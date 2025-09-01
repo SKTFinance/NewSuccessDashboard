@@ -698,63 +698,45 @@
 
 
     <script type="module">
-        // --- Firebase SDKs importieren ---
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging.js";
+        // --- KONSTANTEN ---
+        const SEATABLE_API_TOKEN = "b148f4c735d193f77841ce4e4ddb2bb8bc2e446b";
+        const SEATABLE_APP_ACCESS_TOKEN_URL = "https://cloud.seatable.io/api/v2.1/dtable/app-access-token/";
+        const SEATABLE_DTABLE_UUID = "5b374b51-789c-4aac-a12f-02574f8f4855";
+        const SEATABLE_APP_NAME = "SuccessDashboard";
+        const SEATABLE_QUERY_URL_PREFIX = "https://cloud.seatable.io/dtable-server/api/v1/dtables/";
 
-        // --- KONFIGURATION ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyCRb2nZrC9U78fFxuVZu7NF9JxRxyZw864",
-            authDomain: "skt-dashboard-c7374.firebaseapp.com",
-            projectId: "skt-dashboard-c7374",
-            storageBucket: "skt-dashboard-c7374.appspot.com",
-            messagingSenderId: "936899917792",
-            appId: "1:936899917792:web:6470917c8ae8e410ee5d85"
+        const TIER_GOALS = {
+            "Trainee I": 1250,
+            "Trainee II": 2500,
+            "Trainee III": 4000,
+            "GST": 4001, // Junior GST
         };
 
-        // --- Firebase initialisieren ---
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const messaging = getMessaging(app);
-
-        const spreadsheetId = "1n8NQjGpZpkETLFw7JoY96aYFzwR9_V0WtWwBM9MsN7w";
-        const sheetDataName = "Daten";
-        const sheetPromotionsName = "Anstehende Beförderungen";
-        const sheetEinarbeitungName = "Einarbeitung"; // NEU
-
-        const USER_FILTER_PREFIXES = ["geschäftsstelle", "bezirksleitung", "neuer ma", "wgst", "wbl", "ga ", "jgst", "summe direktion", "rd königslehner", "x "];
-
-        const tierGoals = [
-            { name: "T1", goal: 1250 },
-            { name: "T2", goal: 2500 },
-            { name: "T3", goal: 4000 },
-            { name: "Junior GST", goal: 4001 }
-        ];
+        // --- GLOBALE VARIABLEN ---
+        let seaTableAccessToken = null;
+        let db = {
+            mitarbeiter: [],
+            umsatz: [],
+            termine: [],
+            monatsplanung: [],
+            karriereplan: [],
+            einarbeitungsschritte: [],
+            einarbeitung: [],
+        };
 
         let personalData = {};
         let teamData = {};
         let structureData = {};
-        let leaderPromotionData = [];
-        let traineePromotionData = {};
-        let currentPlanningView = 'struktur';
-        let allUsersCache = [];
         let loggedInUserData = {};
-        let allLeadersCache = []; // NEU
-        let cachedBezirksleitungenData = [];
-        let cachedAllLeaderData = [];
-        let isSuperuserView = false; // NEU
+        let viewHistory = [];
+        
+        let currentPlanningView = 'personal';
         let currentLeadershipViewMode = 'list';
-        let cachedActiveMembers = [];
-        let cachedAgenciesData = [];
-        let cachedCycleData = {};
+        let isSuperuserView = false;
         let isMoneyView = false;
-        let viewHistory = []; 
-        let currentView = 'dashboard'; // NEU: 'dashboard' oder 'einarbeitung'
-        let currentOnboardingSubView = 'leader-list'; // NEU: 'leader-list' oder 'trainee-detail'
+        let currentView = 'dashboard';
 
-
-        // --- DOM ELEMENTS
+        // --- DOM-ELEMENTE ---
         const dom = {
             welcomeHeader: document.getElementById('welcome-header'),
             userPosition: document.getElementById('user-position'),
@@ -763,10 +745,9 @@
             dashboardSections: document.getElementById('dashboard-sections'),
             employeeView: document.getElementById('employee-view'),
             leadershipView: document.getElementById('leadership-view'),
-            teamCount: document.getElementById('team-count'),
             teamMembersContainer: document.getElementById('team-members-container'),
             passiveMembersSection: document.getElementById('passive-members-section'),
-            leadershipViewTitle: document.getElementById('leadership-view-title'), 
+            leadershipViewTitle: document.getElementById('leadership-view-title'),
             leadershipViewCount: document.getElementById('leadership-view-count'),
             leadershipViewModeToggle: document.getElementById('leadership-view-mode-toggle'),
             fortschrittKreisKarriere: document.getElementById('progress-circle-career'),
@@ -776,8 +757,8 @@
             nextMilestone: document.getElementById('next-milestone'),
             weeklyProgressContainer: document.getElementById('weekly-progress-container'),
             ehProgressCircle: document.getElementById('progress-circle-eh'),
-            prognosisCircleEh: document.getElementById('prognosis-circle-eh'), 
-            segmentDividersEh: document.getElementById('segment-dividers-eh'), 
+            prognosisCircleEh: document.getElementById('prognosis-circle-eh'),
+            segmentDividersEh: document.getElementById('segment-dividers-eh'),
             ehCenterCurrent: document.getElementById('eh-center-current'),
             ehCenterGoal: document.getElementById('eh-center-goal'),
             ehSollValue: document.getElementById('eh-soll-value'),
@@ -789,7 +770,7 @@
             employeeCountDisplay: document.getElementById('employee-count-display'),
             employeeSlotsContainer: document.getElementById('employee-slots-container'),
             employeeGoalStatus: document.getElementById('employee-goal-status'),
-            interviewsProgressBar: document.getElementById('interviews-progress-bar'), // UPDATE
+            interviewsProgressBar: document.getElementById('interviews-progress-bar'),
             userDropdownSelect: document.getElementById('user-dropdown-select'),
             userSelectError: document.getElementById('user-select-error'),
             tierCards: [
@@ -809,17 +790,16 @@
             logoutBtn: document.getElementById('logout-btn'),
             clearCacheBtn: document.getElementById('clear-cache-btn'),
             superuserBtn: document.getElementById('superuser-btn'),
-            backButton: document.getElementById('back-button'), 
+            backButton: document.getElementById('back-button'),
             moneyViewBtn: document.getElementById('money-view-btn'),
             monthlyPlanningTitle: document.getElementById('monthly-planning-title'),
-            monthlyPlanningView: document.getElementById('monthly-planning-view'), // NEU
+            monthlyPlanningView: document.getElementById('monthly-planning-view'),
             planningViewToggle: document.getElementById('planning-view-toggle'),
             teamViewBtn: document.getElementById('team-view-btn'),
             personalViewBtn: document.getElementById('personal-view-btn'),
             strukturViewBtn: document.getElementById('struktur-view-btn'),
             gridViewBtn: document.getElementById('grid-view-btn'),
             listViewBtn: document.getElementById('list-view-btn'),
-            // NEUE DOM ELEMENTE
             mainDashboardView: document.getElementById('main-dashboard-view'),
             einarbeitungView: document.getElementById('einarbeitung-view'),
             einarbeitungBtn: document.getElementById('einarbeitung-btn'),
@@ -835,16 +815,81 @@
             aufbauseminarDateMarkers: document.getElementById('aufbauseminar-date-markers'),
             hinweisModal: document.getElementById('hinweis-modal'),
             hinweisModalContent: document.getElementById('hinweis-modal-content'),
-            grundseminarContainer: document.getElementById('grundseminar-container'),
-            aufbauseminarContainer: document.getElementById('aufbauseminar-container'), // ID wurde im HTML korrigiert
             closeHinweisModalBtn: document.getElementById('close-hinweis-modal-btn'),
-            iosInstructionsModal: document.getElementById('ios-instructions-modal'),
-            closeIosModalBtn: document.getElementById('close-ios-modal-btn'),
-            ehCenterUnitLabel: document.getElementById('eh-center-unit-label'),
-            ehSollUnitLabel: document.getElementById('eh-soll-unit-label'),
-            ehValueUnit: document.getElementById('eh-value-unit'),
-            ehValueTitle: document.getElementById('eh-value-title'),
         };
+
+        // --- SEATABLE API FUNKTIONEN ---
+
+        async function getSeaTableAccessToken() {
+            try {
+                const response = await fetch(SEATABLE_APP_ACCESS_TOKEN_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Token ${SEATABLE_API_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        "dtable_uuid": SEATABLE_DTABLE_UUID,
+                        "app_name": SEATABLE_APP_NAME
+                    })
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                seaTableAccessToken = data.access_token;
+                console.log("SeaTable Access Token obtained.");
+            } catch (error) {
+                console.error("Error getting SeaTable access token:", error);
+                setStatus("Fehler bei der Verbindung zur Datenbank.", true);
+            }
+        }
+
+        async function seaTableQuery(tableName) {
+            if (!seaTableAccessToken) {
+                await getSeaTableAccessToken();
+                if (!seaTableAccessToken) return []; // Stop if token is still not available
+            }
+            try {
+                const url = `${SEATABLE_QUERY_URL_PREFIX}${SEATABLE_DTABLE_UUID}/rows/?table_name=${tableName}`;
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${seaTableAccessToken}`
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                return data.rows;
+            } catch (error) {
+                console.error(`Error fetching data from table ${tableName}:`, error);
+                setStatus(`Fehler beim Laden der Tabelle: ${tableName}.`, true);
+                return [];
+            }
+        }
+        
+        async function loadAllData() {
+            setStatus("Lade Datenbank-Zugang...");
+            await getSeaTableAccessToken();
+            if (!seaTableAccessToken) return false;
+
+            setStatus("Lade Tabellen...");
+            const tablesToLoad = [
+                'Mitarbeiter', 'Umsatz', 'Termine', 'Monatsplanung', 
+                'Karriereplan', 'Einarbeitungsschritte', 'Einarbeitung'
+            ];
+            
+            const promises = tablesToLoad.map(async (tableName) => {
+                const data = await seaTableQuery(tableName);
+                db[tableName.toLowerCase()] = data;
+            });
+
+            await Promise.all(promises);
+            console.log("All SeaTable data loaded and cached.", db);
+            return true;
+        }
 
         // --- HILFSFUNKTIONEN ---
         function setStatus(msg, isError = false) {
@@ -855,41 +900,23 @@
             if (loader) loader.style.display = isError ? 'none' : 'block';
         }
 
-        function clearChildren(el) { while(el.firstChild) el.removeChild(el.firstChild); }
-
-        function updateCircleProgress(svgElement, radius, percentage) {
-            if (!svgElement) return;
-            const circumference = 2 * Math.PI * radius;
-            const offset = circumference * (1 - Math.min(percentage, 100) / 100);
-            svgElement.style.strokeDasharray = circumference;
-            svgElement.style.strokeDashoffset = offset;
+        function clearChildren(el) {
+            while (el.firstChild) el.removeChild(el.firstChild);
         }
-
-        function animateValue(element, start, end, duration, isLocaleString = true) {
-            let startTimestamp = null;
-            const step = (timestamp) => {
-                if (!startTimestamp) startTimestamp = timestamp;
-                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-                const value = Math.floor(progress * (end - start) + start);
-                element.textContent = isLocaleString ? value.toLocaleString('de-DE') : value;
-                if (progress < 1) {
-                    window.requestAnimationFrame(step);
-                }
-            };
-            window.requestAnimationFrame(step);
+        
+        function findRowById(tableName, id) {
+            return db[tableName.toLowerCase()].find(row => row._id === id);
         }
 
         function getMonthlyCycleDates() {
             const today = new Date();
-            today.setHours(0, 0, 0, 0); // Normalize today to the beginning of the day
+            today.setHours(0, 0, 0, 0);
 
             const findCycleStartForMonth = (year, month) => {
                 const date = new Date(year, month, 1);
-                // Find the first Thursday
                 while (date.getDay() !== 4) { // 4 = Thursday
                     date.setDate(date.getDate() + 1);
                 }
-                // If the first Thursday is on the 1st or 2nd, the cycle starts on the second Thursday.
                 if (date.getDate() <= 2) {
                     date.setDate(date.getDate() + 7);
                 }
@@ -898,1105 +925,505 @@
 
             let currentMonth = today.getMonth();
             let currentYear = today.getFullYear();
-
             let thisMonthCycleStart = findCycleStartForMonth(currentYear, currentMonth);
-
             let startDate, endDate;
 
             if (today < thisMonthCycleStart) {
-                // We are in the previous month's cycle.
                 let prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
                 let prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-                
                 startDate = findCycleStartForMonth(prevYear, prevMonth);
                 endDate = new Date(thisMonthCycleStart);
-                endDate.setDate(endDate.getDate() - 1); // The Wednesday before this month's cycle starts
+                endDate.setDate(endDate.getDate() - 1);
             } else {
-                // We are in the current month's cycle.
                 let nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
                 let nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
-
                 startDate = thisMonthCycleStart;
                 let nextMonthCycleStart = findCycleStartForMonth(nextYear, nextMonth);
                 endDate = new Date(nextMonthCycleStart);
-                endDate.setDate(endDate.getDate() - 1); // The Wednesday before next month's cycle starts
+                endDate.setDate(endDate.getDate() - 1);
             }
-
             return { startDate, endDate };
         }
 
-        async function fetchSheetQuery(sheet, query, headers = -1) { // -1 bedeutet Standardverhalten
-            try {
-                let url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:json&sheet=${sheet}&tq=${encodeURIComponent(query)}`;
-                if (headers !== -1) {
-                    url += `&headers=${headers}`;
-                }
-                const res = await fetch(url);
-                if (!res.ok) throw new Error(`Network response was not ok: ${res.statusText}`);
-                const text = await res.text();
-                const jsonString = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
-                return JSON.parse(jsonString);
-            } catch (err) {
-                console.error(`Fehler beim Abrufen von ${sheet}:`, err);
-                setStatus(`Fehler beim Laden der Daten aus Tabelle "${sheet}".`, true);
-                return null;
-            }
-        }
+        // --- DATENBERECHNUNGS-LOGIK ---
 
-        function filterUsers(rawUsers) {
-            return rawUsers.filter(u => {
-                const n = u.toLowerCase().trim();
-                return n && n !== 'x' && !USER_FILTER_PREFIXES.some(f => n.startsWith(f) || n === f);
-            });
-        }
-        
-        function getEarningsRate(position, totalEh) {
-            if (!position) return 0;
-            const pos = position.toLowerCase().trim();
-            if (pos.includes('bezirksleiter')) return 5;
-            if (pos.includes('geschäftsstelle')) return 4;
-            if (pos.includes('junior gst')) return 3;
-            if (pos.includes('trainee')) {
-                if (totalEh < 1250) return 1;    // Trainee I
-                if (totalEh < 2500) return 2;    // Trainee II
-                return 2.5; // Trainee III (und darüber, falls Position noch 'Trainee' ist)
-            }
-            return 0; // Default
-        }
+        function calculatePersonalData(mitarbeiterId) {
+            const user = findRowById('mitarbeiter', mitarbeiterId);
+            if (!user) return {};
 
-        function calculateTotalEarnings(leaderData, teamMembersData, agenciesData) {
-            const leaderRate = getEarningsRate(leaderData.position, leaderData.totalCurrentEh);
-            
-            // 1. Personal earnings
-            let totalEarnings = leaderData.ehCurrent * leaderRate;
-
-            // 2. Differential from direct team (Trainees)
-            teamMembersData.forEach(member => {
-                const memberRate = getEarningsRate(member.position, member.totalCurrentEh);
-                const differential = leaderRate - memberRate;
-                if (differential > 0) {
-                    totalEarnings += member.ehCurrent * differential;
-                }
-            });
-
-            // 3. Differential from agencies (for BL on GST groups)
-            if (agenciesData && agenciesData.length > 0) {
-                const gstRate = getEarningsRate('geschäftsstelle', 0); // GST rate is fixed
-                const differential = leaderRate - gstRate;
-                if (differential > 0) {
-                    agenciesData.forEach(agency => totalEarnings += agency.ehCurrent * differential);
-                }
-            }
-            return totalEarnings;
-        }
-
-        async function loadAndDisplayTeamStats(leaderName, container) {
-            container.innerHTML = `<div class="loader mx-auto my-2" style="width: 20px; height: 20px; border-width: 3px;"></div>`;
-
-            try {
-                const teamMembers = await findTeamMembers(leaderName);
-                if (teamMembers.length === 0) {
-                    container.innerHTML = `<p class="text-sm text-gray-500">Keine Mitarbeiter im Team.</p>`;
-                    return;
-                }
-
-                const memberDataPromises = teamMembers.map(name => fetchUserData(name, true));
-                const membersData = (await Promise.all(memberDataPromises)).filter(Boolean);
-
-                const activeMembers = membersData.filter(m => m.ehGoal > 0 || m.etGoal > 0).length;
-                const passiveMembers = membersData.length - activeMembers;
-
-                container.innerHTML = `
-                    <p class="text-sm font-semibold text-skt-blue mb-1">Team-Zusammensetzung</p>
-                    <p class="text-md font-bold text-skt-blue"><span class="text-skt-green-accent">${activeMembers} Aktiv</span> / <span class="text-gray-500">${passiveMembers} Passiv</span></p>`;
-            } catch (error) {
-                console.error(`Fehler beim Laden der Team-Statistiken für ${leaderName}:`, error);
-                container.innerHTML = `<p class="text-sm text-red-500">Fehler beim Laden.</p>`;
-            }
-        }
-
-        async function fetchUserPassword(userName) {
-            const query = `select K where A = '${userName.trim()}'`;
-            const data = await fetchSheetQuery(sheetDataName, query);
-            if (data && data.table.rows.length > 0 && data.table.rows[0].c && data.table.rows[0].c[0]) {
-                return data.table.rows[0].c[0].v.toString();
-            }
-            return null;
-        }
-
-        // --- PWA & SERVICE WORKER ---
-        function registerServiceWorker() {
-         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-              navigator.serviceWorker.register('./service-worker.js')
-                .then(registration => console.log('Service Worker: Registered'))
-                .catch(error => console.log('Service Worker: Registration Failed', error));
-            });
-          }
-        }
-
-        function updateNotificationPromptVisibility() {
-            const prompt = document.getElementById('notification-prompt');
-            if ('Notification' in window && Notification.permission !== 'granted') {
-                prompt.classList.remove('hidden');
-            } else {
-                prompt.classList.add('hidden');
-            }
-        }
-
-        async function askForNotificationPermission() {
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-            const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches;
-
-            if (isIOS && !isInStandaloneMode) {
-                dom.iosInstructionsModal.classList.add('visible');
-                document.body.classList.add('modal-open');
-                return;
-            }
-
-            if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
-                alert('Dein Browser unterstützt leider keine Push-Benachrichtigungen.');
-                return;
-            }
-            
-            const permission = await Notification.requestPermission();
-
-            if (permission === 'granted') {
-                document.getElementById('notification-prompt').classList.add('hidden');
-                try {
-                    const vapidKey = 'BDCibiyhVTM6BhoU79r99pzsqTN9vIRedITekvHlbznK8aZgnKLpSDvQyOTQo_vAOkS__LIEAgS0m3r2crCI3Xo';
-                    const registration = await navigator.serviceWorker.ready;
-                    const currentToken = await getToken(messaging, { 
-                        vapidKey: vapidKey,
-                        serviceWorkerRegistration: registration
-                    });
-
-                    if (currentToken) {
-                        const userName = localStorage.getItem('loggedInUser');
-                        if (userName) {
-                            const userDocRef = doc(db, "subscriptions", userName);
-                            await setDoc(userDocRef, { token: currentToken }, { merge: true });
-                            console.log(`Token für ${userName} in Firestore gespeichert.`);
-                            alert('Benachrichtigungen erfolgreich aktiviert!');
-                        }
-                    }
-                } catch (err) {
-                    console.error('Fehler beim Abrufen des Tokens:', err);
-                }
-            }
-        }
-
-        // --- DASHBOARD FUNKTIONEN ---
-        async function startDashboard(user) {
-            isSuperuserView = false;
-            let selectedUser = user;
-            if (!selectedUser) {
-                const dropdownUser = dom.userDropdownSelect.value;
-                const enteredPassword = document.getElementById('password-input').value;
-                
-                if (!dropdownUser) { dom.userSelectError.textContent = "Bitte zuerst einen Benutzer auswählen."; return; }
-                if (!enteredPassword) { dom.userSelectError.textContent = "Bitte gib dein Passwort ein."; return; }
-                dom.userSelectError.textContent = "";
-
-                const startBtn = document.getElementById('start-dashboard-btn');
-                startBtn.disabled = true;
-                startBtn.textContent = 'Wird geprüft...';
-
-                const correctPassword = await fetchUserPassword(dropdownUser);
-                
-                if (correctPassword === null) {
-                    dom.userSelectError.textContent = "Benutzer nicht gefunden oder kein Passwort hinterlegt.";
-                    startBtn.disabled = false; startBtn.textContent = 'Dashboard laden'; return;
-                }
-                
-                if (enteredPassword !== correctPassword) {
-                    dom.userSelectError.textContent = "Falsches Passwort. Bitte erneut versuchen.";
-                    startBtn.disabled = false; startBtn.textContent = 'Dashboard laden';
-                    const passwordInput = document.getElementById('password-input');
-                    passwordInput.value = ""; passwordInput.focus();
-                    return;
-                }
-                selectedUser = dropdownUser;
-            }
-
-            localStorage.setItem('loggedInUser', selectedUser); 
-
-            // NEU: Daten des eingeloggten Benutzers separat abrufen und speichern, um Berechtigungen robust zu prüfen.
-            loggedInUserData = await fetchUserData(selectedUser, true);
-            if (!loggedInUserData || !loggedInUserData.position) {
-                dom.userSelectError.textContent = "Benutzerdaten konnten nicht geladen werden.";
-                const startBtn = document.getElementById('start-dashboard-btn');
-                startBtn.disabled = false; startBtn.textContent = 'Dashboard laden';
-                return;
-            }
-
-            viewHistory = [selectedUser];
-
-            document.getElementById('user-select-screen').classList.add('hidden');
-            const dashboardContent = document.getElementById('dashboard-content');
-            dashboardContent.classList.remove('hidden');
-            dashboardContent.classList.add('flex');
-            
-            fetchAndRenderDashboard(selectedUser);
-            updateNotificationPromptVisibility();
-            updateBackButtonVisibility();
-        }
-        
-        async function fetchUserData(userName, returnData = false) {
-            const query = `select B, C, D, E, F, G, H, I, J where A = '${userName.trim()}'`;
-            const data = await fetchSheetQuery(sheetDataName, query);
-            let userData = { name: userName, ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atVereinbart: 0, atCurrent: 0, totalCurrentEh: 0, position: null };
-
-            if (data && data.table.rows.length > 0 && data.table.rows[0].c) {
-                const row = data.table.rows[0].c;
-                userData = {
-                    name: userName,
-                    ehGoal: Math.round(row[0]?.v || 0),
-                    ehCurrent: Math.round(row[1]?.v || 0),
-                    etGoal: Math.round(row[2]?.v || 0),
-                    etCurrent: Math.round(row[3]?.v || 0),
-                    atGoal: Math.round(row[4]?.v || 0),
-                    atVereinbart: Math.round(row[5]?.v || 0),
-                    atCurrent: Math.round(row[6]?.v || 0),
-                    totalCurrentEh: Math.round(row[7]?.v || 0),
-                    position: row[8]?.v || null
-                };
-            } else {
-                 if (!isSuperuserView && !returnData) setStatus(`Keine Daten für Benutzer "${userName}" gefunden.`, true);
-            }
-
-            if (returnData) {
-                return userData;
-            } else {
-                personalData = userData;
-            }
-        }
-
-
-        async function fetchCurrentUserPromotionData(userName) {
-            let goal = 'none', missing = 0;
-            const query = `select A, B where A is not null`;
-            const data = await fetchSheetQuery(sheetPromotionsName, query);
-            if (!data || !data.table || !data.table.rows) {
-                traineePromotionData = { goal, missing };
-                return;
-            }
-            let section = null;
-            for (const row of data.table.rows) {
-                const name = row.c[0]?.v;
-                if (!name) continue;
-                if (name.includes('BL Beförderungen')) { section='BL'; continue; }
-                if (name.includes('GST Beförderungen')) { section='GST'; continue; }
-                if (name.toLowerCase().trim() === userName.toLowerCase().trim() && section) {
-                    goal = section;
-                    missing = row.c[1]?.v || 0;
-                    break;
-                }
-            }
-            traineePromotionData = { goal, missing };
-        }
-        
-        async function fetchLeaderPromotionData() {
-            const query = `select A, B, C where A is not null`; // Name, Missing MA, Start Date
-            const data = await fetchSheetQuery(sheetPromotionsName, query);
-            if (!data || !data.table || !data.table.rows) {
-                leaderPromotionData = [];
-                return;
-            }
-            let isBlSection = false;
-            const promotions = [];
-            for (const row of data.table.rows) {
-                const nameCell = row.c[0];
-                if (!nameCell || !nameCell.v) continue;
-                const name = nameCell.v;
-                const nameLower = name.toLowerCase().trim();
-
-                if (nameLower.includes('bl beförderungen')) { isBlSection = true; continue; }
-                if (nameLower.includes('gst beförderungen')) { isBlSection = false; continue; }
-
-                if (isBlSection && name.trim() !== "") {
-                    promotions.push({
-                        name: name.trim(),
-                        missing: row.c[1]?.v || 0,
-                        startDate: row.c[2]?.f || 'N/A'
-                    });
-                }
-            }
-            leaderPromotionData = promotions;
-        }
-
-        async function fetchAndRenderDashboard(userName){
-            window.scrollTo(0, 0);
-            isSuperuserView = false;
-            setStatus('Daten werden geladen...');
-            dom.dashboardSections.classList.add('opacity-0');
-            dom.welcomeHeader.textContent=`Willkommen, ${userName}`;
-            
-            try {
-                await Promise.all([
-                    getAllUsers(), // Sicherstellen, dass die Benutzerliste für Verlinkungen geladen ist
-                    fetchUserData(userName), 
-                    fetchCurrentUserPromotionData(userName),
-                    fetchLeaderPromotionData(),
-                ]);
-
-                const teamMembers = await findTeamMembers(userName);
-                await fetchAndRenderOnboarding(userName, teamMembers);
-                
-                if (dom.statusText.textContent.toLowerCase().includes('fehler')) {
-                    dom.dashboardSections.classList.add('hidden');
-                    return;
-                }
-                
-                const isTrainee = personalData.position && personalData.position.toLowerCase().trim() === 'trainee';
-
-                if (isTrainee) {
-                    let traineeLevel = "Trainee I";
-                    if (personalData.totalCurrentEh >= 2500) {
-                        traineeLevel = "Trainee III";
-                    } else if (personalData.totalCurrentEh >= 1250) {
-                        traineeLevel = "Trainee II";
-                    }
-                    dom.userPosition.textContent = traineeLevel;
-                } else {
-                    dom.userPosition.textContent = personalData.position;
-                }
-                
-                // Banner nur anzeigen, wenn der Benutzer im Einarbeitungsplan ist.
-                // Dazu muss geprüft werden, ob der Benutzer im Einarbeitungssheet existiert.
-                const onboardingQuery = `select * where A is not null`;
-                const onboardingData = await fetchSheetQuery(sheetEinarbeitungName, onboardingQuery, 0);
-                if (onboardingData && onboardingData.table && onboardingData.table.rows.length > 1) {
-                    const nameRow = onboardingData.table.rows[1].c;
-                    const userInOnboarding = nameRow.some(cell => cell && cell.v && cell.v.toLowerCase().trim() === userName.toLowerCase().trim());
-                    if (userInOnboarding && !localStorage.getItem('hasVisitedOnboarding') && personalData.totalCurrentEh < 1) {
-                        dom.einarbeitungBanner.classList.remove('hidden');
-                    } else {
-                        dom.einarbeitungBanner.classList.add('hidden');
-                    }
-                } else {
-                     dom.einarbeitungBanner.classList.add('hidden');
-                }
-                
-
-                // Blur-Effekt für Trainees mit 0 EH
-                if (isTrainee && personalData.totalCurrentEh < 1) {
-                    dom.monthlyPlanningView.classList.add('blurred-section-overlay');
-                } else {
-                    dom.monthlyPlanningView.classList.remove('blurred-section-overlay');
-                }
-
-                if (!isTrainee) {
-                    dom.planningViewToggle.classList.remove('hidden');
-                    dom.employeeView.classList.add('hidden');
-                    dom.leadershipView.classList.remove('hidden');
-                    renderLeaderPersonalGoal(userName);
-                    
-                    await calculateTeamAndStructureData(userName, teamMembers);
-                    
-                    const posLower = personalData.position ? personalData.position.toLowerCase() : '';
-                    const isRD = posLower.includes('regionaldirektor');
-                    const isBL = posLower.includes('bezirksleiter');
-
-                    if (isRD) {
-                        dom.strukturViewBtn.classList.remove('hidden');
-                        dom.teamViewBtn.classList.remove('hidden'); // Gruppenansicht (für direkte Trainees) ebenfalls verfügbar machen
-                        currentPlanningView = 'struktur';
-                        dom.strukturViewBtn.classList.add('active');
-                        dom.teamViewBtn.classList.remove('active');
-                        dom.personalViewBtn.classList.remove('active');
-                        dom.monthlyPlanningTitle.textContent = "Direktions-Übersicht";
-                        updateMonthlyPlanningView(structureData);
-                    } else if (isBL) {
-                        dom.strukturViewBtn.classList.remove('hidden');
-                        dom.teamViewBtn.classList.remove('hidden');
-                        currentPlanningView = 'struktur';
-                        dom.strukturViewBtn.classList.add('active');
-                        dom.teamViewBtn.classList.remove('active');
-                        dom.personalViewBtn.classList.remove('active');
-                        dom.monthlyPlanningTitle.textContent = "Struktur-Übersicht";
-                        updateMonthlyPlanningView(structureData);
-                    } else { // GST, JGST, etc.
-                        dom.strukturViewBtn.classList.add('hidden');
-                        dom.teamViewBtn.classList.remove('hidden');
-                        currentPlanningView = 'team';
-                        dom.teamViewBtn.classList.add('active');
-                        dom.strukturViewBtn.classList.remove('active');
-                        dom.personalViewBtn.classList.remove('active');
-                        dom.monthlyPlanningTitle.textContent = "Gruppen-Übersicht";
-                        updateMonthlyPlanningView(teamData);
-                    }
-                    updateLeadershipView();
-
-                } else {
-                    currentPlanningView = 'personal';
-                    dom.planningViewToggle.classList.add('hidden');
-                    dom.leadershipView.classList.add('hidden');
-                    dom.employeeView.classList.remove('hidden');
-                    updateMonthlyPlanningView(personalData);
-                    updateEmployeeCareerView();
-                    dom.monthlyPlanningTitle.textContent = "Deine Monatsplanung";
-                }
-
-                setStatus('');
-                dom.dashboardSections.classList.remove('hidden');
-                setTimeout(() => dom.dashboardSections.classList.remove('opacity-0'), 50);
-                updateBackButtonVisibility();
-            } catch (error) {
-                console.error("Ein schwerwiegender Fehler ist im Dashboard aufgetreten:", error);
-                setStatus("Ein Fehler ist aufgetreten. Bitte laden Sie die Seite neu.", true);
-            }
-        }
-
-        async function calculateTeamAndStructureData(userName, team) {
             const { startDate, endDate } = getMonthlyCycleDates();
-            const today = new Date();
-            cachedCycleData.totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
-            cachedCycleData.daysPassedInCycle = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24));
+            const currentMonthName = startDate.toLocaleString('de-DE', { month: 'long' });
+            const currentYear = startDate.getFullYear();
 
-            const memberDataPromises = team.map(async (memberName) => {
-                const query = `select B, C, D, E, F, G, H, I, J where A = '${memberName.trim()}'`;
-                const data = await fetchSheetQuery(sheetDataName, query);
-                if (data && data.table.rows.length > 0) {
-                    const row = data.table.rows[0].c;
-                    return { 
-                        name: memberName, 
-                        ehGoal: Math.round(row[0]?.v || 0), 
-                        ehCurrent: Math.round(row[1]?.v || 0), 
-                        etGoal: Math.round(row[2]?.v || 0), 
-                        etCurrent: Math.round(row[3]?.v || 0), 
-                        atGoal: Math.round(row[4]?.v || 0), 
-                        atVereinbart: Math.round(row[5]?.v || 0), 
-                        atCurrent: Math.round(row[6]?.v || 0), 
-                        totalCurrentEh: Math.round(row[7]?.v || 0),
-                        position: row[8]?.v || null 
-                    };
+            // 1. Monatsplanung
+            const plan = db.monatsplanung.find(p => 
+                p.Mitarbeiter && p.Mitarbeiter[0] === mitarbeiterId &&
+                p.Monat === currentMonthName &&
+                p.Jahr === currentYear
+            );
+
+            const ehZiel = plan ? plan.ET_Ziel : 0;
+            const etZiel = plan ? plan.EH_Ziel : 0;
+
+            // 2. EH Ist
+            const ehIst = db.umsatz.reduce((sum, u) => {
+                const umsatzDatum = new Date(u.Datum);
+                if (u.Mitarbeiter && u.Mitarbeiter[0] === mitarbeiterId && u.Status_OK && umsatzDatum >= startDate && umsatzDatum <= endDate) {
+                    return sum + (u.EH || 0);
                 }
-                return null;
+                return sum;
+            }, 0);
+
+            // 3. Termine Ist (ET & AT)
+            let etIst = 0;
+            let atIst = 0;
+            let atVereinbart = 0;
+            db.termine.forEach(t => {
+                const terminDatum = new Date(t.Datum);
+                if (t.Mitarbeiter && t.Mitarbeiter[0] === mitarbeiterId && terminDatum >= startDate && terminDatum <= endDate) {
+                    if (t.Kategorie === 'ET' && t.Status === 'Gehalten') {
+                        etIst++;
+                    }
+                    if (t.Kategorie === 'AT') {
+                        if (t.Status === 'Gehalten') atIst++;
+                        if (t.Status === 'Ausgemacht') atVereinbart++;
+                    }
+                }
             });
+
+            // 4. AT Soll
+            const atSoll = (user.EHproATQuote && ehZiel > 0) ? Math.round(ehZiel / user.EHproATQuote) : 0;
+
+            // 5. Karriere-Fortschritt
+            const totalCurrentEh = db.umsatz.reduce((sum, u) => {
+                if (u.Mitarbeiter && u.Mitarbeiter[0] === mitarbeiterId) {
+                    return sum + (u.EH || 0);
+                }
+                return sum;
+            }, 0);
+
+            const anzahlGeworbenerMA = db.mitarbeiter.filter(m => m.Werber && m.Werber[0] === mitarbeiterId).length;
+
+            return {
+                id: user._id,
+                name: user.Name,
+                position: user.Karrierestufe,
+                ehGoal: ehZiel,
+                ehCurrent: ehIst,
+                etGoal: etZiel,
+                etCurrent: etIst,
+                atGoal: atSoll,
+                atCurrent: atIst,
+                atVereinbart: atVereinbart,
+                totalCurrentEh: totalCurrentEh,
+                recruitedEmployees: anzahlGeworbenerMA,
+                isTrainee: user.Karrierestufe.toLowerCase().includes('trainee'),
+                isLeader: !user.Karrierestufe.toLowerCase().includes('trainee'),
+            };
+        }
+        
+        function getSubordinates(leaderId, recursive = false) {
+            let team = db.mitarbeiter.filter(m => m.Führungskraft && m.Führungskraft[0] === leaderId);
+            if (recursive) {
+                const subTeam = [];
+                team.forEach(member => {
+                    subTeam.push(...getSubordinates(member._id, true));
+                });
+                team = team.concat(subTeam);
+            }
+            return team;
+        }
+
+        function calculateGroupOrStructureData(leaderId, type = 'gruppe') {
+            const leaderData = calculatePersonalData(leaderId);
+            let members = [];
+
+            if (type === 'gruppe') {
+                members = getSubordinates(leaderId, false);
+            } else if (type === 'struktur') {
+                members = getSubordinates(leaderId, true);
+            }
             
-            const membersData = (await Promise.all(memberDataPromises)).filter(Boolean);
-            const teamMembersTotal = membersData.reduce((acc, member) => {
+            const memberData = members.map(m => calculatePersonalData(m._id));
+            
+            const aggregatedData = memberData.reduce((acc, member) => {
                 acc.ehGoal += member.ehGoal;
                 acc.ehCurrent += member.ehCurrent;
                 acc.etGoal += member.etGoal;
                 acc.etCurrent += member.etCurrent;
                 acc.atGoal += member.atGoal;
-                acc.atVereinbart += member.atVereinbart;
                 acc.atCurrent += member.atCurrent;
+                acc.atVereinbart += member.atVereinbart;
                 return acc;
-            }, { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atVereinbart: 0, atCurrent: 0 });
+            }, { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atCurrent: 0, atVereinbart: 0 });
 
-            teamData = {
-                ehGoal: teamMembersTotal.ehGoal + (personalData.ehGoal || 0),
-                ehCurrent: teamMembersTotal.ehCurrent + (personalData.ehCurrent || 0),
-                etGoal: teamMembersTotal.etGoal + (personalData.etGoal || 0),
-                etCurrent: teamMembersTotal.etCurrent + (personalData.etCurrent || 0),
-                atGoal: teamMembersTotal.atGoal + (personalData.atGoal || 0),
-                atVereinbart: teamMembersTotal.atVereinbart + (personalData.atVereinbart || 0),
-                atCurrent: teamMembersTotal.atCurrent + (personalData.atCurrent || 0)
-            };
-
-            cachedActiveMembers = membersData;
-            
-            const positionLower = personalData.position ? personalData.position.toLowerCase() : '';
-            cachedAgenciesData = [];
-            cachedBezirksleitungenData = [];
-
-            if (positionLower.includes('regionaldirektor')) {
-                cachedBezirksleitungenData = await fetchRDStructureData(userName);
-                // For an RD, structure data is team data (personal + direct trainees) + structure items (BLs, GSTs, etc.).
-                structureData = JSON.parse(JSON.stringify(teamData)); 
-                cachedBezirksleitungenData.forEach(item => {
-                    structureData.ehGoal += item.ehGoal;
-                    structureData.ehCurrent += item.ehCurrent;
-                    structureData.etGoal += item.etGoal;
-                    structureData.etCurrent += item.etCurrent;
-                    structureData.atGoal += item.atGoal;
-                    structureData.atVereinbart += item.atVereinbart;
-                    structureData.atCurrent += item.atCurrent;
-                });
-            } else if (positionLower.includes('bezirksleiter')) {
-                cachedAgenciesData = await fetchAgenciesData(userName);
-                // For a BL, structure data is team data (personal + trainees) + agencies.
-                structureData = JSON.parse(JSON.stringify(teamData));
-                cachedAgenciesData.forEach(agency => {
-                    structureData.ehGoal += agency.ehGoal;
-                    structureData.ehCurrent += agency.ehCurrent;
-                    structureData.etGoal += agency.etGoal;
-                    structureData.etCurrent += agency.etCurrent;
-                    structureData.atGoal += agency.atGoal;
-                    structureData.atVereinbart += agency.atVereinbart;
-                    structureData.atCurrent += agency.atCurrent;
-                });
-            } else {
-                // For others (GST, etc.), structure data is the same as team data.
-                structureData = JSON.parse(JSON.stringify(teamData));
-            }
-        }
-
-        function drawSegmentDividers() {
-            const { startDate, endDate } = getMonthlyCycleDates();
-            clearChildren(dom.segmentDividersEh);
-            const totalDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
-            const totalWeeks = Math.ceil(totalDays / 7);
-
-            for (let i = 1; i < totalWeeks; i++) {
-                const angle = i * (360 / totalWeeks);
-                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                
-                const innerRadius = 35; const strokeWidth = 4;
-                const innerEdgeRadius = innerRadius - (strokeWidth / 2);
-                const outerEdgeRadius = innerRadius + (strokeWidth / 2);
-
-                const x1 = 50 + innerEdgeRadius * Math.cos(angle * Math.PI / 180);
-                const y1 = 50 + innerEdgeRadius * Math.sin(angle * Math.PI / 180);
-                const x2 = 50 + outerEdgeRadius * Math.cos(angle * Math.PI / 180);
-                const y2 = 50 + outerEdgeRadius * Math.sin(angle * Math.PI / 180);
-
-                line.setAttribute('x1', x1); line.setAttribute('y1', y1);
-                line.setAttribute('x2', x2); line.setAttribute('y2', y2);
-                
-                dom.segmentDividersEh.appendChild(line);
-            }
-        }
-
-        function updateWeeklyProgress() {
-            const { startDate, endDate } = getMonthlyCycleDates();
-            const today = new Date();
-            clearChildren(dom.weeklyProgressContainer);
-
-            const totalDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
-            const daysInAWeek = 7;
-            const totalWeeks = Math.ceil(totalDays / daysInAWeek);
-            const dateOptions = { day: '2-digit', month: '2-digit' };
-
-            const createDivider = (left) => {
-                const d = document.createElement('div');
-                d.className = 'start-end-divider'; d.style.left = left;
-                dom.weeklyProgressContainer.appendChild(d);
-            };
-            const createLabel = (left, text, transform) => {
-                const l = document.createElement('div');
-                l.className = 'centered-date-label'; l.style.left = left;
-                l.style.transform = transform; l.textContent = text;
-                dom.weeklyProgressContainer.appendChild(l);
-            };
-            
-            createDivider('0%');
-            createLabel('0%', startDate.toLocaleDateString('de-DE', dateOptions), 'translateX(-50%)');
-
-            for (let i = 0; i < totalWeeks; i++) {
-                const weekStart = new Date(startDate.getTime() + i * daysInAWeek * 24 * 60 * 60 * 1000);
-                const weekEnd = new Date(weekStart.getTime() + daysInAWeek * 24 * 60 * 60 * 1000);
-                let progress = 0;
-                if (today >= weekEnd) progress = 100;
-                else if (today >= weekStart && today < weekEnd) {
-                    const daysPassed = (today - weekStart) / (1000 * 60 * 60 * 24);
-                    progress = (daysPassed / daysInAWeek) * 100;
-                }
-                const weekDiv = document.createElement('div');
-                weekDiv.className = 'flex-1 h-full relative p-2 flex flex-col items-center z-20';
-                weekDiv.innerHTML = `<div class="w-full bg-skt-grey-medium h-2 rounded-full overflow-hidden"><div class="h-full bg-skt-green-accent rounded-full transition-all duration-500" style="width: ${Math.min(progress, 100)}%;"></div></div>`;
-                dom.weeklyProgressContainer.appendChild(weekDiv);
-            }
-
-            const weeksDivs = dom.weeklyProgressContainer.querySelectorAll('.flex-1');
-            weeksDivs.forEach((div, i) => {
-                if (i === weeksDivs.length - 1) return;
-                const pos = `${(i + 1) * (100 / weeksDivs.length)}%`;
-                const weekDivider = document.createElement('div');
-                weekDivider.className = 'week-divider'; weekDivider.style.left = pos;
-                dom.weeklyProgressContainer.appendChild(weekDivider);
-                const wednesday = new Date(startDate.getTime() + i * daysInAWeek * 24 * 60 * 60 * 1000);
-                wednesday.setDate(wednesday.getDate() + (3 - wednesday.getDay() + 7) % 7);
-                createLabel(pos, wednesday.toLocaleDateString('de-DE', dateOptions), 'translateX(-50%)');
+            // Add leader's personal data to the total
+            Object.keys(aggregatedData).forEach(key => {
+                aggregatedData[key] += leaderData[key] || 0;
             });
             
-            const endDivider = document.createElement('div');
-            endDivider.className = 'start-end-divider'; endDivider.style.right = '0%';
-            dom.weeklyProgressContainer.appendChild(endDivider);
-            createLabel('100%', endDate.toLocaleDateString('de-DE', dateOptions), 'translateX(-50%)');
+            return { ...aggregatedData, members: memberData };
         }
-        
+
+        function calculateGesamtansichtData() {
+            const führungskräfte = db.mitarbeiter.filter(m => m.Karrierestufe && !m.Karrierestufe.toLowerCase().includes('trainee'));
+            
+            const geschäftsstelleRows = db.mitarbeiter.filter(m => 
+                m.Name.toLowerCase().startsWith('geschäftsstelle') && m.Karrierestufe === 'Trainee'
+            );
+
+            let totalData = { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atCurrent: 0, atVereinbart: 0, members: [] };
+
+            geschäftsstelleRows.forEach(gsRow => {
+                const data = calculatePersonalData(gsRow._id);
+                Object.keys(totalData).forEach(key => {
+                    if(typeof totalData[key] === 'number') totalData[key] += data[key] || 0;
+                });
+            });
+
+            // For the list below, we need to associate each leader with their "Geschäftsstelle" row data
+            const leaderCardsData = führungskräfte.map(leader => {
+                const gsName = `Geschäftsstelle ${leader.Name}`;
+                const gsRow = geschäftsstelleRows.find(row => row.Name === gsName);
+                const displayData = gsRow ? calculatePersonalData(gsRow._id) : calculatePersonalData(leader._id); // Fallback to leader's own data
+                return { ...displayData, leaderName: leader.Name, originalPosition: leader.Karrierestufe };
+            });
+
+            totalData.members = leaderCardsData;
+            return totalData;
+        }
+
+
+        // --- UI-FUNKTIONEN ---
+
         function updateMonthlyPlanningView(data) {
+            // This function now receives the calculated data object
+            // It should be adapted to use the properties of this object
+            // For example: data.ehCurrent, data.ehGoal, etc.
+            
+            // Placeholder for weekly progress bar update
             updateWeeklyProgress();
 
-            let displayValueCurrent = data.ehCurrent;
-            let displayValueGoal = data.ehGoal;
-            let isEuro = false;
-
-            if (isMoneyView && !isSuperuserView) {
-                isEuro = true;
-                if (currentPlanningView === 'personal') {
-                    const rate = getEarningsRate(personalData.position, personalData.totalCurrentEh);
-                    displayValueCurrent = personalData.ehCurrent * rate;
-                    displayValueGoal = personalData.ehGoal * rate;
-                } else if (currentPlanningView === 'team') {
-                    displayValueCurrent = calculateTotalEarnings(personalData, cachedActiveMembers, []);
-                    const avgRate = teamData.ehCurrent > 0 ? displayValueCurrent / teamData.ehCurrent : getEarningsRate(personalData.position, personalData.totalCurrentEh);
-                    displayValueGoal = teamData.ehGoal * avgRate;
-                } else if (currentPlanningView === 'struktur') {
-                    displayValueCurrent = calculateTotalEarnings(personalData, cachedActiveMembers, cachedAgenciesData);
-                    const avgRate = structureData.ehCurrent > 0 ? displayValueCurrent / structureData.ehCurrent : getEarningsRate(personalData.position, personalData.totalCurrentEh);
-                    displayValueGoal = structureData.ehGoal * avgRate;
-                }
-            }
-
-            dom.ehCenterUnitLabel.textContent = isEuro ? '€ verdient' : 'Einheiten erreicht';
-            dom.ehSollUnitLabel.textContent = isEuro ? 'Soll €' : 'Soll Einheiten';
-
-            animateValue(dom.ehCenterCurrent, 0, displayValueCurrent, 1000, true);
-            dom.ehCenterGoal.textContent = displayValueGoal.toLocaleString('de-DE', { maximumFractionDigits: 0 });
-            animateValue(dom.etCurrentDisplay, 0, data.etCurrent, 1000, false);
-            dom.etGoalDisplay.textContent = data.etGoal.toLocaleString('de-DE');
+            animateValue(dom.ehCenterCurrent, 0, data.ehCurrent || 0, 1000);
+            dom.ehCenterGoal.textContent = (data.ehGoal || 0).toLocaleString('de-DE');
             
-            const actualPercentage = data.ehGoal > 0 ? (data.ehCurrent / data.ehGoal * 100) : 0;
-            updateCircleProgress(dom.ehProgressCircle, 45, actualPercentage);
+            const ehPercentage = (data.ehGoal > 0) ? (data.ehCurrent / data.ehGoal * 100) : 0;
+            // updateCircleProgress(dom.ehProgressCircle, 45, ehPercentage);
 
-            const { startDate, endDate } = getMonthlyCycleDates();
-            const today = new Date();
-            const totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
-            const daysPassedInCycle = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24));
-            const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
-            updateCircleProgress(dom.prognosisCircleEh, 35, timeElapsedPercentage);
-
-            const sollValue = Math.round(displayValueGoal * (timeElapsedPercentage / 100));
-            if (dom.ehSollValue) {
-                animateValue(dom.ehSollValue, 0, sollValue, 1000, true);
-            }
-
-            drawSegmentDividers();
-
-            dom.appointmentsText.textContent = `${data.atCurrent} / ${data.atVereinbart} / ${data.atGoal}`;
+            // ... and so on for all other elements in this view
+            dom.appointmentsText.textContent = `${data.atCurrent || 0} / ${data.atVereinbart || 0} / ${data.atGoal || 0}`;
             
             const vereinbartPercent = data.atGoal > 0 ? (data.atVereinbart / data.atGoal) * 100 : 0;
             const gehaltenPercent = data.atGoal > 0 ? (data.atCurrent / data.atGoal) * 100 : 0;
             dom.appointmentsVereinbartBar.style.width = `${Math.min(vereinbartPercent, 100)}%`;
             dom.appointmentsGehaltenBar.style.width = `${Math.min(gehaltenPercent, 100)}%`;
 
-            // UPDATE: Logik für Bewerbungsgespräche-Balken
-            if(dom.interviewsProgressBar) {
-                 const etPercent = data.etGoal > 0 ? (data.etCurrent / data.etGoal) * 100 : 0;
-                 dom.interviewsProgressBar.style.width = `${Math.min(etPercent, 100)}%`;
-            }
+            animateValue(dom.etCurrentDisplay, 0, data.etCurrent || 0, 1000, false);
+            dom.etGoalDisplay.textContent = (data.etGoal || 0).toLocaleString('de-DE');
+            const etPercent = data.etGoal > 0 ? (data.etCurrent / data.etGoal) * 100 : 0;
+            if(dom.interviewsProgressBar) dom.interviewsProgressBar.style.width = `${Math.min(etPercent, 100)}%`;
         }
 
         function updateEmployeeCareerView() {
-            const ehValueDisplay = document.getElementById('eh-value-display');
-            const ehCheckmark = document.getElementById('eh-checkmark');
+            const { totalCurrentEh, recruitedEmployees, name } = personalData;
             
-            if (isMoneyView) {
-                const rate = getEarningsRate(personalData.position, personalData.totalCurrentEh);
-                const earnings = personalData.totalCurrentEh * rate;
-                animateValue(dom.currentEhDisplay, 0, earnings, 1500);
-                dom.ehValueUnit.textContent = ' €';
-                dom.ehValueTitle.textContent = 'Verdient (insgesamt)';
-                dom.ehValueTitle.dataset.tooltip = 'Dein gesamter Verdienst';
-            } else {
-                animateValue(dom.currentEhDisplay, 0, personalData.totalCurrentEh, 1500);
-                dom.ehValueUnit.textContent = ' EH';
-                dom.ehValueTitle.textContent = 'Erreichte EH (insgesamt)';
-                dom.ehValueTitle.dataset.tooltip = 'Deine gesamten erreichten Einheiten';
-            }
+            // 1. Total EH
+            animateValue(dom.currentEhDisplay, 0, totalCurrentEh, 1500);
 
-            if (personalData.totalCurrentEh >= 4000) {
-                ehValueDisplay.classList.add('hidden');
-                ehCheckmark.classList.remove('hidden');
-            } else {
-                ehValueDisplay.classList.remove('hidden');
-                ehCheckmark.classList.add('hidden');
-            }
+            // 2. Next career goal
+            const currentStage = db.karriereplan.find(k => k.Stufe === personalData.position);
+            const nextStage = db.karriereplan
+                .filter(k => k.Hierarchie > (currentStage ? currentStage.Hierarchie : 0))
+                .sort((a, b) => a.Hierarchie - b.Hierarchie)[0];
 
-            let curTier=-1, curGoal=0, nextGoal=0, nextName="";
-            if(personalData.totalCurrentEh < 1251){ curTier=0; nextGoal=1250; nextName="T2"; }
-            else if(personalData.totalCurrentEh < 2501){ curTier=1; curGoal=1250; nextGoal=2500; nextName="T3"; }
-            else if(personalData.totalCurrentEh < 4001){ curTier=2; curGoal=2500; nextGoal=4000; nextName="Junior GST"; }
-            else curTier=3;
-
-            dom.tierCards.forEach(c => c.classList.remove('active'));
-            dom.tierProgressBars.forEach(b => b.style.width='0%');
-
-            if(curTier === 3){
-                dom.tierCards.forEach(c => c.classList.add('active'));
-                dom.tierProgressBars.forEach(b => b.style.width='100%');
-                dom.careerProgressPercentage.textContent="100%";
-                dom.progressToNextText.textContent="Junior GST erreicht!";
-                dom.nextMilestone.innerHTML='Nächster Meilenstein: <span class="text-skt-blue font-semibold">Erfolgreich!</span>';
-                updateCircleProgress(dom.fortschrittKreisKarriere, 40, 100);
-            } else {
-                const spanCur = personalData.totalCurrentEh - curGoal, spanNext = nextGoal - curGoal;
-                const percent = spanNext > 0 ? (spanCur / spanNext * 100) : 0;
-                dom.careerProgressPercentage.textContent=`${Math.min(percent, 100).toFixed(1)}%`;
-                dom.progressToNextText.textContent=`Fortschritt zum ${nextName}`;
-                dom.nextMilestone.innerHTML=`Nächster Meilenstein: <span class="text-skt-blue font-semibold">${nextName} (${nextGoal.toLocaleString('de-DE')} EH)</span>`;
-                updateCircleProgress(dom.fortschrittKreisKarriere, 40, percent);
-
-                if (dom.tierProgressBars[0]) dom.tierProgressBars[0].style.width=`${Math.min(personalData.totalCurrentEh / tierGoals[0].goal * 100, 100)}%`; 
-                if (personalData.totalCurrentEh >= tierGoals[0].goal && dom.tierCards[0]) dom.tierCards[0].classList.add('active');
+            if (nextStage) {
+                dom.nextMilestone.innerHTML = `Nächster Meilenstein: <span class="text-skt-blue font-semibold">${nextStage.Stufe}</span>`;
                 
-                if (dom.tierProgressBars[1]) dom.tierProgressBars[1].style.width=`${Math.min(Math.max(0, personalData.totalCurrentEh - tierGoals[0].goal) / (tierGoals[1].goal - tierGoals[0].goal) * 100, 100)}%`; 
-                if (personalData.totalCurrentEh >= tierGoals[1].goal && dom.tierCards[1]) dom.tierCards[1].classList.add('active');
+                const ehNeeded = nextStage.Kriterium_EH || 0;
+                const progressEh = ehNeeded > 0 ? (totalCurrentEh / ehNeeded) * 100 : 0;
+                dom.careerProgressPercentage.textContent = `${Math.min(progressEh, 100).toFixed(1)}%`;
+                dom.progressToNextText.textContent = `Fortschritt zum ${nextStage.Stufe}`;
+                // updateCircleProgress(dom.fortschrittKreisKarriere, 40, progressEh);
 
-                if (dom.tierProgressBars[2]) dom.tierProgressBars[2].style.width=`${Math.min(Math.max(0, personalData.totalCurrentEh - tierGoals[1].goal) / (tierGoals[2].goal - tierGoals[1].goal) * 100, 100)}%`; 
-                if (personalData.totalCurrentEh >= tierGoals[2].goal && dom.tierCards[2]) dom.tierCards[2].classList.add('active');
-                
-                if (dom.tierCards[curTier]) dom.tierCards[curTier].classList.add('active');
-            }
-
-            clearChildren(dom.employeeSlotsContainer);
-            dom.employeeGoalStatus.classList.remove('text-skt-red-accent','text-skt-blue-light','font-semibold');
-
-            if(traineePromotionData.goal === 'none'){
-                dom.employeeCountDisplay.textContent = "N/A";
-                dom.employeeGoalStatus.textContent = 'Karriereschritt besprechen';
-                dom.employeeGoalStatus.classList.add('text-skt-red-accent','font-semibold');
-            } else {
-                const required = traineePromotionData.goal === 'BL' ? 6 : 3;
-                const filled = required - traineePromotionData.missing;
-                dom.employeeCountDisplay.textContent = `${filled} / ${required} MA`;
-                dom.employeeGoalStatus.textContent = `Ziel: ${traineePromotionData.goal}`;
-                dom.employeeGoalStatus.classList.add('text-skt-blue-light');
-                for(let i=0; i < required; i++){
-                    const slot=document.createElement('div'); slot.classList.add('employee-slot'); if(i < filled) slot.classList.add('filled');
+                const maNeeded = nextStage.Kriterium_MA || 0;
+                dom.employeeCountDisplay.textContent = `${recruitedEmployees} / ${maNeeded}`;
+                dom.employeeGoalStatus.textContent = `Ziel: ${maNeeded} MA`;
+                clearChildren(dom.employeeSlotsContainer);
+                for (let i = 0; i < maNeeded; i++) {
+                    const slot = document.createElement('div');
+                    slot.className = `employee-slot ${i < recruitedEmployees ? 'filled' : ''}`;
                     dom.employeeSlotsContainer.appendChild(slot);
                 }
-            }
-        }
-
-        async function findTeamMembers(leaderName) {
-            const data = await fetchSheetQuery(sheetDataName, 'select A, J');
-            if (!data || !data.table.rows) return [];
-        
-            const allUsers = data.table.rows.map(r => ({
-                name: r.c[0]?.v,
-                position: r.c[1]?.v
-            })).filter(u => u.name);
-        
-            const leaderIndex = allUsers.findIndex(u => u.name.toLowerCase().trim() === leaderName.toLowerCase().trim());
-        
-            if (leaderIndex === -1) return [];
-        
-            const team = [];
-            for (let i = leaderIndex + 1; i < allUsers.length; i++) {
-                const currentUser = allUsers[i];
-                const currentNameLower = currentUser.name.toLowerCase().trim();
-                const currentPositionLower = (currentUser.position || "").toLowerCase().trim();
-        
-                if (currentPositionLower && currentPositionLower !== 'trainee') {
-                    break;
-                }
-        
-                if (currentNameLower !== 'x' && !USER_FILTER_PREFIXES.some(prefix => currentNameLower.startsWith(prefix))) {
-                    team.push(currentUser.name);
-                }
-            }
-            return team;
-        }
-        
-        function getProgressColorHex(current, goal, totalDays, daysPassed) {
-            if (goal === 0) return 'var(--color-skt-grey-medium)';
-            const progressPercent = (current / goal) * 100;
-            if (progressPercent >= 100) return 'var(--color-accent-green)';
-
-            if (daysPassed <= 0) return 'var(--color-accent-green)';
-
-            const timePercent = (daysPassed / totalDays) * 100;
-
-            if (progressPercent >= timePercent) return 'var(--color-accent-green)';
-            if (progressPercent >= timePercent * 0.75) return 'var(--color-accent-yellow)';
-            return 'var(--color-accent-red)';
-        }
-
-        function getProgressColorClass(current, goal, totalDays, daysPassed) {
-            if (goal === 0) return 'bg-skt-grey-medium';
-            const progressPercent = (current / goal) * 100;
-            if (progressPercent >= 100) return 'bg-skt-green-accent';
-
-            if (daysPassed <= 0) return 'bg-skt-green-accent';
-
-            const timePercent = (daysPassed / totalDays) * 100;
-
-            if (progressPercent >= timePercent) return 'bg-skt-green-accent';
-            if (progressPercent >= timePercent * 0.75) return 'bg-skt-yellow-accent';
-            return 'bg-skt-red-accent';
-        }
-
-        function getPrognosis(current, goal, totalDays, daysPassed) {
-            if (goal === 0) return { text: 'Keine Ziele gesetzt', colorClass: 'text-skt-blue-light' };
-            const progressPercent = (current / goal) * 100;
-            if (progressPercent >= 100) return { text: 'Ziele erreicht', colorClass: 'text-skt-green-accent' };
-
-            if (daysPassed <= 0) return { text: 'Auf Kurs', colorClass: 'text-skt-green-accent' };
-
-            const timePercent = (daysPassed / totalDays) * 100;
-
-            if (progressPercent >= timePercent) return { text: 'Auf Kurs', colorClass: 'text-skt-green-accent' };
-            if (progressPercent >= timePercent * 0.75) return { text: '', colorClass: 'text-skt-yellow-accent' };
-            return { text: 'Ziele gefährdet', colorClass: 'text-skt-red-accent' };
-        }
-
-        function renderLeaderPersonalGoal(userName) {
-            const container = document.getElementById('leader-personal-goal-container');
-            if (!container) return;
-
-            // NEU: Karriereziel für BL und RD ausblenden, da sie die höchsten Stufen erreicht haben.
-            const posLower = personalData.position ? personalData.position.toLowerCase().trim() : '';
-            if (posLower.includes('bezirksleiter') || posLower.includes('regionaldirektor')) {
-                container.classList.add('hidden');
-                container.innerHTML = '';
-                return;
-            }
-
-            clearChildren(container);
-            container.classList.remove('hidden');
-
-            const promotionInfo = leaderPromotionData.find(p => p.name.toLowerCase() === userName.toLowerCase().trim());
-
-            let goalHtml = '';
-            if (promotionInfo) {
-                const required = 6; // BL requires 6 MA
-                const filled = required - promotionInfo.missing;
-                let slotsHtml = '';
-                for(let i=0; i < required; i++){
-                    slotsHtml += `<div class="employee-slot ${i < filled ? 'filled' : ''}"></div>`;
-                }
-                goalHtml = `
-                    <h2 class="text-2xl font-semibold text-skt-blue mb-4 text-center">Dein nächstes Karriereziel</h2>
-                    <div class="bg-skt-grey-light rounded-xl p-4 flex flex-col sm:flex-row justify-between items-center">
-                        <div>
-                            <p class="text-lg text-skt-blue-light font-bold">Ziel: Bezirksleitung</p>
-                            <p class="text-md text-skt-blue-light">Start im Rennen: ${promotionInfo.startDate}</p>
-                        </div>
-                        <div class="flex items-center gap-2 mt-4 sm:mt-0">
-                            <span class="text-2xl font-bold text-skt-blue">${filled}/${required} MA</span>
-                            <div class="flex space-x-1.5">${slotsHtml}</div>
-                        </div>
-                    </div>
-                `;
             } else {
-                goalHtml = `
-                    <h2 class="text-2xl font-semibold text-skt-blue mb-4 text-center">Dein nächstes Karriereziel</h2>
-                    <div class="bg-skt-grey-light rounded-xl p-4">
-                        <p class="text-md text-skt-red-accent font-semibold text-center">Karriereschritt im nächsten PG besprechen.</p>
-                    </div>
-                `;
+                // Highest level reached
+                dom.nextMilestone.innerHTML = 'Höchste Stufe erreicht!';
+                dom.careerProgressPercentage.textContent = "100%";
+                // ...
             }
-            container.innerHTML = goalHtml;
+            
+            // Tier cards update
+            // This logic needs to be adapted based on TIER_GOALS and totalCurrentEh
+        }
+        
+        function updateLeadershipView() {
+            let data, title;
+            if (currentPlanningView === 'struktur') {
+                data = structureData;
+                title = "Struktur-Übersicht";
+            } else { // 'team'
+                data = teamData;
+                title = "Gruppen-Übersicht";
+            }
+            
+            dom.leadershipViewTitle.textContent = title;
+            dom.leadershipViewCount.textContent = `Zeige ${data.members.length} Mitarbeiter`;
+
+            renderTeamMemberCards(data.members);
         }
 
         function renderTeamMemberCards(members) {
             clearChildren(dom.teamMembersContainer);
             dom.teamMembersContainer.className = 'mt-6'; 
 
-            if (members.length === 0) {
-                dom.teamMembersContainer.innerHTML = `<p class="text-center text-gray-500 col-span-full">Du hast aktuell keine aktiven Mitarbeiter in der Liste.</p>`;
+            if (!members || members.length === 0) {
+                dom.teamMembersContainer.innerHTML = `<p class="text-center text-gray-500 col-span-full">Keine Mitarbeiter in dieser Ansicht.</p>`;
+                return;
+            }
+            
+            // Simplified render logic, can be expanded with list/grid view later
+            dom.teamMembersContainer.classList.add('space-y-4');
+            members.forEach(member => {
+                const card = document.createElement('div');
+                card.className = 'bg-white p-4 rounded-lg shadow';
+                card.innerHTML = `
+                    <div class="flex justify-between">
+                        <p class="font-bold">${member.leaderName || member.name}</p>
+                        <p>${member.ehCurrent} / ${member.ehGoal} EH</p>
+                    </div>
+                    <p class="text-sm text-gray-600">${member.originalPosition || member.position}</p>
+                `;
+                dom.teamMembersContainer.appendChild(card);
+            });
+        }
+
+        function fetchNextInfoDate() {
+            // Placeholder function
+            return "Datum unbekannt";
+        }
+        
+        function updateBackButtonVisibility() {
+            dom.backButton.classList.toggle('hidden', viewHistory.length <= 1);
+        }
+
+        // --- MAIN LOGIC ---
+
+        async function fetchAndRenderDashboard(mitarbeiterId) {
+            window.scrollTo(0, 0);
+            setStatus('Daten werden verarbeitet...');
+            dom.dashboardSections.classList.add('opacity-0');
+
+            const user = findRowById('mitarbeiter', mitarbeiterId);
+            if (!user) {
+                setStatus(`Benutzer mit ID ${mitarbeiterId} nicht gefunden.`, true);
+                return;
+            }
+            
+            loggedInUserData = user; // Store the full user object
+            dom.welcomeHeader.textContent = `Willkommen, ${user.Name}`;
+            dom.userPosition.textContent = user.Karrierestufe;
+
+            // Calculate all data views
+            personalData = calculatePersonalData(mitarbeiterId);
+            teamData = calculateGroupOrStructureData(mitarbeiterId, 'gruppe');
+            structureData = calculateGroupOrStructureData(mitarbeiterId, 'struktur');
+
+            // Show/hide sections based on user role
+            const isLeader = !user.Karrierestufe.toLowerCase().includes('trainee');
+            dom.employeeView.classList.toggle('hidden', isLeader);
+            dom.leadershipView.classList.toggle('hidden', !isLeader);
+            dom.planningViewToggle.classList.toggle('hidden', !isLeader);
+
+            if (isLeader) {
+                // Default to team view for leaders
+                currentPlanningView = 'team';
+                dom.teamViewBtn.classList.add('active');
+                dom.personalViewBtn.classList.remove('active');
+                dom.strukturViewBtn.classList.remove('active');
+                dom.monthlyPlanningTitle.textContent = "Gruppen-Übersicht";
+                updateMonthlyPlanningView(teamData);
+                updateLeadershipView();
+            } else {
+                // Personal view for trainees
+                currentPlanningView = 'personal';
+                dom.monthlyPlanningTitle.textContent = "Deine Monatsplanung";
+                updateMonthlyPlanningView(personalData);
+                updateEmployeeCareerView();
+            }
+            
+            // Display "Nächstes Info" date
+            const nextInfoDateEl = document.createElement('p');
+            nextInfoDateEl.id = 'next-info-date';
+            nextInfoDateEl.className = 'text-center text-sm text-skt-blue-light mt-4';
+            nextInfoDateEl.textContent = `Nächstes Info: ${fetchNextInfoDate()}`;
+            dom.monthlyPlanningView.querySelector('.flex-col.md\:flex-row').parentElement.appendChild(nextInfoDateEl);
+
+
+            setStatus('');
+            dom.dashboardSections.classList.remove('hidden');
+            setTimeout(() => dom.dashboardSections.classList.remove('opacity-0'), 50);
+            updateBackButtonVisibility();
+        }
+        
+        async function renderSuperuserView() {
+            isSuperuserView = true;
+            setStatus('Lade Gesamtansicht...');
+            dom.dashboardSections.classList.add('opacity-0');
+
+            const gesamtData = calculateGesamtansichtData();
+            
+            dom.monthlyPlanningTitle.textContent = "Gesamtansicht";
+            updateMonthlyPlanningView(gesamtData);
+
+            dom.leadershipViewTitle.textContent = "Führungskräfte-Übersicht";
+            dom.leadershipViewCount.textContent = `Zeige ${gesamtData.members.length} Führungskräfte`;
+            renderTeamMemberCards(gesamtData.members);
+
+            dom.employeeView.classList.add('hidden');
+            dom.leadershipView.classList.remove('hidden');
+            dom.planningViewToggle.classList.add('hidden');
+
+            setStatus('');
+            dom.dashboardSections.classList.remove('hidden');
+            setTimeout(() => dom.dashboardSections.classList.remove('opacity-0'), 50);
+        }
+
+
+        // --- INITIALISIERUNG & EVENT LISTENERS ---
+
+        function setupEventListeners() {
+            dom.userDropdownSelect.addEventListener('change', () => {
+                document.getElementById('password-container').classList.remove('hidden');
+                document.getElementById('start-dashboard-btn').classList.remove('hidden');
+            });
+
+            document.getElementById('start-dashboard-btn').addEventListener('click', async () => {
+                const selectedUserId = dom.userDropdownSelect.value;
+                const enteredPassword = document.getElementById('password-input').value;
+                
+                if (!selectedUserId) {
+                    dom.userSelectError.textContent = "Bitte einen Benutzer wählen.";
+                    return;
+                }
+                
+                const user = findRowById('mitarbeiter', selectedUserId);
+                if (user && user.PWD === enteredPassword) {
+                    localStorage.setItem('loggedInUserId', selectedUserId);
+                    viewHistory = [selectedUserId];
+                    document.getElementById('user-select-screen').classList.add('hidden');
+                    document.getElementById('dashboard-content').classList.remove('hidden');
+                    fetchAndRenderDashboard(selectedUserId);
+                } else {
+                    dom.userSelectError.textContent = "Falsches Passwort oder Benutzer nicht gefunden.";
+                }
+            });
+
+            dom.logoutBtn.addEventListener('click', () => {
+                localStorage.removeItem('loggedInUserId');
+                location.reload();
+            });
+            
+            dom.clearCacheBtn.addEventListener('click', () => {
+                localStorage.clear();
+                location.reload();
+            });
+
+            dom.settingsBtn.addEventListener('click', () => dom.settingsMenu.classList.toggle('hidden'));
+            
+            dom.superuserBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                dom.settingsMenu.classList.add('hidden');
+                renderSuperuserView();
+            });
+
+            dom.backButton.addEventListener('click', () => {
+                if (viewHistory.length > 1) {
+                    viewHistory.pop();
+                    const previousUserId = viewHistory[viewHistory.length - 1];
+                    fetchAndRenderDashboard(previousUserId);
+                }
+            });
+
+            // View toggles (Personal, Gruppe, Struktur)
+            dom.personalViewBtn.addEventListener('click', () => {
+                currentPlanningView = 'personal';
+                updateMonthlyPlanningView(personalData);
+                // ... update active button styles
+            });
+            dom.teamViewBtn.addEventListener('click', () => {
+                currentPlanningView = 'team';
+                updateMonthlyPlanningView(teamData);
+                updateLeadershipView();
+                // ... update active button styles
+            });
+            dom.strukturViewBtn.addEventListener('click', () => {
+                currentPlanningView = 'struktur';
+                updateMonthlyPlanningView(structureData);
+                updateLeadershipView();
+                // ... update active button styles
+            });
+            
+            // Einarbeitung view toggle
+            dom.einarbeitungBtn.addEventListener('click', () => {
+                // This needs the full implementation of the onboarding view
+                console.log("Einarbeitung view not fully implemented yet.");
+            });
+        }
+
+        async function initializeDashboard() {
+            const loggedInUserId = localStorage.getItem('loggedInUserId');
+            const dataLoaded = await loadAllData();
+
+            if (!dataLoaded) {
+                setStatus("Initialisierung fehlgeschlagen. Bitte Seite neu laden.", true);
                 return;
             }
 
-            if (currentLeadershipViewMode === 'grid') {
-                dom.teamMembersContainer.classList.add('grid', 'grid-cols-1', 'sm:grid-cols-2', 'lg:grid-cols-3', 'gap-6');
-                members.forEach(member => {
-                    const card = createMemberCardGrid(member, cachedCycleData.totalDaysInCycle, cachedCycleData.daysPassedInCycle);
-                    dom.teamMembersContainer.appendChild(card);
-                });
-            } else { // 'list'
-                dom.teamMembersContainer.classList.add('space-y-4');
-                members.forEach(member => {
-                    const card = createMemberCardList(member, cachedCycleData.totalDaysInCycle, cachedCycleData.daysPassedInCycle);
-                    dom.teamMembersContainer.appendChild(card);
-                });
-            }
-        }
-
-        function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
-            const ehPercentage = member.ehGoal > 0 ? (member.ehCurrent / member.ehGoal * 100) : 0;
-            const etPercentage = member.etGoal > 0 ? (member.etCurrent / member.etGoal * 100) : 0;
-            const ehColorHex = getProgressColorHex(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
-            const prognosis = getPrognosis(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
-            const memberId = member.name.replace(/[^a-zA-Z0-9]/g, '');
-
-            const card = document.createElement('div');
-            card.className = 'bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl flex flex-col';
-
-            const summary = document.createElement('div');
-            summary.className = 'p-4 cursor-pointer flex-grow';
-
-            const radius = 40;
-            const circumference = 2 * Math.PI * radius;
-            const offset = circumference * (1 - Math.min(ehPercentage, 100) / 100);
+            // Populate user dropdown
+            const activeUsers = db.mitarbeiter.filter(m => m.Status === 'Aktiv');
+            activeUsers.sort((a, b) => a.Name.localeCompare(b.Name));
+            activeUsers.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user._id;
+                option.textContent = user.Name;
+                dom.userDropdownSelect.appendChild(option);
+            });
             
-            let positionHtml = '';
-            const posLower = member.position.toLowerCase().trim();
-            if (posLower !== 'trainee') {
-                if (posLower === 'geschäftsstelle') {
-                    positionHtml = `<p class="text-sm ${prognosis.colorClass} font-semibold">${prognosis.text}</p>`;
-                } else {
-                    positionHtml = `<p class="text-sm text-skt-blue-light">${member.position}</p>`;
-                }
+            // Superuser button visibility (e.g., for specific user names)
+            // This logic can be refined
+            const superusers = ["Admin User", "Samuel König"]; // Example
+            const tempLoggedInUser = findRowById('mitarbeiter', loggedInUserId);
+            if (tempLoggedInUser && superusers.includes(tempLoggedInUser.Name)) {
+                dom.superuserBtn.classList.remove('hidden');
             }
 
-            summary.innerHTML = `
-                <div class="flex justify-between items-center mb-4">
-                    <div>
-                        <p class="font-bold text-skt-blue text-lg">${member.name}</p>
-                        ${positionHtml}
-                    </div>
-                    <div class="flex items-center space-x-2">
-                         <button data-username="${member.name}" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button>
-                         <i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i>
-                    </div>
-                </div>
-                <div class="flex justify-center items-center flex-col">
-                    <div class="w-40 h-40 relative">
-                        <svg class="team-progress-circle w-full h-full" viewBox="0 0 100 100">
-                            <circle class="bg-circle" cx="50" cy="50" r="${radius}"></circle>
-                            <circle class="progress-arc" cx="50" cy="50" r="${radius}" 
-                                    style="stroke: ${ehColorHex}; stroke-dasharray: ${circumference}; stroke-dashoffset: ${offset};"></circle>
-                        </svg>
-                        <div class="absolute inset-0 flex items-center justify-center flex-col text-center px-2">
-                            <p class="text-base sm:text-lg font-bold" style="color: ${ehColorHex}; font-size: clamp(0.75rem, 4vw, 1.125rem);">${member.ehCurrent.toLocaleString('de-DE')} / ${member.ehGoal.toLocaleString('de-DE')}</p>
-                            <p class="text-xs text-skt-blue-light">Einheiten</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="mt-4 px-2">
-                    <div class="flex justify-between items-baseline text-xs">
-                        <p class="text-skt-blue-light">ET Termine</p>
-                        <p class="font-semibold text-skt-blue">${member.etCurrent} / ${member.etGoal}</p>
-                    </div>
-                    <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1">
-                         <div class="h-full bg-skt-green-accent" style="width: ${Math.min(etPercentage, 100)}%;"></div>
-                    </div>
-                </div>
-            `;
 
-            const details = document.createElement('div');
-            details.className = 'team-member-details px-4';
-            details.innerHTML = `
-                <div class="details-grid grid grid-cols-1 gap-4">
-                    <div class="text-center">
-                        <p class="text-sm font-semibold text-skt-blue mb-1">Analysetermine</p>
-                        <p class="text-md font-bold text-skt-blue">${member.atCurrent} / ${member.atVereinbart} / ${member.atGoal}</p>
-                        <p class="text-xs text-gray-500 mb-2">Gehalten / Vereinbart / Soll</p>
-                        <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden relative">
-                            <div class="h-full bg-skt-yellow-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(member.atGoal > 0 ? (member.atVereinbart / member.atGoal) * 100 : 0, 100)}%;"></div>
-                            <div class="h-full bg-skt-green-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(member.atGoal > 0 ? (member.atCurrent / member.atGoal) * 100 : 0, 100)}%;"></div>
-                        </div>
-                    </div>
-                    <div id="team-stats-${memberId}" class="hidden text-center border-t border-gray-200 pt-4 mt-4">
-                        <!-- Content will be loaded on click -->
-                    </div>
-                    <div id="leader-goal-${memberId}"></div>
-                </div>`;
-
-            card.appendChild(summary);
-            card.appendChild(details);
+            if (loggedInUserId && findRowById('mitarbeiter', loggedInUserId)) {
+                viewHistory = [loggedInUserId];
+                document.getElementById('user-select-screen').classList.add('hidden');
+                document.getElementById('dashboard-content').classList.remove('hidden');
+                fetchAndRenderDashboard(loggedInUserId);
+            } else {
+                document.getElementById('user-select-screen').classList.remove('hidden');
+                setStatus('');
+            }
             
-            summary.addEventListener('click', (e) => { if (!e.target.closest('.switch-view-btn')) { details.classList.toggle('open'); summary.classList.toggle('open'); if (isSuperuserView && details.classList.contains('open')) { const statsContainer = details.querySelector(`#team-stats-${memberId}`); statsContainer.classList.remove('hidden'); if (statsContainer.innerHTML.trim() === '<!-- Content will be loaded on click -->') { loadAndDisplayTeamStats(member.name, statsContainer); } } } });
-            summary.querySelector('.switch-view-btn').addEventListener('click', (e) => { 
-                e.stopPropagation();
-                const newuser = e.currentTarget.dataset.username;
-                viewHistory.push(newuser);
-                fetchAndRenderDashboard(newuser);
-            });
-            return card;
+            setupEventListeners();
         }
 
-        function createAgencyCardGrid(agency, totalDaysInCycle, daysPassedInCycle) {
-            const ehPercentage = agency.ehGoal > 0 ? (agency.ehCurrent / agency.ehGoal * 100) : 0;
-            const etPercentage = agency.etGoal > 0 ? (agency.etCurrent / agency.etGoal * 100) : 0;
-            const ehColorHex = getProgressColorHex(agency.ehCurrent, agency.ehGoal, totalDaysInCycle, daysPassedInCycle);
-            const prognosis = getPrognosis(agency.ehCurrent, agency.ehGoal, totalDaysInCycle, daysPassedInCycle);
+        // --- START ---
+        document.addEventListener('DOMContentLoaded', initializeDashboard);
 
-            const card = document.createElement('div');
-            card.className = 'bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl flex flex-col';
-
-            const summary = document.createElement('div');
-            summary.className = 'p-4 cursor-pointer flex-grow';
-
-            const radius = 40;
-            const circumference = 2 * Math.PI * radius;
-            const offset = circumference * (1 - Math.min(ehPercentage, 100) / 100);
-            
-            summary.innerHTML = `
-                <div class="flex justify-between items-center mb-4">
-                    <div>
-                        <p class="font-bold text-skt-blue text-lg">${agency.name}</p>
-                        <p class="text-sm ${prognosis.colorClass} font-semibold">${prognosis.text}</p>
-                    </div>
-                    <div class="flex items-center space-x-2">
-                         <button data-agencyname="${agency.name}" class="switch-to-agency-leader-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button>
-                         <i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i>
-                    </div>
-                </div>
-                <div class="flex justify-center items-center flex-col">
-                    <div class="w-40 h-40 relative">
-                        <svg class="team-progress-circle w-full h-full" viewBox="0 0 100 100">
-                            <circle class="bg-circle" cx="50" cy="50" r="${radius}"></circle>
-                            <circle class="progress-arc" cx="50" cy="50" r="${radius}" 
-                                    style="stroke: ${ehColorHex}; stroke-dasharray: ${circumference}; stroke-dashoffset: ${offset};"></circle>
-                        </svg>
-                        <div class="absolute inset-0 flex items-center justify-center flex-col text-center px-2">
-                            <p class="text-base sm:text-lg font-bold" style="color: ${ehColorHex}; font-size: clamp(0.75rem, 4vw, 1.125rem);">${agency.ehCurrent.toLocaleString('de-DE')} / ${agency.ehGoal.toLocaleString('de-DE')}</p>
-                            <p class="text-xs text-skt-blue-light">Einheiten</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="mt-4 px-2">
-                    <div class="flex justify-between items-baseline text-xs">
-                        <p class="text-skt-blue-light">ET Termine</p>
-                        <p class="font-semibold text-skt-blue">${agency.etCurrent} / ${agency.etGoal}</p>
-                    </div>
-                    <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1">
-                         <div class="h-full bg-skt-green-accent" style="width: ${Math.min(etPercentage, 100)}%;"></div>
-                    </div>
-                </div>
-            `;
-
-            const details = document.createElement('div');
-            details.className = 'team-member-details px-4';
-            details.innerHTML = `
-                <div class="details-grid grid grid-cols-1 gap-4">
-                    <div class="text-center">
-                        <p class="text-sm font-semibold text-skt-blue mb-1">Analysetermine</p>
-                        <p class="text-md font-bold text-skt-blue">${agency.atCurrent} / ${agency.atVereinbart} / ${agency.atGoal}</p>
-                        <p class="text-xs text-gray-500 mb-2">Gehalten / Vereinbart / Soll</p>
-                        <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden relative">
-                            <div class="h-full bg-skt-yellow-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(agency.atGoal > 0 ? (agency.atVereinbart / agency.atGoal) * 100 : 0, 100)}%;"></div>
-                            <div class="h-full bg-skt-green-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(agency.atGoal > 0 ? (agency.atCurrent / agency.atGoal) * 100 : 0, 100)}%;"></div>
-                        </div>
-                    </div>
-                </div>`;
-
-            card.appendChild(summary);
-            card.appendChild(details);
-            
-            summary.addEventListener('click', (e) => { if (!e.target.closest('.switch-to-agency-leader-btn')) { details.classList.toggle('open'); summary.classList.toggle('open'); } });
-            
-            summary.querySelector('.switch-to-agency-leader-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                const agencyName = e.currentTarget.dataset.agencyname;
-                const parts = agencyName.split(' ');
-                if (parts.length > 1) {
-                    const lastName = parts[parts.length - 1];
-                    const foundUser = allUsersCache.find(user => user.toLowerCase().includes(lastName.toLowerCase()));
-                    if (foundUser) {
-                        viewHistory.push(foundUser);
-                        fetchAndRenderDashboard(foundUser);
-                    } else {
-                        console.warn(`Kein Geschäftsstellenleiter für "${agencyName}" gefunden.`);
-                    }
-                }
-            });
-
-            return card;
-        }
-
-        function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
-            const etPercentage = member.etGoal > 0 ? (member.etCurrent / member.etGoal * 100) : 0;
-            const prognosis = getPrognosis(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
-            const memberId = member.name.replace(/[^a-zA-Z0-9]/g, '');
+    </script>
             
             let ehValue = member.ehCurrent;
             let ehGoal = member.ehGoal;
@@ -3348,5 +2775,7 @@ function renderStructureView() {
         });
 
     </script>
+</body>
+</html>
 </body>
 </html>
