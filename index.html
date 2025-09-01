@@ -468,7 +468,10 @@
                     <button id="einarbeitung-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Meine Einarbeitung">
                         <i class="fas fa-graduation-cap"></i>
                     </button>
-                    <!-- UPDATE: Settings Button with Dropdown -->
+                    <!-- NEU: KI Assistent Button -->
+                    <button id="ai-assistant-btn" class="bg-accent-purple text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-purple-700 transition-colors h-10 w-10 flex items-center justify-center" title="KI-Assistent">
+                        <i class="fas fa-robot"></i>
+                    </button>
                     <div class="relative">
                         <button id="settings-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Einstellungen">
                             <i class="fas fa-cog"></i>
@@ -476,6 +479,7 @@
                         <div id="settings-menu" class="dropdown-menu hidden">
                              <a href="#" id="superuser-btn" class="hidden block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-users-cog w-5 mr-2"></i>Gesamtansicht</a>
                              <a href="#" id="money-view-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-euro-sign w-5 mr-2"></i>Geld-Ansicht</a>
+                             <a href="#" id="edit-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-edit w-5 mr-2"></i>Personendaten</a>
                              <a href="#" id="clear-cache-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sync-alt w-5 mr-2"></i>Cache leeren</a>
                              <a href="#" id="logout-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-right-from-bracket w-5 mr-2"></i>Logout</a>
                         </div>
@@ -631,12 +635,12 @@
                          <p id="onboarding-progress-text" class="font-bold text-skt-blue">0%</p>
                      </div>
                      <div class="w-full bg-gray-200 rounded-full h-4 shadow-inner relative">
-                        <div id="onboarding-soll-bar" class="bg-red-300 h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: 0%; z-index: 1;" data-tooltip="Soll-Fortschritt"></div>
-                        <div id="onboarding-progress-bar" class="bg-skt-green-accent h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: 0%; z-index: 2;" data-tooltip="Ist-Fortschritt"></div>
+                         <div id="onboarding-soll-bar" class="bg-red-300 h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: 0%; z-index: 1;" data-tooltip="Soll-Fortschritt"></div>
+                         <div id="onboarding-progress-bar" class="bg-skt-green-accent h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: 0%; z-index: 2;" data-tooltip="Ist-Fortschritt"></div>
                      </div>
                  </div>
 
-                                  <div class="space-y-8">
+                                 <div class="space-y-8">
                      <!-- Container Grundseminar -->
                      <div id="grundseminar-container" class="bg-skt-grey-light p-6 rounded-xl shadow-md">
                          <h3 class="text-2xl font-bold text-skt-blue mb-6 text-center">Grundseminar</h3>
@@ -648,26 +652,26 @@
                              </div>
                              <div id="grundseminar-steps-container" class="space-y-4 flex-grow"></div>
                          </div>
-                    </div>
+                 </div>
                      <!-- Container Aufbauseminar -->
                      <div id="aufbauseminar-container" class="bg-skt-grey-light p-6 rounded-xl shadow-md">
                          <h3 class="text-2xl font-bold text-skt-blue mb-6 text-center">Aufbauseminar</h3>
-                          <div class="timeline-wrapper flex gap-x-4 md:gap-x-6">
-                                 <div class="w-12 md:w-20 flex-shrink-0 relative pt-4 pb-4">
-                                     <div class="timeline-vertical-line"></div>
-                                     <div class="timeline-vertical-line-progress" id="aufbauseminar-progress"></div>
-                                     <div class="timeline-date-markers" id="aufbauseminar-date-markers"></div>
-                                 </div>
-                                 <div id="aufbauseminar-steps-container" class="space-y-4 flex-grow"></div>
-                              </div>
+                           <div class="timeline-wrapper flex gap-x-4 md:gap-x-6">
+                               <div class="w-12 md:w-20 flex-shrink-0 relative pt-4 pb-4">
+                                   <div class="timeline-vertical-line"></div>
+                                   <div class="timeline-vertical-line-progress" id="aufbauseminar-progress"></div>
+                                   <div class="timeline-date-markers" id="aufbauseminar-date-markers"></div>
+                               </div>
+                               <div id="aufbauseminar-steps-container" class="space-y-4 flex-grow"></div>
+                             </div>
                          </div>
                      </div>
-                </div>
+                 </div>
 
-                <!-- Container für die Führungskraft-Ansicht -->
-                <div id="leader-onboarding-view" class="hidden">
-                    <!-- Inhalt wird per JS generiert -->
-                </div>
+                 <!-- Container für die Führungskraft-Ansicht -->
+                 <div id="leader-onboarding-view" class="hidden">
+                     <!-- Inhalt wird per JS generiert -->
+                 </div>
 
              </div>
         </main>
@@ -687,12 +691,45 @@
         </div>
     </div>
     
-    <!-- NEU: Hinweis-Modal für Einarbeitung -->
     <div id="hinweis-modal" class="modal-overlay">
         <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-md relative">
             <button id="close-hinweis-modal-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
-            <h3 class="text-xl font-bold text-skt-blue mb-4">Hinweis</h3>
-            <p id="hinweis-modal-content" class="text-gray-700"></p>
+            <h3 id="hinweis-modal-title" class="text-xl font-bold text-skt-blue mb-4">Hinweis</h3>
+            <div id="hinweis-modal-content" class="text-gray-700"></div>
+        </div>
+    </div>
+
+    <!-- NEU: Modal zum Bearbeiten von Benutzerdaten -->
+    <div id="edit-user-modal" class="modal-overlay">
+        <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative">
+             <button id="cancel-edit-user-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
+             <h3 class="text-2xl font-bold text-skt-blue mb-6">Personendaten bearbeiten</h3>
+             <form id="edit-user-form" class="space-y-4">
+                 <div>
+                     <label for="edit-name" class="block text-sm font-medium text-gray-700">Name</label>
+                     <input type="text" id="edit-name" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                 </div>
+                 <div>
+                     <label for="edit-pwd" class="block text-sm font-medium text-gray-700">Passwort</label>
+                     <input type="text" id="edit-pwd" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                 </div>
+                  <div>
+                     <label for="edit-eh-quote" class="block text-sm font-medium text-gray-700">EH pro AT Quote</label>
+                     <input type="number" id="edit-eh-quote" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                 </div>
+                 <div>
+                     <label for="edit-status" class="block text-sm font-medium text-gray-700">Status</label>
+                     <select id="edit-status" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></select>
+                 </div>
+                 <div>
+                     <label for="edit-position" class="block text-sm font-medium text-gray-700">Karrierestufe</label>
+                     <select id="edit-position" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></select>
+                 </div>
+                 <div class="pt-4 flex justify-end space-x-3">
+                     <button type="button" id="cancel-edit-user-btn-2" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button>
+                     <button type="submit" id="save-user-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors">Speichern</button>
+                 </div>
+             </form>
         </div>
     </div>
 
@@ -702,18 +739,13 @@
         const SEATABLE_API_TOKEN = "b148f4c735d193f77841ce4e4ddb2bb8bc2e446b";
         const SEATABLE_APP_ACCESS_TOKEN_URL = "https://cloud.seatable.io/api/v2.1/dtable/app-access-token/";
         const SEATABLE_DTABLE_UUID = "5b374b51-789c-4aac-a12f-02574f8f4855";
-        const SEATABLE_APP_NAME = "SuccessDashboard";
-        const SEATABLE_QUERY_URL_PREFIX = "https://cloud.seatable.io/dtable-server/api/v1/dtables/";
-
-        const TIER_GOALS = {
-            "Trainee I": 1250,
-            "Trainee II": 2500,
-            "Trainee III": 4000,
-            "GST": 4001, // Junior GST
-        };
+        
+        let COLUMN_MAPS = {}; // Will be populated dynamically
 
         // --- GLOBALE VARIABLEN ---
         let seaTableAccessToken = null;
+        let apiGatewayUrl = null; 
+        let METADATA = {}; 
         let db = {
             mitarbeiter: [],
             umsatz: [],
@@ -735,6 +767,10 @@
         let isSuperuserView = false;
         let isMoneyView = false;
         let currentView = 'dashboard';
+        let currentOnboardingSubView = 'leader-list';
+        let cachedActiveMembers = [];
+        let cachedCycleData = {};
+
 
         // --- DOM-ELEMENTE ---
         const dom = {
@@ -814,55 +850,108 @@
             grundseminarDateMarkers: document.getElementById('grundseminar-date-markers'),
             aufbauseminarDateMarkers: document.getElementById('aufbauseminar-date-markers'),
             hinweisModal: document.getElementById('hinweis-modal'),
+            hinweisModalTitle: document.getElementById('hinweis-modal-title'),
             hinweisModalContent: document.getElementById('hinweis-modal-content'),
             closeHinweisModalBtn: document.getElementById('close-hinweis-modal-btn'),
+            closeIosModalBtn: document.getElementById('close-ios-modal-btn'),
+            iosInstructionsModal: document.getElementById('ios-instructions-modal'),
+            aiAssistantBtn: document.getElementById('ai-assistant-btn'),
+            leaderPersonalGoalContainer: document.getElementById('leader-personal-goal-container'),
+            editUserBtn: document.getElementById('edit-user-btn'),
+            editUserModal: document.getElementById('edit-user-modal'),
+            editUserForm: document.getElementById('edit-user-form'),
+            cancelEditUserBtn: document.getElementById('cancel-edit-user-btn'),
+            cancelEditUserBtn2: document.getElementById('cancel-edit-user-btn-2'),
+            saveUserBtn: document.getElementById('save-user-btn'),
         };
 
         // --- SEATABLE API FUNKTIONEN ---
 
         async function getSeaTableAccessToken() {
             try {
-                const response = await fetch(SEATABLE_APP_ACCESS_TOKEN_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Token ${SEATABLE_API_TOKEN}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        "dtable_uuid": SEATABLE_DTABLE_UUID,
-                        "app_name": SEATABLE_APP_NAME
-                    })
+                const url = `${SEATABLE_APP_ACCESS_TOKEN_URL}?dtable_uuid=${SEATABLE_DTABLE_UUID}`;
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: { 'Authorization': `Token ${SEATABLE_API_TOKEN}` }
                 });
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const data = await response.json();
                 seaTableAccessToken = data.access_token;
-                console.log("SeaTable Access Token obtained.");
+                apiGatewayUrl = data.dtable_server;
+                console.log("SeaTable App Access Token and API Gateway URL obtained.");
             } catch (error) {
                 console.error("Error getting SeaTable access token:", error);
                 setStatus("Fehler bei der Verbindung zur Datenbank.", true);
             }
         }
-
-        async function seaTableQuery(tableName) {
-            if (!seaTableAccessToken) {
-                await getSeaTableAccessToken();
-                if (!seaTableAccessToken) return []; // Stop if token is still not available
+        
+        async function fetchColumnMaps() {
+            if (!seaTableAccessToken || !apiGatewayUrl) {
+                console.error("Cannot fetch column maps without access token and gateway URL.");
+                return {};
             }
             try {
-                const url = `${SEATABLE_QUERY_URL_PREFIX}${SEATABLE_DTABLE_UUID}/rows/?table_name=${tableName}`;
+                const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/metadata/`;
                 const response = await fetch(url, {
                     method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${seaTableAccessToken}`
-                    }
+                    headers: { 'Authorization': `Bearer ${seaTableAccessToken}` }
                 });
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const data = await response.json();
-                return data.rows;
+                const newColumnMaps = {};
+                if (data && data.metadata && data.metadata.tables) {
+                    METADATA.tables = data.metadata.tables; // Store the full metadata
+                    data.metadata.tables.forEach(table => {
+                        const tableNameLower = table.name.toLowerCase();
+                        newColumnMaps[tableNameLower] = {};
+                        table.columns.forEach(col => {
+                            newColumnMaps[tableNameLower][col.name] = col.key;
+                        });
+                    });
+                }
+                console.log("Dynamically fetched column maps:", newColumnMaps);
+                return newColumnMaps;
+            } catch (error) {
+                console.error("Error fetching column maps:", error);
+                setStatus("Fehler beim Laden der Datenbankstruktur.", true);
+                return {};
+            }
+        }
+
+        async function seaTableQuery(tableName) {
+            if (!seaTableAccessToken || !apiGatewayUrl) {
+                await getSeaTableAccessToken();
+                if (!seaTableAccessToken || !apiGatewayUrl) return [];
+            }
+            try {
+                // Fetch all rows by paginating
+                let allRows = [];
+                let start = 0;
+                const limit = 1000; // Max limit
+                let hasMore = true;
+
+                while(hasMore) {
+                    const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/?table_name=${encodeURIComponent(tableName)}&start=${start}&limit=${limit}`;
+                    const response = await fetch(url, {
+                        method: 'GET',
+                        headers: { 'Authorization': `Bearer ${seaTableAccessToken}` }
+                    });
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    allRows = allRows.concat(data.rows);
+                    if (data.rows.length < limit) {
+                        hasMore = false;
+                    } else {
+                        start += limit;
+                    }
+                }
+                return allRows;
             } catch (error) {
                 console.error(`Error fetching data from table ${tableName}:`, error);
                 setStatus(`Fehler beim Laden der Tabelle: ${tableName}.`, true);
@@ -870,10 +959,91 @@
             }
         }
         
+        async function seaTableUpdateRow(tableName, rowId, rowData) {
+            if (!seaTableAccessToken || !apiGatewayUrl) {
+                console.error("Cannot update row without access token and gateway URL.");
+                return false;
+            }
+            try {
+                const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+                const response = await fetch(url, {
+                    method: 'PUT',
+                    headers: { 
+                        'Authorization': `Bearer ${seaTableAccessToken}`,
+                        'Content-Type': 'application/json'
+                     },
+                     body: JSON.stringify({
+                         table_name: tableName,
+                         row_id: rowId,
+                         row: rowData
+                     })
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error_message}`);
+                }
+                return true;
+            } catch (error) {
+                console.error(`Error updating row in table ${tableName}:`, error);
+                setStatus(`Fehler beim Speichern der Daten in Tabelle: ${tableName}.`, true);
+                return false;
+            }
+        }
+
+        // --- DATA NORMALIZATION ---
+        function normalizeRow(tableName, row) {
+            const tableNameLower = tableName.toLowerCase();
+            const mapping = COLUMN_MAPS[tableNameLower];
+            const tableMeta = METADATA.tables.find(t => t.name.toLowerCase() === tableNameLower);
+            
+            if (!mapping || !tableMeta) return row;
+
+            const normalizedRow = { ...row }; 
+            for (const readableName in mapping) {
+                const crypticKey = mapping[readableName];
+                const rawValue = row[crypticKey];
+
+                if (rawValue !== undefined && rawValue !== null) {
+                    const columnMeta = tableMeta.columns.find(c => c.key === crypticKey);
+
+                    if (columnMeta) {
+                        if (columnMeta.type === 'single-select' && columnMeta.data && columnMeta.data.options) {
+                            const option = columnMeta.data.options.find(o => o.id === rawValue);
+                            normalizedRow[readableName] = option ? option.name : rawValue; 
+                        } else if (columnMeta.type === 'link' && Array.isArray(rawValue) && rawValue.length > 0 && typeof rawValue[0] === 'object' && rawValue[0].hasOwnProperty('row_id')) {
+                             normalizedRow[readableName] = rawValue.map(link => link.row_id);
+                        }
+                        else {
+                            normalizedRow[readableName] = rawValue;
+                        }
+                    } else {
+                         normalizedRow[readableName] = rawValue;
+                    }
+                }
+            }
+            return normalizedRow;
+        }
+
+        function normalizeAllData() {
+            for (const tableName in db) {
+                if (Array.isArray(db[tableName])) {
+                    db[tableName] = db[tableName].map(row => normalizeRow(tableName, row));
+                }
+            }
+            console.log("--- Normalisierte Mitarbeiterdaten ---");
+            db.mitarbeiter.forEach(m => {
+                console.log(`Name: ${m.Name}, Status: ${m.Status}, PWD: ${m.PWD}, Karrierestufe: ${m.Karrierestufe}`);
+            });
+            console.log("------------------------------------");
+        }
+
         async function loadAllData() {
             setStatus("Lade Datenbank-Zugang...");
             await getSeaTableAccessToken();
             if (!seaTableAccessToken) return false;
+
+            COLUMN_MAPS = await fetchColumnMaps();
+            if (Object.keys(COLUMN_MAPS).length === 0) return false;
 
             setStatus("Lade Tabellen...");
             const tablesToLoad = [
@@ -887,7 +1057,10 @@
             });
 
             await Promise.all(promises);
-            console.log("All SeaTable data loaded and cached.", db);
+            
+            normalizeAllData();
+
+            console.log("All SeaTable data loaded and cached.");
             return true;
         }
 
@@ -942,7 +1115,35 @@
                 endDate = new Date(nextMonthCycleStart);
                 endDate.setDate(endDate.getDate() - 1);
             }
+            endDate.setHours(23, 59, 59, 999);
             return { startDate, endDate };
+        }
+        
+        function animateValue(element, start, end, duration, formatAsCurrency = false) {
+            if (!element) return;
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                const value = Math.floor(progress * (end - start) + start);
+                if (formatAsCurrency) {
+                    element.textContent = value.toLocaleString('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                } else {
+                    element.textContent = value.toLocaleString('de-DE');
+                }
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                }
+            };
+            window.requestAnimationFrame(step);
+        }
+
+        function updateCircleProgress(circleElement, radius, percentage) {
+            if (!circleElement) return;
+            const circumference = 2 * Math.PI * radius;
+            const offset = circumference - (Math.min(percentage, 100) / 100) * circumference;
+            circleElement.style.strokeDasharray = `${circumference} ${circumference}`;
+            circleElement.style.strokeDashoffset = offset;
         }
 
         // --- DATENBERECHNUNGS-LOGIK ---
@@ -950,59 +1151,63 @@
         function calculatePersonalData(mitarbeiterId) {
             const user = findRowById('mitarbeiter', mitarbeiterId);
             if (!user) return {};
+            const position = user.Karrierestufe || ""; // Safety check
 
             const { startDate, endDate } = getMonthlyCycleDates();
             const currentMonthName = startDate.toLocaleString('de-DE', { month: 'long' });
             const currentYear = startDate.getFullYear();
 
-            // 1. Monatsplanung
             const plan = db.monatsplanung.find(p => 
-                p.Mitarbeiter && p.Mitarbeiter[0] === mitarbeiterId &&
+                p.Mitarbeiter_ID && p.Mitarbeiter_ID[0] === mitarbeiterId &&
                 p.Monat === currentMonthName &&
                 p.Jahr === currentYear
             );
 
-            const ehZiel = plan ? plan.ET_Ziel : 0;
-            const etZiel = plan ? plan.EH_Ziel : 0;
+            const ehZiel = plan ? (plan.EH_Ziel || 0) : 0;
+            const etZiel = plan ? (plan.ET_Ziel || 0) : 0;
 
-            // 2. EH Ist
             const ehIst = db.umsatz.reduce((sum, u) => {
                 const umsatzDatum = new Date(u.Datum);
-                if (u.Mitarbeiter && u.Mitarbeiter[0] === mitarbeiterId && u.Status_OK && umsatzDatum >= startDate && umsatzDatum <= endDate) {
+                if (u.Mitarbeiter_ID && u.Mitarbeiter_ID[0] === mitarbeiterId && u.Status_OK && umsatzDatum >= startDate && umsatzDatum <= endDate) {
                     return sum + (u.EH || 0);
                 }
                 return sum;
             }, 0);
 
-            // 3. Termine Ist (ET & AT)
             let etIst = 0;
             let atIst = 0;
             let atVereinbart = 0;
+            const etGehaltenStati = ['Weiterer ET', 'Info Eingeladen', 'Info Bestätigt', 'Info Anwesend', 'Wird Mitarbeiter'];
+
             db.termine.forEach(t => {
                 const terminDatum = new Date(t.Datum);
-                if (t.Mitarbeiter && t.Mitarbeiter[0] === mitarbeiterId && terminDatum >= startDate && terminDatum <= endDate) {
-                    if (t.Kategorie === 'ET' && t.Status === 'Gehalten') {
-                        etIst++;
+                if (t.Mitarbeiter_ID && t.Mitarbeiter_ID[0] === mitarbeiterId && terminDatum >= startDate && terminDatum <= endDate) {
+                    if (t.Kategorie === 'ET') {
+                        if (etGehaltenStati.includes(t.Status)) {
+                            etIst++;
+                        }
                     }
                     if (t.Kategorie === 'AT') {
-                        if (t.Status === 'Gehalten') atIst++;
-                        if (t.Status === 'Ausgemacht') atVereinbart++;
+                        if (t.Status === 'Gehalten') {
+                            atIst++;
+                            atVereinbart++; // Gehalten zählt auch als vereinbart
+                        } else if (t.Status === 'Ausgemacht') {
+                            atVereinbart++;
+                        }
                     }
                 }
             });
 
-            // 4. AT Soll
             const atSoll = (user.EHproATQuote && ehZiel > 0) ? Math.round(ehZiel / user.EHproATQuote) : 0;
 
-            // 5. Karriere-Fortschritt
             const totalCurrentEh = db.umsatz.reduce((sum, u) => {
-                if (u.Mitarbeiter && u.Mitarbeiter[0] === mitarbeiterId) {
+                if (u.Mitarbeiter_ID && u.Mitarbeiter_ID[0] === mitarbeiterId) {
                     return sum + (u.EH || 0);
                 }
                 return sum;
             }, 0);
 
-            const anzahlGeworbenerMA = db.mitarbeiter.filter(m => m.Werber && m.Werber[0] === mitarbeiterId).length;
+            const anzahlGeworbenerMA = db.mitarbeiter.filter(m => m.Werberr && m.Werberr[0] === mitarbeiterId).length;
 
             return {
                 id: user._id,
@@ -1017,31 +1222,111 @@
                 atVereinbart: atVereinbart,
                 totalCurrentEh: totalCurrentEh,
                 recruitedEmployees: anzahlGeworbenerMA,
-                isTrainee: user.Karrierestufe.toLowerCase().includes('trainee'),
-                isLeader: !user.Karrierestufe.toLowerCase().includes('trainee'),
+                isTrainee: position.toLowerCase().includes('trainee') || position.toLowerCase().includes('ga '),
+                isLeader: !position.toLowerCase().includes('trainee') && !position.toLowerCase().includes('ga '),
             };
         }
         
-        function getSubordinates(leaderId, recursive = false) {
-            let team = db.mitarbeiter.filter(m => m.Führungskraft && m.Führungskraft[0] === leaderId);
-            if (recursive) {
-                const subTeam = [];
-                team.forEach(member => {
-                    subTeam.push(...getSubordinates(member._id, true));
-                });
-                team = team.concat(subTeam);
+        function getSubordinates(leaderId, type) {
+            const allUsers = db.mitarbeiter;
+            const leader = findRowById('mitarbeiter', leaderId);
+            if (!leader) return [];
+
+            const hierarchy = {};
+            allUsers.forEach(u => { hierarchy[u._id] = { user: u, children: [] }; });
+            allUsers.forEach(u => {
+                const fkId = u.FK ? u.FK[0] : null;
+                if (fkId && hierarchy[fkId]) {
+                    hierarchy[fkId].children.push(u._id);
+                }
+            });
+            
+            const subordinates = [];
+            const queue = [...(hierarchy[leaderId]?.children || [])];
+            const visited = new Set(queue);
+            
+            while (queue.length > 0) {
+                const currentId = queue.shift();
+                const current = hierarchy[currentId];
+                if (!current) continue;
+                
+                const pos = current.user.Karrierestufe || "";
+                const isCurrentLeader = !pos.toLowerCase().includes('trainee') && !pos.toLowerCase().includes('ga ');
+
+                if (type === 'gruppe') {
+                    if (!isCurrentLeader) {
+                        subordinates.push(current.user);
+                        current.children.forEach(childId => {
+                             if (!visited.has(childId)) {
+                                queue.push(childId);
+                                visited.add(childId);
+                             }
+                        });
+                    }
+                } else if (type === 'struktur') {
+                    if (isCurrentLeader) {
+                         subordinates.push(current.user);
+                    }
+                    current.children.forEach(childId => {
+                         if (!visited.has(childId)) {
+                            queue.push(childId);
+                            visited.add(childId);
+                         }
+                    });
+                }
             }
-            return team;
+
+            if (type === 'struktur') {
+                const leaderHierarchyLevel = db.karriereplan.find(k => k.Stufe === leader.Karrierestufe)?.Hierarchie || 99;
+                return subordinates.filter(sub => {
+                    const subHierarchyLevel = db.karriereplan.find(k => k.Stufe === sub.Karrierestufe)?.Hierarchie || 0;
+                    return subHierarchyLevel < leaderHierarchyLevel;
+                });
+            }
+
+            return subordinates;
         }
+        
+        function getAllSubordinatesRecursive(leaderId) {
+            const allUsers = db.mitarbeiter;
+            const hierarchy = {};
+            allUsers.forEach(u => { hierarchy[u._id] = { user: u, children: [] }; });
+            allUsers.forEach(u => {
+                const fkId = u.FK ? u.FK[0] : null;
+                if (fkId && hierarchy[fkId]) {
+                    hierarchy[fkId].children.push(u._id);
+                }
+            });
+            
+            const subordinates = [];
+            const queue = [...(hierarchy[leaderId]?.children || [])];
+            const visited = new Set(queue);
+
+            while (queue.length > 0) {
+                const currentId = queue.shift();
+                const current = hierarchy[currentId];
+                if (!current) continue;
+                
+                subordinates.push(current.user);
+                current.children.forEach(childId => {
+                    if (!visited.has(childId)) {
+                        queue.push(childId);
+                        visited.add(childId);
+                    }
+                });
+            }
+            return subordinates;
+        }
+
 
         function calculateGroupOrStructureData(leaderId, type = 'gruppe') {
             const leaderData = calculatePersonalData(leaderId);
             let members = [];
 
             if (type === 'gruppe') {
-                members = getSubordinates(leaderId, false);
+                members = getSubordinates(leaderId, 'gruppe');
             } else if (type === 'struktur') {
-                members = getSubordinates(leaderId, true);
+                members = getSubordinates(leaderId, 'struktur');
             }
             
             const memberData = members.map(m => calculatePersonalData(m._id));
@@ -1057,9 +1342,10 @@
                 return acc;
             }, { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atCurrent: 0, atVereinbart: 0 });
 
-            // Add leader's personal data to the total
             Object.keys(aggregatedData).forEach(key => {
-                aggregatedData[key] += leaderData[key] || 0;
+                if(typeof leaderData[key] === 'number') {
+                    aggregatedData[key] += leaderData[key];
+                }
             });
             
             return { ...aggregatedData, members: memberData };
@@ -1069,7 +1355,7 @@
             const führungskräfte = db.mitarbeiter.filter(m => m.Karrierestufe && !m.Karrierestufe.toLowerCase().includes('trainee'));
             
             const geschäftsstelleRows = db.mitarbeiter.filter(m => 
-                m.Name.toLowerCase().startsWith('geschäftsstelle') && m.Karrierestufe === 'Trainee'
+                m.Name && m.Name.toLowerCase().startsWith('geschäftsstelle') && m.Karrierestufe && m.Karrierestufe.toLowerCase().includes('trainee')
             );
 
             let totalData = { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atCurrent: 0, atVereinbart: 0, members: [] };
@@ -1081,11 +1367,10 @@
                 });
             });
 
-            // For the list below, we need to associate each leader with their "Geschäftsstelle" row data
             const leaderCardsData = führungskräfte.map(leader => {
                 const gsName = `Geschäftsstelle ${leader.Name}`;
                 const gsRow = geschäftsstelleRows.find(row => row.Name === gsName);
-                const displayData = gsRow ? calculatePersonalData(gsRow._id) : calculatePersonalData(leader._id); // Fallback to leader's own data
+                const displayData = gsRow ? calculatePersonalData(gsRow._id) : calculatePersonalData(leader._id);
                 return { ...displayData, leaderName: leader.Name, originalPosition: leader.Karrierestufe };
             });
 
@@ -1095,22 +1380,19 @@
 
 
         // --- UI-FUNKTIONEN ---
+        function updateWeeklyProgress() {
+            clearChildren(dom.weeklyProgressContainer);
+        }
 
         function updateMonthlyPlanningView(data) {
-            // This function now receives the calculated data object
-            // It should be adapted to use the properties of this object
-            // For example: data.ehCurrent, data.ehGoal, etc.
-            
-            // Placeholder for weekly progress bar update
             updateWeeklyProgress();
 
             animateValue(dom.ehCenterCurrent, 0, data.ehCurrent || 0, 1000);
             dom.ehCenterGoal.textContent = (data.ehGoal || 0).toLocaleString('de-DE');
             
             const ehPercentage = (data.ehGoal > 0) ? (data.ehCurrent / data.ehGoal * 100) : 0;
-            // updateCircleProgress(dom.ehProgressCircle, 45, ehPercentage);
+            updateCircleProgress(dom.ehProgressCircle, 45, ehPercentage);
 
-            // ... and so on for all other elements in this view
             dom.appointmentsText.textContent = `${data.atCurrent || 0} / ${data.atVereinbart || 0} / ${data.atGoal || 0}`;
             
             const vereinbartPercent = data.atGoal > 0 ? (data.atVereinbart / data.atGoal) * 100 : 0;
@@ -1127,13 +1409,16 @@
         function updateEmployeeCareerView() {
             const { totalCurrentEh, recruitedEmployees, name } = personalData;
             
-            // 1. Total EH
             animateValue(dom.currentEhDisplay, 0, totalCurrentEh, 1500);
 
-            // 2. Next career goal
             const currentStage = db.karriereplan.find(k => k.Stufe === personalData.position);
+            if (!currentStage) {
+                console.error("Aktuelle Karrierestufe nicht im Karriereplan gefunden:", personalData.position);
+                return;
+            }
+
             const nextStage = db.karriereplan
-                .filter(k => k.Hierarchie > (currentStage ? currentStage.Hierarchie : 0))
+                .filter(k => k.Hierarchie > currentStage.Hierarchie)
                 .sort((a, b) => a.Hierarchie - b.Hierarchie)[0];
 
             if (nextStage) {
@@ -1143,7 +1428,7 @@
                 const progressEh = ehNeeded > 0 ? (totalCurrentEh / ehNeeded) * 100 : 0;
                 dom.careerProgressPercentage.textContent = `${Math.min(progressEh, 100).toFixed(1)}%`;
                 dom.progressToNextText.textContent = `Fortschritt zum ${nextStage.Stufe}`;
-                // updateCircleProgress(dom.fortschrittKreisKarriere, 40, progressEh);
+                updateCircleProgress(dom.fortschrittKreisKarriere, 40, progressEh);
 
                 const maNeeded = nextStage.Kriterium_MA || 0;
                 dom.employeeCountDisplay.textContent = `${recruitedEmployees} / ${maNeeded}`;
@@ -1155,19 +1440,59 @@
                     dom.employeeSlotsContainer.appendChild(slot);
                 }
             } else {
-                // Highest level reached
                 dom.nextMilestone.innerHTML = 'Höchste Stufe erreicht!';
                 dom.careerProgressPercentage.textContent = "100%";
-                // ...
+                updateCircleProgress(dom.fortschrittKreisKarriere, 40, 100);
             }
             
-            // Tier cards update
-            // This logic needs to be adapted based on TIER_GOALS and totalCurrentEh
+            // Tier cards update based on Karriereplan
+            const careerPlanTiers = db.karriereplan
+                .filter(p => (p.Stufe && (p.Stufe.toLowerCase().includes('trainee') || p.Stufe.toLowerCase().includes('jgst'))))
+                .sort((a,b) => a.Hierarchie - b.Hierarchie);
+
+            let currentTierIndex = -1;
+            for (let i = careerPlanTiers.length - 1; i >= 0; i--) {
+                if (totalCurrentEh >= careerPlanTiers[i].Kriterium_EH) {
+                    currentTierIndex = i;
+                    break;
+                }
+            }
+
+            dom.tierCards.forEach((card, i) => {
+                 if (i < careerPlanTiers.length) {
+                    card.querySelector('h3').textContent = careerPlanTiers[i].Stufe;
+                    card.querySelector('p').textContent = `${(careerPlanTiers[i].Kriterium_EH || 0).toLocaleString('de-DE')} EH`;
+                    card.classList.toggle('active', i === currentTierIndex);
+
+                    let progress = 0;
+                    if (i < currentTierIndex) {
+                        progress = 100;
+                    } else if (i === currentTierIndex) {
+                        const tierStart = careerPlanTiers[i].Kriterium_EH || 0;
+                        const nextTierGoal = (i + 1 < careerPlanTiers.length) ? (careerPlanTiers[i+1].Kriterium_EH || 0) : tierStart;
+                        if (nextTierGoal > tierStart) {
+                           progress = ((totalCurrentEh - tierStart) / (nextTierGoal - tierStart)) * 100;
+                        } else {
+                            progress = (totalCurrentEh >= tierStart) ? 100 : 0;
+                        }
+                    }
+                    dom.tierProgressBars[i].style.width = `${Math.min(progress, 100)}%`;
+                }
+            });
         }
         
         function updateLeadershipView() {
+             if (currentPlanningView === 'personal' && !isSuperuserView) {
+                dom.leadershipView.classList.add('hidden');
+                return;
+             }
+             dom.leadershipView.classList.remove('hidden');
+
             let data, title;
-            if (currentPlanningView === 'struktur') {
+            if (isSuperuserView) {
+                data = { members: calculateGesamtansichtData().members };
+                title = "Führungskräfte-Übersicht";
+            } else if (currentPlanningView === 'struktur') {
                 data = structureData;
                 title = "Struktur-Übersicht";
             } else { // 'team'
@@ -1183,6 +1508,7 @@
 
         function renderTeamMemberCards(members) {
             clearChildren(dom.teamMembersContainer);
+            clearChildren(dom.passiveMembersSection);
             dom.teamMembersContainer.className = 'mt-6'; 
 
             if (!members || members.length === 0) {
@@ -1190,20 +1516,145 @@
                 return;
             }
             
-            // Simplified render logic, can be expanded with list/grid view later
-            dom.teamMembersContainer.classList.add('space-y-4');
-            members.forEach(member => {
-                const card = document.createElement('div');
-                card.className = 'bg-white p-4 rounded-lg shadow';
-                card.innerHTML = `
-                    <div class="flex justify-between">
-                        <p class="font-bold">${member.leaderName || member.name}</p>
-                        <p>${member.ehCurrent} / ${member.ehGoal} EH</p>
-                    </div>
-                    <p class="text-sm text-gray-600">${member.originalPosition || member.position}</p>
-                `;
-                dom.teamMembersContainer.appendChild(card);
+            const activeMembers = members.filter(m => m.ehGoal > 0 || m.etGoal > 0);
+            const passiveMembers = members.filter(m => m.ehGoal === 0 && m.etGoal === 0);
+            
+            const { startDate, endDate } = getMonthlyCycleDates();
+            const totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
+            const daysPassedInCycle = Math.max(0, (new Date() - startDate) / (1000 * 60 * 60 * 24));
+            
+            if (currentLeadershipViewMode === 'grid') {
+                dom.teamMembersContainer.className = 'mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6';
+            } else {
+                dom.teamMembersContainer.className = 'mt-6 space-y-4';
+            }
+            
+            activeMembers.forEach(member => {
+                 const card = createTeamMemberCard(member, totalDaysInCycle, daysPassedInCycle);
+                 dom.teamMembersContainer.appendChild(card);
             });
+
+            if (passiveMembers.length > 0) {
+                const details = document.createElement('details');
+                details.className = 'bg-white rounded-xl shadow-lg';
+                const summary = document.createElement('summary');
+                summary.className = 'p-4 font-semibold text-skt-blue cursor-pointer';
+                summary.textContent = `Passive Mitarbeiter (${passiveMembers.length})`;
+                details.appendChild(summary);
+                const container = document.createElement('div');
+                container.className = 'p-4 pt-0 space-y-3';
+                passiveMembers.forEach(member => {
+                    const passiveCard = document.createElement('div');
+                    passiveCard.className = 'p-3 bg-skt-grey-light rounded-lg flex justify-between items-center';
+                    passiveCard.innerHTML = `
+                        <div>
+                            <p class="font-bold text-skt-blue">${member.name}</p>
+                            <p class="text-sm text-skt-blue-light">${member.position}</p>
+                        </div>
+                        <button data-userid="${member.id}" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    `;
+                    passiveCard.querySelector('.switch-view-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const userId = e.currentTarget.dataset.userid;
+                        if(userId) fetchAndRenderDashboard(userId);
+                    });
+                    container.appendChild(passiveCard);
+                });
+                details.appendChild(container);
+                dom.passiveMembersSection.appendChild(details);
+            }
+        }
+        
+        function createTeamMemberCard(member, totalDaysInCycle, daysPassedInCycle) {
+            const prognosis = getPrognosis(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
+            const etPercentage = member.etGoal > 0 ? (member.etCurrent / member.etGoal * 100) : 0;
+            const memberId = member.id || member.name.replace(/\s+/g, '-');
+            
+            let ehValue = member.ehCurrent;
+            let ehGoal = member.ehGoal;
+            let ehUnit = 'Einheiten (EH)';
+
+            if (isMoneyView) {
+                 const { startDate, endDate } = getMonthlyCycleDates();
+                 ehValue = calculateTotalEarnings(member.id, startDate, endDate);
+                 ehGoal = 0; // Goal for earnings is not defined, can be adapted
+                 ehUnit = 'Verdienst (€)';
+            }
+
+            const ehPercentage = member.ehGoal > 0 ? (member.ehCurrent / member.ehGoal * 100) : 0;
+            const ehColorClass = getProgressColorClass(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
+
+            const card = document.createElement('div');
+            card.className = 'bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl';
+            
+            const summary = document.createElement('div');
+            summary.className = 'p-4 cursor-pointer';
+            
+            const pos = member.position || "";
+            const positionHtml = pos && !pos.toLowerCase().includes('trainee') ? `<p class="text-sm text-skt-blue-light">${member.originalPosition || member.position}</p>` : '';
+
+            summary.innerHTML = `
+                <div class="flex justify-between items-start gap-2">
+                    <div class="min-w-0">
+                        <p class="font-bold text-skt-blue text-lg break-words">${member.leaderName || member.name}</p>
+                        ${positionHtml}
+                    </div>
+                    <div class="flex items-center space-x-4 flex-shrink-0">
+                        <span class="font-semibold text-sm ${prognosis.colorClass}" data-tooltip="Prognose basierend auf dem aktuellen Fortschritt im Verhältnis zur vergangenen Zeit im Monat.">${prognosis.text}</span>
+                        <button data-userid="${member.id}" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button>
+                        <i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <div class="flex justify-between items-baseline">
+                        <p class="text-xs text-skt-blue-light">${ehUnit}</p>
+                        <p class="text-xs font-semibold text-skt-blue">${ehValue.toLocaleString('de-DE', {maximumFractionDigits: 0})} ${isMoneyView ? '' : `/ ${ehGoal.toLocaleString('de-DE', {maximumFractionDigits: 0})}`}</p>
+                    </div>
+                    ${!isMoneyView ? `<div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1">
+                        <div class="h-full ${ehColorClass}" style="width: ${Math.min(ehPercentage, 100)}%;"></div>
+                    </div>` : ''}
+                </div>
+                <div class="mt-2">
+                    <div class="flex justify-between items-baseline">
+                        <p class="text-xs text-skt-blue-light">ET Termine</p>
+                        <p class="text-xs font-semibold text-skt-blue">${member.etCurrent} / ${member.etGoal}</p>
+                    </div>
+                    <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1">
+                        <div class="h-full bg-skt-green-accent" style="width: ${Math.min(etPercentage, 100)}%;"></div>
+                    </div>
+                </div>
+            `;
+
+            const details = document.createElement('div');
+            details.className = 'team-member-details px-4';
+            details.innerHTML = `
+                <div class="details-grid grid grid-cols-1 gap-4">
+                     <div class="text-center">
+                         <p class="text-sm font-semibold text-skt-blue mb-1">Analysetermine</p>
+                         <p class="text-md font-bold text-skt-blue">${member.atCurrent} / ${member.atVereinbart} / ${member.atGoal}</p>
+                         <p class="text-xs text-gray-500 mb-2">Gehalten / Vereinbart / Soll</p>
+                         <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden relative">
+                             <div class="h-full bg-skt-blue-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(member.atGoal > 0 ? (member.atVereinbart / member.atGoal) * 100 : 0, 100)}%;"></div>
+                             <div class="h-full bg-skt-green-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(member.atGoal > 0 ? (member.atCurrent / member.atGoal) * 100 : 0, 100)}%;"></div>
+                         </div>
+                     </div>
+                </div>`;
+
+            card.appendChild(summary);
+            card.appendChild(details);
+            
+            summary.addEventListener('click', (e) => { if (!e.target.closest('.switch-view-btn')) { details.classList.toggle('open'); summary.classList.toggle('open'); } });
+            summary.querySelector('.switch-view-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                const newuserId = e.currentTarget.dataset.userid;
+                if (newuserId) {
+                    viewHistory.push(newuserId);
+                    fetchAndRenderDashboard(newuserId);
+                }
+            });
+            return card;
         }
 
         function fetchNextInfoDate() {
@@ -1212,7 +1663,8 @@
         }
         
         function updateBackButtonVisibility() {
-            dom.backButton.classList.toggle('hidden', viewHistory.length <= 1);
+            const shouldShow = viewHistory.length > 1 || isSuperuserView || currentView === 'einarbeitung';
+            dom.backButton.classList.toggle('hidden', !shouldShow);
         }
 
         // --- MAIN LOGIC ---
@@ -1221,6 +1673,8 @@
             window.scrollTo(0, 0);
             setStatus('Daten werden verarbeitet...');
             dom.dashboardSections.classList.add('opacity-0');
+            
+            checkAndApplyAutomaticPromotion(mitarbeiterId);
 
             const user = findRowById('mitarbeiter', mitarbeiterId);
             if (!user) {
@@ -1238,10 +1692,13 @@
             structureData = calculateGroupOrStructureData(mitarbeiterId, 'struktur');
 
             // Show/hide sections based on user role
-            const isLeader = !user.Karrierestufe.toLowerCase().includes('trainee');
+            const position = user.Karrierestufe || "";
+            const isLeader = !position.toLowerCase().includes('trainee');
             dom.employeeView.classList.toggle('hidden', isLeader);
             dom.leadershipView.classList.toggle('hidden', !isLeader);
             dom.planningViewToggle.classList.toggle('hidden', !isLeader);
+            dom.einarbeitungBanner.classList.toggle('hidden', isLeader);
+
 
             if (isLeader) {
                 // Default to team view for leaders
@@ -1261,11 +1718,14 @@
             }
             
             // Display "Nächstes Info" date
-            const nextInfoDateEl = document.createElement('p');
-            nextInfoDateEl.id = 'next-info-date';
-            nextInfoDateEl.className = 'text-center text-sm text-skt-blue-light mt-4';
+            let nextInfoDateEl = document.getElementById('next-info-date');
+            if (!nextInfoDateEl) {
+                nextInfoDateEl = document.createElement('p');
+                nextInfoDateEl.id = 'next-info-date';
+                nextInfoDateEl.className = 'text-center text-sm text-skt-blue-light mt-4';
+                dom.monthlyPlanningView.appendChild(nextInfoDateEl);
+            }
             nextInfoDateEl.textContent = `Nächstes Info: ${fetchNextInfoDate()}`;
-            dom.monthlyPlanningView.querySelector('.flex-col.md\:flex-row').parentElement.appendChild(nextInfoDateEl);
 
 
             setStatus('');
@@ -1283,10 +1743,9 @@
             
             dom.monthlyPlanningTitle.textContent = "Gesamtansicht";
             updateMonthlyPlanningView(gesamtData);
-
-            dom.leadershipViewTitle.textContent = "Führungskräfte-Übersicht";
-            dom.leadershipViewCount.textContent = `Zeige ${gesamtData.members.length} Führungskräfte`;
-            renderTeamMemberCards(gesamtData.members);
+            
+            currentPlanningView = 'team'; // Set a default view for leadership section
+            updateLeadershipView();
 
             dom.employeeView.classList.add('hidden');
             dom.leadershipView.classList.remove('hidden');
@@ -1295,15 +1754,229 @@
             setStatus('');
             dom.dashboardSections.classList.remove('hidden');
             setTimeout(() => dom.dashboardSections.classList.remove('opacity-0'), 50);
+            updateBackButtonVisibility();
         }
 
 
+        // --- Einarbeitung (Onboarding) Logic ---
+        async function fetchAndRenderOnboarding(mitarbeiterId) {
+             const user = findRowById('mitarbeiter', mitarbeiterId);
+             if (!user) return;
+            
+             const position = user.Karrierestufe || "";
+             const isTrainee = position.toLowerCase().includes('trainee');
+
+             if (isTrainee) {
+                 dom.einarbeitungTitle.textContent = "Dein Einarbeitungsplan";
+                 dom.leaderOnboardingView.classList.add('hidden');
+                 dom.traineeOnboardingView.classList.remove('hidden');
+                 await renderTraineeOnboardingView(mitarbeiterId);
+             } else {
+                 currentOnboardingSubView = 'leader-list';
+                 dom.einarbeitungTitle.textContent = "Einarbeitung: Gruppen-Übersicht";
+                 dom.traineeOnboardingView.classList.add('hidden');
+                 dom.leaderOnboardingView.classList.remove('hidden');
+                 const teamMembers = getSubordinates(mitarbeiterId, 'gruppe');
+                 await renderLeaderOnboardingView(teamMembers);
+             }
+         }
+
+        async function renderLeaderOnboardingView(teamMembers) {
+             clearChildren(dom.leaderOnboardingView);
+             dom.leaderOnboardingView.innerHTML = `<div class="loader mx-auto"></div>`;
+
+             if (teamMembers.length === 0) {
+                 dom.leaderOnboardingView.innerHTML = `<p class="text-center text-gray-500">Keiner deiner Mitarbeiter befindet sich aktuell in der Einarbeitung.</p>`;
+                 return;
+             }
+             
+             const container = document.createElement('div');
+             container.className = 'space-y-4';
+
+             for (const member of teamMembers) {
+                 // Logic to calculate progress for each member
+                const progressData = getOnboardingProgressForTrainee(member._id);
+                if (progressData.totalSteps > 0) { // Only show members with an onboarding plan
+                    const card = document.createElement('div');
+                    card.className = 'bg-skt-grey-light p-4 rounded-lg shadow-md cursor-pointer hover:bg-gray-200 transition-colors';
+                    card.dataset.traineeId = member._id;
+                    card.innerHTML = `
+                        <div class="flex justify-between items-center mb-1">
+                            <p class="font-bold text-skt-blue">${member.Name}</p>
+                            <p class="font-semibold text-skt-blue-light">${progressData.percentage.toFixed(0)}%</p>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-4 shadow-inner relative">
+                            <div class="bg-red-300 h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${progressData.sollPercentage.toFixed(0)}%; z-index: 1;" data-tooltip="Soll-Fortschritt"></div>
+                            <div class="bg-skt-green-accent h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${progressData.percentage.toFixed(0)}%; z-index: 2;" data-tooltip="Ist-Fortschritt"></div>
+                        </div>
+                    `;
+                    card.addEventListener('click', () => showTraineeDetailView(member._id));
+                    container.appendChild(card);
+                }
+             }
+             
+             clearChildren(dom.leaderOnboardingView);
+             if (container.children.length === 0) {
+                 dom.leaderOnboardingView.innerHTML = `<p class="text-center text-gray-500">Keiner deiner Mitarbeiter befindet sich aktuell in der Einarbeitung.</p>`;
+             } else {
+                dom.leaderOnboardingView.appendChild(container);
+             }
+         }
+
+        function getOnboardingProgressForTrainee(traineeId) {
+             // This is a helper to avoid code duplication
+             const userEinarbeitung = db.einarbeitung.filter(e => e.Mitarbeiter_ID && e.Mitarbeiter_ID[0] === traineeId);
+             const allSteps = db.einarbeitungsschritte.sort((a,b) => a['Tage nach Start'] - b['Tage nach Start']);
+
+             if(allSteps.length === 0) return { percentage: 0, sollPercentage: 0, totalSteps: 0};
+
+             const completedStepIds = new Set(userEinarbeitung.map(e => e.Schritt_ID[0]));
+             const completedSteps = allSteps.filter(s => completedStepIds.has(s._id)).length;
+             const percentage = (completedSteps / allSteps.length) * 100;
+             
+             // Soll-Berechnung
+             const userStartDate = findRowById('mitarbeiter', traineeId)?.Startdatum;
+             let sollPercentage = 0;
+             if (userStartDate) {
+                 const startDate = new Date(userStartDate);
+                 const overallStartDate = new Date(startDate);
+                 overallStartDate.setDate(startDate.getDate() + allSteps[0]['Tage nach Start']);
+                 const overallEndDate = new Date(startDate);
+                 overallEndDate.setDate(startDate.getDate() + allSteps[allSteps.length - 1]['Tage nach Start']);
+                 const today = new Date();
+                 const totalPlanDuration = overallEndDate.getTime() - overallStartDate.getTime();
+                 const elapsedPlanDuration = today.getTime() - overallStartDate.getTime();
+                 if (totalPlanDuration > 0) {
+                     sollPercentage = Math.max(0, Math.min(100, (elapsedPlanDuration / totalPlanDuration) * 100));
+                 } else if (today >= overallStartDate) {
+                     sollPercentage = 100;
+                 }
+             }
+
+             return { percentage, sollPercentage, totalSteps: allSteps.length };
+        }
+        
+        async function showTraineeDetailView(traineeId) {
+            dom.leaderOnboardingView.classList.add('hidden');
+            dom.traineeOnboardingView.classList.remove('hidden');
+            const traineeName = findRowById('mitarbeiter', traineeId)?.Name || "Unbekannt";
+            dom.einarbeitungTitle.textContent = `Einarbeitungsplan: ${traineeName}`;
+            
+            dom.grundseminarStepsContainer.innerHTML = `<div class="loader mx-auto mt-4"></div>`;
+            dom.aufbauseminarStepsContainer.innerHTML = ``;
+            document.getElementById('onboarding-progress-container').classList.add('hidden');
+
+            await renderTraineeOnboardingView(traineeId);
+
+            currentOnboardingSubView = 'trainee-detail';
+            updateBackButtonVisibility();
+        }
+
+        async function renderTraineeOnboardingView(mitarbeiterId, forceShowAllCompleted = false) {
+             // Logic to render the detailed timeline for a single trainee
+            const allSteps = db.einarbeitungsschritte.sort((a,b) => a.Tag - b.Tag);
+            const userEinarbeitung = db.einarbeitung.filter(e => e.Mitarbeiter_ID && e.Mitarbeiter_ID[0] === mitarbeiterId);
+            const completedStepIds = new Set(userEinarbeitung.map(e => e.Schritt_ID[0]));
+            const user = findRowById('mitarbeiter', mitarbeiterId);
+
+            if (!user || !user.Startdatum) {
+                dom.traineeOnboardingView.innerHTML = `<p class="text-center text-red-500">Für diesen Mitarbeiter ist kein Startdatum hinterlegt.</p>`;
+                return;
+            }
+
+            const startDate = new Date(user.Startdatum);
+            
+            const processedSteps = allSteps.map(step => {
+                const dueDate = new Date(startDate);
+                dueDate.setDate(startDate.getDate() + (step.Tag || 0));
+                return {
+                    ...step,
+                    dueDate: dueDate,
+                    completed: completedStepIds.has(step._id)
+                }
+            });
+
+             const aufbauStartIndex = processedSteps.findIndex(step => step.Schritt.toLowerCase().includes('aufbauseminar'));
+             let grundseminarSteps = aufbauStartIndex !== -1 ? processedSteps.slice(0, aufbauStartIndex) : processedSteps;
+             let aufbauseminarSteps = aufbauStartIndex !== -1 ? processedSteps.slice(aufbauStartIndex) : [];
+             
+            const progressData = getOnboardingProgressForTrainee(mitarbeiterId);
+            const progressContainer = document.getElementById('onboarding-progress-container');
+            progressContainer.classList.remove('hidden');
+            document.getElementById('onboarding-progress-bar').style.width = `${progressData.percentage}%`;
+            document.getElementById('onboarding-progress-text').textContent = `${progressData.percentage.toFixed(0)}%`;
+            document.getElementById('onboarding-soll-bar').style.width = `${progressData.sollPercentage}%`;
+
+             renderTimelineSection(dom.grundseminarStepsContainer, dom.grundseminarProgress, dom.grundseminarDateMarkers, grundseminarSteps);
+             renderTimelineSection(dom.aufbauseminarStepsContainer, dom.aufbauseminarProgress, dom.aufbauseminarDateMarkers, aufbauseminarSteps);
+        }
+
+        function renderTimelineSection(container, progressElement, dateMarkerContainer, steps) {
+            clearChildren(container);
+            
+            if (steps.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-500 mt-4">Für diesen Abschnitt sind keine Schritte vorhanden.</p>';
+                if (progressElement) progressElement.style.height = '0%';
+                if (dateMarkerContainer) clearChildren(dateMarkerContainer);
+                return;
+            }
+            
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            steps.forEach((step, index) => {
+                const stepEl = document.createElement('div');
+                const stepType = step.Kategorie ? step.Kategorie.toLowerCase().trim() : 'other';
+                const isMajor = stepType === 'meilenstein' || stepType === 'seminar';
+                
+                let statusClass = step.completed ? 'completed' : (step.dueDate <= today ? 'due' : 'future');
+                const isOverdue = !step.completed && (today.getTime() - step.dueDate.getTime() > (3 * 24 * 60 * 60 * 1000));
+
+                let iconClass = 'fa-question';
+                switch(stepType) {
+                    case 'seminar': iconClass = 'fa-book'; break;
+                    case 'persönliches gespräch': iconClass = 'fa-users'; break;
+                    case 'meilenstein': iconClass = 'fa-star'; break;
+                    case 'hausübung': iconClass = 'fa-pencil-alt'; break;
+                }
+
+                stepEl.className = `timeline-item ${statusClass} ${stepType} ${isMajor ? 'timeline-item-major' : 'timeline-item-minor'}`;
+                stepEl.style.animationDelay = `${index * 0.1}s`;
+                
+                const formattedDate = step.dueDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                
+                stepEl.innerHTML = `
+                    <div class="timeline-content ${isOverdue ? 'overdue-task' : ''}">
+                        <div class="timeline-header">
+                            <div class="timeline-icon-inline">
+                                <i class="fas ${iconClass}"></i>
+                            </div>
+                            <div class="timeline-info">
+                                <p class="timeline-title">${step.Schritt}</p>
+                                <p class="timeline-duedate">Fällig bis: ${formattedDate}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                stepEl.querySelector('.timeline-content').addEventListener('click', () => {
+                    dom.hinweisModalContent.textContent = step.Hinweis || 'Kein Hinweis verfügbar.';
+                    dom.hinweisModal.classList.add('visible');
+                    document.body.classList.add('modal-open');
+                    document.documentElement.classList.add('modal-open');
+                });
+                
+                container.appendChild(stepEl);
+            });
+        }
+        
         // --- INITIALISIERUNG & EVENT LISTENERS ---
 
         function setupEventListeners() {
             dom.userDropdownSelect.addEventListener('change', () => {
                 document.getElementById('password-container').classList.remove('hidden');
                 document.getElementById('start-dashboard-btn').classList.remove('hidden');
+                document.getElementById('password-input').focus();
             });
 
             document.getElementById('start-dashboard-btn').addEventListener('click', async () => {
@@ -1327,6 +2000,10 @@
                 }
             });
 
+            document.getElementById('password-input').addEventListener('keydown', e => {
+                if (e.key === 'Enter') document.getElementById('start-dashboard-btn').click();
+            });
+
             dom.logoutBtn.addEventListener('click', () => {
                 localStorage.removeItem('loggedInUserId');
                 location.reload();
@@ -1336,16 +2013,66 @@
                 localStorage.clear();
                 location.reload();
             });
+            
+             dom.moneyViewBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                isMoneyView = !isMoneyView;
+                dom.moneyViewBtn.innerHTML = isMoneyView 
+                    ? `<i class="fas fa-chart-pie w-5 mr-2"></i>EH-Ansicht` 
+                    : `<i class="fas fa-euro-sign w-5 mr-2"></i>Geld-Ansicht`;
+                dom.settingsMenu.classList.add('hidden');
+                dom.settingsMenu.classList.remove('visible');
+                
+                const currentUser = viewHistory[viewHistory.length - 1];
+                if (isSuperuserView) {
+                     renderSuperuserView();
+                } else if (currentUser) {
+                     fetchAndRenderDashboard(currentUser);
+                }
+            });
 
-            dom.settingsBtn.addEventListener('click', () => dom.settingsMenu.classList.toggle('hidden'));
+            dom.settingsBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const user = findRowById('mitarbeiter', localStorage.getItem('loggedInUserId'));
+                 if (user && user.Karrierestufe && !user.Karrierestufe.toLowerCase().includes('trainee')) {
+                    dom.superuserBtn.classList.remove('hidden');
+                 } else {
+                    dom.superuserBtn.classList.add('hidden');
+                 }
+                dom.settingsMenu.classList.toggle('visible');
+            });
             
             dom.superuserBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                dom.settingsMenu.classList.add('hidden');
+                dom.settingsMenu.classList.remove('visible');
                 renderSuperuserView();
+            });
+             dom.editUserBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                dom.settingsMenu.classList.remove('visible');
+                openEditUserModal();
             });
 
             dom.backButton.addEventListener('click', () => {
+                if (isSuperuserView) {
+                    isSuperuserView = false;
+                    const userId = localStorage.getItem('loggedInUserId');
+                    fetchAndRenderDashboard(userId);
+                    return;
+                }
+                if (currentView === 'einarbeitung') {
+                    if (currentOnboardingSubView === 'trainee-detail' && loggedInUserData && !loggedInUserData.isTrainee) {
+                         const teamMembers = getSubordinates(loggedInUserData._id, 'gruppe');
+                         renderLeaderOnboardingView(teamMembers);
+                         currentOnboardingSubView = 'leader-list';
+                         dom.einarbeitungTitle.textContent = "Einarbeitung: Gruppen-Übersicht";
+                         dom.leaderOnboardingView.classList.remove('hidden');
+                         dom.traineeOnboardingView.classList.add('hidden');
+                    } else {
+                        switchView('dashboard');
+                    }
+                    return;
+                }
                 if (viewHistory.length > 1) {
                     viewHistory.pop();
                     const previousUserId = viewHistory[viewHistory.length - 1];
@@ -1356,40 +2083,97 @@
             // View toggles (Personal, Gruppe, Struktur)
             dom.personalViewBtn.addEventListener('click', () => {
                 currentPlanningView = 'personal';
+                dom.personalViewBtn.classList.add('active');
+                dom.teamViewBtn.classList.remove('active');
+                dom.strukturViewBtn.classList.remove('active');
                 updateMonthlyPlanningView(personalData);
-                // ... update active button styles
+                updateLeadershipView();
             });
             dom.teamViewBtn.addEventListener('click', () => {
                 currentPlanningView = 'team';
+                dom.teamViewBtn.classList.add('active');
+                dom.personalViewBtn.classList.remove('active');
+                dom.strukturViewBtn.classList.remove('active');
                 updateMonthlyPlanningView(teamData);
                 updateLeadershipView();
-                // ... update active button styles
             });
             dom.strukturViewBtn.addEventListener('click', () => {
                 currentPlanningView = 'struktur';
+                dom.strukturViewBtn.classList.add('active');
+                dom.teamViewBtn.classList.remove('active');
+                dom.personalViewBtn.classList.remove('active');
                 updateMonthlyPlanningView(structureData);
                 updateLeadershipView();
-                // ... update active button styles
             });
             
+            dom.gridViewBtn.addEventListener('click', () => {
+                if (currentLeadershipViewMode === 'grid') return;
+                currentLeadershipViewMode = 'grid';
+                dom.gridViewBtn.classList.add('active');
+                dom.listViewBtn.classList.remove('active');
+                updateLeadershipView();
+            });
+
+            dom.listViewBtn.addEventListener('click', () => {
+                if (currentLeadershipViewMode === 'list') return;
+                currentLeadershipViewMode = 'list';
+                dom.listViewBtn.classList.add('active');
+                dom.gridViewBtn.classList.remove('active');
+                updateLeadershipView();
+            });
+
             // Einarbeitung view toggle
             dom.einarbeitungBtn.addEventListener('click', () => {
-                // This needs the full implementation of the onboarding view
-                console.log("Einarbeitung view not fully implemented yet.");
+                switchView('einarbeitung');
+                fetchAndRenderOnboarding(loggedInUserData._id);
             });
+            dom.einarbeitungBanner.addEventListener('click', () => {
+                 switchView('einarbeitung');
+                 fetchAndRenderOnboarding(loggedInUserData._id);
+            });
+
+            dom.closeHinweisModalBtn.addEventListener('click', () => {
+                dom.hinweisModal.classList.remove('visible');
+                document.body.classList.remove('modal-open');
+                document.documentElement.classList.remove('modal-open');
+            });
+             dom.hinweisModal.addEventListener('click', (e) => {
+                if(e.target === dom.hinweisModal) {
+                    dom.hinweisModal.classList.remove('visible');
+                    document.body.classList.remove('modal-open');
+                    document.documentElement.classList.remove('modal-open');
+                }
+            });
+
+            // NEU: Event Listener für KI-Assistent
+            dom.aiAssistantBtn.addEventListener('click', handleAIAssistantClick);
+            
+            // NEU: Event Listeners für User Edit Modal
+            dom.editUserForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                saveUserData();
+            });
+            dom.cancelEditUserBtn.addEventListener('click', closeEditUserModal);
+            dom.cancelEditUserBtn2.addEventListener('click', closeEditUserModal);
+
+        }
+        
+        function switchView(viewName) {
+            currentView = viewName;
+            dom.mainDashboardView.classList.toggle('hidden', viewName === 'einarbeitung');
+            dom.einarbeitungView.classList.toggle('hidden', viewName !== 'einarbeitung');
+            updateBackButtonVisibility();
         }
 
         async function initializeDashboard() {
-            const loggedInUserId = localStorage.getItem('loggedInUserId');
             const dataLoaded = await loadAllData();
 
             if (!dataLoaded) {
                 setStatus("Initialisierung fehlgeschlagen. Bitte Seite neu laden.", true);
                 return;
             }
-
-            // Populate user dropdown
-            const activeUsers = db.mitarbeiter.filter(m => m.Status === 'Aktiv');
+            
+            const activeUsers = db.mitarbeiter.filter(m => m.Status === 'Aktiv' && m.Name);
             activeUsers.sort((a, b) => a.Name.localeCompare(b.Name));
             activeUsers.forEach(user => {
                 const option = document.createElement('option');
@@ -1398,15 +2182,7 @@
                 dom.userDropdownSelect.appendChild(option);
             });
             
-            // Superuser button visibility (e.g., for specific user names)
-            // This logic can be refined
-            const superusers = ["Admin User", "Samuel König"]; // Example
-            const tempLoggedInUser = findRowById('mitarbeiter', loggedInUserId);
-            if (tempLoggedInUser && superusers.includes(tempLoggedInUser.Name)) {
-                dom.superuserBtn.classList.remove('hidden');
-            }
-
-
+            const loggedInUserId = localStorage.getItem('loggedInUserId');
             if (loggedInUserId && findRowById('mitarbeiter', loggedInUserId)) {
                 viewHistory = [loggedInUserId];
                 document.getElementById('user-select-screen').classList.add('hidden');
@@ -1414,1368 +2190,256 @@
                 fetchAndRenderDashboard(loggedInUserId);
             } else {
                 document.getElementById('user-select-screen').classList.remove('hidden');
+                document.getElementById('user-select-screen').classList.add('flex');
                 setStatus('');
             }
             
             setupEventListeners();
         }
+        
+        function getPrognosis(current, goal, totalDays, daysPassed) {
+            if (goal <= 0 || daysPassed <= 0) return { text: '-', colorClass: 'text-gray-500' };
+            const dailyRate = current / daysPassed;
+            const prognosis = dailyRate * totalDays;
+            
+            if (prognosis >= goal) return { text: `↗ ${Math.round(prognosis)}`, colorClass: 'text-skt-green-accent' };
+            if (prognosis >= goal * 0.8) return { text: `→ ${Math.round(prognosis)}`, colorClass: 'text-skt-yellow-accent' };
+            return { text: `↘ ${Math.round(prognosis)}`, colorClass: 'text-skt-red-accent' };
+        }
 
+        function getProgressColorClass(current, goal, totalDays, daysPassed) {
+            if (goal <= 0) return 'bg-skt-grey-medium';
+            const progressRatio = current / goal;
+            if (progressRatio >= 1) return 'bg-skt-green-accent';
+            if (daysPassed <= 0) return 'bg-skt-green-accent';
+
+            const timeRatio = daysPassed / totalDays;
+
+            if (progressRatio >= timeRatio) return 'bg-skt-green-accent';
+            if (progressRatio >= timeRatio * 0.75) return 'bg-skt-yellow-accent';
+            return 'bg-skt-red-accent';
+        }
+        
+        function getVerdienstForPosition(position) {
+            const plan = db.karriereplan.find(p => p.Stufe === position);
+            return plan ? (plan.Verdienst || 0) : 0;
+        }
+
+        function calculateTotalEarnings(leaderId, startDate, endDate) {
+            const leader = findRowById('mitarbeiter', leaderId);
+            if (!leader) return 0;
+
+            const leaderRate = getVerdienstForPosition(leader.Karrierestufe);
+            
+            const personalTurnover = db.umsatz.reduce((sum, u) => {
+                const umsatzDatum = new Date(u.Datum);
+                if (u.Mitarbeiter_ID && u.Mitarbeiter_ID[0] === leaderId && u.Status_OK && umsatzDatum >= startDate && umsatzDatum <= endDate) {
+                    return sum + (u.EH || 0);
+                }
+                return sum;
+            }, 0);
+            let totalEarnings = personalTurnover * leaderRate;
+
+            const directSubordinates = db.mitarbeiter.filter(m => m.FK && m.FK[0] === leaderId);
+            
+            directSubordinates.forEach(sub => {
+                const subRate = getVerdienstForPosition(sub.Karrierestufe);
+                const differentialRate = leaderRate - subRate;
+
+                if (differentialRate > 0) {
+                    const structureTurnover = calculateStructureTurnover(sub._id, startDate, endDate);
+                    totalEarnings += structureTurnover * differentialRate;
+                }
+            });
+
+            return totalEarnings;
+        }
+
+        function calculateStructureTurnover(leaderId, startDate, endDate) {
+            let totalTurnover = 0;
+            const membersToCalculate = [findRowById('mitarbeiter', leaderId), ...getAllSubordinatesRecursive(leaderId)];
+            
+            membersToCalculate.filter(Boolean).forEach(member => {
+                const memberTurnover = db.umsatz.reduce((sum, u) => {
+                    const umsatzDatum = new Date(u.Datum);
+                    if (u.Mitarbeiter_ID && u.Mitarbeiter_ID[0] === member._id && u.Status_OK && umsatzDatum >= startDate && umsatzDatum <= endDate) {
+                        return sum + (u.EH || 0);
+                    }
+                    return sum;
+                }, 0);
+                totalTurnover += memberTurnover;
+            });
+            return totalTurnover;
+        }
+
+        function checkAndApplyAutomaticPromotion(mitarbeiterId) {
+            const user = findRowById('mitarbeiter', mitarbeiterId);
+            if (!user || !user.Karrierestufe) return;
+            
+            const currentPersonalData = calculatePersonalData(mitarbeiterId);
+            const totalEh = currentPersonalData.totalCurrentEh;
+            const recruitedEmployees = currentPersonalData.recruitedEmployees;
+
+            const currentStage = db.karriereplan.find(p => p.Stufe === user.Karrierestufe);
+            if (!currentStage) return;
+
+            const nextStage = db.karriereplan
+                .filter(p => p.Hierarchie > currentStage.Hierarchie)
+                .sort((a, b) => a.Hierarchie - b.Hierarchie)[0];
+            
+            if (nextStage && nextStage.AutomatischeBefoerderung) {
+                if (totalEh >= nextStage.Kriterium_EH && recruitedEmployees >= nextStage.Kriterium_MA) {
+                    // Update in-memory user object for this session
+                    const userInDb = db.mitarbeiter.find(u => u._id === mitarbeiterId);
+                    if(userInDb) {
+                        userInDb.Karrierestufe = nextStage.Stufe;
+                        console.log(`Mitarbeiter ${user.Name} wurde automatisch zu ${nextStage.Stufe} befördert (visuell).`);
+                    }
+                }
+            }
+        }
+        
+         // --- Gemini API Integration ---
+        async function handleAIAssistantClick() {
+            dom.hinweisModalTitle.textContent = "KI-Assistent";
+            dom.hinweisModalContent.innerHTML = '<div class="loader mx-auto"></div>';
+            dom.hinweisModal.classList.add('visible');
+            document.body.classList.add('modal-open');
+
+            const { name, position, ehCurrent, ehGoal, atCurrent, atGoal, etCurrent, etGoal } = personalData;
+
+            const userPrompt = `
+                Analysiere die folgenden Leistungsdaten für den Mitarbeiter ${name} (${position}) und gib eine kurze, motivierende Zusammenfassung und 2-3 konkrete, umsetzbare Tipps.
+                - Aktuelle Einheiten (EH): ${ehCurrent} von ${ehGoal} geplant.
+                - Aktuelle Analysetermine (AT): ${atCurrent} von ${atGoal} geplant.
+                - Aktuelle Einstellungstermine (ET): ${etCurrent} von ${etGoal} geplant.
+                
+                Gib die Antwort auf Deutsch, direkt formuliert an den Mitarbeiter (Du-Form) und formatiere sie mit HTML (z.B. <strong> für wichtige Punkte und <ul>/<li> für die Tipps).
+            `;
+
+            const systemPrompt = "Du bist ein erfahrener und motivierender Vertriebscoach. Deine Antworten sind immer positiv, konstruktiv und auf den Punkt gebracht.";
+
+            try {
+                const apiKey = ""; // Wird von der Umgebung bereitgestellt
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                const payload = {
+                    contents: [{ parts: [{ text: userPrompt }] }],
+                    systemInstruction: {
+                        parts: [{ text: systemPrompt }]
+                    },
+                };
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API-Anfrage fehlgeschlagen mit Status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                const candidate = result.candidates?.[0];
+
+                if (candidate && candidate.content?.parts?.[0]?.text) {
+                    dom.hinweisModalContent.innerHTML = candidate.content.parts[0].text;
+                } else {
+                    throw new Error("Unerwartete Antwortstruktur von der API.");
+                }
+
+            } catch (error) {
+                console.error("Fehler bei der Gemini-API-Anfrage:", error);
+                dom.hinweisModalContent.textContent = "Der KI-Assistent ist im Moment leider nicht verfügbar. Bitte versuchen Sie es später erneut.";
+            }
+        }
+
+        // --- User Data Editing Modal ---
+        function openEditUserModal() {
+            const user = loggedInUserData;
+            document.getElementById('edit-name').value = user.Name || '';
+            document.getElementById('edit-pwd').value = user.PWD || '';
+            document.getElementById('edit-eh-quote').value = user.EHproATQuote || 0;
+
+            const statusSelect = document.getElementById('edit-status');
+            const positionSelect = document.getElementById('edit-position');
+            clearChildren(statusSelect);
+            clearChildren(positionSelect);
+
+            const mitarbeiterMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'mitarbeiter');
+            const statusCol = mitarbeiterMeta.columns.find(c => c.key === COLUMN_MAPS.mitarbeiter.Status);
+            const positionCol = mitarbeiterMeta.columns.find(c => c.key === COLUMN_MAPS.mitarbeiter.Karrierestufe);
+
+            statusCol.data.options.forEach(opt => {
+                const optionEl = document.createElement('option');
+                optionEl.value = opt.name;
+                optionEl.textContent = opt.name;
+                if (user.Status === opt.name) optionEl.selected = true;
+                statusSelect.appendChild(optionEl);
+            });
+
+            positionCol.data.options.forEach(opt => {
+                const optionEl = document.createElement('option');
+                optionEl.value = opt.name;
+                optionEl.textContent = opt.name;
+                if (user.Karrierestufe === opt.name) optionEl.selected = true;
+                positionSelect.appendChild(optionEl);
+            });
+            
+            dom.editUserModal.classList.add('visible');
+            document.body.classList.add('modal-open');
+        }
+
+        function closeEditUserModal() {
+            dom.editUserModal.classList.remove('visible');
+            document.body.classList.remove('modal-open');
+        }
+
+        async function saveUserData() {
+            const user = loggedInUserData;
+            const updatedRowData = {};
+
+            const nameKey = COLUMN_MAPS.mitarbeiter.Name;
+            const pwdKey = COLUMN_MAPS.mitarbeiter.PWD;
+            const ehQuoteKey = COLUMN_MAPS.mitarbeiter.EHproATQuote;
+            const statusKey = COLUMN_MAPS.mitarbeiter.Status;
+            const positionKey = COLUMN_MAPS.mitarbeiter.Karrierestufe;
+
+            updatedRowData[nameKey] = document.getElementById('edit-name').value;
+            updatedRowData[pwdKey] = document.getElementById('edit-pwd').value;
+            updatedRowData[ehQuoteKey] = parseFloat(document.getElementById('edit-eh-quote').value) || 0;
+            
+            updatedRowData[statusKey] = document.getElementById('edit-status').value;
+            updatedRowData[positionKey] = document.getElementById('edit-position').value;
+            
+            dom.saveUserBtn.textContent = "Speichern...";
+            dom.saveUserBtn.disabled = true;
+
+            const success = await seaTableUpdateRow('Mitarbeiter', user._id, updatedRowData);
+            
+            if (success) {
+                // Manually update local data to reflect changes immediately
+                const userInDb = db.mitarbeiter.find(u => u._id === user._id);
+                if(userInDb) {
+                    userInDb.Name = updatedRowData[nameKey];
+                    userInDb.PWD = updatedRowData[pwdKey];
+                    userInDb.EHproATQuote = updatedRowData[ehQuoteKey];
+                    userInDb.Status = updatedRowData[statusKey];
+                    userInDb.Karrierestufe = updatedRowData[positionKey];
+                }
+                closeEditUserModal();
+                await fetchAndRenderDashboard(user._id); // Refresh dashboard
+            }
+
+            dom.saveUserBtn.textContent = "Speichern";
+            dom.saveUserBtn.disabled = false;
+        }
+        
         // --- START ---
         document.addEventListener('DOMContentLoaded', initializeDashboard);
 
     </script>
-            
-            let ehValue = member.ehCurrent;
-            let ehGoal = member.ehGoal;
-            let ehUnit = 'Einheiten (EH)';
-
-            if (isMoneyView) {
-                const rate = getEarningsRate(member.position, member.totalCurrentEh);
-                ehValue = member.ehCurrent * rate;
-                ehGoal = member.ehGoal * rate;
-                ehUnit = 'Verdienst (€)';
-            }
-
-            const ehPercentage = member.ehGoal > 0 ? (member.ehCurrent / member.ehGoal * 100) : 0;
-            const ehColorClass = getProgressColorClass(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
-
-            const card = document.createElement('div');
-            card.className = 'bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl';
-            
-            const summary = document.createElement('div');
-            summary.className = 'p-4 cursor-pointer';
-            
-            const positionHtml = member.position.toLowerCase().trim() !== 'trainee' ? `<p class="text-sm text-skt-blue-light">${member.position}</p>` : '';
-
-            summary.innerHTML = `
-                <div class="flex justify-between items-start gap-2">
-                    <div class="min-w-0">
-                        <p class="font-bold text-skt-blue text-lg break-words">${member.name}</p>
-                        ${positionHtml}
-                    </div>
-                    <div class="flex items-center space-x-4 flex-shrink-0">
-                        <span class="font-semibold text-sm ${prognosis.colorClass}" data-tooltip="Prognose basierend auf dem aktuellen Fortschritt im Verhältnis zur vergangenen Zeit im Monat.">${prognosis.text}</span>
-                        <button data-username="${member.name}" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button>
-                        <i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i>
-                    </div>
-                </div>
-                <div class="mt-2">
-                    <div class="flex justify-between items-baseline">
-                         <p class="text-xs text-skt-blue-light">${ehUnit}</p>
-                         <p class="text-xs font-semibold text-skt-blue">${ehValue.toLocaleString('de-DE', {maximumFractionDigits: 0})} / ${ehGoal.toLocaleString('de-DE', {maximumFractionDigits: 0})}</p>
-                    </div>
-                    <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1">
-                        <div class="h-full ${ehColorClass}" style="width: ${Math.min(ehPercentage, 100)}%;"></div>
-                    </div>
-                </div>
-                <div class="mt-2">
-                    <div class="flex justify-between items-baseline">
-                         <p class="text-xs text-skt-blue-light">ET Termine</p>
-                         <p class="text-xs font-semibold text-skt-blue">${member.etCurrent} / ${member.etGoal}</p>
-                    </div>
-                    <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1">
-                        <div class="h-full bg-skt-green-accent" style="width: ${Math.min(etPercentage, 100)}%;"></div>
-                    </div>
-                </div>
-            `;
-
-            const details = document.createElement('div');
-            details.className = 'team-member-details px-4';
-            details.innerHTML = `
-                <div class="details-grid grid grid-cols-1 gap-4">
-                     <div class="text-center">
-                        <p class="text-sm font-semibold text-skt-blue mb-1">Analysetermine</p>
-                        <p class="text-md font-bold text-skt-blue">${member.atCurrent} / ${member.atVereinbart} / ${member.atGoal}</p>
-                        <p class="text-xs text-gray-500 mb-2">Gehalten / Vereinbart / Soll</p>
-                        <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden relative">
-                            <div class="h-full bg-skt-yellow-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(member.atGoal > 0 ? (member.atVereinbart / member.atGoal) * 100 : 0, 100)}%;"></div>
-                            <div class="h-full bg-skt-green-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(member.atGoal > 0 ? (member.atCurrent / member.atGoal) * 100 : 0, 100)}%;"></div>
-                        </div>
-                    </div>
-                    <div id="team-stats-${memberId}" class="hidden text-center border-t border-gray-200 pt-4 mt-4">
-                        <!-- Content will be loaded on click -->
-                    </div>
-                    <div id="leader-goal-${memberId}"></div>
-                </div>`;
-
-            card.appendChild(summary);
-            card.appendChild(details);
-            
-            summary.addEventListener('click', (e) => { if (!e.target.closest('.switch-view-btn')) { details.classList.toggle('open'); summary.classList.toggle('open'); if (isSuperuserView && details.classList.contains('open')) { const statsContainer = details.querySelector(`#team-stats-${memberId}`); statsContainer.classList.remove('hidden'); if (statsContainer.innerHTML.trim() === '<!-- Content will be loaded on click -->') { loadAndDisplayTeamStats(member.name, statsContainer); } } } });
-            summary.querySelector('.switch-view-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                const newuser = e.currentTarget.dataset.username;
-                viewHistory.push(newuser);
-                fetchAndRenderDashboard(newuser);
-            });
-            return card;
-        }
-        
-        // --- NEUE FUNKTIONEN FÜR EINARBEITUNG ---
-        async function fetchAndRenderOnboarding(userName, teamMembers) {
-            const isTrainee = personalData.position.toLowerCase().trim() === 'trainee';
-
-            if (isTrainee) {
-                dom.einarbeitungTitle.textContent = "Dein Einarbeitungsplan";
-                dom.leaderOnboardingView.classList.add('hidden');
-                dom.traineeOnboardingView.classList.remove('hidden');
-                await renderTraineeOnboardingView(userName);
-            } else {
-                currentOnboardingSubView = 'leader-list'; // Zustand für die Zurück-Navigation setzen
-                dom.einarbeitungTitle.textContent = "Einarbeitung: Gruppen-Übersicht";
-                dom.traineeOnboardingView.classList.add('hidden');
-                dom.leaderOnboardingView.classList.remove('hidden');
-                await renderLeaderOnboardingView(teamMembers);
-            }
-        }
-
-        async function renderLeaderOnboardingView(teamMembers) {
-            clearChildren(dom.leaderOnboardingView);
-            dom.leaderOnboardingView.innerHTML = `<div class="loader mx-auto"></div>`;
- 
-            const teamMemberSet = new Set(teamMembers.map(m => m.toLowerCase().trim()));
- 
-            const query = 'select *';
-            const data = await fetchSheetQuery(sheetEinarbeitungName, query, 0);
- 
-            if (!data || !data.table || !data.table.rows || data.table.rows.length < 5) {
-                dom.leaderOnboardingView.innerHTML = `<p class="text-center text-gray-500">Einarbeitungsdaten konnten nicht geladen werden.</p>`;
-                return;
-            }
-            
-            const nameRow = data.table.rows[1].c;
-            const dateRow = data.table.rows[2].c;
- 
-            const allStepsWithOffsets = [];
-            let minOffset = Infinity;
-            let maxOffset = -Infinity;
- 
-            for (let i = 4; i < data.table.rows.length; i++) {
-                const row = data.table.rows[i].c;
-                const type = (row && row[0] && row[0].v) ? row[0].v.toLowerCase().trim() : '';
-                const title = (row && row[2] && row[2].v) ? row[2].v.trim() : '';
-                const offset = row[3]?.v || 0;
- 
-                if (type !== 'versteckt' && type !== 'abschnitt' && title) {
-                    allStepsWithOffsets.push({ offset: offset });
-                    if (offset < minOffset) minOffset = offset;
-                    if (offset > maxOffset) maxOffset = offset;
-                }
-            }
-            const allStepsCount = allStepsWithOffsets.length;
- 
-             const traineeProgressData = [];
- 
-             // Iteriere durch alle Personen im "Einarbeitung"-Sheet
-             for (let userColIndex = 4; userColIndex < nameRow.length; userColIndex++) {
-                 const traineeNameCell = nameRow[userColIndex];
-                 if (!traineeNameCell || !traineeNameCell.v) continue;
- 
-                 const traineeName = traineeNameCell.v;
-                 const traineeNameLower = traineeName.toLowerCase().trim();
- 
-                 // Prüfe, ob diese Person zum Team der aktuellen Führungskraft gehört
-                 if (teamMemberSet.has(traineeNameLower)) {
-                     let completedSteps = 0;
-                     for (let i = 4; i < data.table.rows.length; i++) {
-                         const row = data.table.rows[i].c;
-                         const type = (row && row[0] && row[0].v) ? row[0].v.toLowerCase().trim() : '';
-                         const title = (row && row[2] && row[2].v) ? row[2].v.trim() : '';
- 
-                         if (type === 'versteckt' || type === 'abschnitt' || !title) continue;
- 
-                         if (row[userColIndex] && row[userColIndex].v === 'x') {
-                             completedSteps++;
-                         }
-                     }
-                     const percentage = allStepsCount > 0 ? (completedSteps / allStepsCount) * 100 : 0;
- 
-                     let sollPercentage = 0;
-                     const startDateCell = dateRow[userColIndex];
-                     if (startDateCell && startDateCell.v) {
-                         let startDate;
-                         if (startDateCell.v.startsWith("Date(")) {
-                             const dateMatch = startDateCell.v.match(/Date\((\d+),(\d+),(\d+)\)/);
-                             if (dateMatch) startDate = new Date(dateMatch[1], dateMatch[2], dateMatch[3]);
-                         } else {
-                             const parts = startDateCell.v.split('.');
-                             if (parts.length === 3) startDate = new Date(parts[2], parts[1] - 1, parts[0]);
-                         }
- 
-                         if (startDate && !isNaN(startDate)) {
-                             const traineePlanStartDate = new Date(startDate);
-                             traineePlanStartDate.setDate(startDate.getDate() + minOffset);
-                             const traineePlanEndDate = new Date(startDate);
-                             traineePlanEndDate.setDate(startDate.getDate() + maxOffset);
-                             const today = new Date();
- 
-                             const totalPlanDuration = traineePlanEndDate.getTime() - traineePlanStartDate.getTime();
-                             const elapsedPlanDuration = today.getTime() - traineePlanStartDate.getTime();
- 
-                             if (totalPlanDuration > 0) {
-                                 sollPercentage = Math.max(0, Math.min(100, (elapsedPlanDuration / totalPlanDuration) * 100));
-                             } else if (today >= traineePlanStartDate) {
-                                 sollPercentage = 100;
-                            }
-                         }
-                     }
-                     traineeProgressData.push({ name: traineeName, percentage, sollPercentage });
-                 }
-             }
-
-            clearChildren(dom.leaderOnboardingView);
-            if (traineeProgressData.length === 0) {
-                 dom.leaderOnboardingView.innerHTML = `<p class="text-center text-gray-500">Keiner deiner Mitarbeiter befindet sich aktuell in der Einarbeitung.</p>`;
-                 return;
-            }
-
-            const container = document.createElement('div');
-            container.className = 'space-y-4';
-
-            traineeProgressData.forEach(trainee => {
-                 const card = document.createElement('div');
-                 card.className = 'bg-skt-grey-light p-4 rounded-lg shadow-md cursor-pointer hover:bg-gray-200 transition-colors';
-                 card.dataset.traineeName = trainee.name;
-                 card.innerHTML = `
-                      <div class="flex justify-between items-center mb-1">
-                          <p class="font-bold text-skt-blue">${trainee.name}</p>
-                          <p class="font-semibold text-skt-blue-light">${trainee.percentage.toFixed(0)}%</p>
-                      </div>
-                      <div class="w-full bg-gray-200 rounded-full h-4 shadow-inner relative">
-                         <div class="bg-red-300 h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${trainee.sollPercentage.toFixed(0)}%; z-index: 1;" data-tooltip="Soll-Fortschritt"></div>
-                         <div class="bg-skt-green-accent h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${trainee.percentage.toFixed(0)}%; z-index: 2;" data-tooltip="Ist-Fortschritt"></div>
-                      </div>
-                 `;
-                 card.addEventListener('click', () => showTraineeDetailView(trainee.name));
-                 container.appendChild(card);
-            });
-            dom.leaderOnboardingView.appendChild(container);
-        }
-
-        async function renderTraineeOnboardingView(userName, forceShowAllCompleted = false) {
-            const renderCompletedMessage = () => {
-                if (progressContainer) progressContainer.classList.add('hidden');
-                if (dom.grundseminarContainer) dom.grundseminarContainer.classList.add('hidden');
-                if (dom.aufbauseminarContainer) dom.aufbauseminarContainer.classList.add('hidden');
-
-                if (!completedMessageContainer) {
-                    completedMessageContainer = document.createElement('div');
-                    completedMessageContainer.id = 'onboarding-completed-message';
-                    dom.traineeOnboardingView.appendChild(completedMessageContainer);
-                }
-                
-                completedMessageContainer.innerHTML = `
-                    <div class="text-center p-6 bg-skt-grey-light rounded-xl shadow-md">
-                        <i class="fas fa-user-graduate text-5xl text-skt-green-accent mb-4"></i>
-                        <h3 class="text-2xl font-bold text-skt-blue mb-2">Einarbeitung absolviert!</h3>
-                        <p class="text-gray-600 max-w-lg mx-auto">Herzlichen Glückwunsch, du hast alle Schritte der Einarbeitung erfolgreich abgeschlossen!</p>
-                        <button id="show-completed-plan-btn" class="mt-4 bg-skt-blue text-white font-semibold py-2 px-4 rounded-lg hover:bg-skt-blue-light transition-colors">Abgeschlossenen Plan ansehen</button>
-                    </div>
-                `;
-                completedMessageContainer.classList.remove('hidden');
-                document.getElementById('show-completed-plan-btn').addEventListener('click', () => renderTraineeOnboardingView(userName, true));
-            };
-
-            const progressContainer = document.getElementById('onboarding-progress-container');
-            if (progressContainer) progressContainer.classList.remove('hidden');
-            if (dom.grundseminarContainer) dom.grundseminarContainer.classList.remove('hidden');
-            if (dom.aufbauseminarContainer) dom.aufbauseminarContainer.classList.remove('hidden');
-            
-            let completedMessageContainer = document.getElementById('onboarding-completed-message');
-            if (completedMessageContainer) {
-                completedMessageContainer.classList.add('hidden');
-            }
-
-            const query = 'select *';
-            const data = await fetchSheetQuery(sheetEinarbeitungName, query, 0);
-
-            if (!data || !data.table || !data.table.rows || data.table.rows.length < 5) {
-                dom.grundseminarStepsContainer.innerHTML = '<p class="text-center text-gray-500">Einarbeitungsdaten konnten nicht geladen werden.</p>';
-                dom.aufbauseminarStepsContainer.innerHTML = '';
-                return;
-            }
-
-            const nameRow = data.table.rows[1].c; 
-            const dateRow = data.table.rows[2].c;
-            let userColIndex = -1;
-
-            for (let i = 4; i < nameRow.length; i++) {
-                if (nameRow[i] && nameRow[i].v && nameRow[i].v.toLowerCase().trim() === userName.toLowerCase().trim()) {
-                    userColIndex = i;
-                    break;
-                }
-            }
-
-            let startDate;
-            if (forceShowAllCompleted) {
-                startDate = new Date(); // Dummy-Datum, da keins vorhanden ist
-                if (progressContainer) progressContainer.classList.add('hidden'); // Fortschrittsbalken ausblenden
-            } else {
-                const startDateCell = userColIndex !== -1 ? dateRow[userColIndex] : null;
-                if (!startDateCell || !startDateCell.v) {
-                    renderCompletedMessage(); // Wenn kein Startdatum, dann als absolviert anzeigen
-                    return;
-                }
-                if (startDateCell.v.startsWith("Date(")) {
-                    const dateMatch = startDateCell.v.match(/Date\((\d+),(\d+),(\d+)\)/);
-                    if (dateMatch) startDate = new Date(dateMatch[1], dateMatch[2], dateMatch[3]);
-                } else {
-                    const parts = startDateCell.v.split('.');
-                    if (parts.length === 3) startDate = new Date(parts[2], parts[1] - 1, parts[0]);
-                }
-            }
-
-            if (!startDate || isNaN(startDate)) {
-                dom.grundseminarStepsContainer.innerHTML = `<p class="text-center text-red-500">Dein Startdatum im Format TT.MM.JJJJ ist ungültig oder fehlt.</p>`;
-                dom.aufbauseminarStepsContainer.innerHTML = '';
-                return;
-            }
-
-            const allSteps = [];
-            for (let i = 4; i < data.table.rows.length; i++) { 
-                const row = data.table.rows[i].c;
-                const type = (row && row[0] && row[0].v) ? row[0].v.toLowerCase().trim() : '';
-                const title = (row && row[2] && row[2].v) ? row[2].v.trim() : '';
-
-                if (type === 'versteckt' || type === 'abschnitt') {
-                    continue; 
-                }
-
-                if (!title) continue; 
-
-                const dueDate = new Date(startDate);
-                dueDate.setDate(dueDate.getDate() + (row[3]?.v || 0));
-                
-                allSteps.push({
-                    type: row[0]?.v || 'Unbekannt',
-                    hint: row[1]?.v || 'Kein Hinweis verfügbar.',
-                    title: title,
-                    dueDate: dueDate,
-                    completed: forceShowAllCompleted || (userColIndex !== -1 && row[userColIndex] && row[userColIndex].v === 'x')
-                });
-            }
-            
-            const allTasksCompleted = allSteps.length > 0 && allSteps.every(s => s.completed);
-            if ((userColIndex === -1 || allTasksCompleted) && !forceShowAllCompleted) {
-                renderCompletedMessage();
-                return;
-            }
-
-            const aufbauStartIndex = allSteps.findIndex(step => step.title.toLowerCase().includes('aufbauseminar'));
-            let grundseminarSteps;
-            let aufbauseminarSteps;
-
-            if (aufbauStartIndex !== -1) {
-                grundseminarSteps = allSteps.slice(0, aufbauStartIndex);
-                aufbauseminarSteps = allSteps.slice(aufbauStartIndex);
-            } else {
-                const grundTestIndex = allSteps.findIndex(step => step.title.toLowerCase().includes('grundseminartest'));
-                if (grundTestIndex !== -1) {
-                    grundseminarSteps = allSteps.slice(0, grundTestIndex + 1);
-                    aufbauseminarSteps = allSteps.slice(grundTestIndex + 1);
-                } else {
-                    grundseminarSteps = allSteps;
-                    aufbauseminarSteps = [];
-                }
-            }
-
-            // UPDATE: Gesamtfortschritt und Soll-Fortschritt berechnen und anzeigen
-            if (progressContainer) {
-                progressContainer.classList.remove('hidden');
-                const totalSteps = allSteps.length;
-                const completedSteps = allSteps.filter(step => step.completed).length;
-                const progressPercentage = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
-                
-                const progressBar = document.getElementById('onboarding-progress-bar');
-                const progressText = document.getElementById('onboarding-progress-text');
-                if(progressBar && progressText) {
-                    progressBar.style.width = `${progressPercentage.toFixed(0)}%`;
-                    progressText.textContent = `${progressPercentage.toFixed(0)}%`;
-                }
-
-                if (allSteps.length > 0) {
-                    const overallStartDate = allSteps[0].dueDate;
-                    const overallEndDate = allSteps[allSteps.length - 1].dueDate;
-                    const today = new Date();
-                    
-                    const totalPlanDuration = overallEndDate.getTime() - overallStartDate.getTime();
-                    const elapsedPlanDuration = today.getTime() - overallStartDate.getTime();
-
-                    let sollPercentage = 0;
-                    if (totalPlanDuration > 0) {
-                        sollPercentage = Math.max(0, Math.min(100, (elapsedPlanDuration / totalPlanDuration) * 100));
-                    } else if (today >= overallStartDate) {
-                        sollPercentage = 100;
-                    }
-
-                    const sollBar = document.getElementById('onboarding-soll-bar');
-                    if (sollBar) {
-                        sollBar.style.width = `${sollPercentage.toFixed(0)}%`;
-                    }
-                }
-            }
-
-
-            // UPDATE: Logik zum Blurring des Aufbauseminars
-            const isGrundseminarComplete = grundseminarSteps.every(step => step.completed);
-            const aufbauWrapper = dom.aufbauseminarContainer; // Korrektur: Referenz aus dem dom-Objekt
-            
-            if (aufbauWrapper) { // Sicherheitsprüfung, um Abstürze zu verhindern
-                let shouldBlur = true;
-                if (isGrundseminarComplete) {
-                    shouldBlur = false;
-                } else if (aufbauseminarSteps.length > 0) {
-                     const aufbauStartDate = aufbauseminarSteps[0].dueDate;
-                     if (new Date() >= aufbauStartDate) {
-                         shouldBlur = false;
-                     }
-                }
-    
-                if (shouldBlur) {
-                    aufbauWrapper.classList.add('aufbauseminar-blurred');
-                } else {
-                    aufbauWrapper.classList.remove('aufbauseminar-blurred');
-                }
-            }
-
-            renderTimelineSection(dom.grundseminarStepsContainer, dom.grundseminarProgress, dom.grundseminarDateMarkers, grundseminarSteps);
-            renderTimelineSection(dom.aufbauseminarStepsContainer, dom.aufbauseminarProgress, dom.aufbauseminarDateMarkers, aufbauseminarSteps);
-        }
-
-        function renderTimelineSection(container, progressElement, dateMarkerContainer, steps) {
-            clearChildren(container);
-            
-            if (steps.length === 0) {
-                container.innerHTML = '<p class="text-center text-gray-500 mt-4">Für diesen Abschnitt sind keine Schritte vorhanden.</p>';
-                progressElement.style.height = '0%';
-                clearChildren(dateMarkerContainer);
-                return;
-            }
-            
-            const sectionStartDate = steps[0].dueDate;
-            const sectionEndDate = steps[steps.length - 1].dueDate;
-            const today = new Date();
-
-            const totalDuration = sectionEndDate.getTime() - sectionStartDate.getTime();
-            const elapsedDuration = today.getTime() - sectionStartDate.getTime();
-            
-            let timeProgressPercent = 0;
-            if (totalDuration > 0) {
-                timeProgressPercent = Math.max(0, Math.min(100, (elapsedDuration / totalDuration) * 100));
-            } else if (today >= sectionStartDate) {
-                timeProgressPercent = 100;
-            }
-
-            progressElement.style.height = `${timeProgressPercent}%`;
-            
-            renderDateMarkers(dateMarkerContainer, sectionStartDate, sectionEndDate);
-
-            today.setHours(0, 0, 0, 0);
-
-            steps.forEach((step, index) => {
-                const stepEl = document.createElement('div');
-                const titleLower = step.title.toLowerCase();
-                
-                let statusClass = '';
-                let iconClass = 'fa-question';
-                let typeClass = '';
-                const stepType = step.type.toLowerCase().trim();
-                const isMajor = stepType === 'meilenstein' || stepType === 'seminar';
-
-                // Check for overdue
-                const threeDays = 3 * 24 * 60 * 60 * 1000;
-                const isOverdue = !step.completed && (today.getTime() - step.dueDate.getTime() > threeDays);
-
-                if (step.completed) {
-                    statusClass = 'completed';
-                } else if (step.dueDate <= today) {
-                    statusClass = 'due'; 
-                } else {
-                    statusClass = 'future';
-                }
-                
-                switch(stepType) {
-                    case 'seminar': 
-                        iconClass = 'fa-book'; 
-                        typeClass = 'seminar';
-                        break;
-                    case 'persönliches gespräch': 
-                        iconClass = 'fa-users'; 
-                        typeClass = 'gespraech';
-                        break;
-                    case 'meilenstein': 
-                        iconClass = 'fa-star'; 
-                        typeClass = 'meilenstein';
-                        break;
-                    case 'hausübung':
-                        iconClass = 'fa-pencil-alt';
-                        typeClass = 'hausuebung';
-                        break;
-                    default:
-                        typeClass = 'other';
-                        break;
-                }
-                
-                stepEl.className = `timeline-item ${statusClass} ${typeClass} ${isMajor ? 'timeline-item-major' : 'timeline-item-minor'}`;
-                stepEl.style.animationDelay = `${index * 0.1}s`;
-                
-                const formattedDate = step.dueDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                
-                stepEl.innerHTML = `
-                    <div class="timeline-content ${isOverdue ? 'overdue-task' : ''}">
-                        <div class="timeline-header">
-                            <div class="timeline-icon-inline">
-                                <i class="fas ${iconClass}"></i>
-                            </div>
-                            <div class="timeline-info">
-                                <p class="timeline-title">${step.title}</p>
-                                <p class="timeline-duedate">Fällig bis: ${formattedDate}</p>
-                            </div>
-                        </div>
-                    </div>
-                `;
-
-                stepEl.querySelector('.timeline-content').addEventListener('click', () => {
-                    dom.hinweisModalContent.textContent = step.hint;
-                    dom.hinweisModal.classList.add('visible');
-                    document.body.classList.add('modal-open');
-                    document.documentElement.classList.add('modal-open');
-                });
-                
-                container.appendChild(stepEl);
-            });
-        }
-        
-        function renderDateMarkers(container, startDate, endDate) {
-            clearChildren(container);
-            const totalDuration = endDate.getTime() - startDate.getTime();
-            if (totalDuration <= 0 && startDate.getTime() !== endDate.getTime()) return;
-
-            const createMarker = (date) => {
-                let topPercent = 0;
-                if (totalDuration > 0) {
-                    const elapsed = date.getTime() - startDate.getTime();
-                    topPercent = (elapsed / totalDuration) * 100;
-                } else {
-                     topPercent = 0;
-                }
-                
-                const marker = document.createElement('div');
-                marker.className = 'timeline-date-marker';
-                marker.textContent = date.toLocaleDateString('de-DE', { month: 'short' });
-                marker.style.top = `${Math.max(0, Math.min(100, topPercent))}%`;
-                
-                container.appendChild(marker);
-            };
-
-            createMarker(startDate);
-            
-            let cursorDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 1);
-            while (cursorDate < endDate) {
-                createMarker(cursorDate);
-                cursorDate.setMonth(cursorDate.getMonth() + 1);
-            }
-            
-            if(startDate.getMonth() !== endDate.getFullYear() || startDate.getFullYear() !== endDate.getFullYear()){
-                createMarker(endDate);
-            }
-        }
-
-        async function fetchAgenciesData(userName) {
-            const query = `select A, B, C, D, E, F, G, H, J, M`;
-            const data = await fetchSheetQuery(sheetDataName, query);
-
-            if (!data || !data.table || !data.table.rows) {
-                console.error("Keine Geschäftsstellen-Daten gefunden.");
-                return [];
-            }
-
-            const agenciesData = [];
-            const currentUserNameLower = userName.toLowerCase().trim();
-
-            for (const row of data.table.rows) {
-                const rowData = row.c;
-                if (!rowData) continue;
-                
-                const name = (rowData[0]?.v || "").toLowerCase().trim(); 
-                const bezirksleiter = (rowData[9]?.v || "").toLowerCase().trim();
-
-                const position = (rowData[8]?.v || "").toLowerCase().trim();
-                const isAgencyOrAnwaerter = name.startsWith('geschäftsstelle ') || name.startsWith('wgst ') || name.startsWith('jgst ') || name.startsWith('ga ') || name.startsWith('wbl') || position.includes('werdender bezirksleiter');
-
-                if (isAgencyOrAnwaerter && bezirksleiter === currentUserNameLower) {
-                     let displayName = rowData[0]?.v || 'Unbekannt';
-                     let positionFallback = 'Unbekannt';
-                     if (name.startsWith('geschäftsstelle ')) positionFallback = 'Geschäftsstelle';
-                     else if (name.startsWith('wgst ')) positionFallback = 'wGST';
-                     else if (name.startsWith('jgst ')) positionFallback = 'JGST';
-                     else if (name.startsWith('ga ')) positionFallback = 'GA';
-                     else if (name.startsWith('wbl') || position.includes('werdender bezirksleiter')) {
-                         const nameParts = displayName.split(' ');
-                         const lastName = nameParts.length > 0 ? nameParts[nameParts.length - 1] : displayName;
-                         displayName = `wBL ${lastName}`;
-                         positionFallback = 'wBL';
-                     }
-
-                     agenciesData.push({
-                         name: displayName,
-                         ehGoal: Math.round(rowData[1]?.v || 0),
-                         ehCurrent: Math.round(rowData[2]?.v || 0),
-                         etGoal: Math.round(rowData[3]?.v || 0),
-                         etCurrent: Math.round(rowData[4]?.v || 0),
-                         atGoal: Math.round(rowData[5]?.v || 0),
-                         atVereinbart: Math.round(rowData[6]?.v || 0),
-                         atCurrent: Math.round(rowData[7]?.v || 0),
-                         position: rowData[8]?.v || positionFallback
-                     });
-                }
-            }
-            return agenciesData;
-        }
-
-        async function fetchRDStructureData(userName) {
-            // Fetches BLs and direct agencies for an RD
-            // ANNAHME: Spalte M in 'Daten' enthält den zugehörigen Regionaldirektor
-            const query = `select A, B, C, D, E, F, G, H, J, M`;
-            const data = await fetchSheetQuery(sheetDataName, query);
-
-            if (!data || !data.table || !data.table.rows) {
-                console.error("Keine Struktur-Daten für RD gefunden.");
-                return [];
-            }
-
-            const structureItems = [];
-            const currentUserNameLower = userName.toLowerCase().trim();
-
-            for (const row of data.table.rows) {
-                const rowData = row.c;
-                if (!rowData) continue;
-                
-                const name = (rowData[0]?.v || "").toLowerCase().trim(); 
-                const position = (rowData[8]?.v || "").toLowerCase().trim();
-                const superior = (rowData[9]?.v || "").toLowerCase().trim(); // M is at index 9
-
-                if (superior === currentUserNameLower) {
-                    const isBezirksleitung = name.startsWith('bezirksleitung') || name.startsWith('wbl') || position.includes('bezirksleiter');
-                    const isAgencyOrAnwaerter = name.startsWith('geschäftsstelle ') || name.startsWith('wgst ') || name.startsWith('jgst ') || name.startsWith('ga ');
-
-                    if (isBezirksleitung || isAgencyOrAnwaerter) {
-                        let displayName = rowData[0]?.v || 'Unbekannt';
-                        let positionFallback = 'Unbekannt';
-                        if (name.startsWith('bezirksleitung') || position.includes('bezirksleiter')) {
-                            const nameParts = displayName.split(' ');
-                            const lastName = nameParts.length > 0 ? nameParts[nameParts.length - 1] : displayName;
-                            displayName = `Bezirksleitung ${lastName}`;
-                            positionFallback = 'Bezirksleitung';
-                        } else if (name.startsWith('wbl')) {
-                            positionFallback = 'wBL';
-                        }
-                        else if (name.startsWith('geschäftsstelle ')) positionFallback = 'Geschäftsstelle';
-                        else if (name.startsWith('wgst ')) positionFallback = 'wGST';
-                        else if (name.startsWith('jgst ')) positionFallback = 'JGST';
-                        else if (name.startsWith('ga ')) positionFallback = 'GA';
-
-                        structureItems.push({
-                            name: displayName,
-                            ehGoal: Math.round(rowData[1]?.v || 0),
-                            ehCurrent: Math.round(rowData[2]?.v || 0),
-                            etGoal: Math.round(rowData[3]?.v || 0),
-                            etCurrent: Math.round(rowData[4]?.v || 0),
-                            atGoal: Math.round(rowData[5]?.v || 0),
-                            atVereinbart: Math.round(rowData[6]?.v || 0),
-                            atCurrent: Math.round(rowData[7]?.v || 0),
-                            position: rowData[8]?.v || positionFallback
-                        });
-                    }
-                }
-            }
-            return structureItems;
-        }
-
-        function createAgencyCard(agency, totalDaysInCycle, daysPassedInCycle) {
-            const card = document.createElement('div');
-            card.className = 'bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl';
-
-            const summary = document.createElement('div');
-            summary.className = 'p-4 cursor-pointer';
-
-            const ehPercentage = agency.ehGoal > 0 ? (agency.ehCurrent / agency.ehGoal * 100) : 0;
-            const etPercentage = agency.etGoal > 0 ? (agency.etCurrent / agency.etGoal * 100) : 0;
-            const ehColorClass = getProgressColorClass(agency.ehCurrent, agency.ehGoal, totalDaysInCycle, daysPassedInCycle);
-            const prognosis = getPrognosis(agency.ehCurrent, agency.ehGoal, totalDaysInCycle, daysPassedInCycle);
-
-            summary.innerHTML = `
-                <div class="flex justify-between items-start gap-2">
-                    <div class="min-w-0">
-                        <p class="font-bold text-skt-blue text-lg break-words">${agency.name}</p>
-                        <p class="text-sm ${prognosis.colorClass} font-semibold">${prognosis.text}</p>
-                    </div>
-                    <div class="flex items-center space-x-4 flex-shrink-0">
-                        <button data-agencyname="${agency.name}" class="switch-to-agency-leader-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button>
-                        <i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i>
-                    </div>
-                </div>
-                <div class="mt-2">
-                    <div class="flex justify-between items-baseline">
-                         <p class="text-xs text-skt-blue-light">Einheiten (EH)</p>
-                         <p class="text-xs font-semibold text-skt-blue">${agency.ehCurrent.toLocaleString('de-DE')} / ${agency.ehGoal.toLocaleString('de-DE')}</p>
-                    </div>
-                    <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1">
-                        <div class="h-full ${ehColorClass}" style="width: ${Math.min(ehPercentage, 100)}%;"></div>
-                    </div>
-                </div>
-                 <div class="mt-2">
-                    <div class="flex justify-between items-baseline">
-                         <p class="text-xs text-skt-blue-light">ET Termine</p>
-                         <p class="text-xs font-semibold text-skt-blue">${agency.etCurrent} / ${agency.etGoal}</p>
-                    </div>
-                    <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1">
-                        <div class="h-full bg-skt-green-accent" style="width: ${Math.min(etPercentage, 100)}%;"></div>
-                    </div>
-                </div>
-            `;
-            
-            const details = document.createElement('div');
-            details.className = 'team-member-details px-4';
-            details.innerHTML = `
-                <div class="details-grid grid grid-cols-1 gap-4">
-                     <div class="text-center">
-                        <p class="text-sm font-semibold text-skt-blue mb-1">Analysetermine</p>
-                        <p class="text-md font-bold text-skt-blue">${agency.atCurrent} / ${agency.atVereinbart} / ${agency.atGoal}</p>
-                        <p class="text-xs text-gray-500 mb-2">Gehalten / Vereinbart / Soll</p>
-                        <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden relative">
-                            <div class="h-full bg-skt-yellow-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(agency.atGoal > 0 ? (agency.atVereinbart / agency.atGoal) * 100 : 0, 100)}%;"></div>
-                            <div class="h-full bg-skt-green-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(agency.atGoal > 0 ? (agency.atCurrent / agency.atGoal) * 100 : 0, 100)}%;"></div>
-                        </div>
-                    </div>
-                </div>`;
-
-            card.appendChild(summary);
-            card.appendChild(details);
-
-            summary.addEventListener('click', (e) => {
-                if (!e.target.closest('.switch-to-agency-leader-btn')) {
-                    details.classList.toggle('open');
-                    summary.classList.toggle('open');
-                }
-            });
-
-            summary.querySelector('.switch-to-agency-leader-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                const agencyName = e.currentTarget.dataset.agencyname;
-                const parts = agencyName.split(' ');
-                if (parts.length > 1) {
-                    const lastName = parts[parts.length - 1];
-                    const foundUser = allUsersCache.find(user => user.toLowerCase().includes(lastName.toLowerCase()));
-                    if (foundUser) {
-                        viewHistory.push(foundUser);
-                        fetchAndRenderDashboard(foundUser);
-                    } else {
-                        console.warn(`Kein Geschäftsstellenleiter für "${agencyName}" gefunden.`);
-                        // Hier könnte man eine kleine, nicht-blockierende Benachrichtigung anzeigen
-                    }
-                }
-            });
-            
-            return card;
-        }
-
-
-        async function getAllUsers() {
-            if (allUsersCache.length > 0) return allUsersCache;
-            
-            const data = await fetchSheetQuery(sheetDataName, 'select A');
-            if (!data || !data.table.rows) {
-                console.error("Fehler beim Laden der Benutzerliste."); return [];
-            }
-            const users = filterUsers(data.table.rows.map(r => r.c[0]?.v).filter(Boolean));
-            allUsersCache = users;
-            return allUsersCache;
-        }
-
-        async function populateUserDropdown() {
-            const users = await getAllUsers();
-            if (users.length === 0) {
-                dom.userDropdownSelect.innerHTML = '<option value="">Fehler</option>'; return;
-            }
-            users.forEach(u => {
-                const opt = document.createElement('option');
-                opt.value = opt.textContent = u;
-                dom.userDropdownSelect.appendChild(opt);
-            });
-        }
-        
-        // NEU: Funktion um die Detailansicht eines Trainees in der Einarbeitungs-Ansicht anzuzeigen
-        async function showTraineeDetailView(traineeName) {
-            dom.leaderOnboardingView.classList.add('hidden');
-            dom.traineeOnboardingView.classList.remove('hidden');
-            dom.einarbeitungTitle.textContent = `Einarbeitungsplan: ${traineeName}`;
-            
-            // Ladeindikatoren anzeigen, während die Daten abgerufen werden
-            dom.grundseminarStepsContainer.innerHTML = `<div class="loader mx-auto mt-4"></div>`;
-            dom.aufbauseminarStepsContainer.innerHTML = `<div class="loader mx-auto mt-4"></div>`;
-            document.getElementById('onboarding-progress-container').classList.add('hidden');
-
-            await renderTraineeOnboardingView(traineeName);
-
-            currentOnboardingSubView = 'trainee-detail';
-            updateBackButtonVisibility();
-        }
-
-        // --- NAVIGATION & VIEWS ---
-        function updateBackButtonVisibility() {
-            if (viewHistory.length > 1 || currentView === 'einarbeitung' || isSuperuserView) {
-                dom.backButton.classList.remove('hidden');
-            } else {
-                dom.backButton.classList.add('hidden');
-            }
-        }
-        
-        function switchView(viewName) {
-            currentView = viewName;
-            if (viewName === 'einarbeitung') {
-                localStorage.setItem('hasVisitedOnboarding', 'true'); // Banner-Logik
-                dom.mainDashboardView.classList.add('hidden');
-                dom.einarbeitungView.classList.remove('hidden');
-                dom.einarbeitungBanner.classList.add('hidden');
-            } else { // 'dashboard'
-                dom.einarbeitungView.classList.add('hidden');
-                dom.mainDashboardView.classList.remove('hidden');
-            }
-            updateBackButtonVisibility();
-        }
-
-        function goBack() {
-             if (isSuperuserView) {
-                isSuperuserView = false;
-                const loggedInUser = localStorage.getItem('loggedInUser');
-                if (loggedInUser) {
-                    fetchAndRenderDashboard(loggedInUser);
-                }
-                return;
-            }
-
-            if (currentView === 'einarbeitung') {
-                const isTrainee = personalData.position.toLowerCase().trim() === 'trainee';
-                // Wenn eine Führungskraft die Detailansicht eines Trainees betrachtet, gehe zurück zur Listenansicht
-                if (!isTrainee && currentOnboardingSubView === 'trainee-detail') {
-                    dom.traineeOnboardingView.classList.add('hidden');
-                    dom.leaderOnboardingView.classList.remove('hidden');
-                    dom.einarbeitungTitle.textContent = "Einarbeitung: Gruppen-Übersicht";
-                    currentOnboardingSubView = 'leader-list';
-                    // Die Liste muss nicht neu gerendert werden, da sie im DOM verbleibt.
-                    updateBackButtonVisibility();
-                    return;
-                }
-                 // Ansonsten, wechsle von der Einarbeitungsansicht zurück zum Dashboard
-                 switchView('dashboard');
-                 return;
-            }
-
-            if (viewHistory.length > 1) {
-                viewHistory.pop();
-                const previousUser = viewHistory[viewHistory.length - 1];
-                fetchAndRenderDashboard(previousUser);
-            }
-        }
-
-        function updateLeadershipView() {
-            if (currentPlanningView === 'personal' && !isSuperuserView) {
-                dom.leadershipView.classList.add('hidden');
-                return;
-            }
-
-            dom.leadershipView.classList.remove('hidden');
-
-            if (currentPlanningView === 'struktur') {
-        renderStructureView();
-            } else { // team
-                renderTeamView();
-            }
-        }
-
-function renderStructureView() {
-    const posLower = personalData.position ? personalData.position.toLowerCase() : '';
-    const isRD = posLower.includes('regionaldirektor');
-
-    const data = isRD ? cachedBezirksleitungenData : cachedAgenciesData;
-    const title = isRD ? "Deine Direktions-Übersicht" : "Deine Struktur-Übersicht";
-    const countText = isRD 
-        ? `Du hast <strong>${data.length}</strong> direkte Mitarbeiter in deiner Direktion.`
-        : `Du hast <strong>${data.length}</strong> direkte Mitarbeiter in deiner Struktur.`;
-    const emptyText = isRD
-        ? "Dir sind aktuell keine direkte Mitarbeiter zugeordnet."
-        : "Dir sind aktuell keine direkte Mitarbeiter zugeordnet.";
-
-            dom.leadershipViewTitle.textContent = title;
-            dom.leadershipViewModeToggle.classList.remove('hidden'); // Show toggle for agencies
-            clearChildren(dom.teamMembersContainer);
-            clearChildren(dom.passiveMembersSection);
-            
-            if (data.length === 0) {
-                dom.leadershipViewCount.innerHTML = countText;
-                dom.teamMembersContainer.innerHTML = `<p class="text-center text-gray-500">${emptyText}</p>`;
-                return;
-            }
-
-            dom.leadershipViewCount.innerHTML = countText;
-            
-            if (currentLeadershipViewMode === 'grid') {
-                 dom.teamMembersContainer.className = 'mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6';
-                 data.forEach(item => {
-                    const card = createAgencyCardGrid(item, cachedCycleData.totalDaysInCycle, cachedCycleData.daysPassedInCycle);
-                    dom.teamMembersContainer.appendChild(card);
-                 });
-            } else { // list
-                dom.teamMembersContainer.className = 'mt-6 space-y-4';
-                data.forEach(item => {
-                    const card = createAgencyCard(item, cachedCycleData.totalDaysInCycle, cachedCycleData.daysPassedInCycle);
-                    dom.teamMembersContainer.appendChild(card);
-                 });
-            }
-        }
-
-        function renderTeamView() {
-            dom.leadershipViewTitle.textContent = isSuperuserView ? "Alle Führungskräfte" : "Deine Gruppen-Übersicht";
-            dom.leadershipViewModeToggle.classList.remove('hidden');
-            
-            clearChildren(dom.teamMembersContainer);
-            clearChildren(dom.passiveMembersSection);
-
-            const membersToRender = isSuperuserView ? cachedAllLeaderData : cachedActiveMembers;
-
-            const activeMembers = membersToRender.filter(m => m.ehGoal > 0 || m.etGoal > 0);
-            const passiveMembers = membersToRender.filter(m => m.ehGoal === 0 && m.etGoal === 0);
-
-            dom.leadershipViewCount.innerHTML = isSuperuserView 
-                ? `<strong>${membersToRender.length}</strong> Führungskräfte insgesamt.`
-                : `Du hast <strong class="text-skt-blue">${activeMembers.length}</strong> aktive Mitarbeiter in deiner Gruppe.`;
-            
-            renderTeamMemberCards(activeMembers); 
-            
-            if (passiveMembers.length > 0) {
-                const details = document.createElement('details');
-                details.className = 'bg-white rounded-xl shadow-lg';
-                const summary = document.createElement('summary');
-                summary.className = 'p-4 font-semibold text-skt-blue cursor-pointer';
-                summary.textContent = `Passive Mitarbeiter (${passiveMembers.length})`;
-                details.appendChild(summary);
-                const container = document.createElement('div');
-                container.className = 'p-4 pt-0 space-y-3';
-                passiveMembers.forEach(member => {
-                    const passiveCard = document.createElement('div');
-                    passiveCard.className = 'p-3 bg-skt-grey-light rounded-lg flex justify-between items-center';
-                    passiveCard.innerHTML = `
-                        <div>
-                            <p class="font-bold text-skt-blue">${member.name}</p>
-                            <p class="text-sm text-skt-blue-light">${member.position}</p>
-                        </div>
-                        <button data-username="${member.name}" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln">
-                            <i class="fas fa-eye"></i>
-                        </button>
-                    `;
-                    passiveCard.querySelector('.switch-view-btn').addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        const newuser = e.currentTarget.dataset.username;
-                        viewHistory.push(newuser);
-                        fetchAndRenderDashboard(newuser);
-                    });
-                    container.appendChild(passiveCard);
-                });
-                details.appendChild(container);
-                dom.passiveMembersSection.appendChild(details);
-            }
-        }
-
-        async function getAllLeaders() {
-            if (allLeadersCache.length > 0) return allLeadersCache;
-            const data = await fetchSheetQuery(sheetDataName, `select A, J`);
-            if (data && data.table.rows) {
-                const leaders = data.table.rows
-                    .map(r => ({ name: r.c[0]?.v, position: r.c[1]?.v }))
-                    .filter(u => u.name && u.position && u.position.toLowerCase().trim() !== 'trainee');
-                allLeadersCache = filterUsers(leaders.map(l => l.name));
-            }
-            return allLeadersCache;
-       }
-       
-        async function fetchAndRenderSuperuserView() {
-            // Sicherheitsprüfung: Nur Nicht-Trainees dürfen diese Ansicht sehen.
-            const isTrainee = personalData.position && personalData.position.toLowerCase().trim() === 'trainee';
-            if (isTrainee) {
-                console.warn("Zugriff auf Gesamtansicht für Trainee blockiert.");
-                // Optional: Eine sichtbare Meldung für den Benutzer anzeigen.
-                // alert("Diese Ansicht ist für deine Position nicht verfügbar.");
-                return;
-            }
-
-            isSuperuserView = true;
-            setStatus('Lade Gesamtansicht...');
-            dom.dashboardSections.classList.add('opacity-0');
-            dom.welcomeHeader.textContent = 'Gesamtansicht';
-            dom.userPosition.textContent = 'Alle Führungskräft';
-
-            try {
-                if (isMoneyView) {
-                    alert("Die Geld-Ansicht ist in der Gesamtübersicht nicht verfügbar und wird temporär deaktiviert.");
-                    isMoneyView = false;
-                    dom.moneyViewBtn.innerHTML = `<i class="fas fa-euro-sign w-5 mr-2"></i>Geld-Ansicht`;
-                }
-
-                const query = `select A, B, C, D, E, F, G, H, J`;
-                const data = await fetchSheetQuery(sheetDataName, query);
-
-                if (!data || !data.table || !data.table.rows) {
-                    setStatus('Fehler beim Laden der Daten.', true);
-                    return;
-                }
-
-                const rows = data.table.rows;
-                const summaryDataToSum = [];
-                const leadersToDisplay = [];
-
-                for (let i = 1; i < rows.length; i++) {
-                    const currentRowData = rows[i].c;
-                    const prevRowData = rows[i - 1].c;
-
-                    const currentPosition = (currentRowData[8]?.v || "").toLowerCase().trim();
-                    
-                    if (currentPosition && currentPosition !== 'trainee') {
-                        if (prevRowData) {
-                             const prevPosition = (prevRowData[8]?.v || "").toLowerCase().trim();
-                             if(prevPosition === 'trainee'){
-                                summaryDataToSum.push({
-                                    ehGoal: Math.round(prevRowData[1]?.v || 0),
-                                    ehCurrent: Math.round(prevRowData[2]?.v || 0),
-                                    etGoal: Math.round(prevRowData[3]?.v || 0),
-                                    etCurrent: Math.round(prevRowData[4]?.v || 0),
-                                    atGoal: Math.round(prevRowData[5]?.v || 0),
-                                    atVereinbart: Math.round(prevRowData[6]?.v || 0),
-                                    atCurrent: Math.round(prevRowData[7]?.v || 0),
-                                });
-
-                                leadersToDisplay.push({
-                                    name: currentRowData[0]?.v || '',
-                                    ehGoal: Math.round(prevRowData[1]?.v || 0),
-                                    ehCurrent: Math.round(prevRowData[2]?.v || 0),
-                                    etGoal: Math.round(prevRowData[3]?.v || 0),
-                                    etCurrent: Math.round(prevRowData[4]?.v || 0),
-                                    atGoal: Math.round(prevRowData[5]?.v || 0),
-                                    atVereinbart: Math.round(prevRowData[6]?.v || 0),
-                                    atCurrent: Math.round(prevRowData[7]?.v || 0),
-                                    position: currentRowData[8]?.v || null
-                                });
-                             }
-                        }
-                    }
-                }
-
-                if (summaryDataToSum.length === 0) {
-                    setStatus('Keine summierten Trainee-Daten gefunden.', true);
-                    return;
-                }
-
-                cachedAllLeaderData = leadersToDisplay;
-
-                const superuserData = summaryDataToSum.reduce((acc, data) => {
-                    acc.ehGoal += data.ehGoal;
-                    acc.ehCurrent += data.ehCurrent;
-                    acc.etGoal += data.etGoal;
-                    acc.etCurrent += data.etCurrent;
-                    acc.atGoal += data.atGoal;
-                    acc.atVereinbart += data.atVereinbart;
-                    acc.atCurrent += data.atCurrent;
-                    return acc;
-                }, { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atVereinbart: 0, atCurrent: 0 });
-
-                dom.planningViewToggle.classList.add('hidden');
-                dom.employeeView.classList.add('hidden');
-                dom.leadershipView.classList.remove('hidden');
-                document.getElementById('leader-personal-goal-container').innerHTML = '';
-                document.getElementById('leader-personal-goal-container').classList.add('hidden');
-                
-                dom.monthlyPlanningTitle.textContent = "Gesamtansicht";
-                updateMonthlyPlanningView(superuserData);
-                
-                const { startDate, endDate } = getMonthlyCycleDates();
-                const today = new Date();
-                cachedCycleData.totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
-                cachedCycleData.daysPassedInCycle = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24));
-                
-                renderTeamView();
-
-                setStatus('');
-                dom.dashboardSections.classList.remove('hidden');
-                setTimeout(() => dom.dashboardSections.classList.remove('opacity-0'), 50);
-                updateBackButtonVisibility();
-
-            } catch (error) {
-                console.error("Fehler in der Superuser-Ansicht:", error);
-                setStatus("Fehler beim Laden der Gesamtansicht.", true);
-            }
-        }
-
-
-        // --- EVENTS ---
-        dom.settingsBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-
-            // NEU: Prüfung gegen die Daten des eingeloggten Benutzers, nicht des angezeigten.
-            const pos = loggedInUserData.position ? loggedInUserData.position.toLowerCase().trim() : '';
-            if (pos && pos !== 'trainee') {
-                dom.superuserBtn.classList.remove('hidden');
-            } else {
-                dom.superuserBtn.classList.add('hidden');
-            }
-
-            dom.settingsMenu.classList.toggle('visible');
-            dom.settingsMenu.classList.toggle('hidden');
-        });
-        
-        dom.moneyViewBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            isMoneyView = !isMoneyView;
-            dom.moneyViewBtn.innerHTML = isMoneyView 
-                ? `<i class="fas fa-chart-pie w-5 mr-2"></i>EH-Ansicht` 
-                : `<i class="fas fa-euro-sign w-5 mr-2"></i>Geld-Ansicht`;
-            dom.settingsMenu.classList.add('hidden');
-            dom.settingsMenu.classList.remove('visible');
-            
-            const currentUser = viewHistory[viewHistory.length - 1];
-            if (isSuperuserView) fetchAndRenderSuperuserView();
-            else if (currentUser) fetchAndRenderDashboard(currentUser);
-        });
-
-        dom.logoutBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            localStorage.clear();
-            sessionStorage.clear();
-            viewHistory = [];
-            location.reload();
-        });
-
-        dom.clearCacheBtn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            dom.clearCacheBtn.innerHTML = `<i class="fas fa-spinner fa-spin w-5 mr-2"></i>Wird geleert...`;
-            try {
-                if ('serviceWorker' in navigator) {
-                    const registrations = await navigator.serviceWorker.getRegistrations();
-                    for (const registration of registrations) {
-                        await registration.unregister();
-                    }
-                }
-                if ('caches' in window) {
-                    const keys = await caches.keys();
-                    await Promise.all(keys.map(key => caches.delete(key)));
-                }
-                localStorage.clear();
-                sessionStorage.clear();
-                window.location.reload(true);
-            } catch (error) {
-                console.error('Fehler beim Leeren des Caches:', error);
-                dom.clearCacheBtn.innerHTML = `<i class="fas fa-sync-alt w-5 mr-2"></i>Cache leeren`;
-            }
-        });
-        
-        dom.superuserBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            dom.settingsMenu.classList.add('hidden');
-            dom.settingsMenu.classList.remove('visible');
-            // Sicherheitsprüfung: Nur Nicht-Trainees dürfen diese Ansicht sehen.
-            const isTrainee = personalData.position && personalData.position.toLowerCase().trim() === 'trainee';
-            if (isTrainee) {
-                alert("Diese Ansicht ist für deine Position nicht verfügbar.");
-                return;
-            }
-            fetchAndRenderSuperuserView();
-        });
-        
-        dom.backButton.addEventListener('click', goBack);
-        dom.einarbeitungBtn.addEventListener('click', () => switchView('einarbeitung'));
-        dom.einarbeitungBanner.addEventListener('click', () => switchView('einarbeitung'));
-
-
-        dom.teamViewBtn.addEventListener('click', () => {
-            currentPlanningView = 'team';
-            dom.teamViewBtn.classList.add('active'); 
-            dom.personalViewBtn.classList.remove('active');
-            dom.strukturViewBtn.classList.remove('active');
-            dom.monthlyPlanningTitle.textContent = "Gruppen-Übersicht";
-            updateMonthlyPlanningView(teamData);
-            updateLeadershipView();
-        });
-
-        dom.personalViewBtn.addEventListener('click', () => {
-            currentPlanningView = 'personal';
-            dom.personalViewBtn.classList.add('active'); 
-            dom.teamViewBtn.classList.remove('active');
-            dom.strukturViewBtn.classList.remove('active');
-            dom.monthlyPlanningTitle.textContent = "Persönliche Übersicht";
-            updateMonthlyPlanningView(personalData);
-            updateLeadershipView();
-        });
-        
-        dom.strukturViewBtn.addEventListener('click', () => {
-            currentPlanningView = 'struktur';
-            dom.strukturViewBtn.classList.add('active'); 
-            dom.teamViewBtn.classList.remove('active');
-            dom.personalViewBtn.classList.remove('active');
-            const posLower = personalData.position ? personalData.position.toLowerCase() : '';
-            const isRD = posLower.includes('regionaldirektor');
-            dom.monthlyPlanningTitle.textContent = isRD ? "Direktions-Übersicht" : "Struktur-Übersicht";
-            updateMonthlyPlanningView(structureData);
-            updateLeadershipView();
-        });
-
-        dom.gridViewBtn.addEventListener('click', () => {
-            if (currentLeadershipViewMode === 'grid') return;
-            currentLeadershipViewMode = 'grid';
-            dom.gridViewBtn.classList.add('active');
-            dom.listViewBtn.classList.remove('active');
-            if (isSuperuserView) {
-                renderTeamView();
-            } else {
-                updateLeadershipView();
-            }
-        });
-
-        dom.listViewBtn.addEventListener('click', () => {
-            if (currentLeadershipViewMode === 'list') return;
-            currentLeadershipViewMode = 'list';
-            dom.listViewBtn.classList.add('active');
-            dom.gridViewBtn.classList.remove('active');
-             if (isSuperuserView) {
-                renderTeamView();
-            } else {
-                updateLeadershipView();
-            }
-        });
-        
-        let touchStartY = 0, touchStartX = 0, isRefreshing = false;
-
-        document.addEventListener('touchstart', (e) => {
-            touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY;
-        }, { passive: true });
-
-        document.addEventListener('touchmove', (e) => {
-            if (isRefreshing) return;
-            const pullDistance = e.touches[0].clientY - touchStartY;
-            
-            if (window.scrollY === 0 && pullDistance > 0) {
-                const indicator = document.getElementById('refresh-indicator');
-                const icon = indicator.querySelector('i');
-                indicator.style.opacity = '1';
-                icon.style.transform = `rotate(${Math.min(pullDistance * 2, 360)}deg)`;
-            }
-        }, { passive: true });
-
-        document.addEventListener('touchend', async (e) => {
-            const touchEndX = e.changedTouches[0].clientX;
-            const touchEndY = e.changedTouches[0].clientY;
-            
-            const swipeDistanceX = touchEndX - touchStartX;
-            const swipeDistanceY = touchEndY - touchStartY;
-            const indicator = document.getElementById('refresh-indicator');
-            const icon = indicator.querySelector('i');
-
-            if (window.scrollY === 0 && swipeDistanceY > 100 && Math.abs(swipeDistanceX) < Math.abs(swipeDistanceY) / 2) {
-                if (!isRefreshing) {
-                    isRefreshing = true;
-                    icon.classList.add('animate-spin');
-                    
-                    const user = viewHistory[viewHistory.length - 1];
-                    if (user) {
-                        if (isSuperuserView) {
-                            await fetchAndRenderSuperuserView();
-                        } else {
-                            await fetchAndRenderDashboard(user);
-                        }
-                    }
-
-                    setTimeout(() => {
-                        indicator.style.opacity = '0';
-                        icon.classList.remove('animate-spin');
-                        icon.style.transform = 'rotate(0deg)';
-                        isRefreshing = false;
-                    }, 500);
-                }
-            } 
-            else if (swipeDistanceX > 100 && Math.abs(swipeDistanceY) < Math.abs(swipeDistanceX) / 2) {
-                goBack();
-            } 
-            else {
-                indicator.style.opacity = '0';
-                icon.style.transform = 'rotate(0deg)';
-            }
-            touchStartX = 0; touchStartY = 0;
-        }, { passive: true });
-
-        // --- INIT ---
-        document.addEventListener('DOMContentLoaded', () => {
-            // registerServiceWorker(); // FIX: Verursacht Fehler, wenn keine service-worker.js Datei existiert
-
-            const savedUser = localStorage.getItem('loggedInUser');
-            if (savedUser) {
-                startDashboard(savedUser);
-            } else {
-                document.getElementById('user-select-screen').classList.remove('hidden');
-                document.getElementById('user-select-screen').classList.add('flex');
-                populateUserDropdown();
-            }
-
-            dom.userDropdownSelect.addEventListener('change', () => {
-                const passwordContainer = document.getElementById('password-container');
-                const startBtn = document.getElementById('start-dashboard-btn');
-                
-                if (dom.userDropdownSelect.value) {
-                    passwordContainer.classList.remove('hidden');
-                    startBtn.classList.remove('hidden');
-                    setTimeout(() => document.getElementById('password-input').focus(), 300);
-                } else {
-                    passwordContainer.classList.add('hidden');
-                    startBtn.classList.add('hidden');
-                }
-            });
-
-            document.getElementById('password-input').addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') { e.preventDefault(); startDashboard(); }
-            });
-
-            document.getElementById('start-dashboard-btn').addEventListener('click', () => startDashboard());
-            
-            document.getElementById('enable-notifications-btn').addEventListener('click', askForNotificationPermission);
-
-            dom.closeIosModalBtn.addEventListener('click', () => {
-                dom.iosInstructionsModal.classList.remove('visible');
-                document.body.classList.remove('modal-open');
-                document.documentElement.classList.remove('modal-open');
-            });
-
-            // Event Listener für Hinweis-Modal
-            dom.closeHinweisModalBtn.addEventListener('click', () => {
-                dom.hinweisModal.classList.remove('visible');
-                document.body.classList.remove('modal-open');
-                document.documentElement.classList.remove('modal-open');
-            });
-            dom.hinweisModal.addEventListener('click', (e) => {
-                if(e.target === dom.hinweisModal) {
-                    dom.hinweisModal.classList.remove('visible');
-                    document.body.classList.remove('modal-open');
-                    document.documentElement.classList.remove('modal-open');
-                }
-            });
-
-            // Click-Outside Listener für Settings-Menü
-            document.addEventListener('click', (e) => {
-                if (!dom.settingsBtn.contains(e.target) && !dom.settingsMenu.contains(e.target)) {
-                    dom.settingsMenu.classList.add('hidden');
-                    dom.settingsMenu.classList.remove('visible');
-                }
-            });
-        });
-
-    </script>
 </body>
 </html>
-</body>
-</html>
+
