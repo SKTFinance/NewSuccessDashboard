@@ -1,0 +1,3352 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SKT Success Dashboard</title>
+    
+    <!-- PWA Manifest & Theme Color -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#002147">
+
+    <!-- Tailwind CSS CDN für schnelle und responsive Stile -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome für Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* Definieren der benutzerdefinierten Farben von SKT Finance für Tailwind */
+        :root {
+            --color-skt-blue: #002147;
+            --color-skt-blue-light: #043C64;
+            --color-skt-grey-light: #f5f5f5;
+            --color-skt-grey-medium: #c7c7c7;
+            --color-skt-blue-main: #38bdf8;
+            --color-accent-green: #27ae60;
+            --color-accent-red: #FF6347;
+            --color-accent-red-light: #fecaca; /* UPDATE für dunkleres Rot */
+            --color-accent-yellow: #f1c40f;
+            --color-accent-gold: #d4af37;
+            --color-accent-gold-light: #fff3cd; 
+            --color-accent-purple: #8e44ad;
+        }
+
+        .bg-skt-blue { background-color: var(--color-skt-blue); }
+        .bg-skt-blue-light { background-color: var(--color-skt-blue-light); }
+        .bg-skt-grey-light { background-color: var(--color-skt-grey-light); }
+        .bg-skt-grey-medium { background-color: var(--color-skt-grey-medium); }
+        .text-skt-blue { color: var(--color-skt-blue); }
+        .text-skt-blue-light { color: var(--color-skt-blue-light); }
+        .text-skt-blue-main { color: var(--color-skt-blue-main); }
+        .border-skt-blue-main { border-color: var(--color-skt-blue-main); }
+
+        /* Neue Akzentfarben */
+        .text-skt-green-accent { color: var(--color-accent-green); }
+        .bg-skt-green-accent { background-color: var(--color-accent-green); }
+        .text-skt-red-accent { color: var(--color-accent-red); }
+        .bg-skt-red-accent { background-color: var(--color-accent-red); }
+        .bg-accent-red-light { background-color: var(--color-accent-red-light); } /* NEU */
+        .text-skt-yellow-accent { color: var(--color-accent-yellow); }
+        .bg-skt-yellow-accent { background-color: var(--color-accent-yellow); }
+        .bg-skt-blue-accent { background-color: var(--color-skt-blue-main); }
+        .text-gold { color: var(--color-accent-gold); }
+        .bg-accent-purple { background-color: var(--color-accent-purple); }
+        .border-accent-purple { border-color: var(--color-accent-purple); }
+        .bg-accent-gold { background-color: var(--color-accent-gold); }
+        .border-accent-gold { border-color: var(--color-accent-gold); }
+        .bg-accent-gold-light { background-color: var(--color-accent-gold-light); }
+        .border-skt-blue-accent { border-color: var(--color-skt-blue-main); }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--color-skt-grey-light);
+        }
+        
+        html.modal-open, body.modal-open {
+            overflow: hidden;
+        }
+
+        .font-times-new-roman {
+            font-family: "Times New Roman", Times, serif;
+        }
+        
+        .progress-circle { transform: rotate(-90deg); }
+        .progress-circle .bg-circle { fill: none; stroke: var(--color-skt-grey-medium); stroke-width: 10; }
+        .progress-circle .progress-arc { fill: none; stroke: var(--color-accent-green); stroke-width: 10; transition: stroke-dashoffset 0.7s ease-out; stroke-linecap: round; }
+
+        .progress-circle-monthly { transform: rotate(-90deg); }
+        .progress-circle-monthly .bg-circle { fill: none; stroke: #e2e8f0; stroke-width: 8; }
+        .progress-circle-monthly .progress-arc-eh { fill: none; stroke: var(--color-accent-green); stroke-width: 8; transition: stroke-dashoffset 0.7s ease-out; stroke-linecap: round; }
+        .progress-circle-monthly .prognosis-bg-circle { fill: none; stroke: #e2e8f0; stroke-width: 4; }
+        .progress-circle-monthly .prognosis-arc-eh { fill: none; stroke: var(--color-accent-yellow); stroke-width: 4; transition: stroke-dashoffset 0.7s ease-out; stroke-linecap: round; }
+        #segment-dividers-eh line { stroke: var(--color-skt-grey-light); stroke-width: 2; }
+
+        .tier-card { background-color: white; border-radius: 12px; padding: 16px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); position: relative; overflow: hidden; transition: transform 0.3s ease, box-shadow 0.3s ease; border: 2px solid transparent; }
+        .tier-card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px rgba(0, 0, 0, 0.2); }
+        .tier-card.active { border: 2px solid var(--color-accent-green); }
+        
+        .employee-slot { width: 20px; height: 20px; background-color: var(--color-skt-grey-medium); border-radius: 50%; transition: background-color 0.3s ease-out; border: 1px solid var(--color-skt-grey-medium); }
+        .employee-slot.filled { background-color: var(--color-accent-green); }
+        
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            left: 0; /* Standard: nach rechts ausklappen (für Mobile) */
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            z-index: 50;
+            width: 200px;
+            margin-top: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            transform: translateY(-10px);
+            opacity: 0;
+            pointer-events: none;
+        }
+        .dropdown-menu.visible {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+        .dropdown-menu a {
+            display: flex;
+            align-items: center;
+        }
+        
+        .week-divider { position: absolute; height: calc(100% + 0.25rem); top: -0.125rem; width: 2px; background-color: #e2e8f0; z-index: 10; }
+        .start-end-divider { position: absolute; height: calc(100% + 0.25rem); top: -0.125rem; width: 2px; background-color: #e2e8f0; z-index: 10; }
+        .centered-date-label { position: absolute; bottom: -1.25rem; text-align: center; font-size: 0.75rem; font-weight: 600; color: var(--color-skt-blue-light); white-space: nowrap; z-index: 30; }
+
+        .loader { border: 5px solid var(--color-skt-grey-light); border-top: 5px solid var(--color-skt-blue-main); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        [data-tooltip] { position: relative; cursor: help; }
+        [data-tooltip]::after { content: attr(data-tooltip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%) translateY(-8px); background-color: var(--color-skt-blue); color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 500; white-space: nowrap; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; z-index: 100; }
+        [data-tooltip]:hover::after { opacity: 1; visibility: visible; }
+
+        .team-member-details { max-height: 0; overflow: hidden; transition: max-height 0.5s ease-in-out, padding 0.5s ease-in-out; padding-top: 0; padding-bottom: 0; }
+        .team-member-details.open { max-height: 500px; padding-top: 1rem; padding-bottom: 1rem; }
+        .details-grid { border-top: 1px solid #e2e8f0; margin-top: 1rem; padding-top: 1rem; }
+        .chevron-icon { transition: transform 0.3s ease-in-out; }
+        .open .chevron-icon { transform: rotate(180deg); }
+
+        .team-progress-circle { transform: rotate(-90deg); }
+        .team-progress-circle .bg-circle { fill: none; stroke: #e2e8f0; stroke-width: 8; }
+        .team-progress-circle .progress-arc { 
+            fill: none; 
+            stroke-width: 8; 
+            transition: stroke-dashoffset 0.7s ease-out, stroke 0.5s ease; 
+            stroke-linecap: round; 
+        }
+        
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+        details > summary::before { content: '\f078'; font-family: 'Font Awesome 6 Free'; font-weight: 900; margin-right: 0.5rem; transition: transform 0.3s ease-in-out; }
+        details[open] > summary::before { transform: rotate(180deg); }
+
+        /* Stile für den Ansicht-Umschalter */
+        .view-toggle button {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            border: 2px solid transparent;
+            font-weight: 600;
+            transition: all 0.2s ease-in-out;
+        }
+        .view-toggle button.active {
+            background-color: var(--color-skt-blue);
+            color: white;
+            border-color: var(--color-skt-blue);
+        }
+        .view-toggle button:not(.active) {
+            background-color: var(--color-skt-grey-light);
+            color: var(--color-skt-blue-light);
+        }
+        
+        /* Blur-Effekt für neue Mitarbeiter */
+        .blurred-section-overlay {
+            position: relative;
+        }
+        .blurred-section-overlay::after {
+            content: 'Wird ab 1 EH freigeschaltet';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(245, 245, 245, 0.7);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--color-skt-blue);
+            font-weight: bold;
+            font-size: 1.25rem;
+            text-align: center;
+            z-index: 10;
+            border-radius: 1rem; /* Passt zum Radius des Elternelements */
+        }
+
+
+        /* --- STILE FÜR NEUESTE EINARBEITUNGS-TIMELINE --- */
+        .timeline-vertical-line {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background-color: #e2e8f0;
+            border-radius: 2px;
+            z-index: 1;
+        }
+        .timeline-vertical-line-progress {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            top: 0;
+            width: 4px;
+            background-color: var(--color-accent-green);
+            border-radius: 2px;
+            z-index: 2;
+            height: 0%;
+            transition: height 0.8s ease-out;
+        }
+        .timeline-date-markers {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 10;
+        }
+        .timeline-date-marker {
+            position: absolute;
+            right: calc(50% + 10px);
+            transform: translateY(-50%);
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--color-skt-blue-light);
+            white-space: nowrap;
+            background-color: var(--color-skt-grey-light);
+            padding: 0 4px;
+        }
+        .timeline-date-marker::after {
+            content: '';
+            position: absolute;
+            right: -10px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 8px;
+            height: 2px;
+            background-color: #94a3b8;
+        }
+
+        .timeline-item {
+            opacity: 0;
+            animation: slideIn 0.5s ease-out forwards;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* UPDATE: Eingerückte Aufgaben vs. nicht eingerückte Meilensteine */
+        .timeline-item-major {
+            display: flex;
+            align-items: center;
+            gap: 1rem; 
+            position: relative;
+        }
+        .timeline-item-major::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            left: -2.25rem;
+            width: 0.75rem;
+            height: 2px;
+            background-color: #cbd5e1;
+            z-index: 3;
+        }
+        .timeline-item-major.completed::before,
+        .timeline-item-major.due::before {
+            background-color: var(--color-accent-green);
+        }
+        
+        .timeline-item-minor {
+            margin-left: 1.5rem; /* Indent minor items */
+            padding-left: 1rem;
+            border-left: 2px dotted #cbd5e1;
+        }
+
+        .timeline-content {
+            background-color: #f8fafc;
+            padding: 0.75rem 1rem;
+            border-radius: 0.75rem;
+            width: 100%;
+            border: 1px solid #e2e8f0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .timeline-content:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            border-color: #cbd5e1;
+        }
+        .timeline-item.completed.seminar .timeline-content,
+        .timeline-item.completed.other .timeline-content {
+            background-color: #f0fdf4;
+        }
+        
+        .timeline-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .timeline-icon-inline {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            background-color: var(--color-skt-grey-medium);
+            color: white;
+            border: 4px solid var(--color-skt-grey-light);
+        }
+        .timeline-item.timeline-item-major .timeline-icon-inline {
+            position: relative;
+            z-index: 5;
+            left: -2.25rem;
+            margin-right: -1.5rem;
+        }
+        .timeline-item.completed.seminar .timeline-icon-inline,
+        .timeline-item.completed.other .timeline-icon-inline { 
+            background-color: var(--color-accent-green); 
+        }
+
+        /* NEUE STILE FÜR SPEZIFISCHE ERLEDIGTE AUFGABEN */
+        .timeline-item.completed.gespraech .timeline-icon-inline { background-color: var(--color-accent-purple); }
+        .timeline-item.completed.gespraech .timeline-content { background-color: #f3e8f7; }
+        .timeline-item.completed.meilenstein .timeline-icon-inline { background-color: var(--color-accent-gold); }
+        .timeline-item.completed.meilenstein .timeline-content { background-color: #fef9e7; }
+        .timeline-item.completed.hausuebung .timeline-icon-inline { background-color: var(--color-skt-blue-main); }
+        .timeline-item.completed.hausuebung .timeline-content { background-color: #e0f2fe; }
+
+        .timeline-item.due.seminar .timeline-icon-inline { background-color: var(--color-accent-green); }
+        .timeline-item.due.meilenstein .timeline-icon-inline { background-color: var(--color-accent-gold); }
+        .timeline-item.due.gespraech .timeline-icon-inline { background-color: var(--color-accent-purple); }
+        .timeline-item.due.hausuebung .timeline-icon-inline { background-color: var(--color-skt-blue-main); }
+
+        /* NEU: Goldener Rahmen für Meilensteine */
+        .timeline-item.due.meilenstein .timeline-content,
+        .timeline-item.completed.meilenstein .timeline-content {
+             border: 2px solid var(--color-accent-gold);
+        }
+
+        /* NEU: Geblurrter Zustand für Aufbauseminar */
+        .aufbauseminar-blurred {
+             filter: blur(4px);
+             pointer-events: none;
+             user-select: none;
+             opacity: 0.6;
+             transition: all 0.3s ease-in-out;
+        }
+
+        /* NEU: Stil für überfällige Aufgaben */
+        .overdue-task {
+            background-color: #ffefef !important; /* Helles Rot */
+            border-color: var(--color-accent-red) !important;
+        }
+        .overdue-task .timeline-title {
+            color: var(--color-accent-red) !important;
+        }
+
+        .timeline-info .timeline-title {
+            font-weight: 600;
+            color: var(--color-skt-blue);
+            word-break: break-word;
+        }
+        .timeline-info .timeline-duedate {
+            font-size: 0.875rem;
+            color: var(--color-skt-blue-light);
+        }
+        /* Stile für das iOS-Anleitungs-Modal und Hinweis-Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* NEU: Dropdown-Menü auf größeren Bildschirmen anders ausrichten */
+        @media (min-width: 640px) { /* Tailwind 'sm' breakpoint */
+            .dropdown-menu {
+                left: auto;
+                right: 0; /* Auf Desktops nach links ausklappen */
+            }
+        }
+
+        @media (min-width: 768px) {
+            .timeline-item-major::before {
+                left: -3.5rem;
+                width: 1.5rem;
+            }
+            .timeline-item-minor {
+                margin-left: 3rem;
+                padding-left: 2rem;
+            }
+            .timeline-item.timeline-item-major .timeline-icon-inline {
+                left: -3.5rem;
+                margin-right: -2.5rem;
+            }
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen text-skt-blue">
+    <!-- Pull-to-Refresh Indikator -->
+    <div id="refresh-indicator" class="fixed top-0 left-0 right-0 flex justify-center pt-3 opacity-0 transition-opacity duration-300 z-40">
+        <div class="bg-white rounded-full shadow-lg h-10 w-10 flex items-center justify-center">
+            <i class="fas fa-sync-alt text-skt-blue transition-transform duration-200"></i>
+        </div>
+    </div>
+
+    <!-- Auswahlbereich für Benutzer -->
+    <div id="user-select-screen" class="hidden flex-col items-center justify-start min-h-screen bg-gray-100 p-4 pt-16 sm:pt-24">
+        <div class="w-full max-w-sm bg-white p-8 rounded-2xl shadow-xl border border-gray-200 text-center transform transition-transform duration-300 hover:scale-105">
+            <div class="mb-6">
+                <h1 class="text-3xl font-extrabold text-skt-blue leading-tight">Willkommen zurück!</h1>
+                <p class="text-gray-500 mt-2">Wähle deinen Namen, um fortzufahren.</p>
+            </div>
+            <div class="mb-6">
+                <div class="relative">
+                    <select id="user-dropdown-select" class="block w-full px-4 py-3 rounded-xl border-2 border-gray-300 bg-white text-lg text-gray-700 appearance-none transition-colors duration-200 focus:border-skt-blue-main focus:ring-2 focus:ring-skt-blue-main focus:outline-none pr-10 cursor-pointer">
+                        <option value="">Benutzer wählen ...</option>
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-500">
+                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                    </div>
+                </div>
+            </div>
+            <div id="password-container" class="hidden mb-6">
+                <input type="password" id="password-input" placeholder="Passwort" class="block w-full px-4 py-3 rounded-xl border-2 border-gray-300 bg-white text-lg text-gray-700 transition-colors duration-200 focus:border-skt-blue-main focus:ring-2 focus:ring-skt-blue-main focus:outline-none">
+            </div>
+            <button id="start-dashboard-btn" class="hidden w-full bg-skt-blue text-white font-semibold py-3 rounded-xl hover:bg-skt-blue-light transition-colors duration-200 shadow-md transform hover:-translate-y-0.5 active:translate-y-0 text-lg">Dashboard laden</button>
+            <p id="user-select-error" class="text-red-600 mt-4 h-5 text-sm"></p>
+        </div>
+    </div>
+
+    <!-- Dashboard-Container -->
+    <div id="dashboard-content" class="hidden flex-col min-h-screen">
+        <header class="w-full p-6 md:p-8 bg-skt-blue relative rounded-b-3xl z-50">
+            <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-x-8 gap-y-4 relative">
+                <div class="flex flex-col">
+                    <h1 class="text-4xl sm:text-5xl font-bold font-times-new-roman text-white mb-2" id="welcome-header">Willkommen,</h1>
+                    <p id="user-position" class="text-lg text-gold font-bold"></p>
+                    <p class="text-lg sm:text-xl text-white mt-2">Dein persönliches Dashboard für Erfolg und Karriereplanung.</p>
+                </div>
+                <div class="relative self-start sm:self-center flex items-center space-x-2">
+                    <button id="back-button" class="hidden bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Zurück">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <button id="einarbeitung-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Meine Einarbeitung">
+                        <i class="fas fa-graduation-cap"></i>
+                    </button>
+                    <!-- UPDATE: Settings Button with Dropdown -->
+                    <div class="relative">
+                        <button id="settings-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Einstellungen">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                        <div id="settings-menu" class="dropdown-menu hidden">
+                             <a href="#" id="superuser-btn" class="hidden block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-users-cog w-5 mr-2"></i>Gesamtansicht</a>
+                             <a href="#" id="money-view-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-euro-sign w-5 mr-2"></i>Geld-Ansicht</a>
+                             <a href="#" id="clear-cache-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sync-alt w-5 mr-2"></i>Cache leeren</a>
+                             <a href="#" id="logout-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-right-from-bracket w-5 mr-2"></i>Logout</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Hauptansicht für Dashboard -->
+        <main id="main-dashboard-view" class="flex flex-col w-full max-w-7xl mx-auto flex-grow px-6 md:px-8 pt-2 md:pt-4 pb-6 space-y-6 overflow-hidden">
+            <div id="notification-prompt" class="hidden bg-skt-blue-light text-white p-4 rounded-lg shadow-md flex justify-between items-center">
+                <p>Möchtest du über wichtige Updates benachrichtigt werden?</p>
+                <button id="enable-notifications-btn" class="bg-white text-skt-blue font-bold py-2 px-4 rounded-lg hover:bg-gray-200 transition-colors">Aktivieren</button>
+            </div>
+
+            <div id="status-message" class="flex flex-col items-center justify-center text-center text-lg font-semibold text-skt-blue mt-6">
+                <div class="loader mb-4"></div><p id="status-text">Daten werden geladen...</p>
+            </div>
+
+            <div id="dashboard-sections" class="space-y-12 opacity-0 transition-opacity duration-500">
+                <section id="monthly-planning-view" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
+                    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+                        <h2 id="monthly-planning-title" class="text-2xl font-semibold text-skt-blue">Monatsplanung</h2>
+                        <div id="planning-view-toggle" class="view-toggle hidden flex w-full sm:w-auto space-x-2">
+                            <button id="struktur-view-btn" class="flex-1">Struktur</button>
+                            <button id="team-view-btn" class="active flex-1">Gruppe</button>
+                            <button id="personal-view-btn" class="flex-1">Persönlich</button>
+                        </div>
+                    </div>
+                    <div class="mb-8"><div id="weekly-progress-container" class="w-full flex relative h-5 mb-4 items-end"></div></div>
+                    <div class="flex flex-col md:flex-row items-center justify-between gap-8 mb-8">
+                        <div class="flex-grow md:w-1/2 relative w-full h-auto max-w-sm max-h-sm">
+                            <svg class="progress-circle-monthly w-full h-full" viewBox="0 0 100 100">
+                                <circle class="bg-circle" cx="50" cy="50" r="45"></circle>
+                                <circle class="progress-arc-eh" cx="50" cy="50" r="45" id="progress-circle-eh"></circle>
+                                
+                                <circle class="prognosis-bg-circle" cx="50" cy="50" r="35"></circle>
+                                <circle class="prognosis-arc-eh" cx="50" cy="50" r="35" id="prognosis-circle-eh"></circle>
+
+                                <g id="segment-dividers-eh"></g>
+                            </svg>
+                            <div class="absolute inset-0 flex items-center justify-center flex-col text-center">
+                                <p class="text-xl sm:text-2xl lg:text-3xl font-bold text-skt-green-accent">
+                                    <span id="eh-center-current">0</span> / <span id="eh-center-goal">0</span>
+                                </p>
+                                <p id="eh-center-unit-label" class="text-sm text-gray-500">Einheiten erreicht</p>
+                                <p class="text-lg font-bold text-skt-yellow-accent mt-2">
+                                    <span id="eh-soll-value">0</span>
+                                </p>
+                                <p id="eh-soll-unit-label" class="text-xs text-gray-500">Soll Einheiten</p>
+                            </div>
+                        </div>
+                        <div class="flex-grow md:w-1/2 flex flex-col gap-8 w-full justify-center">
+                            <div class="p-4 bg-skt-grey-light rounded-xl shadow-md text-center">
+                                <p class="text-sm font-semibold text-skt-blue mb-2">Analysetermine</p>
+                                <p class="text-lg font-bold text-skt-blue" id="appointments-text">0 / 0 / 0</p>
+                                <p class="text-xs mb-2">
+                                    <span class="font-semibold" style="color: var(--color-accent-green);">Gehalten</span> / 
+                                    <span class="font-semibold" style="color: var(--color-skt-blue-main);">Vereinbart</span> / 
+                                    <span class="font-semibold" style="color: var(--color-accent-red);">Soll</span>
+                                </p>
+                                <div id="appointments-progress-bar" class="w-full bg-accent-red-light h-3 rounded-full overflow-hidden relative">
+                                    <div id="appointments-vereinbart-bar" class="h-full bg-skt-blue-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: 0%;"></div>
+                                    <div id="appointments-gehalten-bar" class="h-full bg-skt-green-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: 0%;"></div>
+                                </div>
+                            </div>
+                            <!-- UPDATE: Bewerbungsgespräche mit Balken -->
+                            <div class="p-4 bg-accent-gold-light rounded-xl shadow-md border-2 border-accent-gold text-center">
+                                <p class="text-sm text-skt-blue-light font-bold mb-2" data-tooltip="Fortschritt deiner gehaltenen Bewerbungsgespräche.">Einstellungstermine</p>
+                                <p class="text-xl font-bold text-skt-blue mb-4"><span id="et-current">0</span> / <span id="et-goal">0</span></p>
+                                <div id="interviews-progress-wrapper" class="w-full bg-skt-grey-medium h-3 rounded-full overflow-hidden relative">
+                                    <div id="interviews-progress-bar" class="h-full bg-skt-green-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: 0%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="employee-view" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
+                    <h2 class="text-2xl font-semibold text-skt-blue mb-6 text-center">Dein aktueller Fortschritt</h2>
+                    
+                    <!-- NEU: Einarbeitungs-Banner -->
+                    <div id="einarbeitung-banner" class="hidden mb-6 p-4 bg-skt-blue-light text-white rounded-xl shadow-lg flex justify-between items-center cursor-pointer hover:bg-skt-blue transition-colors">
+                        <div>
+                            <p class="font-bold text-lg">Neuer Mitarbeiter? Starte hier!</p>
+                            <p>Verfolge deine Einarbeitungsschritte und starte erfolgreich durch.</p>
+                        </div>
+                        <i class="fas fa-arrow-right text-2xl"></i>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        <div id="tier-1-card" class="tier-card active"><h3 class="text-2xl font-bold mb-2 text-skt-blue">T1</h3><p class="text-sm text-skt-blue-light mb-4">0 EH</p><div class="w-full bg-skt-grey-light h-2 rounded-full overflow-hidden"><div id="tier-1-progress" class="h-full bg-skt-green-accent transition-all duration-700 ease-out" style="width: 100%;"></div></div></div>
+                        <div id="tier-2-card" class="tier-card"><h3 class="text-2xl font-bold mb-2 text-skt-blue">T2</h3><p class="text-sm text-skt-blue-light mb-4">1.250 EH</p><div class="w-full bg-skt-grey-light h-2 rounded-full overflow-hidden"><div id="tier-2-progress" class="h-full bg-skt-green-accent transition-all duration-700 ease-out" style="width: 0%;"></div></div></div>
+                        <div id="tier-3-card" class="tier-card"><h3 class="text-2xl font-bold mb-2 text-skt-blue">T3</h3><p class="text-sm text-skt-blue-light mb-4">2.500 EH</p><div class="w-full bg-skt-grey-light h-2 rounded-full overflow-hidden"><div id="tier-3-progress" class="h-full bg-skt-green-accent transition-all duration-700 ease-out" style="width: 0%;"></div></div></div>
+                        <div id="tier-gst-card" class="tier-card"><h3 class="text-2xl font-bold mb-2 text-skt-blue">Junior GST</h3><p class="text-sm text-skt-blue-light mb-4">4.000 EH</p><div class="w-full bg-skt-grey-light h-2 rounded-full overflow-hidden"><div id="tier-gst-progress" class="h-full bg-skt-green-accent transition-all duration-700 ease-out" style="width: 0%;"></div></div></div>
+                    </div>
+                    <div class="flex flex-col md:flex-row items-center justify-between gap-8 mt-8">
+                        <div class="flex-grow md:w-1/2 relative w-full h-auto max-w-96 max-h-96">
+                            <svg class="progress-circle w-full h-full" viewBox="0 0 100 100">
+                                <circle class="bg-circle" cx="50" cy="50" r="40"></circle><circle class="progress-arc" cx="50" cy="50" r="40" id="progress-circle-career"></circle>
+                            </svg>
+                            <div class="absolute inset-0 flex items-center justify-center flex-col text-center">
+                                <p id="career-progress-percentage" class="text-3xl sm:text-4xl lg:text-5xl font-bold text-skt-blue">0%</p><p class="text-sm text-skt-blue-light mt-1" id="progress-to-next-text">Fortschritt zum ...</p>
+                            </div>
+                        </div>
+                        <div class="flex-grow md:w-1/2 grid grid-cols-2 gap-4 w-full">
+                            <div class="p-4 bg-skt-grey-light rounded-xl shadow-md flex flex-col items-center justify-center text-center">
+                                <p id="eh-value-title" class="text-xs text-skt-blue-light font-bold" data-tooltip="Deine gesamten erreichten Einheiten">Erreichte EH (insgesamt)</p>
+                                <div class="flex items-center justify-center h-full">
+                                    <p id="eh-value-display" class="text-2xl font-bold text-skt-blue mt-1"><span id="current-eh-display">0</span><span id="eh-value-unit"> EH</span></p><i id="eh-checkmark" class="fas fa-check-circle text-5xl text-green-500 hidden"></i>
+                                </div>
+                            </div>
+                            <div class="p-4 bg-skt-grey-light rounded-xl shadow-md flex flex-col items-center justify-center text-center">
+                                <p class="text-xs text-skt-blue-light font-bold">Nächstes Karriereziel</p>
+                                <div id="employee-info-container" class="mt-1 flex flex-col items-center justify-center">
+                                    <p class="text-2xl font-bold text-skt-blue" id="employee-count-display">0</p><p id="employee-goal-status" class="text-skt-blue-light text-sm mt-1">...</p>
+                                </div>
+                                <div id="employee-slots-container" class="flex space-x-2 mt-2"></div>
+                            </div>
+                            <div class="p-4 col-span-2 bg-skt-grey-light rounded-xl shadow-md flex flex-col items-center justify-center text-center">
+                                <p id="next-milestone" class="text-skt-blue-light text-sm font-bold">Nächster Meilenstein: <span class="text-skt-blue font-semibold">...</span></p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="leadership-view" class="hidden bg-white rounded-2xl p-6 md:p-8 shadow-lg">
+                    <div id="leader-personal-goal-container" class="mb-8"></div>
+                    <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+                        <h2 id="leadership-view-title" class="text-2xl font-semibold text-skt-blue">Deine Struktur-Übersicht</h2>
+                        <div id="leadership-view-mode-toggle" class="view-toggle flex space-x-2">
+                            <button id="grid-view-btn" title="Kachelansicht"><i class="fas fa-th-large"></i></button>
+                            <button id="list-view-btn" class="active" title="Listenansicht"><i class="fas fa-bars"></i></button>
+                        </div>
+                    </div>
+                    <p id="leadership-view-count" class="text-center sm:text-left text-skt-blue-light mb-8"></p>
+                    <div id="team-members-container" class="mt-6"></div>
+                    <div id="passive-members-section" class="mt-8"></div>
+                </section>
+            </div>          
+        </main>
+
+        <!-- NEU: Ansicht für Einarbeitung -->
+    <main id="einarbeitung-view" class="hidden w-full max-w-7xl mx-auto flex-grow px-4 md:px-8 pt-6 pb-6">
+         <div class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
+             <h2 id="einarbeitung-title" class="text-3xl font-bold text-skt-blue mb-8 text-center">Dein Einarbeitungsplan</h2>
+             
+             <!-- Container für die Trainee-Ansicht -->
+             <div id="trainee-onboarding-view">
+                 <div id="onboarding-progress-container" class="mb-8 px-2 md:px-4">
+                     <div class="flex justify-between items-center mb-1">
+                         <p class="font-semibold text-skt-blue">Gesamtfortschritt</p>
+                         <p id="onboarding-progress-text" class="font-bold text-skt-blue">0%</p>
+                     </div>
+                     <div class="w-full bg-gray-200 rounded-full h-4 shadow-inner relative">
+                        <div id="onboarding-soll-bar" class="bg-red-300 h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: 0%; z-index: 1;" data-tooltip="Soll-Fortschritt"></div>
+                        <div id="onboarding-progress-bar" class="bg-skt-green-accent h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: 0%; z-index: 2;" data-tooltip="Ist-Fortschritt"></div>
+                     </div>
+                 </div>
+
+                                  <div class="space-y-8">
+                     <!-- Container Grundseminar -->
+                     <div id="grundseminar-container" class="bg-skt-grey-light p-6 rounded-xl shadow-md">
+                         <h3 class="text-2xl font-bold text-skt-blue mb-6 text-center">Grundseminar</h3>
+                         <div class="timeline-wrapper flex gap-x-4 md:gap-x-6">
+                             <div class="w-12 md:w-20 flex-shrink-0 relative pt-4 pb-4">
+                                 <div class="timeline-vertical-line"></div>
+                                 <div class="timeline-vertical-line-progress" id="grundseminar-progress"></div>
+                                 <div class="timeline-date-markers" id="grundseminar-date-markers"></div>
+                             </div>
+                             <div id="grundseminar-steps-container" class="space-y-4 flex-grow"></div>
+                         </div>
+                    </div>
+                     <!-- Container Aufbauseminar -->
+                     <div id="aufbauseminar-container" class="bg-skt-grey-light p-6 rounded-xl shadow-md">
+                         <h3 class="text-2xl font-bold text-skt-blue mb-6 text-center">Aufbauseminar</h3>
+                          <div class="timeline-wrapper flex gap-x-4 md:gap-x-6">
+                                 <div class="w-12 md:w-20 flex-shrink-0 relative pt-4 pb-4">
+                                     <div class="timeline-vertical-line"></div>
+                                     <div class="timeline-vertical-line-progress" id="aufbauseminar-progress"></div>
+                                     <div class="timeline-date-markers" id="aufbauseminar-date-markers"></div>
+                                 </div>
+                                 <div id="aufbauseminar-steps-container" class="space-y-4 flex-grow"></div>
+                              </div>
+                         </div>
+                     </div>
+                </div>
+
+                <!-- Container für die Führungskraft-Ansicht -->
+                <div id="leader-onboarding-view" class="hidden">
+                    <!-- Inhalt wird per JS generiert -->
+                </div>
+
+             </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="ios-instructions-modal" class="modal-overlay">
+        <div class="bg-white rounded-lg shadow-xl p-6 m-4 max-w-sm text-center">
+            <h3 class="text-xl font-bold text-skt-blue mb-2">Benachrichtigungen aktivieren</h3>
+            <p class="text-gray-600 mb-4">Um Benachrichtigungen auf einem iPhone zu erhalten, füge diese App bitte zuerst zu deinem Home-Bildschirm hinzu:</p>
+            <ol class="text-left text-gray-600 space-y-2 mb-4">
+                <li>1. Tippe auf das <i class="fas fa-share-square"></i> **Teilen-Symbol** in der Browser-Leiste.</li>
+                <li>2. Scrolle nach unten und wähle **"Zum Home-Bildschirm"**.</li>
+                <li>3. Starte die App vom neuen Icon auf deinem Home-Bildschirm.</li>
+            </ol>
+            <button id="close-ios-modal-btn" class="w-full bg-skt-blue text-white font-semibold py-2 rounded-lg hover:bg-skt-blue-light transition-colors">Verstanden</button>
+        </div>
+    </div>
+    
+    <!-- NEU: Hinweis-Modal für Einarbeitung -->
+    <div id="hinweis-modal" class="modal-overlay">
+        <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-md relative">
+            <button id="close-hinweis-modal-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
+            <h3 class="text-xl font-bold text-skt-blue mb-4">Hinweis</h3>
+            <p id="hinweis-modal-content" class="text-gray-700"></p>
+        </div>
+    </div>
+
+
+    <script type="module">
+        // --- Firebase SDKs importieren ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-messaging.js";
+
+        // --- KONFIGURATION ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyCRb2nZrC9U78fFxuVZu7NF9JxRxyZw864",
+            authDomain: "skt-dashboard-c7374.firebaseapp.com",
+            projectId: "skt-dashboard-c7374",
+            storageBucket: "skt-dashboard-c7374.appspot.com",
+            messagingSenderId: "936899917792",
+            appId: "1:936899917792:web:6470917c8ae8e410ee5d85"
+        };
+
+        // --- Firebase initialisieren ---
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const messaging = getMessaging(app);
+
+        const spreadsheetId = "1n8NQjGpZpkETLFw7JoY96aYFzwR9_V0WtWwBM9MsN7w";
+        const sheetDataName = "Daten";
+        const sheetPromotionsName = "Anstehende Beförderungen";
+        const sheetEinarbeitungName = "Einarbeitung"; // NEU
+
+        const USER_FILTER_PREFIXES = ["geschäftsstelle", "bezirksleitung", "neuer ma", "wgst", "wbl", "ga ", "jgst", "summe direktion", "rd königslehner", "x "];
+
+        const tierGoals = [
+            { name: "T1", goal: 1250 },
+            { name: "T2", goal: 2500 },
+            { name: "T3", goal: 4000 },
+            { name: "Junior GST", goal: 4001 }
+        ];
+
+        let personalData = {};
+        let teamData = {};
+        let structureData = {};
+        let leaderPromotionData = [];
+        let traineePromotionData = {};
+        let currentPlanningView = 'struktur';
+        let allUsersCache = [];
+        let loggedInUserData = {};
+        let allLeadersCache = []; // NEU
+        let cachedBezirksleitungenData = [];
+        let cachedAllLeaderData = [];
+        let isSuperuserView = false; // NEU
+        let currentLeadershipViewMode = 'list';
+        let cachedActiveMembers = [];
+        let cachedAgenciesData = [];
+        let cachedCycleData = {};
+        let isMoneyView = false;
+        let viewHistory = []; 
+        let currentView = 'dashboard'; // NEU: 'dashboard' oder 'einarbeitung'
+        let currentOnboardingSubView = 'leader-list'; // NEU: 'leader-list' oder 'trainee-detail'
+
+
+        // --- DOM ELEMENTS
+        const dom = {
+            welcomeHeader: document.getElementById('welcome-header'),
+            userPosition: document.getElementById('user-position'),
+            statusMessage: document.getElementById('status-message'),
+            statusText: document.getElementById('status-text'),
+            dashboardSections: document.getElementById('dashboard-sections'),
+            employeeView: document.getElementById('employee-view'),
+            leadershipView: document.getElementById('leadership-view'),
+            teamCount: document.getElementById('team-count'),
+            teamMembersContainer: document.getElementById('team-members-container'),
+            passiveMembersSection: document.getElementById('passive-members-section'),
+            leadershipViewTitle: document.getElementById('leadership-view-title'), 
+            leadershipViewCount: document.getElementById('leadership-view-count'),
+            leadershipViewModeToggle: document.getElementById('leadership-view-mode-toggle'),
+            fortschrittKreisKarriere: document.getElementById('progress-circle-career'),
+            careerProgressPercentage: document.getElementById('career-progress-percentage'),
+            progressToNextText: document.getElementById('progress-to-next-text'),
+            currentEhDisplay: document.getElementById('current-eh-display'),
+            nextMilestone: document.getElementById('next-milestone'),
+            weeklyProgressContainer: document.getElementById('weekly-progress-container'),
+            ehProgressCircle: document.getElementById('progress-circle-eh'),
+            prognosisCircleEh: document.getElementById('prognosis-circle-eh'), 
+            segmentDividersEh: document.getElementById('segment-dividers-eh'), 
+            ehCenterCurrent: document.getElementById('eh-center-current'),
+            ehCenterGoal: document.getElementById('eh-center-goal'),
+            ehSollValue: document.getElementById('eh-soll-value'),
+            etCurrentDisplay: document.getElementById('et-current'),
+            etGoalDisplay: document.getElementById('et-goal'),
+            appointmentsText: document.getElementById('appointments-text'),
+            appointmentsVereinbartBar: document.getElementById('appointments-vereinbart-bar'),
+            appointmentsGehaltenBar: document.getElementById('appointments-gehalten-bar'),
+            employeeCountDisplay: document.getElementById('employee-count-display'),
+            employeeSlotsContainer: document.getElementById('employee-slots-container'),
+            employeeGoalStatus: document.getElementById('employee-goal-status'),
+            interviewsProgressBar: document.getElementById('interviews-progress-bar'), // UPDATE
+            userDropdownSelect: document.getElementById('user-dropdown-select'),
+            userSelectError: document.getElementById('user-select-error'),
+            tierCards: [
+                document.getElementById('tier-1-card'),
+                document.getElementById('tier-2-card'),
+                document.getElementById('tier-3-card'),
+                document.getElementById('tier-gst-card')
+            ],
+            tierProgressBars: [
+                document.getElementById('tier-1-progress'),
+                document.getElementById('tier-2-progress'),
+                document.getElementById('tier-3-progress'),
+                document.getElementById('tier-gst-progress')
+            ],
+            settingsBtn: document.getElementById('settings-btn'),
+            settingsMenu: document.getElementById('settings-menu'),
+            logoutBtn: document.getElementById('logout-btn'),
+            clearCacheBtn: document.getElementById('clear-cache-btn'),
+            superuserBtn: document.getElementById('superuser-btn'),
+            backButton: document.getElementById('back-button'), 
+            moneyViewBtn: document.getElementById('money-view-btn'),
+            monthlyPlanningTitle: document.getElementById('monthly-planning-title'),
+            monthlyPlanningView: document.getElementById('monthly-planning-view'), // NEU
+            planningViewToggle: document.getElementById('planning-view-toggle'),
+            teamViewBtn: document.getElementById('team-view-btn'),
+            personalViewBtn: document.getElementById('personal-view-btn'),
+            strukturViewBtn: document.getElementById('struktur-view-btn'),
+            gridViewBtn: document.getElementById('grid-view-btn'),
+            listViewBtn: document.getElementById('list-view-btn'),
+            // NEUE DOM ELEMENTE
+            mainDashboardView: document.getElementById('main-dashboard-view'),
+            einarbeitungView: document.getElementById('einarbeitung-view'),
+            einarbeitungBtn: document.getElementById('einarbeitung-btn'),
+            einarbeitungBanner: document.getElementById('einarbeitung-banner'),
+            einarbeitungTitle: document.getElementById('einarbeitung-title'),
+            traineeOnboardingView: document.getElementById('trainee-onboarding-view'),
+            leaderOnboardingView: document.getElementById('leader-onboarding-view'),
+            grundseminarStepsContainer: document.getElementById('grundseminar-steps-container'),
+            aufbauseminarStepsContainer: document.getElementById('aufbauseminar-steps-container'),
+            grundseminarProgress: document.getElementById('grundseminar-progress'),
+            aufbauseminarProgress: document.getElementById('aufbauseminar-progress'),
+            grundseminarDateMarkers: document.getElementById('grundseminar-date-markers'),
+            aufbauseminarDateMarkers: document.getElementById('aufbauseminar-date-markers'),
+            hinweisModal: document.getElementById('hinweis-modal'),
+            hinweisModalContent: document.getElementById('hinweis-modal-content'),
+            grundseminarContainer: document.getElementById('grundseminar-container'),
+            aufbauseminarContainer: document.getElementById('aufbauseminar-container'), // ID wurde im HTML korrigiert
+            closeHinweisModalBtn: document.getElementById('close-hinweis-modal-btn'),
+            iosInstructionsModal: document.getElementById('ios-instructions-modal'),
+            closeIosModalBtn: document.getElementById('close-ios-modal-btn'),
+            ehCenterUnitLabel: document.getElementById('eh-center-unit-label'),
+            ehSollUnitLabel: document.getElementById('eh-soll-unit-label'),
+            ehValueUnit: document.getElementById('eh-value-unit'),
+            ehValueTitle: document.getElementById('eh-value-title'),
+        };
+
+        // --- HILFSFUNKTIONEN ---
+        function setStatus(msg, isError = false) {
+            dom.statusText.textContent = msg;
+            dom.statusMessage.style.color = isError ? 'var(--color-accent-red)' : '';
+            dom.statusMessage.style.display = msg ? 'flex' : 'none';
+            const loader = dom.statusMessage.querySelector('.loader');
+            if (loader) loader.style.display = isError ? 'none' : 'block';
+        }
+
+        function clearChildren(el) { while(el.firstChild) el.removeChild(el.firstChild); }
+
+        function updateCircleProgress(svgElement, radius, percentage) {
+            if (!svgElement) return;
+            const circumference = 2 * Math.PI * radius;
+            const offset = circumference * (1 - Math.min(percentage, 100) / 100);
+            svgElement.style.strokeDasharray = circumference;
+            svgElement.style.strokeDashoffset = offset;
+        }
+
+        function animateValue(element, start, end, duration, isLocaleString = true) {
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                const value = Math.floor(progress * (end - start) + start);
+                element.textContent = isLocaleString ? value.toLocaleString('de-DE') : value;
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                }
+            };
+            window.requestAnimationFrame(step);
+        }
+
+        function getMonthlyCycleDates() {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // Normalize today to the beginning of the day
+
+            const findCycleStartForMonth = (year, month) => {
+                const date = new Date(year, month, 1);
+                // Find the first Thursday
+                while (date.getDay() !== 4) { // 4 = Thursday
+                    date.setDate(date.getDate() + 1);
+                }
+                // If the first Thursday is on the 1st or 2nd, the cycle starts on the second Thursday.
+                if (date.getDate() <= 2) {
+                    date.setDate(date.getDate() + 7);
+                }
+                return date;
+            };
+
+            let currentMonth = today.getMonth();
+            let currentYear = today.getFullYear();
+
+            let thisMonthCycleStart = findCycleStartForMonth(currentYear, currentMonth);
+
+            let startDate, endDate;
+
+            if (today < thisMonthCycleStart) {
+                // We are in the previous month's cycle.
+                let prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+                let prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+                
+                startDate = findCycleStartForMonth(prevYear, prevMonth);
+                endDate = new Date(thisMonthCycleStart);
+                endDate.setDate(endDate.getDate() - 1); // The Wednesday before this month's cycle starts
+            } else {
+                // We are in the current month's cycle.
+                let nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
+                let nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
+
+                startDate = thisMonthCycleStart;
+                let nextMonthCycleStart = findCycleStartForMonth(nextYear, nextMonth);
+                endDate = new Date(nextMonthCycleStart);
+                endDate.setDate(endDate.getDate() - 1); // The Wednesday before next month's cycle starts
+            }
+
+            return { startDate, endDate };
+        }
+
+        async function fetchSheetQuery(sheet, query, headers = -1) { // -1 bedeutet Standardverhalten
+            try {
+                let url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:json&sheet=${sheet}&tq=${encodeURIComponent(query)}`;
+                if (headers !== -1) {
+                    url += `&headers=${headers}`;
+                }
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`Network response was not ok: ${res.statusText}`);
+                const text = await res.text();
+                const jsonString = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
+                return JSON.parse(jsonString);
+            } catch (err) {
+                console.error(`Fehler beim Abrufen von ${sheet}:`, err);
+                setStatus(`Fehler beim Laden der Daten aus Tabelle "${sheet}".`, true);
+                return null;
+            }
+        }
+
+        function filterUsers(rawUsers) {
+            return rawUsers.filter(u => {
+                const n = u.toLowerCase().trim();
+                return n && n !== 'x' && !USER_FILTER_PREFIXES.some(f => n.startsWith(f) || n === f);
+            });
+        }
+        
+        function getEarningsRate(position, totalEh) {
+            if (!position) return 0;
+            const pos = position.toLowerCase().trim();
+            if (pos.includes('bezirksleiter')) return 5;
+            if (pos.includes('geschäftsstelle')) return 4;
+            if (pos.includes('junior gst')) return 3;
+            if (pos.includes('trainee')) {
+                if (totalEh < 1250) return 1;    // Trainee I
+                if (totalEh < 2500) return 2;    // Trainee II
+                return 2.5; // Trainee III (und darüber, falls Position noch 'Trainee' ist)
+            }
+            return 0; // Default
+        }
+
+        function calculateTotalEarnings(leaderData, teamMembersData, agenciesData) {
+            const leaderRate = getEarningsRate(leaderData.position, leaderData.totalCurrentEh);
+            
+            // 1. Personal earnings
+            let totalEarnings = leaderData.ehCurrent * leaderRate;
+
+            // 2. Differential from direct team (Trainees)
+            teamMembersData.forEach(member => {
+                const memberRate = getEarningsRate(member.position, member.totalCurrentEh);
+                const differential = leaderRate - memberRate;
+                if (differential > 0) {
+                    totalEarnings += member.ehCurrent * differential;
+                }
+            });
+
+            // 3. Differential from agencies (for BL on GST groups)
+            if (agenciesData && agenciesData.length > 0) {
+                const gstRate = getEarningsRate('geschäftsstelle', 0); // GST rate is fixed
+                const differential = leaderRate - gstRate;
+                if (differential > 0) {
+                    agenciesData.forEach(agency => totalEarnings += agency.ehCurrent * differential);
+                }
+            }
+            return totalEarnings;
+        }
+
+        async function loadAndDisplayTeamStats(leaderName, container) {
+            container.innerHTML = `<div class="loader mx-auto my-2" style="width: 20px; height: 20px; border-width: 3px;"></div>`;
+
+            try {
+                const teamMembers = await findTeamMembers(leaderName);
+                if (teamMembers.length === 0) {
+                    container.innerHTML = `<p class="text-sm text-gray-500">Keine Mitarbeiter im Team.</p>`;
+                    return;
+                }
+
+                const memberDataPromises = teamMembers.map(name => fetchUserData(name, true));
+                const membersData = (await Promise.all(memberDataPromises)).filter(Boolean);
+
+                const activeMembers = membersData.filter(m => m.ehGoal > 0 || m.etGoal > 0).length;
+                const passiveMembers = membersData.length - activeMembers;
+
+                container.innerHTML = `
+                    <p class="text-sm font-semibold text-skt-blue mb-1">Team-Zusammensetzung</p>
+                    <p class="text-md font-bold text-skt-blue"><span class="text-skt-green-accent">${activeMembers} Aktiv</span> / <span class="text-gray-500">${passiveMembers} Passiv</span></p>`;
+            } catch (error) {
+                console.error(`Fehler beim Laden der Team-Statistiken für ${leaderName}:`, error);
+                container.innerHTML = `<p class="text-sm text-red-500">Fehler beim Laden.</p>`;
+            }
+        }
+
+        async function fetchUserPassword(userName) {
+            const query = `select K where A = '${userName.trim()}'`;
+            const data = await fetchSheetQuery(sheetDataName, query);
+            if (data && data.table.rows.length > 0 && data.table.rows[0].c && data.table.rows[0].c[0]) {
+                return data.table.rows[0].c[0].v.toString();
+            }
+            return null;
+        }
+
+        // --- PWA & SERVICE WORKER ---
+        function registerServiceWorker() {
+         if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+              navigator.serviceWorker.register('./service-worker.js')
+                .then(registration => console.log('Service Worker: Registered'))
+                .catch(error => console.log('Service Worker: Registration Failed', error));
+            });
+          }
+        }
+
+        function updateNotificationPromptVisibility() {
+            const prompt = document.getElementById('notification-prompt');
+            if ('Notification' in window && Notification.permission !== 'granted') {
+                prompt.classList.remove('hidden');
+            } else {
+                prompt.classList.add('hidden');
+            }
+        }
+
+        async function askForNotificationPermission() {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches;
+
+            if (isIOS && !isInStandaloneMode) {
+                dom.iosInstructionsModal.classList.add('visible');
+                document.body.classList.add('modal-open');
+                return;
+            }
+
+            if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+                alert('Dein Browser unterstützt leider keine Push-Benachrichtigungen.');
+                return;
+            }
+            
+            const permission = await Notification.requestPermission();
+
+            if (permission === 'granted') {
+                document.getElementById('notification-prompt').classList.add('hidden');
+                try {
+                    const vapidKey = 'BDCibiyhVTM6BhoU79r99pzsqTN9vIRedITekvHlbznK8aZgnKLpSDvQyOTQo_vAOkS__LIEAgS0m3r2crCI3Xo';
+                    const registration = await navigator.serviceWorker.ready;
+                    const currentToken = await getToken(messaging, { 
+                        vapidKey: vapidKey,
+                        serviceWorkerRegistration: registration
+                    });
+
+                    if (currentToken) {
+                        const userName = localStorage.getItem('loggedInUser');
+                        if (userName) {
+                            const userDocRef = doc(db, "subscriptions", userName);
+                            await setDoc(userDocRef, { token: currentToken }, { merge: true });
+                            console.log(`Token für ${userName} in Firestore gespeichert.`);
+                            alert('Benachrichtigungen erfolgreich aktiviert!');
+                        }
+                    }
+                } catch (err) {
+                    console.error('Fehler beim Abrufen des Tokens:', err);
+                }
+            }
+        }
+
+        // --- DASHBOARD FUNKTIONEN ---
+        async function startDashboard(user) {
+            isSuperuserView = false;
+            let selectedUser = user;
+            if (!selectedUser) {
+                const dropdownUser = dom.userDropdownSelect.value;
+                const enteredPassword = document.getElementById('password-input').value;
+                
+                if (!dropdownUser) { dom.userSelectError.textContent = "Bitte zuerst einen Benutzer auswählen."; return; }
+                if (!enteredPassword) { dom.userSelectError.textContent = "Bitte gib dein Passwort ein."; return; }
+                dom.userSelectError.textContent = "";
+
+                const startBtn = document.getElementById('start-dashboard-btn');
+                startBtn.disabled = true;
+                startBtn.textContent = 'Wird geprüft...';
+
+                const correctPassword = await fetchUserPassword(dropdownUser);
+                
+                if (correctPassword === null) {
+                    dom.userSelectError.textContent = "Benutzer nicht gefunden oder kein Passwort hinterlegt.";
+                    startBtn.disabled = false; startBtn.textContent = 'Dashboard laden'; return;
+                }
+                
+                if (enteredPassword !== correctPassword) {
+                    dom.userSelectError.textContent = "Falsches Passwort. Bitte erneut versuchen.";
+                    startBtn.disabled = false; startBtn.textContent = 'Dashboard laden';
+                    const passwordInput = document.getElementById('password-input');
+                    passwordInput.value = ""; passwordInput.focus();
+                    return;
+                }
+                selectedUser = dropdownUser;
+            }
+
+            localStorage.setItem('loggedInUser', selectedUser); 
+
+            // NEU: Daten des eingeloggten Benutzers separat abrufen und speichern, um Berechtigungen robust zu prüfen.
+            loggedInUserData = await fetchUserData(selectedUser, true);
+            if (!loggedInUserData || !loggedInUserData.position) {
+                dom.userSelectError.textContent = "Benutzerdaten konnten nicht geladen werden.";
+                const startBtn = document.getElementById('start-dashboard-btn');
+                startBtn.disabled = false; startBtn.textContent = 'Dashboard laden';
+                return;
+            }
+
+            viewHistory = [selectedUser];
+
+            document.getElementById('user-select-screen').classList.add('hidden');
+            const dashboardContent = document.getElementById('dashboard-content');
+            dashboardContent.classList.remove('hidden');
+            dashboardContent.classList.add('flex');
+            
+            fetchAndRenderDashboard(selectedUser);
+            updateNotificationPromptVisibility();
+            updateBackButtonVisibility();
+        }
+        
+        async function fetchUserData(userName, returnData = false) {
+            const query = `select B, C, D, E, F, G, H, I, J where A = '${userName.trim()}'`;
+            const data = await fetchSheetQuery(sheetDataName, query);
+            let userData = { name: userName, ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atVereinbart: 0, atCurrent: 0, totalCurrentEh: 0, position: null };
+
+            if (data && data.table.rows.length > 0 && data.table.rows[0].c) {
+                const row = data.table.rows[0].c;
+                userData = {
+                    name: userName,
+                    ehGoal: Math.round(row[0]?.v || 0),
+                    ehCurrent: Math.round(row[1]?.v || 0),
+                    etGoal: Math.round(row[2]?.v || 0),
+                    etCurrent: Math.round(row[3]?.v || 0),
+                    atGoal: Math.round(row[4]?.v || 0),
+                    atVereinbart: Math.round(row[5]?.v || 0),
+                    atCurrent: Math.round(row[6]?.v || 0),
+                    totalCurrentEh: Math.round(row[7]?.v || 0),
+                    position: row[8]?.v || null
+                };
+            } else {
+                 if (!isSuperuserView && !returnData) setStatus(`Keine Daten für Benutzer "${userName}" gefunden.`, true);
+            }
+
+            if (returnData) {
+                return userData;
+            } else {
+                personalData = userData;
+            }
+        }
+
+
+        async function fetchCurrentUserPromotionData(userName) {
+            let goal = 'none', missing = 0;
+            const query = `select A, B where A is not null`;
+            const data = await fetchSheetQuery(sheetPromotionsName, query);
+            if (!data || !data.table || !data.table.rows) {
+                traineePromotionData = { goal, missing };
+                return;
+            }
+            let section = null;
+            for (const row of data.table.rows) {
+                const name = row.c[0]?.v;
+                if (!name) continue;
+                if (name.includes('BL Beförderungen')) { section='BL'; continue; }
+                if (name.includes('GST Beförderungen')) { section='GST'; continue; }
+                if (name.toLowerCase().trim() === userName.toLowerCase().trim() && section) {
+                    goal = section;
+                    missing = row.c[1]?.v || 0;
+                    break;
+                }
+            }
+            traineePromotionData = { goal, missing };
+        }
+        
+        async function fetchLeaderPromotionData() {
+            const query = `select A, B, C where A is not null`; // Name, Missing MA, Start Date
+            const data = await fetchSheetQuery(sheetPromotionsName, query);
+            if (!data || !data.table || !data.table.rows) {
+                leaderPromotionData = [];
+                return;
+            }
+            let isBlSection = false;
+            const promotions = [];
+            for (const row of data.table.rows) {
+                const nameCell = row.c[0];
+                if (!nameCell || !nameCell.v) continue;
+                const name = nameCell.v;
+                const nameLower = name.toLowerCase().trim();
+
+                if (nameLower.includes('bl beförderungen')) { isBlSection = true; continue; }
+                if (nameLower.includes('gst beförderungen')) { isBlSection = false; continue; }
+
+                if (isBlSection && name.trim() !== "") {
+                    promotions.push({
+                        name: name.trim(),
+                        missing: row.c[1]?.v || 0,
+                        startDate: row.c[2]?.f || 'N/A'
+                    });
+                }
+            }
+            leaderPromotionData = promotions;
+        }
+
+        async function fetchAndRenderDashboard(userName){
+            window.scrollTo(0, 0);
+            isSuperuserView = false;
+            setStatus('Daten werden geladen...');
+            dom.dashboardSections.classList.add('opacity-0');
+            dom.welcomeHeader.textContent=`Willkommen, ${userName}`;
+            
+            try {
+                await Promise.all([
+                    getAllUsers(), // Sicherstellen, dass die Benutzerliste für Verlinkungen geladen ist
+                    fetchUserData(userName), 
+                    fetchCurrentUserPromotionData(userName),
+                    fetchLeaderPromotionData(),
+                ]);
+
+                const teamMembers = await findTeamMembers(userName);
+                await fetchAndRenderOnboarding(userName, teamMembers);
+                
+                if (dom.statusText.textContent.toLowerCase().includes('fehler')) {
+                    dom.dashboardSections.classList.add('hidden');
+                    return;
+                }
+                
+                const isTrainee = personalData.position && personalData.position.toLowerCase().trim() === 'trainee';
+
+                if (isTrainee) {
+                    let traineeLevel = "Trainee I";
+                    if (personalData.totalCurrentEh >= 2500) {
+                        traineeLevel = "Trainee III";
+                    } else if (personalData.totalCurrentEh >= 1250) {
+                        traineeLevel = "Trainee II";
+                    }
+                    dom.userPosition.textContent = traineeLevel;
+                } else {
+                    dom.userPosition.textContent = personalData.position;
+                }
+                
+                // Banner nur anzeigen, wenn der Benutzer im Einarbeitungsplan ist.
+                // Dazu muss geprüft werden, ob der Benutzer im Einarbeitungssheet existiert.
+                const onboardingQuery = `select * where A is not null`;
+                const onboardingData = await fetchSheetQuery(sheetEinarbeitungName, onboardingQuery, 0);
+                if (onboardingData && onboardingData.table && onboardingData.table.rows.length > 1) {
+                    const nameRow = onboardingData.table.rows[1].c;
+                    const userInOnboarding = nameRow.some(cell => cell && cell.v && cell.v.toLowerCase().trim() === userName.toLowerCase().trim());
+                    if (userInOnboarding && !localStorage.getItem('hasVisitedOnboarding') && personalData.totalCurrentEh < 1) {
+                        dom.einarbeitungBanner.classList.remove('hidden');
+                    } else {
+                        dom.einarbeitungBanner.classList.add('hidden');
+                    }
+                } else {
+                     dom.einarbeitungBanner.classList.add('hidden');
+                }
+                
+
+                // Blur-Effekt für Trainees mit 0 EH
+                if (isTrainee && personalData.totalCurrentEh < 1) {
+                    dom.monthlyPlanningView.classList.add('blurred-section-overlay');
+                } else {
+                    dom.monthlyPlanningView.classList.remove('blurred-section-overlay');
+                }
+
+                if (!isTrainee) {
+                    dom.planningViewToggle.classList.remove('hidden');
+                    dom.employeeView.classList.add('hidden');
+                    dom.leadershipView.classList.remove('hidden');
+                    renderLeaderPersonalGoal(userName);
+                    
+                    await calculateTeamAndStructureData(userName, teamMembers);
+                    
+                    const posLower = personalData.position ? personalData.position.toLowerCase() : '';
+                    const isRD = posLower.includes('regionaldirektor');
+                    const isBL = posLower.includes('bezirksleiter');
+
+                    if (isRD) {
+                        dom.strukturViewBtn.classList.remove('hidden');
+                        dom.teamViewBtn.classList.remove('hidden'); // Gruppenansicht (für direkte Trainees) ebenfalls verfügbar machen
+                        currentPlanningView = 'struktur';
+                        dom.strukturViewBtn.classList.add('active');
+                        dom.teamViewBtn.classList.remove('active');
+                        dom.personalViewBtn.classList.remove('active');
+                        dom.monthlyPlanningTitle.textContent = "Direktions-Übersicht";
+                        updateMonthlyPlanningView(structureData);
+                    } else if (isBL) {
+                        dom.strukturViewBtn.classList.remove('hidden');
+                        dom.teamViewBtn.classList.remove('hidden');
+                        currentPlanningView = 'struktur';
+                        dom.strukturViewBtn.classList.add('active');
+                        dom.teamViewBtn.classList.remove('active');
+                        dom.personalViewBtn.classList.remove('active');
+                        dom.monthlyPlanningTitle.textContent = "Struktur-Übersicht";
+                        updateMonthlyPlanningView(structureData);
+                    } else { // GST, JGST, etc.
+                        dom.strukturViewBtn.classList.add('hidden');
+                        dom.teamViewBtn.classList.remove('hidden');
+                        currentPlanningView = 'team';
+                        dom.teamViewBtn.classList.add('active');
+                        dom.strukturViewBtn.classList.remove('active');
+                        dom.personalViewBtn.classList.remove('active');
+                        dom.monthlyPlanningTitle.textContent = "Gruppen-Übersicht";
+                        updateMonthlyPlanningView(teamData);
+                    }
+                    updateLeadershipView();
+
+                } else {
+                    currentPlanningView = 'personal';
+                    dom.planningViewToggle.classList.add('hidden');
+                    dom.leadershipView.classList.add('hidden');
+                    dom.employeeView.classList.remove('hidden');
+                    updateMonthlyPlanningView(personalData);
+                    updateEmployeeCareerView();
+                    dom.monthlyPlanningTitle.textContent = "Deine Monatsplanung";
+                }
+
+                setStatus('');
+                dom.dashboardSections.classList.remove('hidden');
+                setTimeout(() => dom.dashboardSections.classList.remove('opacity-0'), 50);
+                updateBackButtonVisibility();
+            } catch (error) {
+                console.error("Ein schwerwiegender Fehler ist im Dashboard aufgetreten:", error);
+                setStatus("Ein Fehler ist aufgetreten. Bitte laden Sie die Seite neu.", true);
+            }
+        }
+
+        async function calculateTeamAndStructureData(userName, team) {
+            const { startDate, endDate } = getMonthlyCycleDates();
+            const today = new Date();
+            cachedCycleData.totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
+            cachedCycleData.daysPassedInCycle = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24));
+
+            const memberDataPromises = team.map(async (memberName) => {
+                const query = `select B, C, D, E, F, G, H, I, J where A = '${memberName.trim()}'`;
+                const data = await fetchSheetQuery(sheetDataName, query);
+                if (data && data.table.rows.length > 0) {
+                    const row = data.table.rows[0].c;
+                    return { 
+                        name: memberName, 
+                        ehGoal: Math.round(row[0]?.v || 0), 
+                        ehCurrent: Math.round(row[1]?.v || 0), 
+                        etGoal: Math.round(row[2]?.v || 0), 
+                        etCurrent: Math.round(row[3]?.v || 0), 
+                        atGoal: Math.round(row[4]?.v || 0), 
+                        atVereinbart: Math.round(row[5]?.v || 0), 
+                        atCurrent: Math.round(row[6]?.v || 0), 
+                        totalCurrentEh: Math.round(row[7]?.v || 0),
+                        position: row[8]?.v || null 
+                    };
+                }
+                return null;
+            });
+            
+            const membersData = (await Promise.all(memberDataPromises)).filter(Boolean);
+            const teamMembersTotal = membersData.reduce((acc, member) => {
+                acc.ehGoal += member.ehGoal;
+                acc.ehCurrent += member.ehCurrent;
+                acc.etGoal += member.etGoal;
+                acc.etCurrent += member.etCurrent;
+                acc.atGoal += member.atGoal;
+                acc.atVereinbart += member.atVereinbart;
+                acc.atCurrent += member.atCurrent;
+                return acc;
+            }, { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atVereinbart: 0, atCurrent: 0 });
+
+            teamData = {
+                ehGoal: teamMembersTotal.ehGoal + (personalData.ehGoal || 0),
+                ehCurrent: teamMembersTotal.ehCurrent + (personalData.ehCurrent || 0),
+                etGoal: teamMembersTotal.etGoal + (personalData.etGoal || 0),
+                etCurrent: teamMembersTotal.etCurrent + (personalData.etCurrent || 0),
+                atGoal: teamMembersTotal.atGoal + (personalData.atGoal || 0),
+                atVereinbart: teamMembersTotal.atVereinbart + (personalData.atVereinbart || 0),
+                atCurrent: teamMembersTotal.atCurrent + (personalData.atCurrent || 0)
+            };
+
+            cachedActiveMembers = membersData;
+            
+            const positionLower = personalData.position ? personalData.position.toLowerCase() : '';
+            cachedAgenciesData = [];
+            cachedBezirksleitungenData = [];
+
+            if (positionLower.includes('regionaldirektor')) {
+                cachedBezirksleitungenData = await fetchRDStructureData(userName);
+                // For an RD, structure data is team data (personal + direct trainees) + structure items (BLs, GSTs, etc.).
+                structureData = JSON.parse(JSON.stringify(teamData)); 
+                cachedBezirksleitungenData.forEach(item => {
+                    structureData.ehGoal += item.ehGoal;
+                    structureData.ehCurrent += item.ehCurrent;
+                    structureData.etGoal += item.etGoal;
+                    structureData.etCurrent += item.etCurrent;
+                    structureData.atGoal += item.atGoal;
+                    structureData.atVereinbart += item.atVereinbart;
+                    structureData.atCurrent += item.atCurrent;
+                });
+            } else if (positionLower.includes('bezirksleiter')) {
+                cachedAgenciesData = await fetchAgenciesData(userName);
+                // For a BL, structure data is team data (personal + trainees) + agencies.
+                structureData = JSON.parse(JSON.stringify(teamData));
+                cachedAgenciesData.forEach(agency => {
+                    structureData.ehGoal += agency.ehGoal;
+                    structureData.ehCurrent += agency.ehCurrent;
+                    structureData.etGoal += agency.etGoal;
+                    structureData.etCurrent += agency.etCurrent;
+                    structureData.atGoal += agency.atGoal;
+                    structureData.atVereinbart += agency.atVereinbart;
+                    structureData.atCurrent += agency.atCurrent;
+                });
+            } else {
+                // For others (GST, etc.), structure data is the same as team data.
+                structureData = JSON.parse(JSON.stringify(teamData));
+            }
+        }
+
+        function drawSegmentDividers() {
+            const { startDate, endDate } = getMonthlyCycleDates();
+            clearChildren(dom.segmentDividersEh);
+            const totalDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
+            const totalWeeks = Math.ceil(totalDays / 7);
+
+            for (let i = 1; i < totalWeeks; i++) {
+                const angle = i * (360 / totalWeeks);
+                const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                
+                const innerRadius = 35; const strokeWidth = 4;
+                const innerEdgeRadius = innerRadius - (strokeWidth / 2);
+                const outerEdgeRadius = innerRadius + (strokeWidth / 2);
+
+                const x1 = 50 + innerEdgeRadius * Math.cos(angle * Math.PI / 180);
+                const y1 = 50 + innerEdgeRadius * Math.sin(angle * Math.PI / 180);
+                const x2 = 50 + outerEdgeRadius * Math.cos(angle * Math.PI / 180);
+                const y2 = 50 + outerEdgeRadius * Math.sin(angle * Math.PI / 180);
+
+                line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+                line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+                
+                dom.segmentDividersEh.appendChild(line);
+            }
+        }
+
+        function updateWeeklyProgress() {
+            const { startDate, endDate } = getMonthlyCycleDates();
+            const today = new Date();
+            clearChildren(dom.weeklyProgressContainer);
+
+            const totalDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
+            const daysInAWeek = 7;
+            const totalWeeks = Math.ceil(totalDays / daysInAWeek);
+            const dateOptions = { day: '2-digit', month: '2-digit' };
+
+            const createDivider = (left) => {
+                const d = document.createElement('div');
+                d.className = 'start-end-divider'; d.style.left = left;
+                dom.weeklyProgressContainer.appendChild(d);
+            };
+            const createLabel = (left, text, transform) => {
+                const l = document.createElement('div');
+                l.className = 'centered-date-label'; l.style.left = left;
+                l.style.transform = transform; l.textContent = text;
+                dom.weeklyProgressContainer.appendChild(l);
+            };
+            
+            createDivider('0%');
+            createLabel('0%', startDate.toLocaleDateString('de-DE', dateOptions), 'translateX(-50%)');
+
+            for (let i = 0; i < totalWeeks; i++) {
+                const weekStart = new Date(startDate.getTime() + i * daysInAWeek * 24 * 60 * 60 * 1000);
+                const weekEnd = new Date(weekStart.getTime() + daysInAWeek * 24 * 60 * 60 * 1000);
+                let progress = 0;
+                if (today >= weekEnd) progress = 100;
+                else if (today >= weekStart && today < weekEnd) {
+                    const daysPassed = (today - weekStart) / (1000 * 60 * 60 * 24);
+                    progress = (daysPassed / daysInAWeek) * 100;
+                }
+                const weekDiv = document.createElement('div');
+                weekDiv.className = 'flex-1 h-full relative p-2 flex flex-col items-center z-20';
+                weekDiv.innerHTML = `<div class="w-full bg-skt-grey-medium h-2 rounded-full overflow-hidden"><div class="h-full bg-skt-green-accent rounded-full transition-all duration-500" style="width: ${Math.min(progress, 100)}%;"></div></div>`;
+                dom.weeklyProgressContainer.appendChild(weekDiv);
+            }
+
+            const weeksDivs = dom.weeklyProgressContainer.querySelectorAll('.flex-1');
+            weeksDivs.forEach((div, i) => {
+                if (i === weeksDivs.length - 1) return;
+                const pos = `${(i + 1) * (100 / weeksDivs.length)}%`;
+                const weekDivider = document.createElement('div');
+                weekDivider.className = 'week-divider'; weekDivider.style.left = pos;
+                dom.weeklyProgressContainer.appendChild(weekDivider);
+                const wednesday = new Date(startDate.getTime() + i * daysInAWeek * 24 * 60 * 60 * 1000);
+                wednesday.setDate(wednesday.getDate() + (3 - wednesday.getDay() + 7) % 7);
+                createLabel(pos, wednesday.toLocaleDateString('de-DE', dateOptions), 'translateX(-50%)');
+            });
+            
+            const endDivider = document.createElement('div');
+            endDivider.className = 'start-end-divider'; endDivider.style.right = '0%';
+            dom.weeklyProgressContainer.appendChild(endDivider);
+            createLabel('100%', endDate.toLocaleDateString('de-DE', dateOptions), 'translateX(-50%)');
+        }
+        
+        function updateMonthlyPlanningView(data) {
+            updateWeeklyProgress();
+
+            let displayValueCurrent = data.ehCurrent;
+            let displayValueGoal = data.ehGoal;
+            let isEuro = false;
+
+            if (isMoneyView && !isSuperuserView) {
+                isEuro = true;
+                if (currentPlanningView === 'personal') {
+                    const rate = getEarningsRate(personalData.position, personalData.totalCurrentEh);
+                    displayValueCurrent = personalData.ehCurrent * rate;
+                    displayValueGoal = personalData.ehGoal * rate;
+                } else if (currentPlanningView === 'team') {
+                    displayValueCurrent = calculateTotalEarnings(personalData, cachedActiveMembers, []);
+                    const avgRate = teamData.ehCurrent > 0 ? displayValueCurrent / teamData.ehCurrent : getEarningsRate(personalData.position, personalData.totalCurrentEh);
+                    displayValueGoal = teamData.ehGoal * avgRate;
+                } else if (currentPlanningView === 'struktur') {
+                    displayValueCurrent = calculateTotalEarnings(personalData, cachedActiveMembers, cachedAgenciesData);
+                    const avgRate = structureData.ehCurrent > 0 ? displayValueCurrent / structureData.ehCurrent : getEarningsRate(personalData.position, personalData.totalCurrentEh);
+                    displayValueGoal = structureData.ehGoal * avgRate;
+                }
+            }
+
+            dom.ehCenterUnitLabel.textContent = isEuro ? '€ verdient' : 'Einheiten erreicht';
+            dom.ehSollUnitLabel.textContent = isEuro ? 'Soll €' : 'Soll Einheiten';
+
+            animateValue(dom.ehCenterCurrent, 0, displayValueCurrent, 1000, true);
+            dom.ehCenterGoal.textContent = displayValueGoal.toLocaleString('de-DE', { maximumFractionDigits: 0 });
+            animateValue(dom.etCurrentDisplay, 0, data.etCurrent, 1000, false);
+            dom.etGoalDisplay.textContent = data.etGoal.toLocaleString('de-DE');
+            
+            const actualPercentage = data.ehGoal > 0 ? (data.ehCurrent / data.ehGoal * 100) : 0;
+            updateCircleProgress(dom.ehProgressCircle, 45, actualPercentage);
+
+            const { startDate, endDate } = getMonthlyCycleDates();
+            const today = new Date();
+            const totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
+            const daysPassedInCycle = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24));
+            const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
+            updateCircleProgress(dom.prognosisCircleEh, 35, timeElapsedPercentage);
+
+            const sollValue = Math.round(displayValueGoal * (timeElapsedPercentage / 100));
+            if (dom.ehSollValue) {
+                animateValue(dom.ehSollValue, 0, sollValue, 1000, true);
+            }
+
+            drawSegmentDividers();
+
+            dom.appointmentsText.textContent = `${data.atCurrent} / ${data.atVereinbart} / ${data.atGoal}`;
+            
+            const vereinbartPercent = data.atGoal > 0 ? (data.atVereinbart / data.atGoal) * 100 : 0;
+            const gehaltenPercent = data.atGoal > 0 ? (data.atCurrent / data.atGoal) * 100 : 0;
+            dom.appointmentsVereinbartBar.style.width = `${Math.min(vereinbartPercent, 100)}%`;
+            dom.appointmentsGehaltenBar.style.width = `${Math.min(gehaltenPercent, 100)}%`;
+
+            // UPDATE: Logik für Bewerbungsgespräche-Balken
+            if(dom.interviewsProgressBar) {
+                 const etPercent = data.etGoal > 0 ? (data.etCurrent / data.etGoal) * 100 : 0;
+                 dom.interviewsProgressBar.style.width = `${Math.min(etPercent, 100)}%`;
+            }
+        }
+
+        function updateEmployeeCareerView() {
+            const ehValueDisplay = document.getElementById('eh-value-display');
+            const ehCheckmark = document.getElementById('eh-checkmark');
+            
+            if (isMoneyView) {
+                const rate = getEarningsRate(personalData.position, personalData.totalCurrentEh);
+                const earnings = personalData.totalCurrentEh * rate;
+                animateValue(dom.currentEhDisplay, 0, earnings, 1500);
+                dom.ehValueUnit.textContent = ' €';
+                dom.ehValueTitle.textContent = 'Verdient (insgesamt)';
+                dom.ehValueTitle.dataset.tooltip = 'Dein gesamter Verdienst';
+            } else {
+                animateValue(dom.currentEhDisplay, 0, personalData.totalCurrentEh, 1500);
+                dom.ehValueUnit.textContent = ' EH';
+                dom.ehValueTitle.textContent = 'Erreichte EH (insgesamt)';
+                dom.ehValueTitle.dataset.tooltip = 'Deine gesamten erreichten Einheiten';
+            }
+
+            if (personalData.totalCurrentEh >= 4000) {
+                ehValueDisplay.classList.add('hidden');
+                ehCheckmark.classList.remove('hidden');
+            } else {
+                ehValueDisplay.classList.remove('hidden');
+                ehCheckmark.classList.add('hidden');
+            }
+
+            let curTier=-1, curGoal=0, nextGoal=0, nextName="";
+            if(personalData.totalCurrentEh < 1251){ curTier=0; nextGoal=1250; nextName="T2"; }
+            else if(personalData.totalCurrentEh < 2501){ curTier=1; curGoal=1250; nextGoal=2500; nextName="T3"; }
+            else if(personalData.totalCurrentEh < 4001){ curTier=2; curGoal=2500; nextGoal=4000; nextName="Junior GST"; }
+            else curTier=3;
+
+            dom.tierCards.forEach(c => c.classList.remove('active'));
+            dom.tierProgressBars.forEach(b => b.style.width='0%');
+
+            if(curTier === 3){
+                dom.tierCards.forEach(c => c.classList.add('active'));
+                dom.tierProgressBars.forEach(b => b.style.width='100%');
+                dom.careerProgressPercentage.textContent="100%";
+                dom.progressToNextText.textContent="Junior GST erreicht!";
+                dom.nextMilestone.innerHTML='Nächster Meilenstein: <span class="text-skt-blue font-semibold">Erfolgreich!</span>';
+                updateCircleProgress(dom.fortschrittKreisKarriere, 40, 100);
+            } else {
+                const spanCur = personalData.totalCurrentEh - curGoal, spanNext = nextGoal - curGoal;
+                const percent = spanNext > 0 ? (spanCur / spanNext * 100) : 0;
+                dom.careerProgressPercentage.textContent=`${Math.min(percent, 100).toFixed(1)}%`;
+                dom.progressToNextText.textContent=`Fortschritt zum ${nextName}`;
+                dom.nextMilestone.innerHTML=`Nächster Meilenstein: <span class="text-skt-blue font-semibold">${nextName} (${nextGoal.toLocaleString('de-DE')} EH)</span>`;
+                updateCircleProgress(dom.fortschrittKreisKarriere, 40, percent);
+
+                if (dom.tierProgressBars[0]) dom.tierProgressBars[0].style.width=`${Math.min(personalData.totalCurrentEh / tierGoals[0].goal * 100, 100)}%`; 
+                if (personalData.totalCurrentEh >= tierGoals[0].goal && dom.tierCards[0]) dom.tierCards[0].classList.add('active');
+                
+                if (dom.tierProgressBars[1]) dom.tierProgressBars[1].style.width=`${Math.min(Math.max(0, personalData.totalCurrentEh - tierGoals[0].goal) / (tierGoals[1].goal - tierGoals[0].goal) * 100, 100)}%`; 
+                if (personalData.totalCurrentEh >= tierGoals[1].goal && dom.tierCards[1]) dom.tierCards[1].classList.add('active');
+
+                if (dom.tierProgressBars[2]) dom.tierProgressBars[2].style.width=`${Math.min(Math.max(0, personalData.totalCurrentEh - tierGoals[1].goal) / (tierGoals[2].goal - tierGoals[1].goal) * 100, 100)}%`; 
+                if (personalData.totalCurrentEh >= tierGoals[2].goal && dom.tierCards[2]) dom.tierCards[2].classList.add('active');
+                
+                if (dom.tierCards[curTier]) dom.tierCards[curTier].classList.add('active');
+            }
+
+            clearChildren(dom.employeeSlotsContainer);
+            dom.employeeGoalStatus.classList.remove('text-skt-red-accent','text-skt-blue-light','font-semibold');
+
+            if(traineePromotionData.goal === 'none'){
+                dom.employeeCountDisplay.textContent = "N/A";
+                dom.employeeGoalStatus.textContent = 'Karriereschritt besprechen';
+                dom.employeeGoalStatus.classList.add('text-skt-red-accent','font-semibold');
+            } else {
+                const required = traineePromotionData.goal === 'BL' ? 6 : 3;
+                const filled = required - traineePromotionData.missing;
+                dom.employeeCountDisplay.textContent = `${filled} / ${required} MA`;
+                dom.employeeGoalStatus.textContent = `Ziel: ${traineePromotionData.goal}`;
+                dom.employeeGoalStatus.classList.add('text-skt-blue-light');
+                for(let i=0; i < required; i++){
+                    const slot=document.createElement('div'); slot.classList.add('employee-slot'); if(i < filled) slot.classList.add('filled');
+                    dom.employeeSlotsContainer.appendChild(slot);
+                }
+            }
+        }
+
+        async function findTeamMembers(leaderName) {
+            const data = await fetchSheetQuery(sheetDataName, 'select A, J');
+            if (!data || !data.table.rows) return [];
+        
+            const allUsers = data.table.rows.map(r => ({
+                name: r.c[0]?.v,
+                position: r.c[1]?.v
+            })).filter(u => u.name);
+        
+            const leaderIndex = allUsers.findIndex(u => u.name.toLowerCase().trim() === leaderName.toLowerCase().trim());
+        
+            if (leaderIndex === -1) return [];
+        
+            const team = [];
+            for (let i = leaderIndex + 1; i < allUsers.length; i++) {
+                const currentUser = allUsers[i];
+                const currentNameLower = currentUser.name.toLowerCase().trim();
+                const currentPositionLower = (currentUser.position || "").toLowerCase().trim();
+        
+                if (currentPositionLower && currentPositionLower !== 'trainee') {
+                    break;
+                }
+        
+                if (currentNameLower !== 'x' && !USER_FILTER_PREFIXES.some(prefix => currentNameLower.startsWith(prefix))) {
+                    team.push(currentUser.name);
+                }
+            }
+            return team;
+        }
+        
+        function getProgressColorHex(current, goal, totalDays, daysPassed) {
+            if (goal === 0) return 'var(--color-skt-grey-medium)';
+            const progressPercent = (current / goal) * 100;
+            if (progressPercent >= 100) return 'var(--color-accent-green)';
+
+            if (daysPassed <= 0) return 'var(--color-accent-green)';
+
+            const timePercent = (daysPassed / totalDays) * 100;
+
+            if (progressPercent >= timePercent) return 'var(--color-accent-green)';
+            if (progressPercent >= timePercent * 0.75) return 'var(--color-accent-yellow)';
+            return 'var(--color-accent-red)';
+        }
+
+        function getProgressColorClass(current, goal, totalDays, daysPassed) {
+            if (goal === 0) return 'bg-skt-grey-medium';
+            const progressPercent = (current / goal) * 100;
+            if (progressPercent >= 100) return 'bg-skt-green-accent';
+
+            if (daysPassed <= 0) return 'bg-skt-green-accent';
+
+            const timePercent = (daysPassed / totalDays) * 100;
+
+            if (progressPercent >= timePercent) return 'bg-skt-green-accent';
+            if (progressPercent >= timePercent * 0.75) return 'bg-skt-yellow-accent';
+            return 'bg-skt-red-accent';
+        }
+
+        function getPrognosis(current, goal, totalDays, daysPassed) {
+            if (goal === 0) return { text: 'Keine Ziele gesetzt', colorClass: 'text-skt-blue-light' };
+            const progressPercent = (current / goal) * 100;
+            if (progressPercent >= 100) return { text: 'Ziele erreicht', colorClass: 'text-skt-green-accent' };
+
+            if (daysPassed <= 0) return { text: 'Auf Kurs', colorClass: 'text-skt-green-accent' };
+
+            const timePercent = (daysPassed / totalDays) * 100;
+
+            if (progressPercent >= timePercent) return { text: 'Auf Kurs', colorClass: 'text-skt-green-accent' };
+            if (progressPercent >= timePercent * 0.75) return { text: '', colorClass: 'text-skt-yellow-accent' };
+            return { text: 'Ziele gefährdet', colorClass: 'text-skt-red-accent' };
+        }
+
+        function renderLeaderPersonalGoal(userName) {
+            const container = document.getElementById('leader-personal-goal-container');
+            if (!container) return;
+
+            // NEU: Karriereziel für BL und RD ausblenden, da sie die höchsten Stufen erreicht haben.
+            const posLower = personalData.position ? personalData.position.toLowerCase().trim() : '';
+            if (posLower.includes('bezirksleiter') || posLower.includes('regionaldirektor')) {
+                container.classList.add('hidden');
+                container.innerHTML = '';
+                return;
+            }
+
+            clearChildren(container);
+            container.classList.remove('hidden');
+
+            const promotionInfo = leaderPromotionData.find(p => p.name.toLowerCase() === userName.toLowerCase().trim());
+
+            let goalHtml = '';
+            if (promotionInfo) {
+                const required = 6; // BL requires 6 MA
+                const filled = required - promotionInfo.missing;
+                let slotsHtml = '';
+                for(let i=0; i < required; i++){
+                    slotsHtml += `<div class="employee-slot ${i < filled ? 'filled' : ''}"></div>`;
+                }
+                goalHtml = `
+                    <h2 class="text-2xl font-semibold text-skt-blue mb-4 text-center">Dein nächstes Karriereziel</h2>
+                    <div class="bg-skt-grey-light rounded-xl p-4 flex flex-col sm:flex-row justify-between items-center">
+                        <div>
+                            <p class="text-lg text-skt-blue-light font-bold">Ziel: Bezirksleitung</p>
+                            <p class="text-md text-skt-blue-light">Start im Rennen: ${promotionInfo.startDate}</p>
+                        </div>
+                        <div class="flex items-center gap-2 mt-4 sm:mt-0">
+                            <span class="text-2xl font-bold text-skt-blue">${filled}/${required} MA</span>
+                            <div class="flex space-x-1.5">${slotsHtml}</div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                goalHtml = `
+                    <h2 class="text-2xl font-semibold text-skt-blue mb-4 text-center">Dein nächstes Karriereziel</h2>
+                    <div class="bg-skt-grey-light rounded-xl p-4">
+                        <p class="text-md text-skt-red-accent font-semibold text-center">Karriereschritt im nächsten PG besprechen.</p>
+                    </div>
+                `;
+            }
+            container.innerHTML = goalHtml;
+        }
+
+        function renderTeamMemberCards(members) {
+            clearChildren(dom.teamMembersContainer);
+            dom.teamMembersContainer.className = 'mt-6'; 
+
+            if (members.length === 0) {
+                dom.teamMembersContainer.innerHTML = `<p class="text-center text-gray-500 col-span-full">Du hast aktuell keine aktiven Mitarbeiter in der Liste.</p>`;
+                return;
+            }
+
+            if (currentLeadershipViewMode === 'grid') {
+                dom.teamMembersContainer.classList.add('grid', 'grid-cols-1', 'sm:grid-cols-2', 'lg:grid-cols-3', 'gap-6');
+                members.forEach(member => {
+                    const card = createMemberCardGrid(member, cachedCycleData.totalDaysInCycle, cachedCycleData.daysPassedInCycle);
+                    dom.teamMembersContainer.appendChild(card);
+                });
+            } else { // 'list'
+                dom.teamMembersContainer.classList.add('space-y-4');
+                members.forEach(member => {
+                    const card = createMemberCardList(member, cachedCycleData.totalDaysInCycle, cachedCycleData.daysPassedInCycle);
+                    dom.teamMembersContainer.appendChild(card);
+                });
+            }
+        }
+
+        function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
+            const ehPercentage = member.ehGoal > 0 ? (member.ehCurrent / member.ehGoal * 100) : 0;
+            const etPercentage = member.etGoal > 0 ? (member.etCurrent / member.etGoal * 100) : 0;
+            const ehColorHex = getProgressColorHex(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
+            const prognosis = getPrognosis(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
+            const memberId = member.name.replace(/[^a-zA-Z0-9]/g, '');
+
+            const card = document.createElement('div');
+            card.className = 'bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl flex flex-col';
+
+            const summary = document.createElement('div');
+            summary.className = 'p-4 cursor-pointer flex-grow';
+
+            const radius = 40;
+            const circumference = 2 * Math.PI * radius;
+            const offset = circumference * (1 - Math.min(ehPercentage, 100) / 100);
+            
+            let positionHtml = '';
+            const posLower = member.position.toLowerCase().trim();
+            if (posLower !== 'trainee') {
+                if (posLower === 'geschäftsstelle') {
+                    positionHtml = `<p class="text-sm ${prognosis.colorClass} font-semibold">${prognosis.text}</p>`;
+                } else {
+                    positionHtml = `<p class="text-sm text-skt-blue-light">${member.position}</p>`;
+                }
+            }
+
+            summary.innerHTML = `
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <p class="font-bold text-skt-blue text-lg">${member.name}</p>
+                        ${positionHtml}
+                    </div>
+                    <div class="flex items-center space-x-2">
+                         <button data-username="${member.name}" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button>
+                         <i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i>
+                    </div>
+                </div>
+                <div class="flex justify-center items-center flex-col">
+                    <div class="w-40 h-40 relative">
+                        <svg class="team-progress-circle w-full h-full" viewBox="0 0 100 100">
+                            <circle class="bg-circle" cx="50" cy="50" r="${radius}"></circle>
+                            <circle class="progress-arc" cx="50" cy="50" r="${radius}" 
+                                    style="stroke: ${ehColorHex}; stroke-dasharray: ${circumference}; stroke-dashoffset: ${offset};"></circle>
+                        </svg>
+                        <div class="absolute inset-0 flex items-center justify-center flex-col text-center px-2">
+                            <p class="text-base sm:text-lg font-bold" style="color: ${ehColorHex}; font-size: clamp(0.75rem, 4vw, 1.125rem);">${member.ehCurrent.toLocaleString('de-DE')} / ${member.ehGoal.toLocaleString('de-DE')}</p>
+                            <p class="text-xs text-skt-blue-light">Einheiten</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-4 px-2">
+                    <div class="flex justify-between items-baseline text-xs">
+                        <p class="text-skt-blue-light">ET Termine</p>
+                        <p class="font-semibold text-skt-blue">${member.etCurrent} / ${member.etGoal}</p>
+                    </div>
+                    <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1">
+                         <div class="h-full bg-skt-green-accent" style="width: ${Math.min(etPercentage, 100)}%;"></div>
+                    </div>
+                </div>
+            `;
+
+            const details = document.createElement('div');
+            details.className = 'team-member-details px-4';
+            details.innerHTML = `
+                <div class="details-grid grid grid-cols-1 gap-4">
+                    <div class="text-center">
+                        <p class="text-sm font-semibold text-skt-blue mb-1">Analysetermine</p>
+                        <p class="text-md font-bold text-skt-blue">${member.atCurrent} / ${member.atVereinbart} / ${member.atGoal}</p>
+                        <p class="text-xs text-gray-500 mb-2">Gehalten / Vereinbart / Soll</p>
+                        <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden relative">
+                            <div class="h-full bg-skt-yellow-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(member.atGoal > 0 ? (member.atVereinbart / member.atGoal) * 100 : 0, 100)}%;"></div>
+                            <div class="h-full bg-skt-green-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(member.atGoal > 0 ? (member.atCurrent / member.atGoal) * 100 : 0, 100)}%;"></div>
+                        </div>
+                    </div>
+                    <div id="team-stats-${memberId}" class="hidden text-center border-t border-gray-200 pt-4 mt-4">
+                        <!-- Content will be loaded on click -->
+                    </div>
+                    <div id="leader-goal-${memberId}"></div>
+                </div>`;
+
+            card.appendChild(summary);
+            card.appendChild(details);
+            
+            summary.addEventListener('click', (e) => { if (!e.target.closest('.switch-view-btn')) { details.classList.toggle('open'); summary.classList.toggle('open'); if (isSuperuserView && details.classList.contains('open')) { const statsContainer = details.querySelector(`#team-stats-${memberId}`); statsContainer.classList.remove('hidden'); if (statsContainer.innerHTML.trim() === '<!-- Content will be loaded on click -->') { loadAndDisplayTeamStats(member.name, statsContainer); } } } });
+            summary.querySelector('.switch-view-btn').addEventListener('click', (e) => { 
+                e.stopPropagation();
+                const newuser = e.currentTarget.dataset.username;
+                viewHistory.push(newuser);
+                fetchAndRenderDashboard(newuser);
+            });
+            return card;
+        }
+
+        function createAgencyCardGrid(agency, totalDaysInCycle, daysPassedInCycle) {
+            const ehPercentage = agency.ehGoal > 0 ? (agency.ehCurrent / agency.ehGoal * 100) : 0;
+            const etPercentage = agency.etGoal > 0 ? (agency.etCurrent / agency.etGoal * 100) : 0;
+            const ehColorHex = getProgressColorHex(agency.ehCurrent, agency.ehGoal, totalDaysInCycle, daysPassedInCycle);
+            const prognosis = getPrognosis(agency.ehCurrent, agency.ehGoal, totalDaysInCycle, daysPassedInCycle);
+
+            const card = document.createElement('div');
+            card.className = 'bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl flex flex-col';
+
+            const summary = document.createElement('div');
+            summary.className = 'p-4 cursor-pointer flex-grow';
+
+            const radius = 40;
+            const circumference = 2 * Math.PI * radius;
+            const offset = circumference * (1 - Math.min(ehPercentage, 100) / 100);
+            
+            summary.innerHTML = `
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <p class="font-bold text-skt-blue text-lg">${agency.name}</p>
+                        <p class="text-sm ${prognosis.colorClass} font-semibold">${prognosis.text}</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                         <button data-agencyname="${agency.name}" class="switch-to-agency-leader-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button>
+                         <i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i>
+                    </div>
+                </div>
+                <div class="flex justify-center items-center flex-col">
+                    <div class="w-40 h-40 relative">
+                        <svg class="team-progress-circle w-full h-full" viewBox="0 0 100 100">
+                            <circle class="bg-circle" cx="50" cy="50" r="${radius}"></circle>
+                            <circle class="progress-arc" cx="50" cy="50" r="${radius}" 
+                                    style="stroke: ${ehColorHex}; stroke-dasharray: ${circumference}; stroke-dashoffset: ${offset};"></circle>
+                        </svg>
+                        <div class="absolute inset-0 flex items-center justify-center flex-col text-center px-2">
+                            <p class="text-base sm:text-lg font-bold" style="color: ${ehColorHex}; font-size: clamp(0.75rem, 4vw, 1.125rem);">${agency.ehCurrent.toLocaleString('de-DE')} / ${agency.ehGoal.toLocaleString('de-DE')}</p>
+                            <p class="text-xs text-skt-blue-light">Einheiten</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-4 px-2">
+                    <div class="flex justify-between items-baseline text-xs">
+                        <p class="text-skt-blue-light">ET Termine</p>
+                        <p class="font-semibold text-skt-blue">${agency.etCurrent} / ${agency.etGoal}</p>
+                    </div>
+                    <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1">
+                         <div class="h-full bg-skt-green-accent" style="width: ${Math.min(etPercentage, 100)}%;"></div>
+                    </div>
+                </div>
+            `;
+
+            const details = document.createElement('div');
+            details.className = 'team-member-details px-4';
+            details.innerHTML = `
+                <div class="details-grid grid grid-cols-1 gap-4">
+                    <div class="text-center">
+                        <p class="text-sm font-semibold text-skt-blue mb-1">Analysetermine</p>
+                        <p class="text-md font-bold text-skt-blue">${agency.atCurrent} / ${agency.atVereinbart} / ${agency.atGoal}</p>
+                        <p class="text-xs text-gray-500 mb-2">Gehalten / Vereinbart / Soll</p>
+                        <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden relative">
+                            <div class="h-full bg-skt-yellow-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(agency.atGoal > 0 ? (agency.atVereinbart / agency.atGoal) * 100 : 0, 100)}%;"></div>
+                            <div class="h-full bg-skt-green-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(agency.atGoal > 0 ? (agency.atCurrent / agency.atGoal) * 100 : 0, 100)}%;"></div>
+                        </div>
+                    </div>
+                </div>`;
+
+            card.appendChild(summary);
+            card.appendChild(details);
+            
+            summary.addEventListener('click', (e) => { if (!e.target.closest('.switch-to-agency-leader-btn')) { details.classList.toggle('open'); summary.classList.toggle('open'); } });
+            
+            summary.querySelector('.switch-to-agency-leader-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                const agencyName = e.currentTarget.dataset.agencyname;
+                const parts = agencyName.split(' ');
+                if (parts.length > 1) {
+                    const lastName = parts[parts.length - 1];
+                    const foundUser = allUsersCache.find(user => user.toLowerCase().includes(lastName.toLowerCase()));
+                    if (foundUser) {
+                        viewHistory.push(foundUser);
+                        fetchAndRenderDashboard(foundUser);
+                    } else {
+                        console.warn(`Kein Geschäftsstellenleiter für "${agencyName}" gefunden.`);
+                    }
+                }
+            });
+
+            return card;
+        }
+
+        function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
+            const etPercentage = member.etGoal > 0 ? (member.etCurrent / member.etGoal * 100) : 0;
+            const prognosis = getPrognosis(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
+            const memberId = member.name.replace(/[^a-zA-Z0-9]/g, '');
+            
+            let ehValue = member.ehCurrent;
+            let ehGoal = member.ehGoal;
+            let ehUnit = 'Einheiten (EH)';
+
+            if (isMoneyView) {
+                const rate = getEarningsRate(member.position, member.totalCurrentEh);
+                ehValue = member.ehCurrent * rate;
+                ehGoal = member.ehGoal * rate;
+                ehUnit = 'Verdienst (€)';
+            }
+
+            const ehPercentage = member.ehGoal > 0 ? (member.ehCurrent / member.ehGoal * 100) : 0;
+            const ehColorClass = getProgressColorClass(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
+
+            const card = document.createElement('div');
+            card.className = 'bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl';
+            
+            const summary = document.createElement('div');
+            summary.className = 'p-4 cursor-pointer';
+            
+            const positionHtml = member.position.toLowerCase().trim() !== 'trainee' ? `<p class="text-sm text-skt-blue-light">${member.position}</p>` : '';
+
+            summary.innerHTML = `
+                <div class="flex justify-between items-start gap-2">
+                    <div class="min-w-0">
+                        <p class="font-bold text-skt-blue text-lg break-words">${member.name}</p>
+                        ${positionHtml}
+                    </div>
+                    <div class="flex items-center space-x-4 flex-shrink-0">
+                        <span class="font-semibold text-sm ${prognosis.colorClass}" data-tooltip="Prognose basierend auf dem aktuellen Fortschritt im Verhältnis zur vergangenen Zeit im Monat.">${prognosis.text}</span>
+                        <button data-username="${member.name}" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button>
+                        <i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <div class="flex justify-between items-baseline">
+                         <p class="text-xs text-skt-blue-light">${ehUnit}</p>
+                         <p class="text-xs font-semibold text-skt-blue">${ehValue.toLocaleString('de-DE', {maximumFractionDigits: 0})} / ${ehGoal.toLocaleString('de-DE', {maximumFractionDigits: 0})}</p>
+                    </div>
+                    <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1">
+                        <div class="h-full ${ehColorClass}" style="width: ${Math.min(ehPercentage, 100)}%;"></div>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <div class="flex justify-between items-baseline">
+                         <p class="text-xs text-skt-blue-light">ET Termine</p>
+                         <p class="text-xs font-semibold text-skt-blue">${member.etCurrent} / ${member.etGoal}</p>
+                    </div>
+                    <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1">
+                        <div class="h-full bg-skt-green-accent" style="width: ${Math.min(etPercentage, 100)}%;"></div>
+                    </div>
+                </div>
+            `;
+
+            const details = document.createElement('div');
+            details.className = 'team-member-details px-4';
+            details.innerHTML = `
+                <div class="details-grid grid grid-cols-1 gap-4">
+                     <div class="text-center">
+                        <p class="text-sm font-semibold text-skt-blue mb-1">Analysetermine</p>
+                        <p class="text-md font-bold text-skt-blue">${member.atCurrent} / ${member.atVereinbart} / ${member.atGoal}</p>
+                        <p class="text-xs text-gray-500 mb-2">Gehalten / Vereinbart / Soll</p>
+                        <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden relative">
+                            <div class="h-full bg-skt-yellow-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(member.atGoal > 0 ? (member.atVereinbart / member.atGoal) * 100 : 0, 100)}%;"></div>
+                            <div class="h-full bg-skt-green-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(member.atGoal > 0 ? (member.atCurrent / member.atGoal) * 100 : 0, 100)}%;"></div>
+                        </div>
+                    </div>
+                    <div id="team-stats-${memberId}" class="hidden text-center border-t border-gray-200 pt-4 mt-4">
+                        <!-- Content will be loaded on click -->
+                    </div>
+                    <div id="leader-goal-${memberId}"></div>
+                </div>`;
+
+            card.appendChild(summary);
+            card.appendChild(details);
+            
+            summary.addEventListener('click', (e) => { if (!e.target.closest('.switch-view-btn')) { details.classList.toggle('open'); summary.classList.toggle('open'); if (isSuperuserView && details.classList.contains('open')) { const statsContainer = details.querySelector(`#team-stats-${memberId}`); statsContainer.classList.remove('hidden'); if (statsContainer.innerHTML.trim() === '<!-- Content will be loaded on click -->') { loadAndDisplayTeamStats(member.name, statsContainer); } } } });
+            summary.querySelector('.switch-view-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                const newuser = e.currentTarget.dataset.username;
+                viewHistory.push(newuser);
+                fetchAndRenderDashboard(newuser);
+            });
+            return card;
+        }
+        
+        // --- NEUE FUNKTIONEN FÜR EINARBEITUNG ---
+        async function fetchAndRenderOnboarding(userName, teamMembers) {
+            const isTrainee = personalData.position.toLowerCase().trim() === 'trainee';
+
+            if (isTrainee) {
+                dom.einarbeitungTitle.textContent = "Dein Einarbeitungsplan";
+                dom.leaderOnboardingView.classList.add('hidden');
+                dom.traineeOnboardingView.classList.remove('hidden');
+                await renderTraineeOnboardingView(userName);
+            } else {
+                currentOnboardingSubView = 'leader-list'; // Zustand für die Zurück-Navigation setzen
+                dom.einarbeitungTitle.textContent = "Einarbeitung: Gruppen-Übersicht";
+                dom.traineeOnboardingView.classList.add('hidden');
+                dom.leaderOnboardingView.classList.remove('hidden');
+                await renderLeaderOnboardingView(teamMembers);
+            }
+        }
+
+        async function renderLeaderOnboardingView(teamMembers) {
+            clearChildren(dom.leaderOnboardingView);
+            dom.leaderOnboardingView.innerHTML = `<div class="loader mx-auto"></div>`;
+ 
+            const teamMemberSet = new Set(teamMembers.map(m => m.toLowerCase().trim()));
+ 
+            const query = 'select *';
+            const data = await fetchSheetQuery(sheetEinarbeitungName, query, 0);
+ 
+            if (!data || !data.table || !data.table.rows || data.table.rows.length < 5) {
+                dom.leaderOnboardingView.innerHTML = `<p class="text-center text-gray-500">Einarbeitungsdaten konnten nicht geladen werden.</p>`;
+                return;
+            }
+            
+            const nameRow = data.table.rows[1].c;
+            const dateRow = data.table.rows[2].c;
+ 
+            const allStepsWithOffsets = [];
+            let minOffset = Infinity;
+            let maxOffset = -Infinity;
+ 
+            for (let i = 4; i < data.table.rows.length; i++) {
+                const row = data.table.rows[i].c;
+                const type = (row && row[0] && row[0].v) ? row[0].v.toLowerCase().trim() : '';
+                const title = (row && row[2] && row[2].v) ? row[2].v.trim() : '';
+                const offset = row[3]?.v || 0;
+ 
+                if (type !== 'versteckt' && type !== 'abschnitt' && title) {
+                    allStepsWithOffsets.push({ offset: offset });
+                    if (offset < minOffset) minOffset = offset;
+                    if (offset > maxOffset) maxOffset = offset;
+                }
+            }
+            const allStepsCount = allStepsWithOffsets.length;
+ 
+             const traineeProgressData = [];
+ 
+             // Iteriere durch alle Personen im "Einarbeitung"-Sheet
+             for (let userColIndex = 4; userColIndex < nameRow.length; userColIndex++) {
+                 const traineeNameCell = nameRow[userColIndex];
+                 if (!traineeNameCell || !traineeNameCell.v) continue;
+ 
+                 const traineeName = traineeNameCell.v;
+                 const traineeNameLower = traineeName.toLowerCase().trim();
+ 
+                 // Prüfe, ob diese Person zum Team der aktuellen Führungskraft gehört
+                 if (teamMemberSet.has(traineeNameLower)) {
+                     let completedSteps = 0;
+                     for (let i = 4; i < data.table.rows.length; i++) {
+                         const row = data.table.rows[i].c;
+                         const type = (row && row[0] && row[0].v) ? row[0].v.toLowerCase().trim() : '';
+                         const title = (row && row[2] && row[2].v) ? row[2].v.trim() : '';
+ 
+                         if (type === 'versteckt' || type === 'abschnitt' || !title) continue;
+ 
+                         if (row[userColIndex] && row[userColIndex].v === 'x') {
+                             completedSteps++;
+                         }
+                     }
+                     const percentage = allStepsCount > 0 ? (completedSteps / allStepsCount) * 100 : 0;
+ 
+                     let sollPercentage = 0;
+                     const startDateCell = dateRow[userColIndex];
+                     if (startDateCell && startDateCell.v) {
+                         let startDate;
+                         if (startDateCell.v.startsWith("Date(")) {
+                             const dateMatch = startDateCell.v.match(/Date\((\d+),(\d+),(\d+)\)/);
+                             if (dateMatch) startDate = new Date(dateMatch[1], dateMatch[2], dateMatch[3]);
+                         } else {
+                             const parts = startDateCell.v.split('.');
+                             if (parts.length === 3) startDate = new Date(parts[2], parts[1] - 1, parts[0]);
+                         }
+ 
+                         if (startDate && !isNaN(startDate)) {
+                             const traineePlanStartDate = new Date(startDate);
+                             traineePlanStartDate.setDate(startDate.getDate() + minOffset);
+                             const traineePlanEndDate = new Date(startDate);
+                             traineePlanEndDate.setDate(startDate.getDate() + maxOffset);
+                             const today = new Date();
+ 
+                             const totalPlanDuration = traineePlanEndDate.getTime() - traineePlanStartDate.getTime();
+                             const elapsedPlanDuration = today.getTime() - traineePlanStartDate.getTime();
+ 
+                             if (totalPlanDuration > 0) {
+                                 sollPercentage = Math.max(0, Math.min(100, (elapsedPlanDuration / totalPlanDuration) * 100));
+                             } else if (today >= traineePlanStartDate) {
+                                 sollPercentage = 100;
+                            }
+                         }
+                     }
+                     traineeProgressData.push({ name: traineeName, percentage, sollPercentage });
+                 }
+             }
+
+            clearChildren(dom.leaderOnboardingView);
+            if (traineeProgressData.length === 0) {
+                 dom.leaderOnboardingView.innerHTML = `<p class="text-center text-gray-500">Keiner deiner Mitarbeiter befindet sich aktuell in der Einarbeitung.</p>`;
+                 return;
+            }
+
+            const container = document.createElement('div');
+            container.className = 'space-y-4';
+
+            traineeProgressData.forEach(trainee => {
+                 const card = document.createElement('div');
+                 card.className = 'bg-skt-grey-light p-4 rounded-lg shadow-md cursor-pointer hover:bg-gray-200 transition-colors';
+                 card.dataset.traineeName = trainee.name;
+                 card.innerHTML = `
+                      <div class="flex justify-between items-center mb-1">
+                          <p class="font-bold text-skt-blue">${trainee.name}</p>
+                          <p class="font-semibold text-skt-blue-light">${trainee.percentage.toFixed(0)}%</p>
+                      </div>
+                      <div class="w-full bg-gray-200 rounded-full h-4 shadow-inner relative">
+                         <div class="bg-red-300 h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${trainee.sollPercentage.toFixed(0)}%; z-index: 1;" data-tooltip="Soll-Fortschritt"></div>
+                         <div class="bg-skt-green-accent h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${trainee.percentage.toFixed(0)}%; z-index: 2;" data-tooltip="Ist-Fortschritt"></div>
+                      </div>
+                 `;
+                 card.addEventListener('click', () => showTraineeDetailView(trainee.name));
+                 container.appendChild(card);
+            });
+            dom.leaderOnboardingView.appendChild(container);
+        }
+
+        async function renderTraineeOnboardingView(userName, forceShowAllCompleted = false) {
+            const renderCompletedMessage = () => {
+                if (progressContainer) progressContainer.classList.add('hidden');
+                if (dom.grundseminarContainer) dom.grundseminarContainer.classList.add('hidden');
+                if (dom.aufbauseminarContainer) dom.aufbauseminarContainer.classList.add('hidden');
+
+                if (!completedMessageContainer) {
+                    completedMessageContainer = document.createElement('div');
+                    completedMessageContainer.id = 'onboarding-completed-message';
+                    dom.traineeOnboardingView.appendChild(completedMessageContainer);
+                }
+                
+                completedMessageContainer.innerHTML = `
+                    <div class="text-center p-6 bg-skt-grey-light rounded-xl shadow-md">
+                        <i class="fas fa-user-graduate text-5xl text-skt-green-accent mb-4"></i>
+                        <h3 class="text-2xl font-bold text-skt-blue mb-2">Einarbeitung absolviert!</h3>
+                        <p class="text-gray-600 max-w-lg mx-auto">Herzlichen Glückwunsch, du hast alle Schritte der Einarbeitung erfolgreich abgeschlossen!</p>
+                        <button id="show-completed-plan-btn" class="mt-4 bg-skt-blue text-white font-semibold py-2 px-4 rounded-lg hover:bg-skt-blue-light transition-colors">Abgeschlossenen Plan ansehen</button>
+                    </div>
+                `;
+                completedMessageContainer.classList.remove('hidden');
+                document.getElementById('show-completed-plan-btn').addEventListener('click', () => renderTraineeOnboardingView(userName, true));
+            };
+
+            const progressContainer = document.getElementById('onboarding-progress-container');
+            if (progressContainer) progressContainer.classList.remove('hidden');
+            if (dom.grundseminarContainer) dom.grundseminarContainer.classList.remove('hidden');
+            if (dom.aufbauseminarContainer) dom.aufbauseminarContainer.classList.remove('hidden');
+            
+            let completedMessageContainer = document.getElementById('onboarding-completed-message');
+            if (completedMessageContainer) {
+                completedMessageContainer.classList.add('hidden');
+            }
+
+            const query = 'select *';
+            const data = await fetchSheetQuery(sheetEinarbeitungName, query, 0);
+
+            if (!data || !data.table || !data.table.rows || data.table.rows.length < 5) {
+                dom.grundseminarStepsContainer.innerHTML = '<p class="text-center text-gray-500">Einarbeitungsdaten konnten nicht geladen werden.</p>';
+                dom.aufbauseminarStepsContainer.innerHTML = '';
+                return;
+            }
+
+            const nameRow = data.table.rows[1].c; 
+            const dateRow = data.table.rows[2].c;
+            let userColIndex = -1;
+
+            for (let i = 4; i < nameRow.length; i++) {
+                if (nameRow[i] && nameRow[i].v && nameRow[i].v.toLowerCase().trim() === userName.toLowerCase().trim()) {
+                    userColIndex = i;
+                    break;
+                }
+            }
+
+            let startDate;
+            if (forceShowAllCompleted) {
+                startDate = new Date(); // Dummy-Datum, da keins vorhanden ist
+                if (progressContainer) progressContainer.classList.add('hidden'); // Fortschrittsbalken ausblenden
+            } else {
+                const startDateCell = userColIndex !== -1 ? dateRow[userColIndex] : null;
+                if (!startDateCell || !startDateCell.v) {
+                    renderCompletedMessage(); // Wenn kein Startdatum, dann als absolviert anzeigen
+                    return;
+                }
+                if (startDateCell.v.startsWith("Date(")) {
+                    const dateMatch = startDateCell.v.match(/Date\((\d+),(\d+),(\d+)\)/);
+                    if (dateMatch) startDate = new Date(dateMatch[1], dateMatch[2], dateMatch[3]);
+                } else {
+                    const parts = startDateCell.v.split('.');
+                    if (parts.length === 3) startDate = new Date(parts[2], parts[1] - 1, parts[0]);
+                }
+            }
+
+            if (!startDate || isNaN(startDate)) {
+                dom.grundseminarStepsContainer.innerHTML = `<p class="text-center text-red-500">Dein Startdatum im Format TT.MM.JJJJ ist ungültig oder fehlt.</p>`;
+                dom.aufbauseminarStepsContainer.innerHTML = '';
+                return;
+            }
+
+            const allSteps = [];
+            for (let i = 4; i < data.table.rows.length; i++) { 
+                const row = data.table.rows[i].c;
+                const type = (row && row[0] && row[0].v) ? row[0].v.toLowerCase().trim() : '';
+                const title = (row && row[2] && row[2].v) ? row[2].v.trim() : '';
+
+                if (type === 'versteckt' || type === 'abschnitt') {
+                    continue; 
+                }
+
+                if (!title) continue; 
+
+                const dueDate = new Date(startDate);
+                dueDate.setDate(dueDate.getDate() + (row[3]?.v || 0));
+                
+                allSteps.push({
+                    type: row[0]?.v || 'Unbekannt',
+                    hint: row[1]?.v || 'Kein Hinweis verfügbar.',
+                    title: title,
+                    dueDate: dueDate,
+                    completed: forceShowAllCompleted || (userColIndex !== -1 && row[userColIndex] && row[userColIndex].v === 'x')
+                });
+            }
+            
+            const allTasksCompleted = allSteps.length > 0 && allSteps.every(s => s.completed);
+            if ((userColIndex === -1 || allTasksCompleted) && !forceShowAllCompleted) {
+                renderCompletedMessage();
+                return;
+            }
+
+            const aufbauStartIndex = allSteps.findIndex(step => step.title.toLowerCase().includes('aufbauseminar'));
+            let grundseminarSteps;
+            let aufbauseminarSteps;
+
+            if (aufbauStartIndex !== -1) {
+                grundseminarSteps = allSteps.slice(0, aufbauStartIndex);
+                aufbauseminarSteps = allSteps.slice(aufbauStartIndex);
+            } else {
+                const grundTestIndex = allSteps.findIndex(step => step.title.toLowerCase().includes('grundseminartest'));
+                if (grundTestIndex !== -1) {
+                    grundseminarSteps = allSteps.slice(0, grundTestIndex + 1);
+                    aufbauseminarSteps = allSteps.slice(grundTestIndex + 1);
+                } else {
+                    grundseminarSteps = allSteps;
+                    aufbauseminarSteps = [];
+                }
+            }
+
+            // UPDATE: Gesamtfortschritt und Soll-Fortschritt berechnen und anzeigen
+            if (progressContainer) {
+                progressContainer.classList.remove('hidden');
+                const totalSteps = allSteps.length;
+                const completedSteps = allSteps.filter(step => step.completed).length;
+                const progressPercentage = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
+                
+                const progressBar = document.getElementById('onboarding-progress-bar');
+                const progressText = document.getElementById('onboarding-progress-text');
+                if(progressBar && progressText) {
+                    progressBar.style.width = `${progressPercentage.toFixed(0)}%`;
+                    progressText.textContent = `${progressPercentage.toFixed(0)}%`;
+                }
+
+                if (allSteps.length > 0) {
+                    const overallStartDate = allSteps[0].dueDate;
+                    const overallEndDate = allSteps[allSteps.length - 1].dueDate;
+                    const today = new Date();
+                    
+                    const totalPlanDuration = overallEndDate.getTime() - overallStartDate.getTime();
+                    const elapsedPlanDuration = today.getTime() - overallStartDate.getTime();
+
+                    let sollPercentage = 0;
+                    if (totalPlanDuration > 0) {
+                        sollPercentage = Math.max(0, Math.min(100, (elapsedPlanDuration / totalPlanDuration) * 100));
+                    } else if (today >= overallStartDate) {
+                        sollPercentage = 100;
+                    }
+
+                    const sollBar = document.getElementById('onboarding-soll-bar');
+                    if (sollBar) {
+                        sollBar.style.width = `${sollPercentage.toFixed(0)}%`;
+                    }
+                }
+            }
+
+
+            // UPDATE: Logik zum Blurring des Aufbauseminars
+            const isGrundseminarComplete = grundseminarSteps.every(step => step.completed);
+            const aufbauWrapper = dom.aufbauseminarContainer; // Korrektur: Referenz aus dem dom-Objekt
+            
+            if (aufbauWrapper) { // Sicherheitsprüfung, um Abstürze zu verhindern
+                let shouldBlur = true;
+                if (isGrundseminarComplete) {
+                    shouldBlur = false;
+                } else if (aufbauseminarSteps.length > 0) {
+                     const aufbauStartDate = aufbauseminarSteps[0].dueDate;
+                     if (new Date() >= aufbauStartDate) {
+                         shouldBlur = false;
+                     }
+                }
+    
+                if (shouldBlur) {
+                    aufbauWrapper.classList.add('aufbauseminar-blurred');
+                } else {
+                    aufbauWrapper.classList.remove('aufbauseminar-blurred');
+                }
+            }
+
+            renderTimelineSection(dom.grundseminarStepsContainer, dom.grundseminarProgress, dom.grundseminarDateMarkers, grundseminarSteps);
+            renderTimelineSection(dom.aufbauseminarStepsContainer, dom.aufbauseminarProgress, dom.aufbauseminarDateMarkers, aufbauseminarSteps);
+        }
+
+        function renderTimelineSection(container, progressElement, dateMarkerContainer, steps) {
+            clearChildren(container);
+            
+            if (steps.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-500 mt-4">Für diesen Abschnitt sind keine Schritte vorhanden.</p>';
+                progressElement.style.height = '0%';
+                clearChildren(dateMarkerContainer);
+                return;
+            }
+            
+            const sectionStartDate = steps[0].dueDate;
+            const sectionEndDate = steps[steps.length - 1].dueDate;
+            const today = new Date();
+
+            const totalDuration = sectionEndDate.getTime() - sectionStartDate.getTime();
+            const elapsedDuration = today.getTime() - sectionStartDate.getTime();
+            
+            let timeProgressPercent = 0;
+            if (totalDuration > 0) {
+                timeProgressPercent = Math.max(0, Math.min(100, (elapsedDuration / totalDuration) * 100));
+            } else if (today >= sectionStartDate) {
+                timeProgressPercent = 100;
+            }
+
+            progressElement.style.height = `${timeProgressPercent}%`;
+            
+            renderDateMarkers(dateMarkerContainer, sectionStartDate, sectionEndDate);
+
+            today.setHours(0, 0, 0, 0);
+
+            steps.forEach((step, index) => {
+                const stepEl = document.createElement('div');
+                const titleLower = step.title.toLowerCase();
+                
+                let statusClass = '';
+                let iconClass = 'fa-question';
+                let typeClass = '';
+                const stepType = step.type.toLowerCase().trim();
+                const isMajor = stepType === 'meilenstein' || stepType === 'seminar';
+
+                // Check for overdue
+                const threeDays = 3 * 24 * 60 * 60 * 1000;
+                const isOverdue = !step.completed && (today.getTime() - step.dueDate.getTime() > threeDays);
+
+                if (step.completed) {
+                    statusClass = 'completed';
+                } else if (step.dueDate <= today) {
+                    statusClass = 'due'; 
+                } else {
+                    statusClass = 'future';
+                }
+                
+                switch(stepType) {
+                    case 'seminar': 
+                        iconClass = 'fa-book'; 
+                        typeClass = 'seminar';
+                        break;
+                    case 'persönliches gespräch': 
+                        iconClass = 'fa-users'; 
+                        typeClass = 'gespraech';
+                        break;
+                    case 'meilenstein': 
+                        iconClass = 'fa-star'; 
+                        typeClass = 'meilenstein';
+                        break;
+                    case 'hausübung':
+                        iconClass = 'fa-pencil-alt';
+                        typeClass = 'hausuebung';
+                        break;
+                    default:
+                        typeClass = 'other';
+                        break;
+                }
+                
+                stepEl.className = `timeline-item ${statusClass} ${typeClass} ${isMajor ? 'timeline-item-major' : 'timeline-item-minor'}`;
+                stepEl.style.animationDelay = `${index * 0.1}s`;
+                
+                const formattedDate = step.dueDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                
+                stepEl.innerHTML = `
+                    <div class="timeline-content ${isOverdue ? 'overdue-task' : ''}">
+                        <div class="timeline-header">
+                            <div class="timeline-icon-inline">
+                                <i class="fas ${iconClass}"></i>
+                            </div>
+                            <div class="timeline-info">
+                                <p class="timeline-title">${step.title}</p>
+                                <p class="timeline-duedate">Fällig bis: ${formattedDate}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                stepEl.querySelector('.timeline-content').addEventListener('click', () => {
+                    dom.hinweisModalContent.textContent = step.hint;
+                    dom.hinweisModal.classList.add('visible');
+                    document.body.classList.add('modal-open');
+                    document.documentElement.classList.add('modal-open');
+                });
+                
+                container.appendChild(stepEl);
+            });
+        }
+        
+        function renderDateMarkers(container, startDate, endDate) {
+            clearChildren(container);
+            const totalDuration = endDate.getTime() - startDate.getTime();
+            if (totalDuration <= 0 && startDate.getTime() !== endDate.getTime()) return;
+
+            const createMarker = (date) => {
+                let topPercent = 0;
+                if (totalDuration > 0) {
+                    const elapsed = date.getTime() - startDate.getTime();
+                    topPercent = (elapsed / totalDuration) * 100;
+                } else {
+                     topPercent = 0;
+                }
+                
+                const marker = document.createElement('div');
+                marker.className = 'timeline-date-marker';
+                marker.textContent = date.toLocaleDateString('de-DE', { month: 'short' });
+                marker.style.top = `${Math.max(0, Math.min(100, topPercent))}%`;
+                
+                container.appendChild(marker);
+            };
+
+            createMarker(startDate);
+            
+            let cursorDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 1);
+            while (cursorDate < endDate) {
+                createMarker(cursorDate);
+                cursorDate.setMonth(cursorDate.getMonth() + 1);
+            }
+            
+            if(startDate.getMonth() !== endDate.getFullYear() || startDate.getFullYear() !== endDate.getFullYear()){
+                createMarker(endDate);
+            }
+        }
+
+        async function fetchAgenciesData(userName) {
+            const query = `select A, B, C, D, E, F, G, H, J, M`;
+            const data = await fetchSheetQuery(sheetDataName, query);
+
+            if (!data || !data.table || !data.table.rows) {
+                console.error("Keine Geschäftsstellen-Daten gefunden.");
+                return [];
+            }
+
+            const agenciesData = [];
+            const currentUserNameLower = userName.toLowerCase().trim();
+
+            for (const row of data.table.rows) {
+                const rowData = row.c;
+                if (!rowData) continue;
+                
+                const name = (rowData[0]?.v || "").toLowerCase().trim(); 
+                const bezirksleiter = (rowData[9]?.v || "").toLowerCase().trim();
+
+                const position = (rowData[8]?.v || "").toLowerCase().trim();
+                const isAgencyOrAnwaerter = name.startsWith('geschäftsstelle ') || name.startsWith('wgst ') || name.startsWith('jgst ') || name.startsWith('ga ') || name.startsWith('wbl') || position.includes('werdender bezirksleiter');
+
+                if (isAgencyOrAnwaerter && bezirksleiter === currentUserNameLower) {
+                     let displayName = rowData[0]?.v || 'Unbekannt';
+                     let positionFallback = 'Unbekannt';
+                     if (name.startsWith('geschäftsstelle ')) positionFallback = 'Geschäftsstelle';
+                     else if (name.startsWith('wgst ')) positionFallback = 'wGST';
+                     else if (name.startsWith('jgst ')) positionFallback = 'JGST';
+                     else if (name.startsWith('ga ')) positionFallback = 'GA';
+                     else if (name.startsWith('wbl') || position.includes('werdender bezirksleiter')) {
+                         const nameParts = displayName.split(' ');
+                         const lastName = nameParts.length > 0 ? nameParts[nameParts.length - 1] : displayName;
+                         displayName = `wBL ${lastName}`;
+                         positionFallback = 'wBL';
+                     }
+
+                     agenciesData.push({
+                         name: displayName,
+                         ehGoal: Math.round(rowData[1]?.v || 0),
+                         ehCurrent: Math.round(rowData[2]?.v || 0),
+                         etGoal: Math.round(rowData[3]?.v || 0),
+                         etCurrent: Math.round(rowData[4]?.v || 0),
+                         atGoal: Math.round(rowData[5]?.v || 0),
+                         atVereinbart: Math.round(rowData[6]?.v || 0),
+                         atCurrent: Math.round(rowData[7]?.v || 0),
+                         position: rowData[8]?.v || positionFallback
+                     });
+                }
+            }
+            return agenciesData;
+        }
+
+        async function fetchRDStructureData(userName) {
+            // Fetches BLs and direct agencies for an RD
+            // ANNAHME: Spalte M in 'Daten' enthält den zugehörigen Regionaldirektor
+            const query = `select A, B, C, D, E, F, G, H, J, M`;
+            const data = await fetchSheetQuery(sheetDataName, query);
+
+            if (!data || !data.table || !data.table.rows) {
+                console.error("Keine Struktur-Daten für RD gefunden.");
+                return [];
+            }
+
+            const structureItems = [];
+            const currentUserNameLower = userName.toLowerCase().trim();
+
+            for (const row of data.table.rows) {
+                const rowData = row.c;
+                if (!rowData) continue;
+                
+                const name = (rowData[0]?.v || "").toLowerCase().trim(); 
+                const position = (rowData[8]?.v || "").toLowerCase().trim();
+                const superior = (rowData[9]?.v || "").toLowerCase().trim(); // M is at index 9
+
+                if (superior === currentUserNameLower) {
+                    const isBezirksleitung = name.startsWith('bezirksleitung') || name.startsWith('wbl') || position.includes('bezirksleiter');
+                    const isAgencyOrAnwaerter = name.startsWith('geschäftsstelle ') || name.startsWith('wgst ') || name.startsWith('jgst ') || name.startsWith('ga ');
+
+                    if (isBezirksleitung || isAgencyOrAnwaerter) {
+                        let displayName = rowData[0]?.v || 'Unbekannt';
+                        let positionFallback = 'Unbekannt';
+                        if (name.startsWith('bezirksleitung') || position.includes('bezirksleiter')) {
+                            const nameParts = displayName.split(' ');
+                            const lastName = nameParts.length > 0 ? nameParts[nameParts.length - 1] : displayName;
+                            displayName = `Bezirksleitung ${lastName}`;
+                            positionFallback = 'Bezirksleitung';
+                        } else if (name.startsWith('wbl')) {
+                            positionFallback = 'wBL';
+                        }
+                        else if (name.startsWith('geschäftsstelle ')) positionFallback = 'Geschäftsstelle';
+                        else if (name.startsWith('wgst ')) positionFallback = 'wGST';
+                        else if (name.startsWith('jgst ')) positionFallback = 'JGST';
+                        else if (name.startsWith('ga ')) positionFallback = 'GA';
+
+                        structureItems.push({
+                            name: displayName,
+                            ehGoal: Math.round(rowData[1]?.v || 0),
+                            ehCurrent: Math.round(rowData[2]?.v || 0),
+                            etGoal: Math.round(rowData[3]?.v || 0),
+                            etCurrent: Math.round(rowData[4]?.v || 0),
+                            atGoal: Math.round(rowData[5]?.v || 0),
+                            atVereinbart: Math.round(rowData[6]?.v || 0),
+                            atCurrent: Math.round(rowData[7]?.v || 0),
+                            position: rowData[8]?.v || positionFallback
+                        });
+                    }
+                }
+            }
+            return structureItems;
+        }
+
+        function createAgencyCard(agency, totalDaysInCycle, daysPassedInCycle) {
+            const card = document.createElement('div');
+            card.className = 'bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl';
+
+            const summary = document.createElement('div');
+            summary.className = 'p-4 cursor-pointer';
+
+            const ehPercentage = agency.ehGoal > 0 ? (agency.ehCurrent / agency.ehGoal * 100) : 0;
+            const etPercentage = agency.etGoal > 0 ? (agency.etCurrent / agency.etGoal * 100) : 0;
+            const ehColorClass = getProgressColorClass(agency.ehCurrent, agency.ehGoal, totalDaysInCycle, daysPassedInCycle);
+            const prognosis = getPrognosis(agency.ehCurrent, agency.ehGoal, totalDaysInCycle, daysPassedInCycle);
+
+            summary.innerHTML = `
+                <div class="flex justify-between items-start gap-2">
+                    <div class="min-w-0">
+                        <p class="font-bold text-skt-blue text-lg break-words">${agency.name}</p>
+                        <p class="text-sm ${prognosis.colorClass} font-semibold">${prognosis.text}</p>
+                    </div>
+                    <div class="flex items-center space-x-4 flex-shrink-0">
+                        <button data-agencyname="${agency.name}" class="switch-to-agency-leader-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button>
+                        <i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <div class="flex justify-between items-baseline">
+                         <p class="text-xs text-skt-blue-light">Einheiten (EH)</p>
+                         <p class="text-xs font-semibold text-skt-blue">${agency.ehCurrent.toLocaleString('de-DE')} / ${agency.ehGoal.toLocaleString('de-DE')}</p>
+                    </div>
+                    <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1">
+                        <div class="h-full ${ehColorClass}" style="width: ${Math.min(ehPercentage, 100)}%;"></div>
+                    </div>
+                </div>
+                 <div class="mt-2">
+                    <div class="flex justify-between items-baseline">
+                         <p class="text-xs text-skt-blue-light">ET Termine</p>
+                         <p class="text-xs font-semibold text-skt-blue">${agency.etCurrent} / ${agency.etGoal}</p>
+                    </div>
+                    <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1">
+                        <div class="h-full bg-skt-green-accent" style="width: ${Math.min(etPercentage, 100)}%;"></div>
+                    </div>
+                </div>
+            `;
+            
+            const details = document.createElement('div');
+            details.className = 'team-member-details px-4';
+            details.innerHTML = `
+                <div class="details-grid grid grid-cols-1 gap-4">
+                     <div class="text-center">
+                        <p class="text-sm font-semibold text-skt-blue mb-1">Analysetermine</p>
+                        <p class="text-md font-bold text-skt-blue">${agency.atCurrent} / ${agency.atVereinbart} / ${agency.atGoal}</p>
+                        <p class="text-xs text-gray-500 mb-2">Gehalten / Vereinbart / Soll</p>
+                        <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden relative">
+                            <div class="h-full bg-skt-yellow-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(agency.atGoal > 0 ? (agency.atVereinbart / agency.atGoal) * 100 : 0, 100)}%;"></div>
+                            <div class="h-full bg-skt-green-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(agency.atGoal > 0 ? (agency.atCurrent / agency.atGoal) * 100 : 0, 100)}%;"></div>
+                        </div>
+                    </div>
+                </div>`;
+
+            card.appendChild(summary);
+            card.appendChild(details);
+
+            summary.addEventListener('click', (e) => {
+                if (!e.target.closest('.switch-to-agency-leader-btn')) {
+                    details.classList.toggle('open');
+                    summary.classList.toggle('open');
+                }
+            });
+
+            summary.querySelector('.switch-to-agency-leader-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                const agencyName = e.currentTarget.dataset.agencyname;
+                const parts = agencyName.split(' ');
+                if (parts.length > 1) {
+                    const lastName = parts[parts.length - 1];
+                    const foundUser = allUsersCache.find(user => user.toLowerCase().includes(lastName.toLowerCase()));
+                    if (foundUser) {
+                        viewHistory.push(foundUser);
+                        fetchAndRenderDashboard(foundUser);
+                    } else {
+                        console.warn(`Kein Geschäftsstellenleiter für "${agencyName}" gefunden.`);
+                        // Hier könnte man eine kleine, nicht-blockierende Benachrichtigung anzeigen
+                    }
+                }
+            });
+            
+            return card;
+        }
+
+
+        async function getAllUsers() {
+            if (allUsersCache.length > 0) return allUsersCache;
+            
+            const data = await fetchSheetQuery(sheetDataName, 'select A');
+            if (!data || !data.table.rows) {
+                console.error("Fehler beim Laden der Benutzerliste."); return [];
+            }
+            const users = filterUsers(data.table.rows.map(r => r.c[0]?.v).filter(Boolean));
+            allUsersCache = users;
+            return allUsersCache;
+        }
+
+        async function populateUserDropdown() {
+            const users = await getAllUsers();
+            if (users.length === 0) {
+                dom.userDropdownSelect.innerHTML = '<option value="">Fehler</option>'; return;
+            }
+            users.forEach(u => {
+                const opt = document.createElement('option');
+                opt.value = opt.textContent = u;
+                dom.userDropdownSelect.appendChild(opt);
+            });
+        }
+        
+        // NEU: Funktion um die Detailansicht eines Trainees in der Einarbeitungs-Ansicht anzuzeigen
+        async function showTraineeDetailView(traineeName) {
+            dom.leaderOnboardingView.classList.add('hidden');
+            dom.traineeOnboardingView.classList.remove('hidden');
+            dom.einarbeitungTitle.textContent = `Einarbeitungsplan: ${traineeName}`;
+            
+            // Ladeindikatoren anzeigen, während die Daten abgerufen werden
+            dom.grundseminarStepsContainer.innerHTML = `<div class="loader mx-auto mt-4"></div>`;
+            dom.aufbauseminarStepsContainer.innerHTML = `<div class="loader mx-auto mt-4"></div>`;
+            document.getElementById('onboarding-progress-container').classList.add('hidden');
+
+            await renderTraineeOnboardingView(traineeName);
+
+            currentOnboardingSubView = 'trainee-detail';
+            updateBackButtonVisibility();
+        }
+
+        // --- NAVIGATION & VIEWS ---
+        function updateBackButtonVisibility() {
+            if (viewHistory.length > 1 || currentView === 'einarbeitung' || isSuperuserView) {
+                dom.backButton.classList.remove('hidden');
+            } else {
+                dom.backButton.classList.add('hidden');
+            }
+        }
+        
+        function switchView(viewName) {
+            currentView = viewName;
+            if (viewName === 'einarbeitung') {
+                localStorage.setItem('hasVisitedOnboarding', 'true'); // Banner-Logik
+                dom.mainDashboardView.classList.add('hidden');
+                dom.einarbeitungView.classList.remove('hidden');
+                dom.einarbeitungBanner.classList.add('hidden');
+            } else { // 'dashboard'
+                dom.einarbeitungView.classList.add('hidden');
+                dom.mainDashboardView.classList.remove('hidden');
+            }
+            updateBackButtonVisibility();
+        }
+
+        function goBack() {
+             if (isSuperuserView) {
+                isSuperuserView = false;
+                const loggedInUser = localStorage.getItem('loggedInUser');
+                if (loggedInUser) {
+                    fetchAndRenderDashboard(loggedInUser);
+                }
+                return;
+            }
+
+            if (currentView === 'einarbeitung') {
+                const isTrainee = personalData.position.toLowerCase().trim() === 'trainee';
+                // Wenn eine Führungskraft die Detailansicht eines Trainees betrachtet, gehe zurück zur Listenansicht
+                if (!isTrainee && currentOnboardingSubView === 'trainee-detail') {
+                    dom.traineeOnboardingView.classList.add('hidden');
+                    dom.leaderOnboardingView.classList.remove('hidden');
+                    dom.einarbeitungTitle.textContent = "Einarbeitung: Gruppen-Übersicht";
+                    currentOnboardingSubView = 'leader-list';
+                    // Die Liste muss nicht neu gerendert werden, da sie im DOM verbleibt.
+                    updateBackButtonVisibility();
+                    return;
+                }
+                 // Ansonsten, wechsle von der Einarbeitungsansicht zurück zum Dashboard
+                 switchView('dashboard');
+                 return;
+            }
+
+            if (viewHistory.length > 1) {
+                viewHistory.pop();
+                const previousUser = viewHistory[viewHistory.length - 1];
+                fetchAndRenderDashboard(previousUser);
+            }
+        }
+
+        function updateLeadershipView() {
+            if (currentPlanningView === 'personal' && !isSuperuserView) {
+                dom.leadershipView.classList.add('hidden');
+                return;
+            }
+
+            dom.leadershipView.classList.remove('hidden');
+
+            if (currentPlanningView === 'struktur') {
+        renderStructureView();
+            } else { // team
+                renderTeamView();
+            }
+        }
+
+function renderStructureView() {
+    const posLower = personalData.position ? personalData.position.toLowerCase() : '';
+    const isRD = posLower.includes('regionaldirektor');
+
+    const data = isRD ? cachedBezirksleitungenData : cachedAgenciesData;
+    const title = isRD ? "Deine Direktions-Übersicht" : "Deine Struktur-Übersicht";
+    const countText = isRD 
+        ? `Du hast <strong>${data.length}</strong> direkte Mitarbeiter in deiner Direktion.`
+        : `Du hast <strong>${data.length}</strong> direkte Mitarbeiter in deiner Struktur.`;
+    const emptyText = isRD
+        ? "Dir sind aktuell keine direkte Mitarbeiter zugeordnet."
+        : "Dir sind aktuell keine direkte Mitarbeiter zugeordnet.";
+
+            dom.leadershipViewTitle.textContent = title;
+            dom.leadershipViewModeToggle.classList.remove('hidden'); // Show toggle for agencies
+            clearChildren(dom.teamMembersContainer);
+            clearChildren(dom.passiveMembersSection);
+            
+            if (data.length === 0) {
+                dom.leadershipViewCount.innerHTML = countText;
+                dom.teamMembersContainer.innerHTML = `<p class="text-center text-gray-500">${emptyText}</p>`;
+                return;
+            }
+
+            dom.leadershipViewCount.innerHTML = countText;
+            
+            if (currentLeadershipViewMode === 'grid') {
+                 dom.teamMembersContainer.className = 'mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6';
+                 data.forEach(item => {
+                    const card = createAgencyCardGrid(item, cachedCycleData.totalDaysInCycle, cachedCycleData.daysPassedInCycle);
+                    dom.teamMembersContainer.appendChild(card);
+                 });
+            } else { // list
+                dom.teamMembersContainer.className = 'mt-6 space-y-4';
+                data.forEach(item => {
+                    const card = createAgencyCard(item, cachedCycleData.totalDaysInCycle, cachedCycleData.daysPassedInCycle);
+                    dom.teamMembersContainer.appendChild(card);
+                 });
+            }
+        }
+
+        function renderTeamView() {
+            dom.leadershipViewTitle.textContent = isSuperuserView ? "Alle Führungskräfte" : "Deine Gruppen-Übersicht";
+            dom.leadershipViewModeToggle.classList.remove('hidden');
+            
+            clearChildren(dom.teamMembersContainer);
+            clearChildren(dom.passiveMembersSection);
+
+            const membersToRender = isSuperuserView ? cachedAllLeaderData : cachedActiveMembers;
+
+            const activeMembers = membersToRender.filter(m => m.ehGoal > 0 || m.etGoal > 0);
+            const passiveMembers = membersToRender.filter(m => m.ehGoal === 0 && m.etGoal === 0);
+
+            dom.leadershipViewCount.innerHTML = isSuperuserView 
+                ? `<strong>${membersToRender.length}</strong> Führungskräfte insgesamt.`
+                : `Du hast <strong class="text-skt-blue">${activeMembers.length}</strong> aktive Mitarbeiter in deiner Gruppe.`;
+            
+            renderTeamMemberCards(activeMembers); 
+            
+            if (passiveMembers.length > 0) {
+                const details = document.createElement('details');
+                details.className = 'bg-white rounded-xl shadow-lg';
+                const summary = document.createElement('summary');
+                summary.className = 'p-4 font-semibold text-skt-blue cursor-pointer';
+                summary.textContent = `Passive Mitarbeiter (${passiveMembers.length})`;
+                details.appendChild(summary);
+                const container = document.createElement('div');
+                container.className = 'p-4 pt-0 space-y-3';
+                passiveMembers.forEach(member => {
+                    const passiveCard = document.createElement('div');
+                    passiveCard.className = 'p-3 bg-skt-grey-light rounded-lg flex justify-between items-center';
+                    passiveCard.innerHTML = `
+                        <div>
+                            <p class="font-bold text-skt-blue">${member.name}</p>
+                            <p class="text-sm text-skt-blue-light">${member.position}</p>
+                        </div>
+                        <button data-username="${member.name}" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    `;
+                    passiveCard.querySelector('.switch-view-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const newuser = e.currentTarget.dataset.username;
+                        viewHistory.push(newuser);
+                        fetchAndRenderDashboard(newuser);
+                    });
+                    container.appendChild(passiveCard);
+                });
+                details.appendChild(container);
+                dom.passiveMembersSection.appendChild(details);
+            }
+        }
+
+        async function getAllLeaders() {
+            if (allLeadersCache.length > 0) return allLeadersCache;
+            const data = await fetchSheetQuery(sheetDataName, `select A, J`);
+            if (data && data.table.rows) {
+                const leaders = data.table.rows
+                    .map(r => ({ name: r.c[0]?.v, position: r.c[1]?.v }))
+                    .filter(u => u.name && u.position && u.position.toLowerCase().trim() !== 'trainee');
+                allLeadersCache = filterUsers(leaders.map(l => l.name));
+            }
+            return allLeadersCache;
+       }
+       
+        async function fetchAndRenderSuperuserView() {
+            // Sicherheitsprüfung: Nur Nicht-Trainees dürfen diese Ansicht sehen.
+            const isTrainee = personalData.position && personalData.position.toLowerCase().trim() === 'trainee';
+            if (isTrainee) {
+                console.warn("Zugriff auf Gesamtansicht für Trainee blockiert.");
+                // Optional: Eine sichtbare Meldung für den Benutzer anzeigen.
+                // alert("Diese Ansicht ist für deine Position nicht verfügbar.");
+                return;
+            }
+
+            isSuperuserView = true;
+            setStatus('Lade Gesamtansicht...');
+            dom.dashboardSections.classList.add('opacity-0');
+            dom.welcomeHeader.textContent = 'Gesamtansicht';
+            dom.userPosition.textContent = 'Alle Führungskräft';
+
+            try {
+                if (isMoneyView) {
+                    alert("Die Geld-Ansicht ist in der Gesamtübersicht nicht verfügbar und wird temporär deaktiviert.");
+                    isMoneyView = false;
+                    dom.moneyViewBtn.innerHTML = `<i class="fas fa-euro-sign w-5 mr-2"></i>Geld-Ansicht`;
+                }
+
+                const query = `select A, B, C, D, E, F, G, H, J`;
+                const data = await fetchSheetQuery(sheetDataName, query);
+
+                if (!data || !data.table || !data.table.rows) {
+                    setStatus('Fehler beim Laden der Daten.', true);
+                    return;
+                }
+
+                const rows = data.table.rows;
+                const summaryDataToSum = [];
+                const leadersToDisplay = [];
+
+                for (let i = 1; i < rows.length; i++) {
+                    const currentRowData = rows[i].c;
+                    const prevRowData = rows[i - 1].c;
+
+                    const currentPosition = (currentRowData[8]?.v || "").toLowerCase().trim();
+                    
+                    if (currentPosition && currentPosition !== 'trainee') {
+                        if (prevRowData) {
+                             const prevPosition = (prevRowData[8]?.v || "").toLowerCase().trim();
+                             if(prevPosition === 'trainee'){
+                                summaryDataToSum.push({
+                                    ehGoal: Math.round(prevRowData[1]?.v || 0),
+                                    ehCurrent: Math.round(prevRowData[2]?.v || 0),
+                                    etGoal: Math.round(prevRowData[3]?.v || 0),
+                                    etCurrent: Math.round(prevRowData[4]?.v || 0),
+                                    atGoal: Math.round(prevRowData[5]?.v || 0),
+                                    atVereinbart: Math.round(prevRowData[6]?.v || 0),
+                                    atCurrent: Math.round(prevRowData[7]?.v || 0),
+                                });
+
+                                leadersToDisplay.push({
+                                    name: currentRowData[0]?.v || '',
+                                    ehGoal: Math.round(prevRowData[1]?.v || 0),
+                                    ehCurrent: Math.round(prevRowData[2]?.v || 0),
+                                    etGoal: Math.round(prevRowData[3]?.v || 0),
+                                    etCurrent: Math.round(prevRowData[4]?.v || 0),
+                                    atGoal: Math.round(prevRowData[5]?.v || 0),
+                                    atVereinbart: Math.round(prevRowData[6]?.v || 0),
+                                    atCurrent: Math.round(prevRowData[7]?.v || 0),
+                                    position: currentRowData[8]?.v || null
+                                });
+                             }
+                        }
+                    }
+                }
+
+                if (summaryDataToSum.length === 0) {
+                    setStatus('Keine summierten Trainee-Daten gefunden.', true);
+                    return;
+                }
+
+                cachedAllLeaderData = leadersToDisplay;
+
+                const superuserData = summaryDataToSum.reduce((acc, data) => {
+                    acc.ehGoal += data.ehGoal;
+                    acc.ehCurrent += data.ehCurrent;
+                    acc.etGoal += data.etGoal;
+                    acc.etCurrent += data.etCurrent;
+                    acc.atGoal += data.atGoal;
+                    acc.atVereinbart += data.atVereinbart;
+                    acc.atCurrent += data.atCurrent;
+                    return acc;
+                }, { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atVereinbart: 0, atCurrent: 0 });
+
+                dom.planningViewToggle.classList.add('hidden');
+                dom.employeeView.classList.add('hidden');
+                dom.leadershipView.classList.remove('hidden');
+                document.getElementById('leader-personal-goal-container').innerHTML = '';
+                document.getElementById('leader-personal-goal-container').classList.add('hidden');
+                
+                dom.monthlyPlanningTitle.textContent = "Gesamtansicht";
+                updateMonthlyPlanningView(superuserData);
+                
+                const { startDate, endDate } = getMonthlyCycleDates();
+                const today = new Date();
+                cachedCycleData.totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
+                cachedCycleData.daysPassedInCycle = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24));
+                
+                renderTeamView();
+
+                setStatus('');
+                dom.dashboardSections.classList.remove('hidden');
+                setTimeout(() => dom.dashboardSections.classList.remove('opacity-0'), 50);
+                updateBackButtonVisibility();
+
+            } catch (error) {
+                console.error("Fehler in der Superuser-Ansicht:", error);
+                setStatus("Fehler beim Laden der Gesamtansicht.", true);
+            }
+        }
+
+
+        // --- EVENTS ---
+        dom.settingsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+
+            // NEU: Prüfung gegen die Daten des eingeloggten Benutzers, nicht des angezeigten.
+            const pos = loggedInUserData.position ? loggedInUserData.position.toLowerCase().trim() : '';
+            if (pos && pos !== 'trainee') {
+                dom.superuserBtn.classList.remove('hidden');
+            } else {
+                dom.superuserBtn.classList.add('hidden');
+            }
+
+            dom.settingsMenu.classList.toggle('visible');
+            dom.settingsMenu.classList.toggle('hidden');
+        });
+        
+        dom.moneyViewBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            isMoneyView = !isMoneyView;
+            dom.moneyViewBtn.innerHTML = isMoneyView 
+                ? `<i class="fas fa-chart-pie w-5 mr-2"></i>EH-Ansicht` 
+                : `<i class="fas fa-euro-sign w-5 mr-2"></i>Geld-Ansicht`;
+            dom.settingsMenu.classList.add('hidden');
+            dom.settingsMenu.classList.remove('visible');
+            
+            const currentUser = viewHistory[viewHistory.length - 1];
+            if (isSuperuserView) fetchAndRenderSuperuserView();
+            else if (currentUser) fetchAndRenderDashboard(currentUser);
+        });
+
+        dom.logoutBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            localStorage.clear();
+            sessionStorage.clear();
+            viewHistory = [];
+            location.reload();
+        });
+
+        dom.clearCacheBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            dom.clearCacheBtn.innerHTML = `<i class="fas fa-spinner fa-spin w-5 mr-2"></i>Wird geleert...`;
+            try {
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (const registration of registrations) {
+                        await registration.unregister();
+                    }
+                }
+                if ('caches' in window) {
+                    const keys = await caches.keys();
+                    await Promise.all(keys.map(key => caches.delete(key)));
+                }
+                localStorage.clear();
+                sessionStorage.clear();
+                window.location.reload(true);
+            } catch (error) {
+                console.error('Fehler beim Leeren des Caches:', error);
+                dom.clearCacheBtn.innerHTML = `<i class="fas fa-sync-alt w-5 mr-2"></i>Cache leeren`;
+            }
+        });
+        
+        dom.superuserBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            dom.settingsMenu.classList.add('hidden');
+            dom.settingsMenu.classList.remove('visible');
+            // Sicherheitsprüfung: Nur Nicht-Trainees dürfen diese Ansicht sehen.
+            const isTrainee = personalData.position && personalData.position.toLowerCase().trim() === 'trainee';
+            if (isTrainee) {
+                alert("Diese Ansicht ist für deine Position nicht verfügbar.");
+                return;
+            }
+            fetchAndRenderSuperuserView();
+        });
+        
+        dom.backButton.addEventListener('click', goBack);
+        dom.einarbeitungBtn.addEventListener('click', () => switchView('einarbeitung'));
+        dom.einarbeitungBanner.addEventListener('click', () => switchView('einarbeitung'));
+
+
+        dom.teamViewBtn.addEventListener('click', () => {
+            currentPlanningView = 'team';
+            dom.teamViewBtn.classList.add('active'); 
+            dom.personalViewBtn.classList.remove('active');
+            dom.strukturViewBtn.classList.remove('active');
+            dom.monthlyPlanningTitle.textContent = "Gruppen-Übersicht";
+            updateMonthlyPlanningView(teamData);
+            updateLeadershipView();
+        });
+
+        dom.personalViewBtn.addEventListener('click', () => {
+            currentPlanningView = 'personal';
+            dom.personalViewBtn.classList.add('active'); 
+            dom.teamViewBtn.classList.remove('active');
+            dom.strukturViewBtn.classList.remove('active');
+            dom.monthlyPlanningTitle.textContent = "Persönliche Übersicht";
+            updateMonthlyPlanningView(personalData);
+            updateLeadershipView();
+        });
+        
+        dom.strukturViewBtn.addEventListener('click', () => {
+            currentPlanningView = 'struktur';
+            dom.strukturViewBtn.classList.add('active'); 
+            dom.teamViewBtn.classList.remove('active');
+            dom.personalViewBtn.classList.remove('active');
+            const posLower = personalData.position ? personalData.position.toLowerCase() : '';
+            const isRD = posLower.includes('regionaldirektor');
+            dom.monthlyPlanningTitle.textContent = isRD ? "Direktions-Übersicht" : "Struktur-Übersicht";
+            updateMonthlyPlanningView(structureData);
+            updateLeadershipView();
+        });
+
+        dom.gridViewBtn.addEventListener('click', () => {
+            if (currentLeadershipViewMode === 'grid') return;
+            currentLeadershipViewMode = 'grid';
+            dom.gridViewBtn.classList.add('active');
+            dom.listViewBtn.classList.remove('active');
+            if (isSuperuserView) {
+                renderTeamView();
+            } else {
+                updateLeadershipView();
+            }
+        });
+
+        dom.listViewBtn.addEventListener('click', () => {
+            if (currentLeadershipViewMode === 'list') return;
+            currentLeadershipViewMode = 'list';
+            dom.listViewBtn.classList.add('active');
+            dom.gridViewBtn.classList.remove('active');
+             if (isSuperuserView) {
+                renderTeamView();
+            } else {
+                updateLeadershipView();
+            }
+        });
+        
+        let touchStartY = 0, touchStartX = 0, isRefreshing = false;
+
+        document.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX; touchStartY = e.touches[0].clientY;
+        }, { passive: true });
+
+        document.addEventListener('touchmove', (e) => {
+            if (isRefreshing) return;
+            const pullDistance = e.touches[0].clientY - touchStartY;
+            
+            if (window.scrollY === 0 && pullDistance > 0) {
+                const indicator = document.getElementById('refresh-indicator');
+                const icon = indicator.querySelector('i');
+                indicator.style.opacity = '1';
+                icon.style.transform = `rotate(${Math.min(pullDistance * 2, 360)}deg)`;
+            }
+        }, { passive: true });
+
+        document.addEventListener('touchend', async (e) => {
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            
+            const swipeDistanceX = touchEndX - touchStartX;
+            const swipeDistanceY = touchEndY - touchStartY;
+            const indicator = document.getElementById('refresh-indicator');
+            const icon = indicator.querySelector('i');
+
+            if (window.scrollY === 0 && swipeDistanceY > 100 && Math.abs(swipeDistanceX) < Math.abs(swipeDistanceY) / 2) {
+                if (!isRefreshing) {
+                    isRefreshing = true;
+                    icon.classList.add('animate-spin');
+                    
+                    const user = viewHistory[viewHistory.length - 1];
+                    if (user) {
+                        if (isSuperuserView) {
+                            await fetchAndRenderSuperuserView();
+                        } else {
+                            await fetchAndRenderDashboard(user);
+                        }
+                    }
+
+                    setTimeout(() => {
+                        indicator.style.opacity = '0';
+                        icon.classList.remove('animate-spin');
+                        icon.style.transform = 'rotate(0deg)';
+                        isRefreshing = false;
+                    }, 500);
+                }
+            } 
+            else if (swipeDistanceX > 100 && Math.abs(swipeDistanceY) < Math.abs(swipeDistanceX) / 2) {
+                goBack();
+            } 
+            else {
+                indicator.style.opacity = '0';
+                icon.style.transform = 'rotate(0deg)';
+            }
+            touchStartX = 0; touchStartY = 0;
+        }, { passive: true });
+
+        // --- INIT ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // registerServiceWorker(); // FIX: Verursacht Fehler, wenn keine service-worker.js Datei existiert
+
+            const savedUser = localStorage.getItem('loggedInUser');
+            if (savedUser) {
+                startDashboard(savedUser);
+            } else {
+                document.getElementById('user-select-screen').classList.remove('hidden');
+                document.getElementById('user-select-screen').classList.add('flex');
+                populateUserDropdown();
+            }
+
+            dom.userDropdownSelect.addEventListener('change', () => {
+                const passwordContainer = document.getElementById('password-container');
+                const startBtn = document.getElementById('start-dashboard-btn');
+                
+                if (dom.userDropdownSelect.value) {
+                    passwordContainer.classList.remove('hidden');
+                    startBtn.classList.remove('hidden');
+                    setTimeout(() => document.getElementById('password-input').focus(), 300);
+                } else {
+                    passwordContainer.classList.add('hidden');
+                    startBtn.classList.add('hidden');
+                }
+            });
+
+            document.getElementById('password-input').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); startDashboard(); }
+            });
+
+            document.getElementById('start-dashboard-btn').addEventListener('click', () => startDashboard());
+            
+            document.getElementById('enable-notifications-btn').addEventListener('click', askForNotificationPermission);
+
+            dom.closeIosModalBtn.addEventListener('click', () => {
+                dom.iosInstructionsModal.classList.remove('visible');
+                document.body.classList.remove('modal-open');
+                document.documentElement.classList.remove('modal-open');
+            });
+
+            // Event Listener für Hinweis-Modal
+            dom.closeHinweisModalBtn.addEventListener('click', () => {
+                dom.hinweisModal.classList.remove('visible');
+                document.body.classList.remove('modal-open');
+                document.documentElement.classList.remove('modal-open');
+            });
+            dom.hinweisModal.addEventListener('click', (e) => {
+                if(e.target === dom.hinweisModal) {
+                    dom.hinweisModal.classList.remove('visible');
+                    document.body.classList.remove('modal-open');
+                    document.documentElement.classList.remove('modal-open');
+                }
+            });
+
+            // Click-Outside Listener für Settings-Menü
+            document.addEventListener('click', (e) => {
+                if (!dom.settingsBtn.contains(e.target) && !dom.settingsMenu.contains(e.target)) {
+                    dom.settingsMenu.classList.add('hidden');
+                    dom.settingsMenu.classList.remove('visible');
+                }
+            });
+        });
+
+    </script>
+</body>
+</html>

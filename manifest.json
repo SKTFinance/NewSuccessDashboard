@@ -1,0 +1,22 @@
+{
+  "name": "SKT Success Dashboard",
+  "short_name": "SKT Dashboard",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f5f5f5",
+  "theme_color": "#002147",
+  "description": "Dein persönliches Dashboard für Erfolg und Karriereplanung.",
+  "icons": [
+    {
+      "src": "icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "gcm_sender_id": "103953800507"
+}
