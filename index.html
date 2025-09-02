@@ -243,6 +243,15 @@
             background-color: #94a3b8;
         }
 
+        .loader-small { 
+            border: 3px solid rgba(255, 255, 255, 0.4); 
+            border-top-color: #fff; 
+            border-radius: 50%; 
+            width: 1.25rem; /* 20px */
+            height: 1.25rem; /* 20px */
+            animation: spin 1s linear infinite; 
+        }
+
         .timeline-item {
             opacity: 0;
             animation: slideIn 0.5s ease-out forwards;
@@ -468,6 +477,10 @@
                     <button id="einarbeitung-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Meine Einarbeitung">
                         <i class="fas fa-graduation-cap"></i>
                     </button>
+                    <!-- NEU: Termin-Button im Header -->
+                    <button id="appointments-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Termine verwalten">
+                        <i class="fas fa-calendar-alt"></i>
+                    </button>
                     <!-- NEU: KI Assistent Button -->
                     <button id="ai-assistant-btn" class="bg-accent-purple text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-purple-700 transition-colors h-10 w-10 flex items-center justify-center" title="KI-Assistent">
                         <i class="fas fa-robot"></i>
@@ -479,6 +492,7 @@
                         <div id="settings-menu" class="dropdown-menu hidden">
                              <a href="#" id="superuser-btn" class="hidden block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-users-cog w-5 mr-2"></i>Gesamtansicht</a>
                              <a href="#" id="money-view-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-euro-sign w-5 mr-2"></i>Geld-Ansicht</a>
+                             <a href="#" id="appointments-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-calendar-alt w-5 mr-2"></i>Termine verwalten</a>
                              <a href="#" id="edit-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-edit w-5 mr-2"></i>Personendaten</a>
                              <a href="#" id="clear-cache-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sync-alt w-5 mr-2"></i>Cache leeren</a>
                              <a href="#" id="logout-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-right-from-bracket w-5 mr-2"></i>Logout</a>
@@ -672,9 +686,13 @@
                 <div id="leader-onboarding-view" class="hidden">
                     <!-- Inhalt wird per JS generiert -->
                 </div>
-
             </div>
-    </main>
+        </main>
+        
+        <!-- Container für die Termin-Ansicht -->
+        <main id="appointments-view" class="hidden w-full max-w-7xl mx-auto flex-grow px-4 md:px-8 pt-6 pb-6">
+            <!-- Inhalt von appointments.html wird hier geladen -->
+        </main>
     </div>
 
     <!-- Modals -->
@@ -770,6 +788,7 @@
         let isSuperuserView = false;
         let isMoneyView = false;
         let currentView = 'dashboard';
+        let appointmentsViewLoaded = false;
         let HIERARCHY_CACHE = null;
         let currentOnboardingSubView = 'leader-list';
         
@@ -843,6 +862,9 @@
             einarbeitungView: document.getElementById('einarbeitung-view'),
             einarbeitungBtn: document.getElementById('einarbeitung-btn'),
             einarbeitungBanner: document.getElementById('einarbeitung-banner'),
+            appointmentsHeaderBtn: document.getElementById('appointments-header-btn'), // NEU
+            appointmentsView: document.getElementById('appointments-view'),
+            appointmentsBtn: document.getElementById('appointments-btn'),
             einarbeitungTitle: document.getElementById('einarbeitung-title'),
             traineeOnboardingView: document.getElementById('trainee-onboarding-view'),
             leaderOnboardingView: document.getElementById('leader-onboarding-view'),
@@ -1038,6 +1060,25 @@ jet                // console.log("SeaTable App Access Token and API Gateway URL
             }
         }
 
+        async function seaTableAddRow(tableName, rowData) {
+            if (!seaTableAccessToken || !apiGatewayUrl) return false;
+            try {
+                const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${seaTableAccessToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ table_name: tableName, row: rowData })
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error_message}`);
+                }
+                return await response.json();
+            } catch (error) {
+                console.error(`Error adding row to table ${tableName}:`, error);
+                return false;
+            }
+        }
         // --- DATA NORMALIZATION & MAPPING ---
         function normalizeAllData() {
             const tableNames = Object.keys(db).filter(name => COLUMN_MAPS[name]);
@@ -2111,6 +2152,40 @@ jet                // console.log("SeaTable App Access Token and API Gateway URL
             });
         }
         
+        async function loadAndInitAppointmentsView() {
+            const container = dom.appointmentsView;
+            if (appointmentsViewLoaded) {
+                // Wenn schon geladen, nur neu initialisieren
+                if (window.SKT_APPOINTMENTS_VIEW) {
+                    window.SKT_APPOINTMENTS_VIEW.init(loggedInUserData._id);
+                }
+                return;
+            }
+
+            try {
+                const response = await fetch('./appointments.html');
+                if (!response.ok) throw new Error('appointments.html konnte nicht geladen werden');
+                container.innerHTML = await response.text();
+                appointmentsViewLoaded = true;
+                
+                // Das Skript in der neuen Datei wurde durch innerHTML nicht ausgeführt.
+                // Wir müssen es manuell finden und ausführen.
+                const scriptTag = container.querySelector('script');
+                if (scriptTag) {
+                    const scriptContent = scriptTag.textContent;
+                    scriptTag.remove(); // Entfernen, um Doppel-Ausführung zu vermeiden
+                    new Function(scriptContent)(); // Führt den Code im globalen Scope aus
+                }
+
+                if (window.SKT_APPOINTMENTS_VIEW) {
+                    window.SKT_APPOINTMENTS_VIEW.init(loggedInUserData._id);
+                }
+            } catch (error) {
+                console.error("Fehler beim Laden der Termin-Ansicht:", error);
+                container.innerHTML = `<p class="text-center text-red-500">${error.message}</p>`;
+            }
+        }
+
         // --- INITIALISIERUNG & EVENT LISTENERS ---
 
         function setupEventListeners() {
@@ -2226,6 +2301,12 @@ jet                // console.log("SeaTable App Access Token and API Gateway URL
                   closeSettingsMenu();
                   openEditUserModal();
              });
+            
+            dom.appointmentsBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                closeSettingsMenu();
+                switchView('appointments');
+            });
 
             // --- Main Navigation ---
             dom.backButton.addEventListener('click', async () => {
@@ -2235,7 +2316,7 @@ jet                // console.log("SeaTable App Access Token and API Gateway URL
                     await fetchAndRenderDashboard(userId);
                     return;
                 }
-                if (currentView === 'einarbeitung') {
+                if (currentView === 'einarbeitung' || currentView === 'appointments') {
                     const currentUser = findRowById('mitarbeiter', loggedInUserData._id);
                     if (currentOnboardingSubView === 'trainee-detail' && isUserLeader(currentUser)) {
                         const teamMembers = getSubordinates(loggedInUserData._id, 'gruppe');
@@ -2311,6 +2392,10 @@ jet                // console.log("SeaTable App Access Token and API Gateway URL
                  switchView('einarbeitung');
                  fetchAndRenderOnboarding(loggedInUserData._id);
             });
+            
+            dom.appointmentsHeaderBtn.addEventListener('click', () => { // NEU
+                switchView('appointments');
+            });
 
             // --- Modal Controls ---
             dom.closeHinweisModalBtn.addEventListener('click', () => {
@@ -2338,9 +2423,14 @@ jet                // console.log("SeaTable App Access Token and API Gateway URL
         
         function switchView(viewName) {
             currentView = viewName;
-            dom.mainDashboardView.classList.toggle('hidden', viewName === 'einarbeitung');
-            dom.einarbeitungView.classList.toggle('hidden', viewName !== 'einarbeitung');
+            dom.mainDashboardView.classList.toggle('hidden', viewName === 'einarbeitung' || viewName === 'appointments');
+            dom.einarbeitungView.classList.toggle('hidden', viewName !== 'einarbeitung' );
+            dom.appointmentsView.classList.toggle('hidden', viewName !== 'appointments');
             updateBackButtonVisibility();
+
+            if (viewName === 'appointments') {
+                loadAndInitAppointmentsView();
+            }
         }
 
         let isInitializing = false;
@@ -2627,6 +2717,24 @@ jet                // console.log("SeaTable App Access Token and API Gateway URL
         
         // --- START ---
         document.addEventListener('DOMContentLoaded', initializeDashboard);
+
+        // Mache Kernfunktionen global verfügbar für andere Module/Dateien
+        window.SKT_APP = {
+            seaTableSqlQuery,
+            seaTableAddRow,
+            seaTableUpdateRow,
+            seaTableUpdateRow,
+            mapSqlResults,
+            findRowById,
+            getMonthlyCycleDates,
+            escapeSql,
+            getSubordinates,
+            getAllSubordinatesRecursive,
+            isUserLeader,
+            db,
+            COLUMN_MAPS,
+            get loggedInUserData() { return loggedInUserData; }
+        };
     </script>
 </body>
 </html>
