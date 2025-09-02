@@ -162,55 +162,63 @@
 
             async fetchAndRender() {
                 this.listContainer.innerHTML = '<div class="loader mx-auto"></div>';
+                try {
+                    const cycleValue = this.monthFilter.value;
+                    if (!cycleValue) {
+                        throw new Error("Monatsfilter konnte nicht gelesen werden. Bitte erneut versuchen.");
+                    }
+                    const { startDate, endDate } = JSON.parse(cycleValue);
+                    const startDateIso = new Date(startDate).toISOString().split('T')[0];
+                    const endDateIso = new Date(endDate).toISOString().split('T')[0];
 
-                const cycleValue = this.monthFilter.value;
-                if (!cycleValue) {
-                    console.warn("Monatsfilter ist noch nicht bereit. Erneuter Versuch in 100ms.");
-                    setTimeout(() => this.fetchAndRender(), 100);
-                    return;
-                }
-                const { startDate, endDate } = JSON.parse(cycleValue);
-                const startDateIso = new Date(startDate).toISOString().split('T')[0];
-                const endDateIso = new Date(endDate).toISOString().split('T')[0];
+                    let userIds = new Set();
+                    switch (this.currentScope) {
+                        case 'personal': userIds.add(this.currentUserId); break;
+                        case 'group':
+                            userIds.add(this.currentUserId);
+                            APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
+                            break;
+                        case 'structure':
+                            userIds.add(this.currentUserId);
+                            this.downline.forEach(u => userIds.add(u._id));
+                            break;
+                        case 'single':
+                            if (this.userFilter.value) userIds.add(this.userFilter.value);
+                            break;
+                    }
 
-                let userIds = new Set();
-                switch (this.currentScope) {
-                    case 'personal': userIds.add(this.currentUserId); break;
-                    case 'group':
-                        userIds.add(this.currentUserId);
-                        APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
-                        break;
-                    case 'structure':
-                        userIds.add(this.currentUserId);
-                        this.downline.forEach(u => userIds.add(u._id));
-                        break;
-                    case 'single':
-                        if (this.userFilter.value) userIds.add(this.userFilter.value);
-                        break;
-                }
+                    if (userIds.size === 0) {
+                        this.allAppointments = [];
+                        this.render();
+                        return;
+                    }
 
-                if (userIds.size === 0) {
-                    this.allAppointments = [];
+                    const query = `SELECT _id, Datum, Kategorie, Status, Mitarbeiter_ID FROM \`Termine\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' ORDER BY \`Datum\` DESC`;
+                    const appointmentsRaw = await APP.seaTableSqlQuery(query, false);
+                    const allAppointmentsInPeriod = APP.mapSqlResults(appointmentsRaw, 'Termine');
+
+                    this.allAppointments = allAppointmentsInPeriod.filter(termin => {
+                        const terminUserId = termin.Mitarbeiter_ID?.[0]?.row_id;
+                        return terminUserId && userIds.has(terminUserId);
+                    });
+
+                    this.allAppointments.forEach(termin => {
+                        const terminUserId = termin.Mitarbeiter_ID?.[0]?.row_id;
+                        const user = APP.findRowById('mitarbeiter', terminUserId);
+                        termin.Mitarbeiter_ID_Name = user ? user.Name : 'Unbekannt';
+                    });
+
                     this.render();
-                    return;
+                } catch (error) {
+                    console.error("Fehler in fetchAndRender:", error);
+                    this.listContainer.innerHTML = `
+                        <div class="text-center py-16">
+                            <i class="fas fa-exclamation-triangle fa-4x text-red-400 mb-4"></i>
+                            <h3 class="text-xl font-semibold text-skt-blue">Ein Fehler ist aufgetreten</h3>
+                            <p class="text-gray-500 mt-2">${error.message}</p>
+                        </div>
+                    `;
                 }
-
-                const query = `SELECT _id, Datum, Kategorie, Status, Mitarbeiter_ID FROM \`Termine\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' ORDER BY \`Datum\` DESC`;
-                const appointmentsRaw = await APP.seaTableSqlQuery(query, false);
-                const allAppointmentsInPeriod = APP.mapSqlResults(appointmentsRaw, 'Termine');
-
-                this.allAppointments = allAppointmentsInPeriod.filter(termin => {
-                    const terminUserId = termin.Mitarbeiter_ID?.[0]?.row_id;
-                    return terminUserId && userIds.has(terminUserId);
-                });
-
-                this.allAppointments.forEach(termin => {
-                    const terminUserId = termin.Mitarbeiter_ID?.[0]?.row_id;
-                    const user = APP.findRowById('mitarbeiter', terminUserId);
-                    termin.Mitarbeiter_ID_Name = user ? user.Name : 'Unbekannt';
-                });
-
-                this.render();
             },
 
             render() {
