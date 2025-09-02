@@ -739,6 +739,9 @@
         const SEATABLE_API_TOKEN = "b148f4c735d193f77841ce4e4ddb2bb8bc2e446b";
         const SEATABLE_APP_ACCESS_TOKEN_URL = "https://cloud.seatable.io/api/v2.1/dtable/app-access-token/";
         const SEATABLE_DTABLE_UUID = "5b374b51-789c-4aac-a12f-02574f8f4855";
+        // Cache-Konstanten: Ändere die Version, um alle Caches zu invalidieren.
+        const CACHE_VERSION = 'v1.1'; 
+        const CACHE_PREFIX = `skt-dashboard-cache-${CACHE_VERSION}-`;
         
         let COLUMN_MAPS = {}; // Wird dynamisch gefüllt
 
@@ -767,6 +770,7 @@
         let isSuperuserView = false;
         let isMoneyView = false;
         let currentView = 'dashboard';
+        let HIERARCHY_CACHE = null;
         let currentOnboardingSubView = 'leader-list';
         
         // --- DOM-ELEMENTE ---
@@ -877,7 +881,7 @@
                 const data = await response.json();
                 seaTableAccessToken = data.access_token;
                 apiGatewayUrl = data.dtable_server;
-                console.log("SeaTable App Access Token and API Gateway URL obtained.");
+jet                // console.log("SeaTable App Access Token and API Gateway URL obtained.");
             } catch (error) {
                 console.error("Error getting SeaTable access token:", error);
                 setStatus("Fehler bei der Verbindung zur Datenbank.", true);
@@ -910,7 +914,7 @@
                         });
                     });
                 }
-                console.log("Dynamically fetched column maps:", newColumnMaps);
+                // console.log("Dynamically fetched column maps:", newColumnMaps);
                 return newColumnMaps;
             } catch (error) {
                 console.error("Error fetching column maps:", error);
@@ -919,64 +923,96 @@
             }
         }
 
-        async function seaTableSqlQuery(sql) {
-            if (!seaTableAccessToken || !apiGatewayUrl) {
-                console.error("Cannot run SQL query without access token and gateway URL.");
-                return [];
-            }
-            try {
-                const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/sql/`;
-                console.log(`%c[SQL ANFRAGE]: ${sql}`, 'color: purple; font-weight: bold;');
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${seaTableAccessToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ sql, convert_link_id: true })
-                });
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error_message || JSON.stringify(errorData)}`);
+        async function seaTableSqlQuery(sql, convertLinks = true) {
+            let retries = 5;
+            let wait = 2000; // Start with a 2-second wait
+            while (retries > 0) {
+                if (!seaTableAccessToken || !apiGatewayUrl) {
+                    console.error("Cannot run SQL query without access token and gateway URL.");
+                    return [];
                 }
-                const data = await response.json();
-                return data.results || [];
-            } catch (error) {
-                console.error("Error executing SeaTable SQL query:", error);
-                setStatus(`Fehler bei der SQL-Abfrage.`, true);
-                return [];
+                try {
+                    const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/sql/`;
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${seaTableAccessToken}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sql, convert_link_id: convertLinks })
+                    });
+                    if (response.status === 429) throw new Error('RateLimit');
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error_message || JSON.stringify(errorData)}`);
+                    }
+                    const data = await response.json();
+                    return data.results || [];
+                } catch (error) {
+                    if (error.message === 'RateLimit') {
+                        retries--;
+                        if (retries === 0) {
+                            console.error(`SQL query failed after multiple retries due to rate limiting: ${sql}`);
+                            setStatus(`API-Limit erreicht. Daten konnten nicht geladen werden.`, true);
+                            return [];
+                        }
+                        console.warn(`SQL query rate limited. Retrying in ${wait}ms...`);
+                        await delay(wait);
+                        wait *= 2;
+                    } else {
+                        console.error("Error executing SeaTable SQL query:", error);
+                        setStatus(`Fehler bei der SQL-Abfrage.`, true);
+                        return [];
+                    }
+                }
             }
+            return [];
         }
 
         async function seaTableQuery(tableName) {
-            if (!seaTableAccessToken || !apiGatewayUrl) {
-                await getSeaTableAccessToken();
-                if (!seaTableAccessToken || !apiGatewayUrl) return [];
-            }
-            try {
-                let allRows = [];
-                let start = 0;
-                const limit = 1000;
-                let hasMore = true;
-
-                while(hasMore) {
-                    const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/?table_name=${encodeURIComponent(tableName)}&start=${start}&limit=${limit}&convert_link_id=true`;
-                    const response = await fetch(url, {
-                        method: 'GET',
-                        headers: { 'Authorization': `Bearer ${seaTableAccessToken}` }
-                    });
-                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                    const data = await response.json();
-                    allRows = allRows.concat(data.rows);
-                    hasMore = data.rows.length >= limit;
-                    start += limit;
+            let retries = 5;
+            let wait = 2000; // Start with a 2-second wait
+            while (retries > 0) {
+                if (!seaTableAccessToken || !apiGatewayUrl) {
+                    console.error("Cannot fetch table without access token and gateway URL.");
+                    return [];
                 }
-                return allRows;
-            } catch (error) {
-                console.error(`Error fetching data from table ${tableName}:`, error);
-                setStatus(`Fehler beim Laden der Tabelle: ${tableName}.`, true);
-                return [];
+                try {
+                    let allRows = [];
+                    let start = 0;
+                    const limit = 1000;
+                    let hasMore = true;
+
+                    while(hasMore) {
+                        const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/?table_name=${encodeURIComponent(tableName)}&start=${start}&limit=${limit}&convert_link_id=true`;
+                        const response = await fetch(url, {
+                            method: 'GET',
+                            headers: { 'Authorization': `Bearer ${seaTableAccessToken}` }
+                        });
+                        if (response.status === 429) throw new Error('RateLimit');
+                        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                        const data = await response.json();
+                        allRows = allRows.concat(data.rows);
+                        hasMore = data.rows.length >= limit;
+                        start += limit;
+                    }
+                    return allRows;
+                } catch (error) {
+                    if (error.message === 'RateLimit') {
+                        retries--;
+                        if (retries <= 0) {
+                             console.error(`Failed to fetch table ${tableName} after multiple retries due to rate limiting.`);
+                             setStatus(`API-Limit erreicht. Daten konnten nicht geladen werden.`, true);
+                             return [];
+                        }
+                        console.warn(`Rate limit hit for ${tableName}. Retrying in ${wait}ms...`);
+                        await delay(wait);
+                        wait *= 2;
+                    } else {
+                        console.error(`Error fetching data from table ${tableName}:`, error);
+                        setStatus(`Fehler beim Laden der Tabelle: ${tableName}.`, true);
+                        return [];
+                    }
+                }
             }
+            return [];
         }
         
         async function seaTableUpdateRow(tableName, rowId, rowData) {
@@ -1002,27 +1038,42 @@
 
         // --- DATA NORMALIZATION & MAPPING ---
         function normalizeAllData() {
-            const tableNames = Object.keys(db);
-            const mitarbeiterMeta = METADATA.tables.find(t => t.name === 'Mitarbeiter');
-            const statusColMeta = mitarbeiterMeta?.columns.find(c => c.name === 'Status');
+            const tableNames = Object.keys(db).filter(name => COLUMN_MAPS[name]);
 
-            for(const tableName of tableNames){
+            for (const tableName of tableNames) {
+                const tableMeta = METADATA.tables.find(t => t.name.toLowerCase() === tableName);
+                if (!tableMeta) continue;
+
                 if (Array.isArray(db[tableName])) {
                     db[tableName] = db[tableName].map(row => {
-                        const newRow = {...row};
-                        for(const colName in COLUMN_MAPS[tableName]) {
+                        const newRow = { ...row };
+                        for (const colName in COLUMN_MAPS[tableName]) {
                             const colKey = COLUMN_MAPS[tableName][colName];
+                            const colMeta = tableMeta.columns.find(c => c.key === colKey);
                             let value = row[colKey];
+
                             if (value !== undefined && value !== null) {
-                                if (tableName === 'mitarbeiter') {
-                                    if ((colName === 'FK' || colName === 'Werber') && Array.isArray(value) && value.length > 0) {
-                                        value = value[0]; // Extrahiere nur die ID
-                                    } else if (colName === 'Status' && statusColMeta) {
-                                        const statusOption = statusColMeta.data.options.find(opt => opt.id === value);
-                                        value = statusOption ? statusOption.name : value;
-                                    } else if (colName === 'Karrierestufe' && Array.isArray(value) && value.length > 0 && typeof value[0] === 'object' && value[0] !== null) {
-                                        value = value[0].display_value;
+                                // Intelligente Normalisierung basierend auf Spaltentyp
+                                if (colMeta && colMeta.type === 'link') {
+                                    let id = null, displayValue = null;
+                                    if (Array.isArray(value) && value.length > 0 && value[0]) {
+                                        id = value[0].row_id;
+                                        displayValue = value[0].display_value;
+                                    } else if (typeof value === 'object' && !Array.isArray(value) && value && value.row_id) {
+                                        id = value.row_id;
+                                        displayValue = value.display_value;
                                     }
+
+                                    if (colName === 'Karrierestufe') {
+                                        value = displayValue;
+                                    } else { // Default für Links wie Werber
+                                        value = id;
+                                    }
+                                } else if (colMeta && colMeta.type === 'single-select') {
+                                    const option = colMeta.data.options.find(opt => opt.id === value);
+                                    value = option ? option.name : value;
+                                } else if (colMeta && (colMeta.type === 'link-formula' || colMeta.type === 'lookup') && Array.isArray(value) && value.length > 0 && typeof value[0] === 'object' && value[0] !== null) {
+                                    value = value[0].display_value;
                                 }
                             }
                             newRow[colName] = value;
@@ -1036,6 +1087,8 @@
         function mapSqlResults(results, tableName) {
             const tableNameLower = tableName.toLowerCase();
             if (!COLUMN_MAPS[tableNameLower]) return results;
+            // KORREKTUR: tableMeta muss hier im Scope definiert werden, um auf die Metadaten zugreifen zu können.
+            const tableMeta = METADATA.tables.find(t => t.name.toLowerCase() === tableNameLower);
             const reversedMap = Object.entries(COLUMN_MAPS[tableNameLower]).reduce((acc, [name, key]) => {
                 acc[key] = name;
                 return acc;
@@ -1045,36 +1098,102 @@
                 const newRow = {};
                 for (const key in row) {
                     const name = reversedMap[key] || key;
-                    newRow[name] = row[key];
+                    let value = row[key];
+
+                    // KORREKTUR: Konvertiert Single-Select-IDs (z.B. für Status) in Text-Werte
+                    // Diese Logik war vorher fehlerhaft, da tableMeta nicht im Scope war.
+                    if (tableMeta) {
+                        const colMeta = tableMeta.columns.find(c => c.key === key);
+                        if (colMeta && colMeta.type === 'single-select' && value !== null) {
+                            const option = colMeta.data.options.find(opt => opt.id === value);
+                            value = option ? option.name : value;
+                        }
+                    }
+                    newRow[name] = value;
                 }
                 return newRow;
             });
         }
 
-
         async function loadAllData() {
+            HIERARCHY_CACHE = null; // Hierarchie-Cache bei jedem Neuladen invalidieren
             setStatus("Lade Datenbank-Zugang...");
             await getSeaTableAccessToken();
             if (!seaTableAccessToken) return false;
 
-            COLUMN_MAPS = await fetchColumnMaps();
-            if (Object.keys(COLUMN_MAPS).length === 0) return false;
+            // Lade Spalten-Mappings aus Cache oder API
+            let cachedColumnMaps = loadFromCache('column_maps', 60);
+            if (cachedColumnMaps) {
+                // console.log("Lade Spalten-Mappings aus dem Cache.");
+                COLUMN_MAPS = cachedColumnMaps.maps;
+                METADATA.tables = cachedColumnMaps.meta;
+            } else {
+                // console.log("Lade Spalten-Mappings von der API.");
+                COLUMN_MAPS = await fetchColumnMaps();
+                if (Object.keys(COLUMN_MAPS).length === 0) return false;
+                saveToCache('column_maps', { maps: COLUMN_MAPS, meta: METADATA.tables });
+            }
 
             setStatus("Lade Stammdaten...");
             const tablesToLoad = ['Mitarbeiter', 'Karriereplan', 'Einarbeitungsschritte'];
             
-            const promises = tablesToLoad.map(async (tableName) => {
-                const data = await seaTableQuery(tableName); 
-                db[tableName.toLowerCase()] = data;
-            });
+            for (const tableName of tablesToLoad) {
+                const key = tableName.toLowerCase();
+                let cachedData = loadFromCache(key, 60); // Cache für 60 Minuten
 
-            await Promise.all(promises);
+                if (cachedData) {
+                    // console.log(`Lade '${tableName}' aus dem Cache.`);
+                    db[key] = cachedData;
+                } else {
+                    // console.log(`Lade '${tableName}' von der API.`);
+                    const apiData = await seaTableQuery(tableName);
+                    if (apiData && apiData.length > 0) {
+                        db[key] = apiData;
+                        saveToCache(key, apiData);
+                    } else {
+                        // Wenn die API-Abfrage (trotz Retries) fehlschlägt, ist das kritisch.
+                        if (tableName === 'Mitarbeiter') {
+                            setStatus(`Kritischer Fehler: Mitarbeiterdaten konnten nicht geladen werden.`, true);
+                            return false; // Stoppe die Initialisierung
+                        }
+                        console.error(`Konnte '${tableName}' nicht von der API laden.`);
+                    }
+                }
+            }
+
             normalizeAllData();
-            console.log("Stammdaten geladen und zwischengespeichert.");
+            // console.log("Stammdaten geladen und zwischengespeichert.");
             return true;
         }
 
         // --- HILFSFUNKTIONEN ---
+        function saveToCache(key, data) {
+            try {
+                const item = {
+                    timestamp: new Date().getTime(),
+                    data: data
+                };
+                localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(item));
+            } catch (e) {
+                console.error("Fehler beim Speichern im Cache", e);
+            }
+        }
+
+        function loadFromCache(key, maxAgeMinutes = 60) {
+            try {
+                const itemStr = localStorage.getItem(CACHE_PREFIX + key);
+                if (!itemStr) return null;
+                const item = JSON.parse(itemStr);
+                const now = new Date().getTime();
+                if (now - item.timestamp > maxAgeMinutes * 60 * 1000) return null;
+                return item.data;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        const delay = ms => new Promise(res => setTimeout(res, ms));
+
         function setStatus(msg, isError = false) {
             dom.statusText.textContent = msg;
             dom.statusMessage.style.color = isError ? 'var(--color-accent-red)' : '';
@@ -1148,118 +1267,205 @@
 
         // --- DATENBERECHNUNGS-LOGIK (UMGESTELLT AUF SQL) ---
 
-        async function fetchDashboardDataWithSql(mitarbeiterId) {
-            const user = findRowById('mitarbeiter', mitarbeiterId);
-            if (!user || !user.Name) return {};
+        /*
+         * HINWEIS ZUM AUFBAU DER 'TERMINE' DATENBANK:
+         * Es gibt 2 wichtige Spalten: `Kategorie` und `Status`.
+         *
+         * KATEGORIEN:
+         * - AT: Analysetermin (erster Schritt)
+         * - BT: Beratungstermin (folgt auf AT)
+         * - ST: Servicetermin (folgt auf BT)
+         * - ET: Einstellungstermin
+         *
+         * STATUS-LOGIK FÜR ZÄHLUNG:
+         *
+         * AT (Analysetermin):
+         * - Gehalten: Status ist 'Gehalten'.
+         * - Ausgemacht: Status ist 'Ausgemacht' ODER 'Gehalten'.
+         *
+         * ET (Einstellungstermin):
+         * - Gehalten: Status ist 'Gehalten', 'Weiterer ET', 'Info Eingeladen', 'Info Bestätigt', 'Info Anwesend', 'Wird Mitarbeiter'.
+         * - Ausgemacht: Status ist 'Ausgemacht' ODER einer der 'Gehalten'-Stati.
+         *   (Wird aktuell nicht separat in den KPIs ausgewiesen, aber die Logik ist so definiert).
+         */
+
+        async function fetchBulkDashboardData(mitarbeiterIds) {
+            if (!mitarbeiterIds || mitarbeiterIds.length === 0) return [];
+
+            const users = mitarbeiterIds.map(id => findRowById('mitarbeiter', id)).filter(Boolean);
+            if (users.length === 0) return [];
 
             const { startDate, endDate } = getMonthlyCycleDates();
             const startDateIso = startDate.toISOString().split('T')[0];
             const endDateIso = endDate.toISOString().split('T')[0];
-            
             const currentMonthName = startDate.toLocaleString('de-DE', { month: 'long' });
             const currentYear = startDate.getFullYear();
-            
-            const safeUserName = escapeSql(user.Name);
-            
-            const planQuery = `SELECT \`EH_Ziel\`, \`ET_Ziel\` FROM \`Monatsplanung\` WHERE \`Mitarbeiter_ID\` = '${safeUserName}' AND \`Monat\` = '${currentMonthName}' AND \`Jahr\` = ${currentYear}`;
-            const ehQuery = `SELECT SUM(\`EH\`) AS \`ehIst\` FROM \`Umsatz\` WHERE \`Mitarbeiter_ID\` = '${safeUserName}' AND \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}'`;
-            const termineQuery = `SELECT \`Kategorie\`, \`Status\` FROM \`Termine\` WHERE \`Mitarbeiter_ID\` = '${safeUserName}' AND \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}'`;
-            const totalEhQuery = `SELECT SUM(\`EH\`) AS \`totalEh\` FROM \`Umsatz\` WHERE \`Mitarbeiter_ID\` = '${safeUserName}'`;
 
+            // Die Abfragen holen jetzt Daten für den gesamten Zeitraum, die Filterung nach Benutzern erfolgt im Code per ID.
+            // Das ist robuster als das Filtern nach Namen in der SQL-Abfrage.
+            const planQuery = `SELECT \`Mitarbeiter_ID\`, \`EH_Ziel\`, \`ET_Ziel\` FROM \`Monatsplanung\` WHERE \`Monat\` = '${currentMonthName}' AND \`Jahr\` = ${currentYear}`;
+            const ehQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`ehIst\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' GROUP BY \`Mitarbeiter_ID\``;
+            const termineQuery = `SELECT \`Mitarbeiter_ID\`, \`Kategorie\`, \`Status\` FROM \`Termine\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}'`;
+            const totalEhQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`totalEh\` FROM \`Umsatz\` GROUP BY \`Mitarbeiter_ID\``;
+
+            // WICHTIG: convertLinks wird auf `false` gesetzt, um die stabilen Row-IDs statt der Namen zu erhalten.
             const [planResultRaw, ehResultRaw, termineResultRaw, totalEhResultRaw] = await Promise.all([
-                seaTableSqlQuery(planQuery),
-                seaTableSqlQuery(ehQuery),
-                seaTableSqlQuery(termineQuery),
-                seaTableSqlQuery(totalEhQuery)
+                seaTableSqlQuery(planQuery, false),
+                seaTableSqlQuery(ehQuery, false),
+                seaTableSqlQuery(termineQuery, false),
+                seaTableSqlQuery(totalEhQuery, false)
             ]);
             
-            const planResult = mapSqlResults(planResultRaw, 'Monatsplanung');
-            const ehResult = mapSqlResults(ehResultRaw, 'Umsatz');
-            const termineResult = mapSqlResults(termineResultRaw, 'Termine');
-            const totalEhResult = mapSqlResults(totalEhResultRaw, 'Umsatz');
+            const planResults = mapSqlResults(planResultRaw, 'Monatsplanung');
+            const ehResults = mapSqlResults(ehResultRaw, 'Umsatz');
+            const termineResults = mapSqlResults(termineResultRaw, 'Termine');
+            const totalEhResults = mapSqlResults(totalEhResultRaw, 'Umsatz');
 
+            const AT_STATUS_GEHALTEN = ['Gehalten'];
+            const AT_STATUS_AUSGEMACHT = ['Ausgemacht', 'Gehalten'];
+            const ET_STATUS_GEHALTEN = ['Gehalten', 'Weiterer ET', 'Info Eingeladen', 'Info Bestätigt', 'Info Anwesend', 'Wird Mitarbeiter'];
 
-            const plan = planResult[0] || {};
-            const ehZiel = plan['EH_Ziel'] || 0;
-            const etZiel = plan['ET_Ziel'] || 0;
-            const ehIst = ehResult[0]?.ehIst || 0;
+            return users.map(user => {
+                // KORREKTUR: Die ID befindet sich in der `row_id` Eigenschaft des ersten Objekts im Array.
+                const plan = planResults.find(p => p.Mitarbeiter_ID && Array.isArray(p.Mitarbeiter_ID) && p.Mitarbeiter_ID[0] && p.Mitarbeiter_ID[0].row_id === user._id) || {};
+                const eh = ehResults.find(e => e.Mitarbeiter_ID && Array.isArray(e.Mitarbeiter_ID) && e.Mitarbeiter_ID[0] && e.Mitarbeiter_ID[0].row_id === user._id) || {};
+                const totalEh = totalEhResults.find(te => te.Mitarbeiter_ID && Array.isArray(te.Mitarbeiter_ID) && te.Mitarbeiter_ID[0] && te.Mitarbeiter_ID[0].row_id === user._id) || {};
+                const userTermine = termineResults.filter(t => t.Mitarbeiter_ID && Array.isArray(t.Mitarbeiter_ID) && t.Mitarbeiter_ID[0] && t.Mitarbeiter_ID[0].row_id === user._id);
 
-            let atIst = 0, atVereinbart = 0, etIst = 0;
-            const etGehaltenStati = ['Weiterer ET', 'Info Eingeladen', 'Info Bestätigt', 'Info Anwesend', 'Wird Mitarbeiter'];
-            termineResult.forEach(t => {
-                if (t.Kategorie === 'ET' && etGehaltenStati.includes(t.Status)) etIst++;
-                if (t.Kategorie === 'AT') {
-                    if (t.Status === 'Gehalten') { atIst++; atVereinbart++; }
-                    else if (t.Status === 'Ausgemacht') atVereinbart++;
+                let atIst = 0, atVereinbart = 0, etIst = 0;
+                userTermine.forEach(t => {
+                    if (t.Kategorie === 'AT') { if (AT_STATUS_GEHALTEN.includes(t.Status)) atIst++; if (AT_STATUS_AUSGEMACHT.includes(t.Status)) atVereinbart++; } 
+                    else if (t.Kategorie === 'ET') { if (ET_STATUS_GEHALTEN.includes(t.Status)) etIst++; }
+                });
+
+                const ehZiel = plan['EH_Ziel'] || 0, etZiel = plan['ET_Ziel'] || 0, ehIst = eh.ehIst || 0;
+                const atSoll = (user.EHproATQuote && ehZiel > 0) ? Math.round(ehZiel / user.EHproATQuote) : 0;
+                const totalCurrentEh = totalEh.totalEh || 0;
+                const anzahlGeworbenerMA = db.mitarbeiter.filter(m => m.Werber === user._id).length;
+                const position = user.Karrierestufe || "";
+
+                return { id: user._id, name: user.Name, position, ehGoal: ehZiel, ehCurrent: ehIst, etGoal: etZiel, etCurrent: etIst, atGoal: atSoll, atCurrent: atIst, atVereinbart, totalCurrentEh, recruitedEmployees: anzahlGeworbenerMA, isTrainee: position.toLowerCase().includes('trainee') || (position.toLowerCase().includes('ga') && position.length < 5), isLeader: !position.toLowerCase().includes('trainee') && (!position.toLowerCase().includes('ga') || position.length >= 5) };
+            });
+        }
+
+        async function fetchDashboardDataWithSql(mitarbeiterId) {
+            const results = await fetchBulkDashboardData([mitarbeiterId]);
+            return results[0] || {};
+        }
+
+        function isUserLeader(user) {
+            if (!user || !user.Karrierestufe) return false;
+            const pos = user.Karrierestufe.toLowerCase();
+            // Eine Führungskraft ist jeder, der kein 'Trainee' in der Karrierestufe hat.
+            return !pos.includes('trainee');
+        }
+
+       function buildHierarchy() {
+            if (HIERARCHY_CACHE) return HIERARCHY_CACHE;
+
+            const hierarchy = {};
+            const nameToIdMap = {};
+            const allUsers = db.mitarbeiter;
+
+            allUsers.forEach(u => {
+                if (u._id) {
+                    hierarchy[u._id] = { user: u, children: [] };
+                    if (u.Name) nameToIdMap[u.Name] = u._id;
                 }
             });
 
-            const atSoll = (user.EHproATQuote && ehZiel > 0) ? Math.round(ehZiel / user.EHproATQuote) : 0;
-            const totalCurrentEh = totalEhResult[0]?.totalEh || 0;
-            const anzahlGeworbenerMA = db.mitarbeiter.filter(m => m.Werberr && m.Werberr[0] === mitarbeiterId).length;
+            allUsers.forEach(u => {
+                const userName = u.Name || 'Unbekannt';
+                const werberValue = u.Werber; // Benutze die normalisierte 'Werber' Eigenschaft
 
-            const position = user.Karrierestufe || "";
-            return {
-                id: user._id, name: user.Name, position, ehGoal: ehZiel, ehCurrent: ehIst, etGoal: etZiel, etCurrent: etIst,
-                atGoal: atSoll, atCurrent: atIst, atVereinbart, totalCurrentEh, recruitedEmployees: anzahlGeworbenerMA,
-                isTrainee: position.toLowerCase().includes('trainee') || (position.toLowerCase().includes('ga') && position.length < 5),
-                isLeader: !position.toLowerCase().includes('trainee') && (!position.toLowerCase().includes('ga') || position.length >= 5),
-            };
+                if (!werberValue) return; // Mitarbeiter hat keinen Werber
+
+                let managerId = null;
+
+                if (hierarchy[werberValue]) { // Fall 1: Werber ist eine gültige _id
+                    managerId = werberValue;
+                } else if (nameToIdMap[werberValue]) { // Fall 2: Werber ist ein Name (als Fallback)
+                    managerId = nameToIdMap[werberValue];
+                }
+
+                if (managerId && hierarchy[managerId]) {
+                    hierarchy[managerId].children.push(u._id);
+                }
+            });
+
+            HIERARCHY_CACHE = hierarchy;
+            return hierarchy;
         }
 
-        function getSubordinates(leaderId, type) {
-            const allUsers = db.mitarbeiter;
+       function getSubordinates(leaderId, type) { // 'gruppe' or 'struktur'
             const leader = findRowById('mitarbeiter', leaderId);
             if (!leader) return [];
 
-            const hierarchy = {};
-            allUsers.forEach(u => { hierarchy[u._id] = { user: u, children: [] }; });
-            allUsers.forEach(u => {
-                const fkId = u.FK ? u.FK[0] : null;
-                if (fkId && hierarchy[fkId]) hierarchy[fkId].children.push(u._id);
-            });
-            
+            const hierarchy = buildHierarchy();
             const subordinates = [];
-            const queue = [...(hierarchy[leaderId]?.children || [])];
-            const visited = new Set(queue);
-            
-            while (queue.length > 0) {
-                const currentId = queue.shift();
-                const current = hierarchy[currentId];
-                if (!current) continue;
-                
-                const pos = current.user.Karrierestufe || "";
-                const isCurrentLeader = !pos.toLowerCase().includes('trainee') && !pos.toLowerCase().includes('ga ');
 
-                if (type === 'gruppe') {
-                    if (!isCurrentLeader) {
-                        subordinates.push(current.user);
-                        current.children.forEach(childId => { if (!visited.has(childId)) { queue.push(childId); visited.add(childId); }});
+            if (type === 'gruppe') {
+                const queue = [...(hierarchy[leaderId]?.children || [])];
+                const visited = new Set(queue);
+                while (queue.length > 0) {
+                    const currentId = queue.shift();
+                    const user = findRowById('mitarbeiter', currentId);
+                    if (!user) continue;
+
+                    if (!isUserLeader(user)) { // Ist ein Trainee
+                        subordinates.push(user);
+                        const node = hierarchy[currentId];
+                        if (node) {
+                            node.children.forEach(childId => {
+                                if (!visited.has(childId)) {
+                                    queue.push(childId);
+                                    visited.add(childId);
+                                }
+                            });
+                        }
                     }
-                } else if (type === 'struktur') {
-                    if (isCurrentLeader) subordinates.push(current.user);
-                    current.children.forEach(childId => { if (!visited.has(childId)) { queue.push(childId); visited.add(childId); }});
+                    // Wenn es eine Führungskraft ist, wird der Pfad hier nicht weiter verfolgt.
+                }
+            } else if (type === 'struktur') {
+                const leaderHierarchyLevel = db.karriereplan.find(k => k.Stufe === leader.Karrierestufe)?.Hierarchie || 99;
+                const queue = [...(hierarchy[leaderId]?.children || [])];
+                const visited = new Set(queue);
+
+                while (queue.length > 0) {
+                    const currentId = queue.shift();
+                    const user = findRowById('mitarbeiter', currentId);
+                    if (!user) continue;
+
+                    // Nur Führungskräfte für die Strukturansicht berücksichtigen
+                    if (isUserLeader(user)) {
+                        const userHierarchyLevel = db.karriereplan.find(k => k.Stufe === user.Karrierestufe)?.Hierarchie || 0;
+
+                        // Füge den Benutzer hinzu, wenn seine Hierarchiestufe strikt niedriger ist als die des Betrachters.
+                        // Dies behandelt den "Gleichstand"-Fall (z.B. GST unter GST).
+                        if (userHierarchyLevel < leaderHierarchyLevel) {
+                            subordinates.push(user);
+                        }
+                    }
+                    
+                    // Immer die gesamte Struktur durchlaufen, um alle relevanten Führungskräfte in der Downline zu finden,
+                    // auch wenn der aktuelle Benutzer nicht hinzugefügt wurde.
+                    const node = hierarchy[currentId];
+                    if (node) {
+                        node.children.forEach(childId => {
+                            if (!visited.has(childId)) {
+                                queue.push(childId);
+                                visited.add(childId);
+                            }
+                        });
+                    }
                 }
             }
 
-            if (type === 'struktur') {
-                const leaderHierarchyLevel = db.karriereplan.find(k => k.Stufe === leader.Karrierestufe)?.Hierarchie || 99;
-                return subordinates.filter(sub => {
-                    const subHierarchyLevel = db.karriereplan.find(k => k.Stufe === sub.Karrierestufe)?.Hierarchie || 0;
-                    return subHierarchyLevel < leaderHierarchyLevel;
-                });
-            }
             return subordinates;
         }
         
         function getAllSubordinatesRecursive(leaderId) {
-            const hierarchy = {};
-            db.mitarbeiter.forEach(u => { hierarchy[u._id] = { user: u, children: [] }; });
-            db.mitarbeiter.forEach(u => {
-                const fkId = u.FK ? u.FK[0] : null;
-                if (fkId && hierarchy[fkId]) hierarchy[fkId].children.push(u._id);
-            });
-            
+            const hierarchy = buildHierarchy();
             const subordinates = [];
             const queue = [...(hierarchy[leaderId]?.children || [])];
             const visited = new Set(queue);
@@ -1275,65 +1481,40 @@
             return subordinates;
         }
 
-        async function calculateGroupOrStructureData(leaderId, type = 'gruppe') {
+        function calculateGroupOrStructureData(leaderId, type = 'gruppe', fullDataStore) {
             const leaderUser = findRowById('mitarbeiter', leaderId);
             if (!leaderUser) return { members: [] };
 
-            // [LOGIK KORRIGIERT]
             // 1. Definiere, welche Mitarbeiter angezeigt werden sollen
             const membersForDisplay = getSubordinates(leaderId, type);
+            const memberIdsForDisplay = new Set(membersForDisplay.map(m => m._id));
 
-            // 2. Definiere, wessen Daten für die Gesamtberechnung herangezogen werden
-            const allMembersForCalculation = [leaderUser, ...getAllSubordinatesRecursive(leaderId)];
-            const memberNamesForCalc = allMembersForCalculation.map(m => escapeSql(m.Name)).filter(Boolean);
-
-            if (memberNamesForCalc.length === 0) {
-                const leaderData = await fetchDashboardDataWithSql(leaderId);
-                return { ...leaderData, members: [] }; // Nur Leader, keine untergeordneten Mitglieder
+            // 2. Definiere, wessen Daten für die Gesamtberechnung herangezogen werden, basierend auf dem Typ
+            let membersForCalculation = [];
+            if (type === 'gruppe') {
+                // Für 'Gruppe': Die Führungskraft selbst und alle unterstellten Trainees,
+                // bis zur nächsten Führungskraft in der Hierarchie.
+                membersForCalculation = [leaderUser, ...getSubordinates(leaderId, 'gruppe')];
+            } else { // type === 'struktur'
+                // Für 'Struktur': Die Führungskraft selbst und ALLE Untergebenen (Führungskräfte und Trainees)
+                membersForCalculation = [leaderUser, ...getAllSubordinatesRecursive(leaderId)];
             }
-            const namesInClause = memberNamesForCalc.map(name => `'${name}'`).join(',');
+            const memberIdsForCalc = new Set(membersForCalculation.map(m => m._id));
 
-            // 3. Führe die gebündelten SQL-Abfragen für die Gesamtdaten aus
-            const { startDate, endDate } = getMonthlyCycleDates();
-            const startDateIso = startDate.toISOString().split('T')[0];
-            const endDateIso = endDate.toISOString().split('T')[0];
-            const currentMonthName = startDate.toLocaleString('de-DE', { month: 'long' });
-            const currentYear = startDate.getFullYear();
+            // 3. Filtere den vorab geladenen Datenspeicher
+            const dataForCalc = fullDataStore.filter(d => memberIdsForCalc.has(d.id));
 
-            const planQuery = `SELECT SUM(\`EH_Ziel\`) as ehGoal, SUM(\`ET_Ziel\`) as etGoal FROM \`Monatsplanung\` WHERE \`Mitarbeiter_ID\` IN (${namesInClause}) AND \`Monat\` = '${currentMonthName}' AND \`Jahr\` = ${currentYear}`;
-            const ehQuery = `SELECT SUM(\`EH\`) AS ehCurrent FROM \`Umsatz\` WHERE \`Mitarbeiter_ID\` IN (${namesInClause}) AND \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}'`;
-            const termineQuery = `SELECT \`Kategorie\`, \`Status\` FROM \`Termine\` WHERE \`Mitarbeiter_ID\` IN (${namesInClause}) AND \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}'`;
-            
-            // 4. Hole die individuellen Daten nur für die anzuzeigenden Mitglieder
-            const memberDataPromises = membersForDisplay.map(m => fetchDashboardDataWithSql(m._id));
+            // 4. Berechne die Summen aus den gefilterten Daten
+            const totalEhGoal = dataForCalc.reduce((sum, d) => sum + (d.ehGoal || 0), 0);
+            const totalEhCurrent = dataForCalc.reduce((sum, d) => sum + (d.ehCurrent || 0), 0);
+            const totalEtGoal = dataForCalc.reduce((sum, d) => sum + (d.etGoal || 0), 0);
+            const totalEtCurrent = dataForCalc.reduce((sum, d) => sum + (d.etCurrent || 0), 0);
+            const totalAtGoal = dataForCalc.reduce((sum, d) => sum + (d.atGoal || 0), 0);
+            const totalAtCurrent = dataForCalc.reduce((sum, d) => sum + (d.atCurrent || 0), 0);
+            const totalAtVereinbart = dataForCalc.reduce((sum, d) => sum + (d.atVereinbart || 0), 0);
 
-            const [planResultRaw, ehResultRaw, termineResultRaw, memberData] = await Promise.all([
-                seaTableSqlQuery(planQuery),
-                seaTableSqlQuery(ehQuery),
-                seaTableSqlQuery(termineQuery),
-                Promise.all(memberDataPromises)
-            ]);
-            
-            const totalEhGoal = planResultRaw[0]?.ehGoal || 0;
-            const totalEtGoal = planResultRaw[0]?.etGoal || 0;
-            const totalEhCurrent = ehResultRaw[0]?.ehCurrent || 0;
-
-            let totalAtCurrent = 0, totalAtVereinbart = 0, totalEtCurrent = 0;
-            const etGehaltenStati = ['Weiterer ET', 'Info Eingeladen', 'Info Bestätigt', 'Info Anwesend', 'Wird Mitarbeiter'];
-            const termineResult = mapSqlResults(termineResultRaw, 'Termine');
-            termineResult.forEach(t => {
-                if (t.Kategorie === 'ET' && etGehaltenStati.includes(t.Status)) totalEtCurrent++;
-                if (t.Kategorie === 'AT') {
-                    if (t.Status === 'Gehalten') { totalAtCurrent++; totalAtVereinbart++; }
-                    else if (t.Status === 'Ausgemacht') totalAtVereinbart++;
-                }
-            });
-            
-            const totalAtGoal = allMembersForCalculation.reduce((sum, m) => {
-                const plan = db.monatsplanung.find(p => p.Mitarbeiter_ID && p.Mitarbeiter_ID[0] === m._id && p.Monat === currentMonthName && p.Jahr === currentYear);
-                const ehZiel = plan ? (plan.EH_Ziel || 0) : 0;
-                return sum + ((m.EHproATQuote && ehZiel > 0) ? Math.round(ehZiel / m.EHproATQuote) : 0);
-            }, 0);
+            // 5. Hole die Daten für die anzuzeigenden Karten aus dem Datenspeicher
+            const memberData = fullDataStore.filter(d => memberIdsForDisplay.has(d.id));
 
             return {
                 ehGoal: totalEhGoal,
@@ -1343,27 +1524,27 @@
                 atGoal: totalAtGoal,
                 atCurrent: totalAtCurrent,
                 atVereinbart: totalAtVereinbart,
-                members: memberData // Nur die anzuzeigenden Mitglieder
+                members: memberData
             };
         }
 
         async function calculateGesamtansichtData() {
             const führungskräfte = db.mitarbeiter.filter(m => m.Karrierestufe && !m.Karrierestufe.toLowerCase().includes('trainee'));
             const geschäftsstelleRows = db.mitarbeiter.filter(m => m.Name && m.Name.toLowerCase().startsWith('geschäftsstelle'));
-
-            let totalData = { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atCurrent: 0, atVereinbart: 0, members: [] };
-
-            const gsData = await Promise.all(geschäftsstelleRows.map(gsRow => fetchDashboardDataWithSql(gsRow._id)));
-            gsData.forEach(data => {
-                Object.keys(totalData).forEach(key => { if (typeof totalData[key] === 'number') totalData[key] += data[key] || 0; });
+            const allMemberIds = new Set([...führungskräfte.map(fk => fk._id), ...geschäftsstelleRows.map(gs => gs._id)]);
+            const allMemberData = await fetchBulkDashboardData(Array.from(allMemberIds));
+            const totalData = { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atCurrent: 0, atVereinbart: 0, members: [] };
+            geschäftsstelleRows.forEach(gsRow => {
+                const gsData = allMemberData.find(d => d.id === gsRow._id);
+                if (gsData) { Object.keys(totalData).forEach(key => { if (typeof totalData[key] === 'number') totalData[key] += gsData[key] || 0; }); }
             });
-
-            totalData.members = await Promise.all(führungskräfte.map(async leader => {
+            totalData.members = führungskräfte.map(leader => {
                 const gsName = `Geschäftsstelle ${leader.Name}`;
                 const gsRow = geschäftsstelleRows.find(row => row.Name === gsName);
-                const displayData = await (gsRow ? fetchDashboardDataWithSql(gsRow._id) : fetchDashboardDataWithSql(leader._id));
-                return { ...displayData, leaderName: leader.Name, originalPosition: leader.Karrierestufe };
-            }));
+                const targetId = gsRow ? gsRow._id : leader._id;
+                const displayData = allMemberData.find(d => d.id === targetId);
+                return { ...(displayData || {}), leaderName: leader.Name, originalPosition: leader.Karrierestufe };
+            });
             
             return totalData;
         }
@@ -1469,11 +1650,6 @@
             }
             dom.leadershipViewTitle.textContent = title;
             
-            console.group(`[MITARBEITER-ANZEIGE] für ${title}`);
-            console.log(`Anzuzeigende Mitarbeiter (${data.members.length}):`);
-            data.members.forEach(m => console.log(`- ${m.name} (${m.position})`));
-            console.groupEnd();
-            
             dom.leadershipViewCount.textContent = `Zeige ${data.members.length} Mitarbeiter`;
             renderTeamMemberCards(data.members);
         }
@@ -1572,26 +1748,6 @@
 
         // --- MAIN LOGIC ---
         
-        async function logAllUserDataForDebugging(user) {
-            if (!user || !user.Name) return;
-            const safeUserName = escapeSql(user.Name);
-            console.group(`[DATEN-LOG] Abgerufene Rohdaten für: ${user.Name}`);
-            
-            const [umsatz, termine, planung, einarbeitung] = await Promise.all([
-                seaTableSqlQuery(`SELECT * FROM \`Umsatz\` WHERE \`Mitarbeiter_ID\` = '${safeUserName}'`),
-                seaTableSqlQuery(`SELECT * FROM \`Termine\` WHERE \`Mitarbeiter_ID\` = '${safeUserName}'`),
-                seaTableSqlQuery(`SELECT * FROM \`Monatsplanung\` WHERE \`Mitarbeiter_ID\` = '${safeUserName}'`),
-                seaTableSqlQuery(`SELECT * FROM \`Einarbeitung\` WHERE \`Mitarbeiter_ID\` = '${safeUserName}'`)
-            ]);
-
-            console.log("Umsatz-Einträge:", umsatz);
-            console.log("Termin-Einträge:", termine);
-            console.log("Monatsplanung-Einträge:", planung);
-            console.log("Einarbeitung-Einträge:", einarbeitung);
-
-            console.groupEnd();
-        }
-
         async function fetchAndRenderDashboard(mitarbeiterId) {
             window.scrollTo(0, 0);
             setStatus('Lade & verarbeite Daten...');
@@ -1603,27 +1759,26 @@
                 return;
             }
             
-            await logAllUserDataForDebugging(user);
-            await checkAndApplyAutomaticPromotion(mitarbeiterId);
+            // --- OPTIMIERTER DATENABRUF ---
+            // 1. Hole alle relevanten Mitarbeiter-IDs (sich selbst + gesamte Downline)
+            const allDownline = getAllSubordinatesRecursive(mitarbeiterId);
+            const allRelevantIds = [mitarbeiterId, ...allDownline.map(u => u._id)];
+            // 2. Führe EINEN gebündelten Datenabruf für alle relevanten Mitarbeiter aus
+            const fullDataStore = await fetchBulkDashboardData(allRelevantIds);
+            // --- ENDE OPTIMIERTER DATENABRUF ---
+
+            personalData = fullDataStore.find(d => d.id === mitarbeiterId) || {};
+            await checkAndApplyAutomaticPromotion(mitarbeiterId, personalData.totalCurrentEh);
             
             loggedInUserData = user;
             dom.welcomeHeader.textContent = `Willkommen, ${user.Name}`;
             dom.userPosition.textContent = user.Karrierestufe;
 
-            personalData = await fetchDashboardDataWithSql(mitarbeiterId);
-            
             const position = user.Karrierestufe || "";
             const isLeader = !position.toLowerCase().includes('trainee');
-            dom.employeeView.classList.toggle('hidden', isLeader);
-            dom.leadershipView.classList.toggle('hidden', !isLeader);
-            dom.planningViewToggle.classList.toggle('hidden', !isLeader);
-            dom.einarbeitungBanner.classList.toggle('hidden', isLeader);
-
             if (isLeader) {
-                [teamData, structureData] = await Promise.all([
-                    calculateGroupOrStructureData(mitarbeiterId, 'gruppe'),
-                    calculateGroupOrStructureData(mitarbeiterId, 'struktur')
-                ]);
+                teamData = calculateGroupOrStructureData(mitarbeiterId, 'gruppe', fullDataStore);
+                structureData = calculateGroupOrStructureData(mitarbeiterId, 'struktur', fullDataStore);
                 
                 currentPlanningView = 'team';
                 dom.teamViewBtn.classList.add('active');
@@ -1638,6 +1793,11 @@
                 updateMonthlyPlanningView(personalData);
                 updateEmployeeCareerView();
             }
+
+            dom.employeeView.classList.toggle('hidden', isLeader);
+            dom.leadershipView.classList.toggle('hidden', !isLeader);
+            dom.planningViewToggle.classList.toggle('hidden', !isLeader);
+            dom.einarbeitungBanner.classList.toggle('hidden', isLeader);
             
             let nextInfoDateEl = document.getElementById('next-info-date');
             if (!nextInfoDateEl) {
@@ -1968,7 +2128,13 @@
             // --- Menu Actions ---
             dom.logoutBtn.addEventListener('click', () => {
                 closeSettingsMenu();
-                localStorage.removeItem('loggedInUserId');
+                localStorage.clear(); // Löscht alles, inkl. Cache und Login-Status
+                location.reload();
+            });
+            
+            dom.clearCacheBtn.addEventListener('click', () => {
+                closeSettingsMenu();
+                localStorage.clear(); // Löscht alles, inkl. Cache und Login-Status
                 location.reload();
             });
             
@@ -2122,11 +2288,19 @@
             updateBackButtonVisibility();
         }
 
+        let isInitializing = false;
         async function initializeDashboard() {
+            if (isInitializing) {
+                console.warn("Initialisierung bereits im Gange. Überspringe.");
+                return;
+            }
+            isInitializing = true;
+
             const dataLoaded = await loadAllData();
 
             if (!dataLoaded) {
                 setStatus("Initialisierung fehlgeschlagen. Bitte Seite neu laden.", true);
+                isInitializing = false;
                 return;
             }
             
@@ -2144,7 +2318,7 @@
                 viewHistory = [loggedInUserId];
                 document.getElementById('user-select-screen').classList.add('hidden');
                 document.getElementById('dashboard-content').classList.remove('hidden');
-                fetchAndRenderDashboard(loggedInUserId);
+                await fetchAndRenderDashboard(loggedInUserId);
             } else {
                 document.getElementById('user-select-screen').classList.remove('hidden');
                 document.getElementById('user-select-screen').classList.add('flex');
@@ -2152,6 +2326,7 @@
             }
             
             setupEventListeners();
+            isInitializing = false;
         }
         
         function getPrognosis(current, goal, totalDays, daysPassed) {
@@ -2185,29 +2360,28 @@
         async function calculateTotalEarnings(leaderId, startDate, endDate) {
             const leader = findRowById('mitarbeiter', leaderId);
             if (!leader || !leader.Name) return 0;
-
-            const leaderRate = getVerdienstForPosition(leader.Karrierestufe);
             
             const startDateIso = startDate.toISOString().split('T')[0];
             const endDateIso = endDate.toISOString().split('T')[0];
 
-            let totalEarnings = 0;
             const allSubordinates = getAllSubordinatesRecursive(leaderId);
-            const structureIds = [leaderId, ...allSubordinates.map(m => m._id)];
-            
-            const turnoverPromises = structureIds.map(id => {
-                const member = findRowById('mitarbeiter', id);
-                if (!member || !member.Name) return Promise.resolve({turnover: 0, member});
-                const safeMemberName = escapeSql(member.Name);
-                const turnoverQuery = `SELECT SUM(\`EH\`) AS \`turnover\` FROM \`Umsatz\` WHERE \`Mitarbeiter_ID\` = '${safeMemberName}' AND \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}'`;
-                return seaTableSqlQuery(turnoverQuery).then(result => ({ turnover: result[0]?.turnover || 0, member }));
-            });
+            const structureMembers = [leader, ...allSubordinates];
 
-            const structureTurnovers = await Promise.all(turnoverPromises);
+            // Abfrage holt alle Umsätze im Zeitraum; Filterung per ID im Code.
+            const turnoverQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`turnover\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' GROUP BY \`Mitarbeiter_ID\``;
             
-            const personalTurnoverData = structureTurnovers.find(s => s.member._id === leaderId);
-            totalEarnings += (personalTurnoverData?.turnover || 0) * leaderRate;
+            // Abfrage mit `convertLinks = false` für stabile IDs.
+            const turnoverResultsRaw = await seaTableSqlQuery(turnoverQuery, false);
+            const structureTurnovers = mapSqlResults(turnoverResultsRaw, 'Umsatz');
+            
+            const getTurnoverForMember = (memberId) => {
+                // KORREKTUR: Die ID befindet sich in der `row_id` Eigenschaft des ersten Objekts im Array.
+                const result = structureTurnovers.find(s => s.Mitarbeiter_ID && Array.isArray(s.Mitarbeiter_ID) && s.Mitarbeiter_ID[0] && s.Mitarbeiter_ID[0].row_id === memberId);
+                return result?.turnover || 0;
+            };
 
+            const leaderRate = getVerdienstForPosition(leader.Karrierestufe);
+            let totalEarnings = getTurnoverForMember(leader._id) * leaderRate;
             const directSubordinates = db.mitarbeiter.filter(m => m.Werber === leaderId);
 
             directSubordinates.forEach(sub => {
@@ -2215,10 +2389,7 @@
                 const differentialRate = leaderRate - subRate;
                 if (differentialRate > 0) {
                     const subAndHisTeam = [sub, ...getAllSubordinatesRecursive(sub._id)];
-                    const subStructureTurnover = subAndHisTeam.reduce((total, currentMember) => {
-                        const turnoverData = structureTurnovers.find(s => s.member._id === currentMember._id);
-                        return total + (turnoverData?.turnover || 0);
-                    }, 0);
+                    const subStructureTurnover = subAndHisTeam.reduce((total, currentMember) => total + getTurnoverForMember(currentMember._id), 0);
                     totalEarnings += subStructureTurnover * differentialRate;
                 }
             });
@@ -2226,16 +2397,10 @@
             return totalEarnings;
         }
 
-        async function checkAndApplyAutomaticPromotion(mitarbeiterId) {
+        async function checkAndApplyAutomaticPromotion(mitarbeiterId, totalEh) {
             const user = findRowById('mitarbeiter', mitarbeiterId);
-            if (!user || !user.Karrierestufe || !user.Name) return;
-            
-            const safeUserName = escapeSql(user.Name);
-            const totalEhQuery = `SELECT SUM(\`EH\`) AS \`totalEh\` FROM \`Umsatz\` WHERE \`Mitarbeiter_ID\` = '${safeUserName}'`;
-            const totalEhResultRaw = await seaTableSqlQuery(totalEhQuery);
-            const totalEhResult = mapSqlResults(totalEhResultRaw, "Umsatz");
-            const totalEh = totalEhResult[0]?.totalEh || 0;
-            const recruitedEmployees = db.mitarbeiter.filter(m => m.Werberr && m.Werberr[0] === mitarbeiterId).length;
+            if (!user || !user.Karrierestufe) return;
+            const recruitedEmployees = db.mitarbeiter.filter(m => m.Werber === mitarbeiterId).length;
 
             const currentStage = db.karriereplan.find(p => p.Stufe === user.Karrierestufe);
             if (!currentStage) return;
@@ -2382,4 +2547,3 @@
     </script>
 </body>
 </html>
-
