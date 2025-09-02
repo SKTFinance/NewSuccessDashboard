@@ -4,7 +4,7 @@
 
     <!-- Filter und Aktionen -->
     <div class="bg-skt-grey-light p-4 rounded-xl mb-6 border border-gray-200">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <div class="md:col-span-2">
                 <label for="appointments-scope-filter" class="block text-sm font-medium text-gray-700 mb-1">Anzeigen für:</label>
                 <div class="flex space-x-2">
@@ -18,6 +18,12 @@
                         <!-- Mitarbeiter werden hier per JS geladen -->
                     </select>
                 </div>
+            </div>
+            <div>
+                <label for="appointments-month-filter" class="block text-sm font-medium text-gray-700 mb-1">Monat:</label>
+                <select id="appointments-month-filter" class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                    <!-- Monate werden hier per JS geladen -->
+                </select>
             </div>
             <div class="flex justify-end">
                 <button id="add-appointment-btn" class="w-full md:w-auto bg-skt-green-accent text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-green-700 transition-colors flex items-center justify-center">
@@ -88,6 +94,7 @@
             listContainer: document.getElementById('appointments-list-container'),
             scopeFilter: document.getElementById('appointments-scope-filter'),
             userFilter: document.getElementById('appointments-user-filter'),
+            monthFilter: document.getElementById('appointments-month-filter'),
             umsatzTab: document.getElementById('umsatz-tab'),
             recruitingTab: document.getElementById('recruiting-tab'),
             modal: document.getElementById('appointment-modal'),
@@ -123,6 +130,13 @@
                 this.userFilter.innerHTML = '';
                 this.downline.forEach(member => {
                     this.userFilter.add(new Option(member.Name, member._id));
+                });
+
+                // Populate month filter
+                const cycles = this.getSalesMonthCycles();
+                this.monthFilter.innerHTML = '';
+                cycles.forEach(cycle => {
+                    this.monthFilter.add(new Option(cycle.display, cycle.value));
                 });
 
                 const terminTableMeta = APP.METADATA.tables?.find(t => t.name === 'Termine');
@@ -163,8 +177,12 @@
                     return;
                 }
 
+                const { startDate, endDate } = JSON.parse(this.monthFilter.value);
+                const startDateIso = new Date(startDate).toISOString().split('T')[0];
+                const endDateIso = new Date(endDate).toISOString().split('T')[0];
+
                 const namesInClause = userNames.map(name => `'${APP.escapeSql(name)}'`).join(',');
-                const query = `SELECT _id, Datum, Kategorie, Status, Mitarbeiter_ID FROM \`Termine\` WHERE \`Mitarbeiter_ID\` IN (${namesInClause}) ORDER BY \`Datum\` DESC`;
+                const query = `SELECT _id, Datum, Kategorie, Status, Mitarbeiter_ID FROM \`Termine\` WHERE \`Mitarbeiter_ID\` IN (${namesInClause}) AND \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' ORDER BY \`Datum\` DESC`;
                 const appointmentsRaw = await APP.seaTableSqlQuery(query, true);
                 this.allAppointments = APP.mapSqlResults(appointmentsRaw, 'Termine');
                 this.render();
