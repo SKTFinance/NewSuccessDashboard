@@ -4,7 +4,7 @@
 
     <!-- Filter und Aktionen -->
     <div class="bg-skt-grey-light p-4 rounded-xl mb-6 border border-gray-200">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
             <div class="md:col-span-2">
                 <label for="appointments-scope-filter" class="block text-sm font-medium text-gray-700 mb-1">Anzeigen für:</label>
                 <div class="flex space-x-2">
@@ -26,7 +26,7 @@
                 </select>
             </div>
             <div class="flex justify-end">
-                <button id="add-appointment-btn" class="w-full md:w-auto bg-skt-green-accent text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-green-700 transition-colors flex items-center justify-center">
+                <button id="add-appointment-btn" class="w-full lg:w-auto bg-skt-green-accent text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-green-700 transition-colors flex items-center justify-center">
                     <i class="fas fa-plus mr-2"></i>Neuer Termin
                 </button>
             </div>
@@ -77,7 +77,7 @@
             </div>
             <div class="pt-4 flex justify-end space-x-3">
                 <button type="button" id="cancel-appointment-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button>
-                <button type="submit" id="save-appointment-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors flex items-center justify-center" style="min-width: 110px;">
+                <button type="submit" id="save-appointment-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors flex items-center justify-center" style="min-width: 110px; min-height: 42px;">
                     <span id="save-btn-text">Speichern</span>
                     <div class="loader-small hidden"></div>
                 </button>
@@ -118,7 +118,7 @@
                     this.initialized = true;
                 }
 
-                this.fetchAndRender();
+                await this.fetchAndRender();
             },
 
             populateFilters() {
@@ -140,7 +140,7 @@
                 });
 
                 const terminTableMeta = APP.METADATA.tables?.find(t => t.name === 'Termine');
-                if (terminTableMeta && APP.COLUMN_MAPS.termine) {
+                if (terminTableMeta && APP.COLUMN_MAPS?.termine) {
                     const categoryCol = terminTableMeta.columns.find(c => c.key === APP.COLUMN_MAPS.termine.Kategorie);
                     const statusCol = terminTableMeta.columns.find(c => c.key === APP.COLUMN_MAPS.termine.Status);
                     
@@ -162,29 +162,54 @@
 
             async fetchAndRender() {
                 this.listContainer.innerHTML = '<div class="loader mx-auto"></div>';
-                let userIds = [];
+
+                const cycleValue = this.monthFilter.value;
+                if (!cycleValue) {
+                    console.warn("Monatsfilter ist noch nicht bereit. Erneuter Versuch in 100ms.");
+                    setTimeout(() => this.fetchAndRender(), 100);
+                    return;
+                }
+                const { startDate, endDate } = JSON.parse(cycleValue);
+                const startDateIso = new Date(startDate).toISOString().split('T')[0];
+                const endDateIso = new Date(endDate).toISOString().split('T')[0];
+
+                let userIds = new Set();
                 switch (this.currentScope) {
-                    case 'personal': userIds = [this.currentUserId]; break;
-                    case 'group': userIds = [this.currentUserId, ...APP.getSubordinates(this.currentUserId, 'gruppe').map(u => u._id)]; break;
-                    case 'structure': userIds = [this.currentUserId, ...this.downline.map(u => u._id)]; break;
-                    case 'single': userIds = [this.userFilter.value]; break;
+                    case 'personal': userIds.add(this.currentUserId); break;
+                    case 'group':
+                        userIds.add(this.currentUserId);
+                        APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
+                        break;
+                    case 'structure':
+                        userIds.add(this.currentUserId);
+                        this.downline.forEach(u => userIds.add(u._id));
+                        break;
+                    case 'single':
+                        if (this.userFilter.value) userIds.add(this.userFilter.value);
+                        break;
                 }
 
-                const userNames = userIds.map(id => APP.findRowById('mitarbeiter', id)?.Name).filter(Boolean);
-                if (userNames.length === 0) {
+                if (userIds.size === 0) {
                     this.allAppointments = [];
                     this.render();
                     return;
                 }
 
-                const { startDate, endDate } = JSON.parse(this.monthFilter.value);
-                const startDateIso = new Date(startDate).toISOString().split('T')[0];
-                const endDateIso = new Date(endDate).toISOString().split('T')[0];
+                const query = `SELECT _id, Datum, Kategorie, Status, Mitarbeiter_ID FROM \`Termine\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' ORDER BY \`Datum\` DESC`;
+                const appointmentsRaw = await APP.seaTableSqlQuery(query, false);
+                const allAppointmentsInPeriod = APP.mapSqlResults(appointmentsRaw, 'Termine');
 
-                const namesInClause = userNames.map(name => `'${APP.escapeSql(name)}'`).join(',');
-                const query = `SELECT _id, Datum, Kategorie, Status, Mitarbeiter_ID FROM \`Termine\` WHERE \`Mitarbeiter_ID\` IN (${namesInClause}) AND \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' ORDER BY \`Datum\` DESC`;
-                const appointmentsRaw = await APP.seaTableSqlQuery(query, true);
-                this.allAppointments = APP.mapSqlResults(appointmentsRaw, 'Termine');
+                this.allAppointments = allAppointmentsInPeriod.filter(termin => {
+                    const terminUserId = termin.Mitarbeiter_ID?.[0]?.row_id;
+                    return terminUserId && userIds.has(terminUserId);
+                });
+
+                this.allAppointments.forEach(termin => {
+                    const terminUserId = termin.Mitarbeiter_ID?.[0]?.row_id;
+                    const user = APP.findRowById('mitarbeiter', terminUserId);
+                    termin.Mitarbeiter_ID_Name = user ? user.Name : 'Unbekannt';
+                });
+
                 this.render();
             },
 
@@ -221,7 +246,7 @@
                             <div><p class="text-xs text-gray-500">Datum</p><p class="font-bold text-skt-blue">${new Date(termin.Datum).toLocaleDateString('de-DE')}</p></div>
                             <div><p class="text-xs text-gray-500">Kategorie</p><p class="font-semibold text-skt-blue-light">${termin.Kategorie || 'N/A'}</p></div>
                             <div><p class="text-xs text-gray-500">Status</p><p class="font-semibold">${termin.Status || 'N/A'}</p></div>
-                            <div><p class="text-xs text-gray-500">Mitarbeiter</p><p class="font-semibold truncate" title="${termin.Mitarbeiter_ID || ''}">${termin.Mitarbeiter_ID || 'N/A'}</p></div>
+                            <div><p class="text-xs text-gray-500">Mitarbeiter</p><p class="font-semibold truncate" title="${termin.Mitarbeiter_ID_Name || ''}">${termin.Mitarbeiter_ID_Name || 'N/A'}</p></div>
                         </div>
                         <div class="ml-4 flex-shrink-0">
                             <button data-id="${termin._id}" class="edit-appointment-btn bg-skt-blue-light text-white h-10 w-10 rounded-full hover:bg-skt-blue-main flex items-center justify-center" title="Bearbeiten">
@@ -241,8 +266,8 @@
                 const userSelect = this.modal.querySelector('#appointment-user');
 
                 userSelect.innerHTML = '';
-                const allRelevantUsers = [APP.findRowById('mitarbeiter', this.currentUserId), ...this.downline].filter(Boolean);
-                allRelevantUsers.forEach(u => userSelect.add(new Option(u.Name, u.Name)));
+                const allRelevantUsers = [APP.loggedInUserData, ...this.downline].filter(Boolean);
+                allRelevantUsers.forEach(u => userSelect.add(new Option(u.Name, u._id)));
 
                 if (termin) { // Edit mode
                     title.textContent = 'Termin bearbeiten';
@@ -250,11 +275,12 @@
                     document.getElementById('appointment-date').value = termin.Datum.split(' ')[0];
                     document.getElementById('appointment-category').value = termin.Kategorie;
                     document.getElementById('appointment-status').value = termin.Status;
-                    userSelect.value = termin.Mitarbeiter_ID;
+                    const terminUserId = termin.Mitarbeiter_ID?.[0]?.row_id;
+                    userSelect.value = terminUserId;
                 } else { // Add mode
                     title.textContent = 'Termin anlegen';
                     idInput.value = '';
-                    userSelect.value = APP.findRowById('mitarbeiter', this.currentUserId).Name;
+                    userSelect.value = this.currentUserId;
                 }
                 this.modal.classList.remove('hidden');
                 this.modal.classList.add('flex');
@@ -269,15 +295,16 @@
                 e.preventDefault();
                 const saveBtn = document.getElementById('save-appointment-btn');
                 saveBtn.disabled = true;
-                saveBtn.querySelector('#save-btn-text').classList.add('invisible');
+                saveBtn.querySelector('#save-btn-text').classList.add('hidden');
                 saveBtn.querySelector('.loader-small').classList.remove('hidden');
 
                 const rowId = document.getElementById('appointment-id').value;
+                const selectedUserId = document.getElementById('appointment-user').value;
                 const rowData = {
                     [APP.COLUMN_MAPS.termine.Datum]: document.getElementById('appointment-date').value,
                     [APP.COLUMN_MAPS.termine.Kategorie]: document.getElementById('appointment-category').value,
                     [APP.COLUMN_MAPS.termine.Status]: document.getElementById('appointment-status').value,
-                    [APP.COLUMN_MAPS.termine.Mitarbeiter_ID]: document.getElementById('appointment-user').value,
+                    [APP.COLUMN_MAPS.termine.Mitarbeiter_ID]: [selectedUserId],
                 };
 
                 let success = false;
@@ -295,7 +322,7 @@
                 }
 
                 saveBtn.disabled = false;
-                saveBtn.querySelector('#save-btn-text').classList.remove('invisible');
+                saveBtn.querySelector('#save-btn-text').classList.remove('hidden');
                 saveBtn.querySelector('.loader-small').classList.add('hidden');
             },
 
@@ -307,6 +334,8 @@
                 });
 
                 this.userFilter.addEventListener('change', () => this.fetchAndRender());
+
+                this.monthFilter.addEventListener('change', () => this.fetchAndRender());
 
                 this.umsatzTab.addEventListener('click', () => {
                     this.currentTab = 'umsatz';
@@ -327,6 +356,49 @@
                 document.getElementById('cancel-appointment-btn').addEventListener('click', () => this.closeModal());
                 this.modal.addEventListener('click', (e) => { if (e.target === this.modal) this.closeModal(); });
                 this.form.addEventListener('submit', (e) => this.handleFormSubmit(e));
+            },
+
+            getSalesMonthCycles(countPast = 6, countFuture = 2) {
+                const cycles = [];
+                const today = new Date();
+
+                const findCycleStartForMonth = (year, month) => {
+                    const date = new Date(Date.UTC(year, month, 1));
+                    while (date.getUTCDay() !== 4) { date.setUTCDate(date.getUTCDate() + 1); }
+                    if (date.getUTCDate() <= 2) { date.setUTCDate(date.getUTCDate() + 7); }
+                    return date;
+                };
+
+                let currentCycleStartDate;
+                const thisMonthCycleStart = findCycleStartForMonth(today.getUTCFullYear(), today.getUTCMonth());
+                if (today < thisMonthCycleStart) {
+                    const prevMonth = today.getUTCMonth() === 0 ? 11 : today.getUTCMonth() - 1;
+                    const prevYear = today.getUTCMonth() === 0 ? today.getUTCFullYear() - 1 : today.getUTCFullYear();
+                    currentCycleStartDate = findCycleStartForMonth(prevYear, prevMonth);
+                } else {
+                    currentCycleStartDate = thisMonthCycleStart;
+                }
+
+                let tempStartDate = new Date(currentCycleStartDate);
+                for (let i = 0; i <= countPast; i++) {
+                    const cycleStart = new Date(tempStartDate);
+                    const nextMonth = cycleStart.getUTCMonth() === 11 ? 0 : cycleStart.getUTCMonth() + 1;
+                    const nextYear = cycleStart.getUTCMonth() === 11 ? cycleStart.getUTCFullYear() + 1 : cycleStart.getUTCFullYear();
+                    const cycleEnd = findCycleStartForMonth(nextYear, nextMonth);
+                    cycleEnd.setUTCDate(cycleEnd.getUTCDate() - 1);
+                    cycleEnd.setUTCHours(23, 59, 59, 999);
+                    cycles.push({
+                        display: cycleStart.toLocaleString('de-DE', { month: 'long', year: 'numeric', timeZone: 'UTC' }),
+                        value: JSON.stringify({ startDate: cycleStart.toISOString(), endDate: cycleEnd.toISOString() })
+                    });
+                    const prevMonth = tempStartDate.getUTCMonth() === 0 ? 11 : tempStartDate.getUTCMonth() - 1;
+                    const prevYear = tempStartDate.getUTCMonth() === 0 ? tempStartDate.getUTCFullYear() - 1 : tempStartDate.getUTCFullYear();
+                    tempStartDate = findCycleStartForMonth(prevYear, prevMonth);
+                }
+
+                cycles.sort((a, b) => new Date(JSON.parse(b.value).startDate) - new Date(JSON.parse(a.value).startDate));
+
+                return cycles;
             }
         };
 
