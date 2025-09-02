@@ -34,7 +34,7 @@ let currentLeadershipViewMode = "list";
 let isSuperuserView = false;
 let isMoneyView = false;
 let currentView = "dashboard";
-let appointmentsViewLoaded = false;
+let appointmentsViewInstance = null;
 let HIERARCHY_CACHE = null;
 let currentOnboardingSubView = "leader-list";
 
@@ -1842,43 +1842,328 @@ function renderTimelineSection(
   });
 }
 
+// --- Appointments View Logic (integriert in main.js) ---
+
+const appointmentsLog = (message, ...data) => console.log(`%c[Appointments] %c${message}`, 'color: #4f46e5; font-weight: bold;', 'color: black;', ...data);
+
+class AppointmentsView {
+    constructor() {
+        // Der Konstruktor ist absichtlich schlank. DOM-Elemente werden in init() geholt.
+        this.listContainer = null;
+        this.umsatzTab = null;
+        this.recruitingTab = null;
+        this.startDateInput = null;
+        this.endDateInput = null;
+        this.scopeFilter = null;
+        this.modal = null;
+        this.form = null;
+
+        this.initialized = false;
+        this.currentUserId = null;
+        this.allAppointments = [];
+        this.currentTab = 'umsatz';
+        this.downline = [];
+    }
+
+    // Hilfsmethode, um DOM-Elemente zu holen, wird von init() aufgerufen.
+    _getDomElements() {
+        this.listContainer = document.getElementById('appointments-list-container');
+        this.umsatzTab = document.getElementById('umsatz-tab');
+        this.recruitingTab = document.getElementById('recruiting-tab');
+        this.startDateInput = document.getElementById('appointments-start-date');
+        this.endDateInput = document.getElementById('appointments-end-date');
+        this.scopeFilter = document.getElementById('appointments-scope-filter');
+        this.modal = document.getElementById('appointment-modal');
+        this.form = document.getElementById('appointment-form');
+
+        return this.listContainer && this.umsatzTab && this.recruitingTab && this.startDateInput && this.endDateInput && this.scopeFilter && this.modal && this.form;
+    }
+
+    async init(userId) {
+        appointmentsLog(`Modul wird initialisiert für User-ID: ${userId}`);
+        this.currentUserId = userId;
+        
+        if (!this._getDomElements()) {
+            appointmentsLog('!!! FEHLER: Benötigte DOM-Elemente für die Termin-Ansicht wurden nicht gefunden.');
+            return;
+        }
+
+        const { startDate, endDate } = SKT_APP.getMonthlyCycleDates();
+        this.startDateInput.value = startDate.toISOString().split('T')[0];
+        this.endDateInput.value = endDate.toISOString().split('T')[0];
+
+        this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
+        this.downline.sort((a, b) => a.Name.localeCompare(b.Name));
+        this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.loggedInUserData));
+
+        if (!this.initialized) {
+            appointmentsLog('Erstmalige Initialisierung: Event-Listener werden eingerichtet.');
+            this.setupEventListeners();
+            this.initialized = true;
+        }
+
+        const user = SKT_APP.findRowById('mitarbeiter', this.currentUserId);
+        if (user) {
+            const titleElement = document.getElementById('appointments-title'); // Titel wird jetzt dynamischer
+            if (titleElement) {
+                titleElement.textContent = `Terminübersicht`;
+            }
+        }
+
+        await this.fetchAndRender();
+    }
+
+    async fetchAndRender() {
+        appointmentsLog('--- START: fetchAndRender ---');
+        this.listContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        try {
+            const startDateIso = this.startDateInput.value;
+            const endDateIso = this.endDateInput.value;
+            appointmentsLog(`1. Berechneter Zeitraum: ${startDateIso} bis ${endDateIso}`);
+
+            const scope = this.scopeFilter.value;
+            let userIds = new Set();
+            switch (scope) {
+                case 'personal':
+                    userIds.add(this.currentUserId);
+                    break;
+                case 'group':
+                    userIds.add(this.currentUserId);
+                    SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
+                    break;
+                case 'structure':
+                    userIds.add(this.currentUserId);
+                    this.downline.forEach(u => userIds.add(u._id));
+                    break;
+            }
+
+            if (userIds.size === 0) {
+                this.allAppointments = [];
+                this.render();
+                return;
+            }
+
+            const userNames = Array.from(userIds).map(id => SKT_APP.findRowById('mitarbeiter', id)?.Name).filter(Boolean);
+            const userNamesSql = userNames.map(name => `'${SKT_APP.escapeSql(name)}'`).join(',');
+            appointmentsLog(`2. Lade Termine für ${userNames.length} Mitarbeiter (Scope: ${scope})`);
+
+            const query = `SELECT *, Mitarbeiter_ID FROM \`Termine\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' AND \`Mitarbeiter_ID\` IN (${userNamesSql}) ORDER BY \`Datum\` DESC`;
+            appointmentsLog('3. Sende SQL-Abfrage an die Datenbank...');
+            const appointmentsRaw = await SKT_APP.seaTableSqlQuery(query, true); // convert_link_id: true
+            appointmentsLog('4. Roh-Antwort von der Datenbank erhalten:', JSON.parse(JSON.stringify(appointmentsRaw)));
+            
+            this.allAppointments = SKT_APP.mapSqlResults(appointmentsRaw, 'Termine');
+            appointmentsLog(`5. Antwort in ${this.allAppointments.length} Termin-Objekte umgewandelt.`);
+
+            appointmentsLog('6. Rufe render() auf, um die Termine anzuzeigen.');
+            this.render();
+        } catch (error) {
+            appointmentsLog('!!! FEHLER in fetchAndRender !!!', error);
+            this.listContainer.innerHTML = `<div class="text-center py-16"><i class="fas fa-exclamation-triangle fa-4x text-red-400 mb-4"></i><h3 class="text-xl font-semibold text-skt-blue">Ein Fehler ist aufgetreten</h3><p class="text-gray-500 mt-2">${error.message}</p></div>`;
+        }
+        appointmentsLog('--- ENDE: fetchAndRender ---');
+    }
+
+    render() {
+        appointmentsLog('--- START: render ---');
+        this.listContainer.innerHTML = '';
+        let appointmentsToRender = [];
+        if (this.currentTab === 'umsatz') {
+            appointmentsToRender = this.allAppointments.filter(t => t.Kategorie === 'AT' || t.Kategorie === 'BT');
+        } else {
+            appointmentsToRender = this.allAppointments.filter(t => t.Kategorie === 'ET');
+        }
+        appointmentsLog(`Aktiver Tab: '${this.currentTab}'. Zeige ${appointmentsToRender.length} von ${this.allAppointments.length} Terminen an.`);
+
+        if (appointmentsToRender.length === 0) {
+            this.listContainer.innerHTML = `<div class="text-center py-16"><i class="fas fa-calendar-times fa-4x text-skt-grey-medium mb-4"></i><h3 class="text-xl font-semibold text-skt-blue">Keine Termine gefunden</h3><p class="text-gray-500 mt-2">Für die aktuelle Auswahl gibt es keine Termine in diesem Zyklus.</p></div>`;
+            return;
+        }
+
+        appointmentsToRender.forEach(termin => {
+            const card = document.createElement('div');
+            let statusColorClass = 'border-gray-300';
+            if (termin.Status === 'Gehalten') statusColorClass = 'border-skt-green-accent';
+            else if (termin.Status === 'Ausgemacht') statusColorClass = 'border-skt-blue-main';
+            else if (termin.Status === 'Storno') statusColorClass = 'border-skt-red-accent';
+
+            card.className = `bg-white p-4 rounded-lg flex justify-between items-center transition-shadow hover:shadow-md border-l-4 ${statusColorClass} cursor-pointer`;
+            card.dataset.id = termin._id;
+            card.innerHTML = `
+                <div class="flex-grow grid grid-cols-2 md:grid-cols-4 gap-4 items-center">
+                    <div><p class="text-xs text-gray-500">Datum</p><p class="font-bold text-skt-blue">${new Date(termin.Datum).toLocaleDateString('de-DE')}</p></div>
+                    <div><p class="text-xs text-gray-500">Partner</p><p class="font-semibold text-skt-blue-light truncate" title="${termin.Terminpartner || ''}">${termin.Terminpartner || 'N/A'}</p></div>
+                    <div><p class="text-xs text-gray-500">Status</p><p class="font-semibold">${termin.Status || 'N/A'}</p></div>
+                    <div><p class="text-xs text-gray-500">Mitarbeiter</p><p class="font-semibold truncate" title="${termin.Mitarbeiter_ID || ''}">${termin.Mitarbeiter_ID || 'N/A'}</p></div>
+                </div>
+                <div class="ml-4 flex-shrink-0"><i class="fas fa-pen text-gray-400"></i></div>`;
+            card.addEventListener('click', () => this.openModal(termin));
+            this.listContainer.appendChild(card);
+        });
+        appointmentsLog('Alle Terminkarten wurden im DOM erstellt.');
+        appointmentsLog('--- ENDE: render ---');
+    }
+
+    setupEventListeners() {
+        const debouncedFetch = _.debounce(() => this.fetchAndRender(), 300);
+        this.startDateInput.addEventListener('change', debouncedFetch);
+        this.endDateInput.addEventListener('change', debouncedFetch);
+        this.scopeFilter.addEventListener('change', () => this.fetchAndRender());
+
+        this.umsatzTab.addEventListener('click', () => { this.currentTab = 'umsatz'; this.updateTabs(); this.render(); });
+        this.recruitingTab.addEventListener('click', () => { this.currentTab = 'recruiting'; this.updateTabs(); this.render(); });
+
+        document.getElementById('add-appointment-btn').addEventListener('click', () => this.openModal());
+        document.getElementById('close-appointment-modal-btn').addEventListener('click', () => this.closeModal());
+        document.getElementById('cancel-appointment-btn').addEventListener('click', () => this.closeModal());
+        this.modal.addEventListener('click', (e) => { if (e.target === this.modal) this.closeModal(); });
+        this.form.addEventListener('submit', (e) => this.handleFormSubmit(e));
+
+        // Event Listeners für bedingte Felder im Modal
+        this.form.querySelector('#appointment-category').addEventListener('change', (e) => this.toggleConditionalFields(e.target.value));
+        this.form.querySelector('#appointment-cancellation').addEventListener('change', (e) => {
+            this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !e.target.checked);
+        });
+    }
+
+    updateTabs() {
+        if (this.currentTab === 'umsatz') {
+            this.umsatzTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue';
+            this.recruitingTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
+        } else {
+            this.recruitingTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue';
+            this.umsatzTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
+        }
+    }
+
+    toggleConditionalFields(category) {
+        this.form.querySelector('#appointment-prognose-container').classList.toggle('hidden', !['BT', 'ST'].includes(category));
+    }
+
+    openModal(termin = null) {
+        this.form.reset();
+        const title = this.modal.querySelector('#appointment-modal-title');
+        const idInput = this.modal.querySelector('#appointment-id');
+        const userSelect = this.modal.querySelector('#appointment-user');
+        const categorySelect = this.modal.querySelector('#appointment-category');
+        const statusSelect = this.modal.querySelector('#appointment-status');
+
+        // Dropdowns befüllen
+        const allRelevantUsers = [SKT_APP.loggedInUserData, ...this.downline].filter(Boolean);
+        userSelect.innerHTML = '';
+        allRelevantUsers.forEach(u => userSelect.add(new Option(u.Name, u._id)));
+
+        const terminMeta = SKT_APP.METADATA.tables.find(t => t.name.toLowerCase() === 'termine');
+        const categories = terminMeta.columns.find(c => c.name === 'Kategorie').data.options.map(o => o.name);
+        const statuses = terminMeta.columns.find(c => c.name === 'Status').data.options.map(o => o.name);
+        categorySelect.innerHTML = '';
+        statusSelect.innerHTML = '';
+        categories.forEach(cat => categorySelect.add(new Option(cat, cat)));
+        statuses.forEach(stat => statusSelect.add(new Option(stat, stat)));
+
+        if (termin) { // Edit mode
+            title.textContent = 'Termin bearbeiten';
+            idInput.value = termin._id;
+            const user = allRelevantUsers.find(u => u.Name === termin.Mitarbeiter_ID);
+            if (user) userSelect.value = user._id;
+            
+            this.form.querySelector('#appointment-date').value = termin.Datum ? termin.Datum.split(' ')[0] : '';
+            categorySelect.value = termin.Kategorie || '';
+            statusSelect.value = termin.Status || '';
+            this.form.querySelector('#appointment-partner').value = termin.Terminpartner || '';
+            this.form.querySelector('#appointment-prognose').value = termin.Umsatzprognose || '';
+            this.form.querySelector('#appointment-referrals').value = termin.Empfehlungen || '';
+            this.form.querySelector('#appointment-note').value = termin.Hinweis || '';
+            this.form.querySelector('#appointment-cancellation').checked = termin.Absage || false;
+            this.form.querySelector('#appointment-cancellation-reason').value = termin.Absagegrund || '';
+
+        } else { // Add mode
+            title.textContent = 'Termin anlegen';
+            idInput.value = '';
+            userSelect.value = this.currentUserId;
+            this.form.querySelector('#appointment-date').value = new Date().toISOString().split('T')[0];
+        }
+
+        this.toggleConditionalFields(categorySelect.value);
+        this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !this.form.querySelector('#appointment-cancellation').checked);
+        this.modal.classList.remove('hidden');
+        this.modal.classList.add('flex');
+    }
+
+    closeModal() {
+        this.modal.classList.add('hidden');
+        this.modal.classList.remove('flex');
+    }
+
+    async handleFormSubmit(e) {
+        e.preventDefault();
+        const saveBtn = document.getElementById('save-appointment-btn');
+        saveBtn.disabled = true;
+        saveBtn.querySelector('#save-btn-text').classList.add('hidden');
+        saveBtn.querySelector('.loader-small').classList.remove('hidden');
+
+        const rowId = this.form.querySelector('#appointment-id').value;
+        const isCancellation = this.form.querySelector('#appointment-cancellation').checked;
+
+        const rowData = {
+            [SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID]: [this.form.querySelector('#appointment-user').value],
+            [SKT_APP.COLUMN_MAPS.termine.Datum]: this.form.querySelector('#appointment-date').value,
+            [SKT_APP.COLUMN_MAPS.termine.Kategorie]: this.form.querySelector('#appointment-category').value,
+            [SKT_APP.COLUMN_MAPS.termine.Status]: isCancellation ? 'Storno' : this.form.querySelector('#appointment-status').value,
+            [SKT_APP.COLUMN_MAPS.termine.Terminpartner]: this.form.querySelector('#appointment-partner').value,
+            [SKT_APP.COLUMN_MAPS.termine.Umsatzprognose]: parseFloat(this.form.querySelector('#appointment-prognose').value) || null,
+            [SKT_APP.COLUMN_MAPS.termine.Empfehlungen]: parseInt(this.form.querySelector('#appointment-referrals').value) || null,
+            [SKT_APP.COLUMN_MAPS.termine.Hinweis]: this.form.querySelector('#appointment-note').value,
+            [SKT_APP.COLUMN_MAPS.termine.Absage]: isCancellation,
+            [SKT_APP.COLUMN_MAPS.termine.Absagegrund]: isCancellation ? this.form.querySelector('#appointment-cancellation-reason').value : '',
+        };
+
+        let success = false;
+        if (rowId) {
+            appointmentsLog('Führe Update aus für Termin:', rowId);
+            success = await SKT_APP.seaTableUpdateRow('Termine', rowId, rowData);
+        } else {
+            appointmentsLog('Führe Hinzufügen aus...');
+            success = await SKT_APP.seaTableAddRow('Termine', rowData);
+        }
+
+        if (success) {
+            this.closeModal();
+            await this.fetchAndRender();
+        } else {
+            alert('Fehler beim Speichern des Termins.');
+        }
+
+        saveBtn.disabled = false;
+        saveBtn.querySelector('#save-btn-text').classList.remove('hidden');
+        saveBtn.querySelector('.loader-small').classList.add('hidden');
+    }
+}
+
 async function loadAndInitAppointmentsView() {
   const container = dom.appointmentsView;
-  // Wenn das Modul bereits geladen wurde, wird es nur neu initialisiert.
-  if (appointmentsViewLoaded) {
-    if (window.SKT_APPOINTMENTS_VIEW) {
-      window.SKT_APPOINTMENTS_VIEW.init(loggedInUserData._id);
-    }
-    return;
-  }
+  console.log('%c[Loader] %cLoading/Re-loading appointments view...', 'color: orange; font-weight: bold;', 'color: black;');
 
   try {
+    // Schritt 1: Lade IMMER das HTML neu, um sicherzustellen, dass es aktuell ist und Caching-Probleme vermieden werden.
+    console.log('%c[Loader] %cFetching ./appointments.html...', 'color: orange; font-weight: bold;', 'color: black;');
     const response = await fetch("./appointments.html");
-    if (!response.ok)
-      throw new Error(
-        `Die Datei 'appointments.html' konnte nicht gefunden werden (HTTP-Status: ${response.status}).`
-      );
-
+    if (!response.ok) throw new Error(`Die Datei 'appointments.html' konnte nicht gefunden werden (HTTP-Status: ${response.status}).`);
     const html = await response.text();
-
-    // Sicherheitsprüfung: Stellt sicher, dass die korrekte Datei geladen wurde.
     if (!html.includes('id="appointments-module-root"')) {
-      throw new Error(
-        "Falscher Inhalt für die Termin-Seite geladen. Möglicherweise ein Server-Problem."
-      );
+        throw new Error("Falscher Inhalt für die Termin-Seite geladen.");
     }
-
     container.innerHTML = html;
-    appointmentsViewLoaded = true;
+    console.log('%c[Loader] %cAppointments HTML injected.', 'color: orange; font-weight: bold;', 'color: black;');
 
-    const scriptTag = container.querySelector("script");
-    if (scriptTag) {
-      new Function(scriptTag.textContent)(); // Führt das Skript aus
+    // Schritt 2: Die View-Instanz erstellen (falls noch nicht geschehen)
+    if (!appointmentsViewInstance) {
+        console.log('%c[Loader] %cCreating new AppointmentsView instance...', 'color: orange; font-weight: bold;', 'color: black;');
+        appointmentsViewInstance = new AppointmentsView();
     }
-
-    if (window.SKT_APPOINTMENTS_VIEW) {
-      window.SKT_APPOINTMENTS_VIEW.init(loggedInUserData._id);
-    }
+    
+    console.log('%c[Loader] %cInitializing appointments view instance...', 'color: orange; font-weight: bold;', 'color: black;');
+    await appointmentsViewInstance.init(loggedInUserData._id);
   } catch (error) {
     console.error("Fehler beim Laden der Termin-Ansicht:", error);
     container.innerHTML = `<div class="text-center p-8 bg-red-50 rounded-lg border border-red-200"><i class="fas fa-exclamation-triangle fa-3x text-red-400 mb-4"></i><h3 class="text-xl font-bold text-skt-blue">Fehler beim Laden</h3><p class="text-red-600 mt-2">${error.message}</p><p class="text-gray-500 mt-4">Bitte stelle sicher, dass die Datei 'appointments.html' im selben Verzeichnis wie 'index.html' liegt.</p></div>`;
@@ -2504,7 +2789,6 @@ document.addEventListener("DOMContentLoaded", initializeDashboard);
 window.SKT_APP = {
   seaTableSqlQuery,
   seaTableAddRow,
-  seaTableUpdateRow,
   seaTableUpdateRow,
   mapSqlResults,
   findRowById,
