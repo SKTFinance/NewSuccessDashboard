@@ -114,9 +114,9 @@ const dom = {
   einarbeitungView: document.getElementById("einarbeitung-view"),
   einarbeitungBtn: document.getElementById("einarbeitung-btn"),
   einarbeitungBanner: document.getElementById("einarbeitung-banner"),
-  appointmentsHeaderBtn: document.getElementById("appointments-header-btn"), // NEU
+  dashboardHeaderBtn: document.getElementById("dashboard-header-btn"),
+  appointmentsHeaderBtn: document.getElementById("appointments-header-btn"),
   appointmentsView: document.getElementById("appointments-view"),
-  appointmentsBtn: document.getElementById("appointments-btn"),
   einarbeitungTitle: document.getElementById("einarbeitung-title"),
   traineeOnboardingView: document.getElementById("trainee-onboarding-view"),
   leaderOnboardingView: document.getElementById("leader-onboarding-view"),
@@ -1857,12 +1857,18 @@ class AppointmentsView {
         this.scopeFilter = null;
         this.modal = null;
         this.form = null;
+        this.searchInput = null;
+        this.showCancelledCheckbox = null;
 
         this.initialized = false;
         this.currentUserId = null;
         this.allAppointments = [];
         this.currentTab = 'umsatz';
         this.downline = [];
+        this.sortColumn = 'Datum';
+        this.sortDirection = 'desc';
+        this.filterText = '';
+        this.showCancelled = false;
     }
 
     // Hilfsmethode, um DOM-Elemente zu holen, wird von init() aufgerufen.
@@ -1875,8 +1881,10 @@ class AppointmentsView {
         this.scopeFilter = document.getElementById('appointments-scope-filter');
         this.modal = document.getElementById('appointment-modal');
         this.form = document.getElementById('appointment-form');
+        this.searchInput = document.getElementById('appointments-search-filter');
+        this.showCancelledCheckbox = document.getElementById('appointments-show-cancelled');
 
-        return this.listContainer && this.umsatzTab && this.recruitingTab && this.startDateInput && this.endDateInput && this.scopeFilter && this.modal && this.form;
+        return this.listContainer && this.umsatzTab && this.recruitingTab && this.startDateInput && this.endDateInput && this.scopeFilter && this.modal && this.form && this.searchInput && this.showCancelledCheckbox;
     }
 
     async init(userId) {
@@ -1967,41 +1975,130 @@ class AppointmentsView {
     render() {
         appointmentsLog('--- START: render ---');
         this.listContainer.innerHTML = '';
-        let appointmentsToRender = [];
-        if (this.currentTab === 'umsatz') {
-            appointmentsToRender = this.allAppointments.filter(t => t.Kategorie === 'AT' || t.Kategorie === 'BT');
-        } else {
-            appointmentsToRender = this.allAppointments.filter(t => t.Kategorie === 'ET');
-        }
-        appointmentsLog(`Aktiver Tab: '${this.currentTab}'. Zeige ${appointmentsToRender.length} von ${this.allAppointments.length} Terminen an.`);
 
-        if (appointmentsToRender.length === 0) {
-            this.listContainer.innerHTML = `<div class="text-center py-16"><i class="fas fa-calendar-times fa-4x text-skt-grey-medium mb-4"></i><h3 class="text-xl font-semibold text-skt-blue">Keine Termine gefunden</h3><p class="text-gray-500 mt-2">Für die aktuelle Auswahl gibt es keine Termine in diesem Zyklus.</p></div>`;
+        // 1. Filter data
+        let filteredAppointments = this.allAppointments.filter(t => {
+            const isUmsatzTermin = ['AT', 'BT', 'ST'].includes(t.Kategorie);
+            const isRecruitingTermin = t.Kategorie === 'ET';
+
+            const tabMatch = this.currentTab === 'umsatz' ? isUmsatzTermin : isRecruitingTermin;
+            if (!tabMatch) return false;
+
+            // KORREKTUR: Prüfe auf Status 'Storno' ODER das Absage-Flag
+            if (!this.showCancelled && (t.Status === 'Storno' || t.Absage === true)) {
+                return false;
+            }
+
+            if (this.filterText) {
+                const searchText = this.filterText.toLowerCase();
+                const partner = (t.Terminpartner || '').toLowerCase();
+                const mitarbeiter = (t.Mitarbeiter_ID?.[0]?.display_value || '').toLowerCase();
+                if (!partner.includes(searchText) && !mitarbeiter.includes(searchText)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        // 2. Sort data
+        const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+        filteredAppointments.sort((a, b) => {
+            let valA = a[this.sortColumn];
+            let valB = b[this.sortColumn];
+
+            if (this.sortColumn === 'Mitarbeiter_ID') {
+                valA = valA?.[0]?.display_value || '';
+                valB = valB?.[0]?.display_value || '';
+            }
+
+            if (valA === null || valA === undefined) valA = '';
+            if (valB === null || valB === undefined) valB = '';
+
+            let comparison = 0;
+            if (typeof valA === 'number' && typeof valB === 'number') {
+                comparison = valA - valB;
+            } else if (this.sortColumn === 'Datum') {
+                comparison = new Date(valA) - new Date(valB);
+            } else {
+                comparison = collator.compare(String(valA), String(valB));
+            }
+
+            return this.sortDirection === 'asc' ? comparison : -comparison;
+        });
+
+        appointmentsLog(`Rendering ${filteredAppointments.length} appointments.`);
+
+        if (filteredAppointments.length === 0) {
+            this.listContainer.innerHTML = `<div class="text-center py-16"><i class="fas fa-calendar-times fa-4x text-skt-grey-medium mb-4"></i><h3 class="text-xl font-semibold text-skt-blue">Keine Termine gefunden</h3><p class="text-gray-500 mt-2">Für die aktuelle Auswahl gibt es keine Termine.</p></div>`;
             return;
         }
 
-        appointmentsToRender.forEach(termin => {
-            const card = document.createElement('div');
-            let statusColorClass = 'border-gray-300';
-            if (termin.Status === 'Gehalten') statusColorClass = 'border-skt-green-accent';
-            else if (termin.Status === 'Ausgemacht') statusColorClass = 'border-skt-blue-main';
-            else if (termin.Status === 'Storno') statusColorClass = 'border-skt-red-accent';
-            const mitarbeiterName = termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
+        // 3. Build table
+        const table = document.createElement('table');
+        table.className = 'appointments-table';
 
-            card.className = `bg-white p-4 rounded-lg flex justify-between items-center transition-shadow hover:shadow-md border-l-4 ${statusColorClass} cursor-pointer`;
-            card.dataset.id = termin._id;
-            card.innerHTML = `
-                <div class="flex-grow grid grid-cols-2 md:grid-cols-4 gap-4 items-center">
-                    <div><p class="text-xs text-gray-500">Datum</p><p class="font-bold text-skt-blue">${new Date(termin.Datum).toLocaleDateString('de-DE')}</p></div>
-                    <div><p class="text-xs text-gray-500">Partner</p><p class="font-semibold text-skt-blue-light truncate" title="${termin.Terminpartner || ''}">${termin.Terminpartner || 'N/A'}</p></div>
-                    <div><p class="text-xs text-gray-500">Status</p><p class="font-semibold">${termin.Status || 'N/A'}</p></div>
-                    <div><p class="text-xs text-gray-500">Mitarbeiter</p><p class="font-semibold truncate" title="${mitarbeiterName}">${mitarbeiterName}</p></div>
-                </div>
-                <div class="ml-4 flex-shrink-0"><i class="fas fa-pen text-gray-400"></i></div>`;
-            card.addEventListener('click', () => this.openModal(termin));
-            this.listContainer.appendChild(card);
+        const isUmsatz = this.currentTab === 'umsatz';
+        const columns = [
+            { key: 'Datum', label: 'Datum' },
+            { key: 'Terminpartner', label: isUmsatz ? 'Kunde' : 'Bewerber' },
+            { key: 'Status', label: 'Status' },
+            { key: 'Mitarbeiter_ID', label: 'Mitarbeiter' },
+        ];
+        if (isUmsatz) {
+            columns.push({ key: 'Umsatzprognose', label: 'Umsatzprognose' });
+        }
+
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        columns.forEach(col => {
+            const th = document.createElement('th');
+            th.dataset.sortKey = col.key;
+            let iconHtml = '<i class="fas fa-sort sort-icon"></i>';
+            if (this.sortColumn === col.key) {
+                iconHtml = this.sortDirection === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>';
+            }
+            th.innerHTML = `${col.label} ${iconHtml}`;
+            headerRow.appendChild(th);
         });
-        appointmentsLog('Alle Terminkarten wurden im DOM erstellt.');
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        filteredAppointments.forEach(termin => {
+            const tr = document.createElement('tr');
+            const statusColorClass = this._getStatusColorClass(termin);
+            tr.className = `border-l-4 ${statusColorClass} cursor-pointer`;
+            tr.dataset.id = termin._id;
+
+            columns.forEach(col => {
+                const td = document.createElement('td');
+                let value = termin[col.key];
+                if (col.key === 'Mitarbeiter_ID') {
+                    value = termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
+                } else if (col.key === 'Datum') {
+                    value = value ? new Date(value).toLocaleDateString('de-DE') : '-';
+                } else if (col.key === 'Umsatzprognose') {
+                    value = value ? value.toLocaleString('de-DE') + ' EH' : '-';
+                }
+                td.textContent = value || '-';
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+
+        this.listContainer.appendChild(table);
+
+        this.listContainer.querySelectorAll('thead th').forEach(th => {
+            th.addEventListener('click', () => this._handleSort(th.dataset.sortKey));
+        });
+        this.listContainer.querySelectorAll('tbody tr').forEach(tr => {
+            tr.addEventListener('click', () => {
+                const termin = this.allAppointments.find(t => t._id === tr.dataset.id);
+                if (termin) this.openModal(termin);
+            });
+        });
+
         appointmentsLog('--- ENDE: render ---');
     }
 
@@ -2010,6 +2107,15 @@ class AppointmentsView {
         this.startDateInput.addEventListener('change', debouncedFetch);
         this.endDateInput.addEventListener('change', debouncedFetch);
         this.scopeFilter.addEventListener('change', () => this.fetchAndRender());
+
+        this.searchInput.addEventListener('input', _.debounce((e) => {
+            this.filterText = e.target.value;
+            this.render();
+        }, 300));
+        this.showCancelledCheckbox.addEventListener('change', (e) => {
+            this.showCancelled = e.target.checked;
+            this.render();
+        });
 
         this.umsatzTab.addEventListener('click', () => { this.currentTab = 'umsatz'; this.updateTabs(); this.render(); });
         this.recruitingTab.addEventListener('click', () => { this.currentTab = 'recruiting'; this.updateTabs(); this.render(); });
@@ -2025,6 +2131,35 @@ class AppointmentsView {
         this.form.querySelector('#appointment-cancellation').addEventListener('change', (e) => {
             this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !e.target.checked);
         });
+    }
+
+    _handleSort(columnKey) {
+        if (this.sortColumn === columnKey) {
+            this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.sortColumn = columnKey;
+            this.sortDirection = 'asc';
+        }
+        this.render();
+    }
+
+    _getStatusColorClass(termin) {
+        if (termin.Status === 'Storno' || termin.Absage === true) {
+            return 'border-skt-red-accent';
+        }
+        switch (termin.Status) {
+            case 'Gehalten': return 'border-skt-green-accent';
+            case 'Ausgemacht':
+            case 'weiterer BT':
+            case 'weiterer ET': return 'border-skt-grey-medium';
+            case 'Verschoben':
+            case 'offen': return 'border-skt-orange-accent';
+            case 'Info Eingeladen': return 'border-skt-yellow-accent';
+            case 'Info Bestätigt': return 'border-skt-blue-accent';
+            case 'Info Anwesend': return 'border-accent-purple';
+            case 'Wird Mitarbeiter': return 'border-skt-gold-accent';
+            default: return 'border-gray-300';
+        }
     }
 
     updateTabs() {
@@ -2333,12 +2468,6 @@ function setupEventListeners() {
     openEditUserModal();
   });
 
-  dom.appointmentsBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    closeSettingsMenu();
-    switchView("appointments");
-  });
-
   // --- Main Navigation ---
   dom.backButton.addEventListener("click", async () => {
     if (isSuperuserView) {
@@ -2425,6 +2554,10 @@ function setupEventListeners() {
   dom.einarbeitungBanner.addEventListener("click", () => {
     switchView("einarbeitung");
     fetchAndRenderOnboarding(loggedInUserData._id);
+  });
+
+  dom.dashboardHeaderBtn.addEventListener('click', () => {
+    switchView('dashboard');
   });
 
   dom.appointmentsHeaderBtn.addEventListener("click", () => {

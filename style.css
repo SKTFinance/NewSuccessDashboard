@@ -7,8 +7,10 @@
     --color-skt-blue-main: #38bdf8;
     --color-accent-green: #27ae60;
     --color-accent-red: #FF6347;
-    --color-accent-red-light: #fecaca; /* UPDATE für dunkleres Rot */
+    --color-accent-red-light: #fecaca;
     --color-accent-yellow: #f1c40f;
+    --color-accent-orange: #f97316;
+    --color-accent-blue: #3b82f6;
     --color-accent-gold: #d4af37;
     --color-accent-gold-light: #fff3cd; 
     --color-accent-purple: #8e44ad;
@@ -22,14 +24,21 @@
 .text-skt-blue-light { color: var(--color-skt-blue-light); }
 .text-skt-blue-main { color: var(--color-skt-blue-main); }
 .border-skt-blue-main { border-color: var(--color-skt-blue-main); }
+.border-skt-grey-medium { border-color: var(--color-skt-grey-medium); }
 
 /* Neue Akzentfarben */
 .text-skt-green-accent { color: var(--color-accent-green); }
+.border-skt-green-accent { border-color: var(--color-accent-green); }
 .bg-skt-green-accent { background-color: var(--color-accent-green); }
 .text-skt-red-accent { color: var(--color-accent-red); }
+.border-skt-red-accent { border-color: var(--color-accent-red); }
+.border-skt-red-accent { border-color: var(--color-accent-red); }
 .bg-skt-red-accent { background-color: var(--color-accent-red); }
 .bg-accent-red-light { background-color: var(--color-accent-red-light); } /* NEU */
 .text-skt-yellow-accent { color: var(--color-accent-yellow); }
+.border-skt-orange-accent { border-color: var(--color-accent-orange); }
+.border-skt-yellow-accent { border-color: var(--color-accent-yellow); }
+.border-skt-blue-accent { border-color: var(--color-accent-blue); }
 .bg-skt-yellow-accent { background-color: var(--color-accent-yellow); }
 .bg-skt-blue-accent { background-color: var(--color-skt-blue-main); }
 .text-gold { color: var(--color-accent-gold); }
@@ -37,6 +46,7 @@
 .border-accent-purple { border-color: var(--color-accent-purple); }
 .bg-accent-gold { background-color: var(--color-accent-gold); }
 .border-accent-gold { border-color: var(--color-accent-gold); }
+.border-skt-gold-accent { border-color: var(--color-accent-gold); }
 .bg-accent-gold-light { background-color: var(--color-accent-gold-light); }
 .border-skt-blue-accent { border-color: var(--color-skt-blue-main); }
 
@@ -410,3 +420,37 @@ details[open] > summary::before { transform: rotate(180deg); }
         margin-right: -2.5rem;
     }
 }
+
+/* Table Styles for Appointments */
+.appointments-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+.appointments-table thead th {
+    background-color: var(--color-skt-grey-light);
+    color: var(--color-skt-blue-light);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #e2e8f0;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+.appointments-table thead th:hover {
+    background-color: #e2e8f0;
+}
+.appointments-table tbody tr {
+    border-bottom: 1px solid #e2e8f0;
+    transition: background-color 0.2s ease;
+}
+.appointments-table tbody tr:hover {
+    background-color: #f8fafc;
+}
+.appointments-table td {
+    padding: 1rem;
+    vertical-align: middle;
+}
+.sort-icon { margin-left: 0.5rem; opacity: 0.4; transition: opacity 0.2s ease; }
+.sort-icon.active { opacity: 1; color: var(--color-skt-blue); }
