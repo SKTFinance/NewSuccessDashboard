@@ -1986,6 +1986,7 @@ class AppointmentsView {
             if (termin.Status === 'Gehalten') statusColorClass = 'border-skt-green-accent';
             else if (termin.Status === 'Ausgemacht') statusColorClass = 'border-skt-blue-main';
             else if (termin.Status === 'Storno') statusColorClass = 'border-skt-red-accent';
+            const mitarbeiterName = termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
 
             card.className = `bg-white p-4 rounded-lg flex justify-between items-center transition-shadow hover:shadow-md border-l-4 ${statusColorClass} cursor-pointer`;
             card.dataset.id = termin._id;
@@ -1994,7 +1995,7 @@ class AppointmentsView {
                     <div><p class="text-xs text-gray-500">Datum</p><p class="font-bold text-skt-blue">${new Date(termin.Datum).toLocaleDateString('de-DE')}</p></div>
                     <div><p class="text-xs text-gray-500">Partner</p><p class="font-semibold text-skt-blue-light truncate" title="${termin.Terminpartner || ''}">${termin.Terminpartner || 'N/A'}</p></div>
                     <div><p class="text-xs text-gray-500">Status</p><p class="font-semibold">${termin.Status || 'N/A'}</p></div>
-                    <div><p class="text-xs text-gray-500">Mitarbeiter</p><p class="font-semibold truncate" title="${termin.Mitarbeiter_ID || ''}">${termin.Mitarbeiter_ID || 'N/A'}</p></div>
+                    <div><p class="text-xs text-gray-500">Mitarbeiter</p><p class="font-semibold truncate" title="${mitarbeiterName}">${mitarbeiterName}</p></div>
                 </div>
                 <div class="ml-4 flex-shrink-0"><i class="fas fa-pen text-gray-400"></i></div>`;
             card.addEventListener('click', () => this.openModal(termin));
@@ -2041,58 +2042,90 @@ class AppointmentsView {
     }
 
     openModal(termin = null) {
-        this.form.reset();
-        const title = this.modal.querySelector('#appointment-modal-title');
-        const idInput = this.modal.querySelector('#appointment-id');
-        const userSelect = this.modal.querySelector('#appointment-user');
-        const categorySelect = this.modal.querySelector('#appointment-category');
-        const statusSelect = this.modal.querySelector('#appointment-status');
+        appointmentsLog('--- START: openModal ---', termin ? `Editing term ID: ${termin?._id}` : 'Creating new term');
+        try {
+            this.form.reset();
+            appointmentsLog('Form reset.');
 
-        // Dropdowns befüllen
-        const allRelevantUsers = [SKT_APP.loggedInUserData, ...this.downline].filter(Boolean);
-        userSelect.innerHTML = '';
-        allRelevantUsers.forEach(u => userSelect.add(new Option(u.Name, u._id)));
+            const title = this.modal.querySelector('#appointment-modal-title');
+            const idInput = this.modal.querySelector('#appointment-id');
+            const userSelect = this.modal.querySelector('#appointment-user');
+            const categorySelect = this.modal.querySelector('#appointment-category');
+            const statusSelect = this.modal.querySelector('#appointment-status');
+            appointmentsLog('Modal elements found.');
 
-        const terminMeta = SKT_APP.METADATA.tables.find(t => t.name.toLowerCase() === 'termine');
-        const categories = terminMeta.columns.find(c => c.name === 'Kategorie').data.options.map(o => o.name);
-        const statuses = terminMeta.columns.find(c => c.name === 'Status').data.options.map(o => o.name);
-        categorySelect.innerHTML = '';
-        statusSelect.innerHTML = '';
-        categories.forEach(cat => categorySelect.add(new Option(cat, cat)));
-        statuses.forEach(stat => statusSelect.add(new Option(stat, stat)));
+            // Dropdowns befüllen
+            const allRelevantUsers = [SKT_APP.loggedInUserData, ...this.downline].filter(Boolean);
+            userSelect.innerHTML = '';
+            allRelevantUsers.forEach(u => userSelect.add(new Option(u.Name, u._id)));
+            appointmentsLog('User dropdown populated.');
 
-        if (termin) { // Edit mode
-            title.textContent = 'Termin bearbeiten';
-            idInput.value = termin._id;
-            const user = allRelevantUsers.find(u => u.Name === termin.Mitarbeiter_ID);
-            if (user) userSelect.value = user._id;
+            if (!METADATA || !METADATA.tables) {
+                throw new Error("METADATA or METADATA.tables is not available.");
+            }
+            const terminMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'termine');
+            if (!terminMeta) {
+                throw new Error("Could not find metadata for table 'Termine'.");
+            }
+            appointmentsLog('Found metadata for Termine table.');
+
+            const categoryColumn = terminMeta.columns.find(c => c.name === 'Kategorie');
+            if (!categoryColumn || !categoryColumn.data || !categoryColumn.data.options) throw new Error("Could not find 'Kategorie' options in metadata.");
+            const categories = categoryColumn.data.options.map(o => o.name);
+
+            const statusColumn = terminMeta.columns.find(c => c.name === 'Status');
+            if (!statusColumn || !statusColumn.data || !statusColumn.data.options) throw new Error("Could not find 'Status' options in metadata.");
+            const statuses = statusColumn.data.options.map(o => o.name);
+            appointmentsLog('Categories and statuses extracted from metadata.');
+
+            categorySelect.innerHTML = '';
+            statusSelect.innerHTML = '';
+            categories.forEach(cat => categorySelect.add(new Option(cat, cat)));
+            statuses.forEach(stat => statusSelect.add(new Option(stat, stat)));
+            appointmentsLog('Category and status dropdowns populated.');
+
+            if (termin) { // Edit mode
+                appointmentsLog('Entering edit mode for termin:', termin);
+                title.textContent = 'Termin bearbeiten';
+                idInput.value = termin._id;
+                const user = allRelevantUsers.find(u => u.Name === termin.Mitarbeiter_ID?.[0]?.display_value);
+                if (user) userSelect.value = user._id;
+                
+                this.form.querySelector('#appointment-date').value = termin.Datum ? termin.Datum.split(' ')[0] : '';
+                categorySelect.value = termin.Kategorie || '';
+                statusSelect.value = termin.Status || '';
+                this.form.querySelector('#appointment-partner').value = termin.Terminpartner || '';
+                this.form.querySelector('#appointment-prognose').value = termin.Umsatzprognose || '';
+                this.form.querySelector('#appointment-referrals').value = termin.Empfehlungen || '';
+                this.form.querySelector('#appointment-note').value = termin.Hinweis || '';
+                this.form.querySelector('#appointment-cancellation').checked = termin.Absage || false;
+                this.form.querySelector('#appointment-cancellation-reason').value = termin.Absagegrund || '';
+
+            } else { // Add mode
+                appointmentsLog('Entering add mode.');
+                title.textContent = 'Termin anlegen';
+                idInput.value = '';
+                userSelect.value = this.currentUserId;
+                this.form.querySelector('#appointment-date').value = new Date().toISOString().split('T')[0];
+            }
+
+            this.toggleConditionalFields(categorySelect.value);
+            this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !this.form.querySelector('#appointment-cancellation').checked);
             
-            this.form.querySelector('#appointment-date').value = termin.Datum ? termin.Datum.split(' ')[0] : '';
-            categorySelect.value = termin.Kategorie || '';
-            statusSelect.value = termin.Status || '';
-            this.form.querySelector('#appointment-partner').value = termin.Terminpartner || '';
-            this.form.querySelector('#appointment-prognose').value = termin.Umsatzprognose || '';
-            this.form.querySelector('#appointment-referrals').value = termin.Empfehlungen || '';
-            this.form.querySelector('#appointment-note').value = termin.Hinweis || '';
-            this.form.querySelector('#appointment-cancellation').checked = termin.Absage || false;
-            this.form.querySelector('#appointment-cancellation-reason').value = termin.Absagegrund || '';
+            this.modal.classList.add('visible');
+            document.body.classList.add('modal-open');
+            appointmentsLog('Modal is now visible.');
 
-        } else { // Add mode
-            title.textContent = 'Termin anlegen';
-            idInput.value = '';
-            userSelect.value = this.currentUserId;
-            this.form.querySelector('#appointment-date').value = new Date().toISOString().split('T')[0];
+        } catch (error) {
+            appointmentsLog('!!! ERROR in openModal !!!', error);
+            alert('Ein Fehler ist beim Öffnen des Formulars aufgetreten. Details siehe Konsole.');
         }
-
-        this.toggleConditionalFields(categorySelect.value);
-        this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !this.form.querySelector('#appointment-cancellation').checked);
-        this.modal.classList.remove('hidden');
-        this.modal.classList.add('flex');
+        appointmentsLog('--- END: openModal ---');
     }
 
     closeModal() {
-        this.modal.classList.add('hidden');
-        this.modal.classList.remove('flex');
+        this.modal.classList.remove('visible');
+        document.body.classList.remove('modal-open');
     }
 
     async handleFormSubmit(e) {
@@ -2799,6 +2832,9 @@ window.SKT_APP = {
   isUserLeader,
   db,
   COLUMN_MAPS,
+  get METADATA() { // Use a getter to ensure the latest value is always returned
+    return METADATA;
+  },
   get loggedInUserData() {
     return loggedInUserData;
   },
