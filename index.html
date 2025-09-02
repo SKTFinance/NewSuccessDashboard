@@ -905,7 +905,7 @@
                 const data = await response.json();
                 seaTableAccessToken = data.access_token;
                 apiGatewayUrl = data.dtable_server;
-jet                // console.log("SeaTable App Access Token and API Gateway URL obtained.");
+                // console.log("SeaTable App Access Token and API Gateway URL obtained.");
             } catch (error) {
                 console.error("Error getting SeaTable access token:", error);
                 setStatus("Fehler bei der Verbindung zur Datenbank.", true);
