@@ -1,5 +1,5 @@
 <!-- Ansicht für die Terminverwaltung -->
-<div class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
+<div id="appointments-module-root" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
     <h2 id="appointments-title" class="text-3xl font-bold text-skt-blue mb-6 text-center">Terminverwaltung</h2>
 
     <!-- Filter und Aktionen -->
@@ -93,6 +93,7 @@
             modal: document.getElementById('appointment-modal'),
             form: document.getElementById('appointment-form'),
 
+            initialized: false,
             currentUserId: null,
             allAppointments: [],
             currentScope: 'personal',
@@ -101,11 +102,15 @@
 
             async init(userId) {
                 this.currentUserId = userId;
-                this.downline = APP.getAllSubordinatesRecursive(this.currentUserId);
-                this.downline.sort((a, b) => a.Name.localeCompare(b.Name));
+                
+                if (!this.initialized) {
+                    this.downline = APP.getAllSubordinatesRecursive(this.currentUserId);
+                    this.downline.sort((a, b) => a.Name.localeCompare(b.Name));
+                    this.setupEventListeners();
+                    this.populateFilters();
+                    this.initialized = true;
+                }
 
-                this.setupEventListeners();
-                this.populateFilters();
                 this.fetchAndRender();
             },
 

@@ -2154,35 +2154,39 @@ jet                // console.log("SeaTable App Access Token and API Gateway URL
         
         async function loadAndInitAppointmentsView() {
             const container = dom.appointmentsView;
+            // Wenn das Modul bereits geladen wurde, wird es nur neu initialisiert.
             if (appointmentsViewLoaded) {
-                // Wenn schon geladen, nur neu initialisieren
                 if (window.SKT_APPOINTMENTS_VIEW) {
                     window.SKT_APPOINTMENTS_VIEW.init(loggedInUserData._id);
                 }
                 return;
             }
-
+        
             try {
                 const response = await fetch('./appointments.html');
-                if (!response.ok) throw new Error('appointments.html konnte nicht geladen werden');
-                container.innerHTML = await response.text();
+                if (!response.ok) throw new Error(`Die Datei 'appointments.html' konnte nicht gefunden werden (HTTP-Status: ${response.status}).`);
+                
+                const html = await response.text();
+        
+                // Sicherheitsprüfung: Stellt sicher, dass die korrekte Datei geladen wurde.
+                if (!html.includes('id="appointments-module-root"')) {
+                    throw new Error("Falscher Inhalt für die Termin-Seite geladen. Möglicherweise ein Server-Problem.");
+                }
+        
+                container.innerHTML = html;
                 appointmentsViewLoaded = true;
                 
-                // Das Skript in der neuen Datei wurde durch innerHTML nicht ausgeführt.
-                // Wir müssen es manuell finden und ausführen.
                 const scriptTag = container.querySelector('script');
                 if (scriptTag) {
-                    const scriptContent = scriptTag.textContent;
-                    scriptTag.remove(); // Entfernen, um Doppel-Ausführung zu vermeiden
-                    new Function(scriptContent)(); // Führt den Code im globalen Scope aus
+                    new Function(scriptTag.textContent)(); // Führt das Skript aus
                 }
-
+        
                 if (window.SKT_APPOINTMENTS_VIEW) {
                     window.SKT_APPOINTMENTS_VIEW.init(loggedInUserData._id);
                 }
             } catch (error) {
                 console.error("Fehler beim Laden der Termin-Ansicht:", error);
-                container.innerHTML = `<p class="text-center text-red-500">${error.message}</p>`;
+                container.innerHTML = `<div class="text-center p-8 bg-red-50 rounded-lg border border-red-200"><i class="fas fa-exclamation-triangle fa-3x text-red-400 mb-4"></i><h3 class="text-xl font-bold text-skt-blue">Fehler beim Laden</h3><p class="text-red-600 mt-2">${error.message}</p><p class="text-gray-500 mt-4">Bitte stelle sicher, dass die Datei 'appointments.html' im selben Verzeichnis wie 'index.html' liegt.</p></div>`;
             }
         }
 
