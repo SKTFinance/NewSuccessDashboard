@@ -797,6 +797,8 @@
             prognosisCircleEh: document.getElementById('prognosis-circle-eh'),
             segmentDividersEh: document.getElementById('segment-dividers-eh'),
             ehCenterCurrent: document.getElementById('eh-center-current'),
+            ehCenterUnitLabel: document.getElementById('eh-center-unit-label'),
+            ehSollUnitLabel: document.getElementById('eh-soll-unit-label'),
             ehCenterGoal: document.getElementById('eh-center-goal'),
             ehSollValue: document.getElementById('eh-soll-value'),
             etCurrentDisplay: document.getElementById('et-current'),
@@ -1512,6 +1514,11 @@ jet                // console.log("SeaTable App Access Token and API Gateway URL
             const totalAtGoal = dataForCalc.reduce((sum, d) => sum + (d.atGoal || 0), 0);
             const totalAtCurrent = dataForCalc.reduce((sum, d) => sum + (d.atCurrent || 0), 0);
             const totalAtVereinbart = dataForCalc.reduce((sum, d) => sum + (d.atVereinbart || 0), 0);
+            
+            // Der Gesamtverdienst der Gruppe/Struktur ist der Verdienst der Führungskraft,
+            // da dieser bereits die Differenzprovisionen für die jeweilige Downline enthält.
+            const leaderData = fullDataStore.find(d => d.id === leaderId);
+            const totalEarnings = leaderData ? leaderData.earnings : { personal: 0, group: 0, structure: 0 };
 
             // 5. Hole die Daten für die anzuzeigenden Karten aus dem Datenspeicher
             const memberData = fullDataStore.filter(d => memberIdsForDisplay.has(d.id));
@@ -1524,6 +1531,7 @@ jet                // console.log("SeaTable App Access Token and API Gateway URL
                 atGoal: totalAtGoal,
                 atCurrent: totalAtCurrent,
                 atVereinbart: totalAtVereinbart,
+                earnings: totalEarnings,
                 members: memberData
             };
         }
@@ -1532,20 +1540,33 @@ jet                // console.log("SeaTable App Access Token and API Gateway URL
             const führungskräfte = db.mitarbeiter.filter(m => m.Karrierestufe && !m.Karrierestufe.toLowerCase().includes('trainee'));
             const geschäftsstelleRows = db.mitarbeiter.filter(m => m.Name && m.Name.toLowerCase().startsWith('geschäftsstelle'));
             const allMemberIds = new Set([...führungskräfte.map(fk => fk._id), ...geschäftsstelleRows.map(gs => gs._id)]);
-            const allMemberData = await fetchBulkDashboardData(Array.from(allMemberIds));
-            const totalData = { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atCurrent: 0, atVereinbart: 0, members: [] };
+            const { startDate, endDate } = getMonthlyCycleDates();
+            const [allMemberData, earningsMap] = await Promise.all([
+                fetchBulkDashboardData(Array.from(allMemberIds)),
+                calculateAllStructureEarnings(Array.from(allMemberIds), startDate, endDate)
+            ]);
+            const augmentedMemberData = allMemberData.map(data => ({
+                ...data,
+                earnings: earningsMap[data.id] || { personal: 0, group: 0, structure: 0 }
+            }));
+            const totalData = { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atCurrent: 0, atVereinbart: 0, members: [], earnings: 0 };
             geschäftsstelleRows.forEach(gsRow => {
-                const gsData = allMemberData.find(d => d.id === gsRow._id);
-                if (gsData) { Object.keys(totalData).forEach(key => { if (typeof totalData[key] === 'number') totalData[key] += gsData[key] || 0; }); }
+                const gsData = augmentedMemberData.find(d => d.id === gsRow._id);
+                if (gsData) { 
+                    Object.keys(totalData).forEach(key => { 
+                        if (typeof totalData[key] === 'number' && gsData[key]) totalData[key] += gsData[key]; 
+                    }); 
+                }
             });
             totalData.members = führungskräfte.map(leader => {
                 const gsName = `Geschäftsstelle ${leader.Name}`;
                 const gsRow = geschäftsstelleRows.find(row => row.Name === gsName);
                 const targetId = gsRow ? gsRow._id : leader._id;
-                const displayData = allMemberData.find(d => d.id === targetId);
+                const displayData = augmentedMemberData.find(d => d.id === targetId);
                 return { ...(displayData || {}), leaderName: leader.Name, originalPosition: leader.Karrierestufe };
             });
             
+            totalData.earnings = totalData.members.reduce((sum, m) => sum + (m.earnings?.structure || 0), 0);
             return totalData;
         }
 
@@ -1556,10 +1577,35 @@ jet                // console.log("SeaTable App Access Token and API Gateway URL
 
         function updateMonthlyPlanningView(data) {
             updateWeeklyProgress();
-            animateValue(dom.ehCenterCurrent, 0, data.ehCurrent || 0, 1000);
-            dom.ehCenterGoal.textContent = (data.ehGoal || 0).toLocaleString('de-DE');
-            const ehPercentage = (data.ehGoal > 0) ? (data.ehCurrent / data.ehGoal * 100) : 0;
-            updateCircleProgress(dom.ehProgressCircle, 45, ehPercentage);
+            if (isMoneyView) {
+                let earningsToShow = 0;
+                if (data.earnings) {
+                    if (isSuperuserView) {
+                        earningsToShow = data.earnings; // In superuser view, data.earnings is just a number
+                    } else if (currentPlanningView === 'personal') {
+                        earningsToShow = data.earnings.personal;
+                    } else if (currentPlanningView === 'team') {
+                        earningsToShow = data.earnings.group;
+                    } else if (currentPlanningView === 'struktur') {
+                        earningsToShow = data.earnings.structure;
+                    }
+                }
+                animateValue(dom.ehCenterCurrent, 0, earningsToShow || 0, 1000, true);
+                dom.ehCenterGoal.textContent = 'Verdienst';
+                dom.ehCenterUnitLabel.textContent = 'in diesem Zyklus';
+                updateCircleProgress(dom.ehProgressCircle, 45, 0); // Kein Ziel in der Geld-Ansicht
+                dom.prognosisCircleEh.style.strokeDashoffset = 2 * Math.PI * 35; // Prognose ausblenden
+                dom.ehSollValue.textContent = '';
+                dom.ehSollUnitLabel.textContent = '';
+            } else {
+                animateValue(dom.ehCenterCurrent, 0, data.ehCurrent || 0, 1000);
+                dom.ehCenterGoal.textContent = (data.ehGoal || 0).toLocaleString('de-DE');
+                dom.ehCenterUnitLabel.textContent = 'Einheiten erreicht';
+                const ehPercentage = (data.ehGoal > 0) ? (data.ehCurrent / data.ehGoal * 100) : 0;
+                updateCircleProgress(dom.ehProgressCircle, 45, ehPercentage);
+                // Hier könnte die Prognose-Logik wieder eingefügt werden, falls gewünscht
+            }
+
             dom.appointmentsText.textContent = `${data.atCurrent || 0} / ${data.atVereinbart || 0} / ${data.atGoal || 0}`;
             const vereinbartPercent = data.atGoal > 0 ? (data.atVereinbart / data.atGoal) * 100 : 0;
             const gehaltenPercent = data.atGoal > 0 ? (data.atCurrent / data.atGoal) * 100 : 0;
@@ -1704,15 +1750,13 @@ jet                // console.log("SeaTable App Access Token and API Gateway URL
         function createTeamMemberCard(member, totalDaysInCycle, daysPassedInCycle) {
             const prognosis = getPrognosis(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
             const etPercentage = member.etGoal > 0 ? (member.etCurrent / member.etGoal * 100) : 0;
-            let ehValue = member.ehCurrent;
-            let ehGoal = member.ehGoal;
-            let ehUnit = 'Einheiten (EH)';
-            if (isMoneyView) {
-                const { startDate, endDate } = getMonthlyCycleDates();
-                ehValue = calculateTotalEarnings(member.id, startDate, endDate);
-                ehGoal = 0;
-                ehUnit = 'Verdienst (€)';
-            }
+
+            const ehValue = isMoneyView ? (member.earnings?.structure || 0) : member.ehCurrent;
+            const ehGoal = isMoneyView ? 0 : member.ehGoal;
+            const ehUnit = isMoneyView ? 'Verdienst' : 'Einheiten (EH)';
+            const ehDisplayValue = isMoneyView ? ehValue.toLocaleString('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }) : ehValue.toLocaleString('de-DE', {maximumFractionDigits: 0});
+            const ehGoalDisplay = isMoneyView ? '' : `/ ${ehGoal.toLocaleString('de-DE', {maximumFractionDigits: 0})}`;
+
             const ehPercentage = member.ehGoal > 0 ? (member.ehCurrent / member.ehGoal * 100) : 0;
             const ehColorClass = getProgressColorClass(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
             const card = document.createElement('div');
@@ -1721,7 +1765,8 @@ jet                // console.log("SeaTable App Access Token and API Gateway URL
             summary.className = 'p-4 cursor-pointer';
             const pos = member.position || "";
             const positionHtml = pos && !pos.toLowerCase().includes('trainee') ? `<p class="text-sm text-skt-blue-light">${member.originalPosition || member.position}</p>` : '';
-            summary.innerHTML = `<div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-skt-blue text-lg break-words">${member.leaderName || member.name}</p>${positionHtml}</div><div class="flex items-center space-x-4 flex-shrink-0"><span class="font-semibold text-sm ${prognosis.colorClass}" data-tooltip="Prognose basierend auf dem aktuellen Fortschritt im Verhältnis zur vergangenen Zeit im Monat.">${prognosis.text}</span><button data-userid="${member.id}" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button><i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i></div></div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">${ehUnit}</p><p class="text-xs font-semibold text-skt-blue">${ehValue.toLocaleString('de-DE', {maximumFractionDigits: 0})} ${isMoneyView ? '' : `/ ${ehGoal.toLocaleString('de-DE', {maximumFractionDigits: 0})}`}</p></div>${!isMoneyView ? `<div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1"><div class="h-full ${ehColorClass}" style="width: ${Math.min(ehPercentage, 100)}%;"></div></div>` : ''}</div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">ET Termine</p><p class="text-xs font-semibold text-skt-blue">${member.etCurrent} / ${member.etGoal}</p></div><div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1"><div class="h-full bg-skt-green-accent" style="width: ${Math.min(etPercentage, 100)}%;"></div></div></div>`;
+            const prognosisHtml = !isMoneyView ? `<span class="font-semibold text-sm ${prognosis.colorClass}" data-tooltip="Prognose basierend auf dem aktuellen Fortschritt im Verhältnis zur vergangenen Zeit im Monat.">${prognosis.text}</span>` : '';
+            summary.innerHTML = `<div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-skt-blue text-lg break-words">${member.leaderName || member.name}</p>${positionHtml}</div><div class="flex items-center space-x-4 flex-shrink-0">${prognosisHtml}<button data-userid="${member.id}" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button><i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i></div></div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">${ehUnit}</p><p class="text-xs font-semibold text-skt-blue">${ehDisplayValue} ${ehGoalDisplay}</p></div>${!isMoneyView ? `<div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1"><div class="h-full ${ehColorClass}" style="width: ${Math.min(ehPercentage, 100)}%;"></div></div>` : ''}</div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">ET Termine</p><p class="text-xs font-semibold text-skt-blue">${member.etCurrent} / ${member.etGoal}</p></div><div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1"><div class="h-full bg-skt-green-accent" style="width: ${Math.min(etPercentage, 100)}%;"></div></div></div>`;
             const details = document.createElement('div');
             details.className = 'team-member-details px-4';
             details.innerHTML = `<div class="details-grid grid grid-cols-1 gap-4"><div class="text-center"><p class="text-sm font-semibold text-skt-blue mb-1">Analysetermine</p><p class="text-md font-bold text-skt-blue">${member.atCurrent} / ${member.atVereinbart} / ${member.atGoal}</p><p class="text-xs text-gray-500 mb-2">Gehalten / Vereinbart / Soll</p><div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden relative"><div class="h-full bg-skt-blue-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(member.atGoal > 0 ? (member.atVereinbart / member.atGoal) * 100 : 0, 100)}%;"></div><div class="h-full bg-skt-green-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(member.atGoal > 0 ? (member.atCurrent / member.atGoal) * 100 : 0, 100)}%;"></div></div></div></div>`;
@@ -1763,11 +1808,21 @@ jet                // console.log("SeaTable App Access Token and API Gateway URL
             // 1. Hole alle relevanten Mitarbeiter-IDs (sich selbst + gesamte Downline)
             const allDownline = getAllSubordinatesRecursive(mitarbeiterId);
             const allRelevantIds = [mitarbeiterId, ...allDownline.map(u => u._id)];
+            
             // 2. Führe EINEN gebündelten Datenabruf für alle relevanten Mitarbeiter aus
-            const fullDataStore = await fetchBulkDashboardData(allRelevantIds);
+            const { startDate, endDate } = getMonthlyCycleDates();
+            const [fullDataStore, earningsMap] = await Promise.all([
+                fetchBulkDashboardData(allRelevantIds),
+                calculateAllStructureEarnings(allRelevantIds, startDate, endDate)
+            ]);
+
+            const augmentedDataStore = fullDataStore.map(data => ({
+                ...data,
+                earnings: earningsMap[data.id] || { personal: 0, group: 0, structure: 0 }
+            }));
             // --- ENDE OPTIMIERTER DATENABRUF ---
 
-            personalData = fullDataStore.find(d => d.id === mitarbeiterId) || {};
+            personalData = augmentedDataStore.find(d => d.id === mitarbeiterId) || {};
             await checkAndApplyAutomaticPromotion(mitarbeiterId, personalData.totalCurrentEh);
             
             loggedInUserData = user;
@@ -1777,8 +1832,8 @@ jet                // console.log("SeaTable App Access Token and API Gateway URL
             const position = user.Karrierestufe || "";
             const isLeader = !position.toLowerCase().includes('trainee');
             if (isLeader) {
-                teamData = calculateGroupOrStructureData(mitarbeiterId, 'gruppe', fullDataStore);
-                structureData = calculateGroupOrStructureData(mitarbeiterId, 'struktur', fullDataStore);
+                teamData = calculateGroupOrStructureData(mitarbeiterId, 'gruppe', augmentedDataStore);
+                structureData = calculateGroupOrStructureData(mitarbeiterId, 'struktur', augmentedDataStore);
                 
                 currentPlanningView = 'team';
                 dom.teamViewBtn.classList.add('active');
@@ -2354,47 +2409,75 @@ jet                // console.log("SeaTable App Access Token and API Gateway URL
         
         function getVerdienstForPosition(position) {
             const plan = db.karriereplan.find(p => p.Stufe === position);
-            return plan ? (plan.Verdienst || 0) : 0;
+            if (!plan || !plan.Verdienst) return 0;
+
+            let verdienstValue = plan.Verdienst;
+            // Macht die Funktion robust, falls der Wert als Text mit Komma oder €-Symbol gespeichert ist.
+            if (typeof verdienstValue === 'string') {
+                verdienstValue = verdienstValue.replace(/€/g, '').trim().replace(',', '.');
+            }
+
+            const rate = parseFloat(verdienstValue);
+            return isNaN(rate) ? 0 : rate;
         }
 
-        async function calculateTotalEarnings(leaderId, startDate, endDate) {
-            const leader = findRowById('mitarbeiter', leaderId);
-            if (!leader || !leader.Name) return 0;
-            
+        async function calculateAllStructureEarnings(memberIds, startDate, endDate) {
+            const earningsMap = {};
+            if (memberIds.length === 0) return earningsMap;
+
             const startDateIso = startDate.toISOString().split('T')[0];
             const endDateIso = endDate.toISOString().split('T')[0];
 
-            const allSubordinates = getAllSubordinatesRecursive(leaderId);
-            const structureMembers = [leader, ...allSubordinates];
-
-            // Abfrage holt alle Umsätze im Zeitraum; Filterung per ID im Code.
             const turnoverQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`turnover\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' GROUP BY \`Mitarbeiter_ID\``;
             
-            // Abfrage mit `convertLinks = false` für stabile IDs.
             const turnoverResultsRaw = await seaTableSqlQuery(turnoverQuery, false);
-            const structureTurnovers = mapSqlResults(turnoverResultsRaw, 'Umsatz');
+            const allTurnovers = mapSqlResults(turnoverResultsRaw, 'Umsatz');
             
             const getTurnoverForMember = (memberId) => {
-                // KORREKTUR: Die ID befindet sich in der `row_id` Eigenschaft des ersten Objekts im Array.
-                const result = structureTurnovers.find(s => s.Mitarbeiter_ID && Array.isArray(s.Mitarbeiter_ID) && s.Mitarbeiter_ID[0] && s.Mitarbeiter_ID[0].row_id === memberId);
+                const result = allTurnovers.find(s => s.Mitarbeiter_ID && Array.isArray(s.Mitarbeiter_ID) && s.Mitarbeiter_ID[0] && s.Mitarbeiter_ID[0].row_id === memberId);
                 return result?.turnover || 0;
             };
 
-            const leaderRate = getVerdienstForPosition(leader.Karrierestufe);
-            let totalEarnings = getTurnoverForMember(leader._id) * leaderRate;
-            const directSubordinates = db.mitarbeiter.filter(m => m.Werber === leaderId);
+            const hierarchy = buildHierarchy();
 
-            directSubordinates.forEach(sub => {
-                const subRate = getVerdienstForPosition(sub.Karrierestufe);
-                const differentialRate = leaderRate - subRate;
-                if (differentialRate > 0) {
-                    const subAndHisTeam = [sub, ...getAllSubordinatesRecursive(sub._id)];
-                    const subStructureTurnover = subAndHisTeam.reduce((total, currentMember) => total + getTurnoverForMember(currentMember._id), 0);
-                    totalEarnings += subStructureTurnover * differentialRate;
+            for (const leaderId of memberIds) {
+                const leader = findRowById('mitarbeiter', leaderId);
+                if (!leader || !leader.Name) { 
+                    earningsMap[leaderId] = { personal: 0, group: 0, structure: 0 };
+                    continue; 
                 }
-            });
 
-            return totalEarnings;
+                const leaderRate = getVerdienstForPosition(leader.Karrierestufe);
+                const leaderTurnover = getTurnoverForMember(leaderId);
+                
+                const personalEarnings = leaderTurnover * leaderRate;
+                let groupEarnings = personalEarnings;
+                let structureEarnings = personalEarnings;
+
+                const directSubordinates = (hierarchy[leaderId]?.children || []).map(id => findRowById('mitarbeiter', id)).filter(Boolean);
+
+                directSubordinates.forEach(sub => {
+                    const subRate = getVerdienstForPosition(sub.Karrierestufe);
+                    const differentialRate = leaderRate - subRate;
+
+                    if (differentialRate > 0) {
+                        const subAndHisTeam = [sub, ...getAllSubordinatesRecursive(sub._id)];
+                        const subStructureTurnover = subAndHisTeam.reduce((total, currentMember) => total + getTurnoverForMember(currentMember._id), 0);
+                        const differentialEarning = subStructureTurnover * differentialRate;
+                        structureEarnings += differentialEarning;
+                        if (!isUserLeader(sub)) {
+                            groupEarnings += differentialEarning;
+                        }
+                    }
+                });
+                
+                earningsMap[leaderId] = {
+                    personal: personalEarnings,
+                    group: groupEarnings,
+                    structure: structureEarnings
+                };
+            }
+            return earningsMap;
         }
 
         async function checkAndApplyAutomaticPromotion(mitarbeiterId, totalEh) {
