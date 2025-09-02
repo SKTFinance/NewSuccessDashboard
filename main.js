@@ -34,7 +34,7 @@ let currentLeadershipViewMode = "list";
 let isSuperuserView = false;
 let isMoneyView = false;
 let currentView = "dashboard";
-let appointmentsViewLoaded = false;
+let appointmentsViewInstance = null;
 let HIERARCHY_CACHE = null;
 let currentOnboardingSubView = "leader-list";
 
@@ -114,9 +114,9 @@ const dom = {
   einarbeitungView: document.getElementById("einarbeitung-view"),
   einarbeitungBtn: document.getElementById("einarbeitung-btn"),
   einarbeitungBanner: document.getElementById("einarbeitung-banner"),
-  appointmentsHeaderBtn: document.getElementById("appointments-header-btn"), // NEU
+  dashboardHeaderBtn: document.getElementById("dashboard-header-btn"),
+  appointmentsHeaderBtn: document.getElementById("appointments-header-btn"),
   appointmentsView: document.getElementById("appointments-view"),
-  appointmentsBtn: document.getElementById("appointments-btn"),
   einarbeitungTitle: document.getElementById("einarbeitung-title"),
   traineeOnboardingView: document.getElementById("trainee-onboarding-view"),
   leaderOnboardingView: document.getElementById("leader-onboarding-view"),
@@ -1842,43 +1842,497 @@ function renderTimelineSection(
   });
 }
 
+// --- Appointments View Logic (integriert in main.js) ---
+
+const appointmentsLog = (message, ...data) => console.log(`%c[Appointments] %c${message}`, 'color: #4f46e5; font-weight: bold;', 'color: black;', ...data);
+
+class AppointmentsView {
+    constructor() {
+        // Der Konstruktor ist absichtlich schlank. DOM-Elemente werden in init() geholt.
+        this.listContainer = null;
+        this.umsatzTab = null;
+        this.recruitingTab = null;
+        this.startDateInput = null;
+        this.endDateInput = null;
+        this.scopeFilter = null;
+        this.modal = null;
+        this.form = null;
+        this.searchInput = null;
+        this.showCancelledCheckbox = null;
+
+        this.initialized = false;
+        this.currentUserId = null;
+        this.allAppointments = [];
+        this.currentTab = 'umsatz';
+        this.downline = [];
+        this.sortColumn = 'Datum';
+        this.sortDirection = 'desc';
+        this.filterText = '';
+        this.showCancelled = false;
+    }
+
+    // Hilfsmethode, um DOM-Elemente zu holen, wird von init() aufgerufen.
+    _getDomElements() {
+        this.listContainer = document.getElementById('appointments-list-container');
+        this.umsatzTab = document.getElementById('umsatz-tab');
+        this.recruitingTab = document.getElementById('recruiting-tab');
+        this.startDateInput = document.getElementById('appointments-start-date');
+        this.endDateInput = document.getElementById('appointments-end-date');
+        this.scopeFilter = document.getElementById('appointments-scope-filter');
+        this.modal = document.getElementById('appointment-modal');
+        this.form = document.getElementById('appointment-form');
+        this.searchInput = document.getElementById('appointments-search-filter');
+        this.showCancelledCheckbox = document.getElementById('appointments-show-cancelled');
+
+        return this.listContainer && this.umsatzTab && this.recruitingTab && this.startDateInput && this.endDateInput && this.scopeFilter && this.modal && this.form && this.searchInput && this.showCancelledCheckbox;
+    }
+
+    async init(userId) {
+        appointmentsLog(`Modul wird initialisiert für User-ID: ${userId}`);
+        this.currentUserId = userId;
+        
+        if (!this._getDomElements()) {
+            appointmentsLog('!!! FEHLER: Benötigte DOM-Elemente für die Termin-Ansicht wurden nicht gefunden.');
+            return;
+        }
+
+        const { startDate, endDate } = SKT_APP.getMonthlyCycleDates();
+        this.startDateInput.value = startDate.toISOString().split('T')[0];
+        this.endDateInput.value = endDate.toISOString().split('T')[0];
+
+        this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
+        this.downline.sort((a, b) => a.Name.localeCompare(b.Name));
+        this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.loggedInUserData));
+
+        if (!this.initialized) {
+            appointmentsLog('Erstmalige Initialisierung: Event-Listener werden eingerichtet.');
+            this.setupEventListeners();
+            this.initialized = true;
+        }
+
+        const user = SKT_APP.findRowById('mitarbeiter', this.currentUserId);
+        if (user) {
+            const titleElement = document.getElementById('appointments-title'); // Titel wird jetzt dynamischer
+            if (titleElement) {
+                titleElement.textContent = `Terminübersicht`;
+            }
+        }
+
+        await this.fetchAndRender();
+    }
+
+    async fetchAndRender() {
+        appointmentsLog('--- START: fetchAndRender ---');
+        this.listContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        try {
+            const startDateIso = this.startDateInput.value;
+            const endDateIso = this.endDateInput.value;
+            appointmentsLog(`1. Berechneter Zeitraum: ${startDateIso} bis ${endDateIso}`);
+
+            const scope = this.scopeFilter.value;
+            let userIds = new Set();
+            switch (scope) {
+                case 'personal':
+                    userIds.add(this.currentUserId);
+                    break;
+                case 'group':
+                    userIds.add(this.currentUserId);
+                    SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
+                    break;
+                case 'structure':
+                    userIds.add(this.currentUserId);
+                    this.downline.forEach(u => userIds.add(u._id));
+                    break;
+            }
+
+            if (userIds.size === 0) {
+                this.allAppointments = [];
+                this.render();
+                return;
+            }
+
+            const userNames = Array.from(userIds).map(id => SKT_APP.findRowById('mitarbeiter', id)?.Name).filter(Boolean);
+            const userNamesSql = userNames.map(name => `'${SKT_APP.escapeSql(name)}'`).join(',');
+            appointmentsLog(`2. Lade Termine für ${userNames.length} Mitarbeiter (Scope: ${scope})`);
+
+            const query = `SELECT *, Mitarbeiter_ID FROM \`Termine\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' AND \`Mitarbeiter_ID\` IN (${userNamesSql}) ORDER BY \`Datum\` DESC`;
+            appointmentsLog('3. Sende SQL-Abfrage an die Datenbank...');
+            const appointmentsRaw = await SKT_APP.seaTableSqlQuery(query, true); // convert_link_id: true
+            appointmentsLog('4. Roh-Antwort von der Datenbank erhalten:', JSON.parse(JSON.stringify(appointmentsRaw)));
+            
+            this.allAppointments = SKT_APP.mapSqlResults(appointmentsRaw, 'Termine');
+            appointmentsLog(`5. Antwort in ${this.allAppointments.length} Termin-Objekte umgewandelt.`);
+
+            appointmentsLog('6. Rufe render() auf, um die Termine anzuzeigen.');
+            this.render();
+        } catch (error) {
+            appointmentsLog('!!! FEHLER in fetchAndRender !!!', error);
+            this.listContainer.innerHTML = `<div class="text-center py-16"><i class="fas fa-exclamation-triangle fa-4x text-red-400 mb-4"></i><h3 class="text-xl font-semibold text-skt-blue">Ein Fehler ist aufgetreten</h3><p class="text-gray-500 mt-2">${error.message}</p></div>`;
+        }
+        appointmentsLog('--- ENDE: fetchAndRender ---');
+    }
+
+    render() {
+        appointmentsLog('--- START: render ---');
+        this.listContainer.innerHTML = '';
+
+        // 1. Filter data
+        let filteredAppointments = this.allAppointments.filter(t => {
+            const isUmsatzTermin = ['AT', 'BT', 'ST'].includes(t.Kategorie);
+            const isRecruitingTermin = t.Kategorie === 'ET';
+
+            const tabMatch = this.currentTab === 'umsatz' ? isUmsatzTermin : isRecruitingTermin;
+            if (!tabMatch) return false;
+
+            // KORREKTUR: Prüfe auf Status 'Storno' ODER das Absage-Flag
+            if (!this.showCancelled && (t.Status === 'Storno' || t.Absage === true)) {
+                return false;
+            }
+
+            if (this.filterText) {
+                const searchText = this.filterText.toLowerCase();
+                const partner = (t.Terminpartner || '').toLowerCase();
+                const mitarbeiter = (t.Mitarbeiter_ID?.[0]?.display_value || '').toLowerCase();
+                if (!partner.includes(searchText) && !mitarbeiter.includes(searchText)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        // 2. Sort data
+        const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+        filteredAppointments.sort((a, b) => {
+            let valA = a[this.sortColumn];
+            let valB = b[this.sortColumn];
+
+            if (this.sortColumn === 'Mitarbeiter_ID') {
+                valA = valA?.[0]?.display_value || '';
+                valB = valB?.[0]?.display_value || '';
+            }
+
+            if (valA === null || valA === undefined) valA = '';
+            if (valB === null || valB === undefined) valB = '';
+
+            let comparison = 0;
+            if (typeof valA === 'number' && typeof valB === 'number') {
+                comparison = valA - valB;
+            } else if (this.sortColumn === 'Datum') {
+                comparison = new Date(valA) - new Date(valB);
+            } else {
+                comparison = collator.compare(String(valA), String(valB));
+            }
+
+            return this.sortDirection === 'asc' ? comparison : -comparison;
+        });
+
+        appointmentsLog(`Rendering ${filteredAppointments.length} appointments.`);
+
+        if (filteredAppointments.length === 0) {
+            this.listContainer.innerHTML = `<div class="text-center py-16"><i class="fas fa-calendar-times fa-4x text-skt-grey-medium mb-4"></i><h3 class="text-xl font-semibold text-skt-blue">Keine Termine gefunden</h3><p class="text-gray-500 mt-2">Für die aktuelle Auswahl gibt es keine Termine.</p></div>`;
+            return;
+        }
+
+        // 3. Build table
+        const table = document.createElement('table');
+        table.className = 'appointments-table';
+
+        const isUmsatz = this.currentTab === 'umsatz';
+        const columns = [
+            { key: 'Datum', label: 'Datum' },
+            { key: 'Terminpartner', label: isUmsatz ? 'Kunde' : 'Bewerber' },
+            { key: 'Status', label: 'Status' },
+            { key: 'Mitarbeiter_ID', label: 'Mitarbeiter' },
+        ];
+        if (isUmsatz) {
+            columns.push({ key: 'Umsatzprognose', label: 'Umsatzprognose' });
+        }
+
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        columns.forEach(col => {
+            const th = document.createElement('th');
+            th.dataset.sortKey = col.key;
+            let iconHtml = '<i class="fas fa-sort sort-icon"></i>';
+            if (this.sortColumn === col.key) {
+                iconHtml = this.sortDirection === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>';
+            }
+            th.innerHTML = `${col.label} ${iconHtml}`;
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        filteredAppointments.forEach(termin => {
+            const tr = document.createElement('tr');
+            const statusColorClass = this._getStatusColorClass(termin);
+            tr.className = `border-l-4 ${statusColorClass} cursor-pointer`;
+            tr.dataset.id = termin._id;
+
+            columns.forEach(col => {
+                const td = document.createElement('td');
+                let value = termin[col.key];
+                if (col.key === 'Mitarbeiter_ID') {
+                    value = termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
+                } else if (col.key === 'Datum') {
+                    value = value ? new Date(value).toLocaleDateString('de-DE') : '-';
+                } else if (col.key === 'Umsatzprognose') {
+                    value = value ? value.toLocaleString('de-DE') + ' EH' : '-';
+                }
+                td.textContent = value || '-';
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+
+        this.listContainer.appendChild(table);
+
+        this.listContainer.querySelectorAll('thead th').forEach(th => {
+            th.addEventListener('click', () => this._handleSort(th.dataset.sortKey));
+        });
+        this.listContainer.querySelectorAll('tbody tr').forEach(tr => {
+            tr.addEventListener('click', () => {
+                const termin = this.allAppointments.find(t => t._id === tr.dataset.id);
+                if (termin) this.openModal(termin);
+            });
+        });
+
+        appointmentsLog('--- ENDE: render ---');
+    }
+
+    setupEventListeners() {
+        const debouncedFetch = _.debounce(() => this.fetchAndRender(), 300);
+        this.startDateInput.addEventListener('change', debouncedFetch);
+        this.endDateInput.addEventListener('change', debouncedFetch);
+        this.scopeFilter.addEventListener('change', () => this.fetchAndRender());
+
+        this.searchInput.addEventListener('input', _.debounce((e) => {
+            this.filterText = e.target.value;
+            this.render();
+        }, 300));
+        this.showCancelledCheckbox.addEventListener('change', (e) => {
+            this.showCancelled = e.target.checked;
+            this.render();
+        });
+
+        this.umsatzTab.addEventListener('click', () => { this.currentTab = 'umsatz'; this.updateTabs(); this.render(); });
+        this.recruitingTab.addEventListener('click', () => { this.currentTab = 'recruiting'; this.updateTabs(); this.render(); });
+
+        document.getElementById('add-appointment-btn').addEventListener('click', () => this.openModal());
+        document.getElementById('close-appointment-modal-btn').addEventListener('click', () => this.closeModal());
+        document.getElementById('cancel-appointment-btn').addEventListener('click', () => this.closeModal());
+        this.modal.addEventListener('click', (e) => { if (e.target === this.modal) this.closeModal(); });
+        this.form.addEventListener('submit', (e) => this.handleFormSubmit(e));
+
+        // Event Listeners für bedingte Felder im Modal
+        this.form.querySelector('#appointment-category').addEventListener('change', (e) => this.toggleConditionalFields(e.target.value));
+        this.form.querySelector('#appointment-cancellation').addEventListener('change', (e) => {
+            this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !e.target.checked);
+        });
+    }
+
+    _handleSort(columnKey) {
+        if (this.sortColumn === columnKey) {
+            this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.sortColumn = columnKey;
+            this.sortDirection = 'asc';
+        }
+        this.render();
+    }
+
+    _getStatusColorClass(termin) {
+        if (termin.Status === 'Storno' || termin.Absage === true) {
+            return 'border-skt-red-accent';
+        }
+        switch (termin.Status) {
+            case 'Gehalten': return 'border-skt-green-accent';
+            case 'Ausgemacht':
+            case 'weiterer BT':
+            case 'weiterer ET': return 'border-skt-grey-medium';
+            case 'Verschoben':
+            case 'offen': return 'border-skt-orange-accent';
+            case 'Info Eingeladen': return 'border-skt-yellow-accent';
+            case 'Info Bestätigt': return 'border-skt-blue-accent';
+            case 'Info Anwesend': return 'border-accent-purple';
+            case 'Wird Mitarbeiter': return 'border-skt-gold-accent';
+            default: return 'border-gray-300';
+        }
+    }
+
+    updateTabs() {
+        if (this.currentTab === 'umsatz') {
+            this.umsatzTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue';
+            this.recruitingTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
+        } else {
+            this.recruitingTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue';
+            this.umsatzTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
+        }
+    }
+
+    toggleConditionalFields(category) {
+        this.form.querySelector('#appointment-prognose-container').classList.toggle('hidden', !['BT', 'ST'].includes(category));
+    }
+
+    openModal(termin = null) {
+        appointmentsLog('--- START: openModal ---', termin ? `Editing term ID: ${termin?._id}` : 'Creating new term');
+        try {
+            this.form.reset();
+            appointmentsLog('Form reset.');
+
+            const title = this.modal.querySelector('#appointment-modal-title');
+            const idInput = this.modal.querySelector('#appointment-id');
+            const userSelect = this.modal.querySelector('#appointment-user');
+            const categorySelect = this.modal.querySelector('#appointment-category');
+            const statusSelect = this.modal.querySelector('#appointment-status');
+            appointmentsLog('Modal elements found.');
+
+            // Dropdowns befüllen
+            const allRelevantUsers = [SKT_APP.loggedInUserData, ...this.downline].filter(Boolean);
+            userSelect.innerHTML = '';
+            allRelevantUsers.forEach(u => userSelect.add(new Option(u.Name, u._id)));
+            appointmentsLog('User dropdown populated.');
+
+            if (!METADATA || !METADATA.tables) {
+                throw new Error("METADATA or METADATA.tables is not available.");
+            }
+            const terminMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'termine');
+            if (!terminMeta) {
+                throw new Error("Could not find metadata for table 'Termine'.");
+            }
+            appointmentsLog('Found metadata for Termine table.');
+
+            const categoryColumn = terminMeta.columns.find(c => c.name === 'Kategorie');
+            if (!categoryColumn || !categoryColumn.data || !categoryColumn.data.options) throw new Error("Could not find 'Kategorie' options in metadata.");
+            const categories = categoryColumn.data.options.map(o => o.name);
+
+            const statusColumn = terminMeta.columns.find(c => c.name === 'Status');
+            if (!statusColumn || !statusColumn.data || !statusColumn.data.options) throw new Error("Could not find 'Status' options in metadata.");
+            const statuses = statusColumn.data.options.map(o => o.name);
+            appointmentsLog('Categories and statuses extracted from metadata.');
+
+            categorySelect.innerHTML = '';
+            statusSelect.innerHTML = '';
+            categories.forEach(cat => categorySelect.add(new Option(cat, cat)));
+            statuses.forEach(stat => statusSelect.add(new Option(stat, stat)));
+            appointmentsLog('Category and status dropdowns populated.');
+
+            if (termin) { // Edit mode
+                appointmentsLog('Entering edit mode for termin:', termin);
+                title.textContent = 'Termin bearbeiten';
+                idInput.value = termin._id;
+                const user = allRelevantUsers.find(u => u.Name === termin.Mitarbeiter_ID?.[0]?.display_value);
+                if (user) userSelect.value = user._id;
+                
+                this.form.querySelector('#appointment-date').value = termin.Datum ? termin.Datum.split(' ')[0] : '';
+                categorySelect.value = termin.Kategorie || '';
+                statusSelect.value = termin.Status || '';
+                this.form.querySelector('#appointment-partner').value = termin.Terminpartner || '';
+                this.form.querySelector('#appointment-prognose').value = termin.Umsatzprognose || '';
+                this.form.querySelector('#appointment-referrals').value = termin.Empfehlungen || '';
+                this.form.querySelector('#appointment-note').value = termin.Hinweis || '';
+                this.form.querySelector('#appointment-cancellation').checked = termin.Absage || false;
+                this.form.querySelector('#appointment-cancellation-reason').value = termin.Absagegrund || '';
+
+            } else { // Add mode
+                appointmentsLog('Entering add mode.');
+                title.textContent = 'Termin anlegen';
+                idInput.value = '';
+                userSelect.value = this.currentUserId;
+                this.form.querySelector('#appointment-date').value = new Date().toISOString().split('T')[0];
+            }
+
+            this.toggleConditionalFields(categorySelect.value);
+            this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !this.form.querySelector('#appointment-cancellation').checked);
+            
+            this.modal.classList.add('visible');
+            document.body.classList.add('modal-open');
+            appointmentsLog('Modal is now visible.');
+
+        } catch (error) {
+            appointmentsLog('!!! ERROR in openModal !!!', error);
+            alert('Ein Fehler ist beim Öffnen des Formulars aufgetreten. Details siehe Konsole.');
+        }
+        appointmentsLog('--- END: openModal ---');
+    }
+
+    closeModal() {
+        this.modal.classList.remove('visible');
+        document.body.classList.remove('modal-open');
+    }
+
+    async handleFormSubmit(e) {
+        e.preventDefault();
+        const saveBtn = document.getElementById('save-appointment-btn');
+        saveBtn.disabled = true;
+        saveBtn.querySelector('#save-btn-text').classList.add('hidden');
+        saveBtn.querySelector('.loader-small').classList.remove('hidden');
+
+        const rowId = this.form.querySelector('#appointment-id').value;
+        const isCancellation = this.form.querySelector('#appointment-cancellation').checked;
+
+        const rowData = {
+            [SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID]: [this.form.querySelector('#appointment-user').value],
+            [SKT_APP.COLUMN_MAPS.termine.Datum]: this.form.querySelector('#appointment-date').value,
+            [SKT_APP.COLUMN_MAPS.termine.Kategorie]: this.form.querySelector('#appointment-category').value,
+            [SKT_APP.COLUMN_MAPS.termine.Status]: isCancellation ? 'Storno' : this.form.querySelector('#appointment-status').value,
+            [SKT_APP.COLUMN_MAPS.termine.Terminpartner]: this.form.querySelector('#appointment-partner').value,
+            [SKT_APP.COLUMN_MAPS.termine.Umsatzprognose]: parseFloat(this.form.querySelector('#appointment-prognose').value) || null,
+            [SKT_APP.COLUMN_MAPS.termine.Empfehlungen]: parseInt(this.form.querySelector('#appointment-referrals').value) || null,
+            [SKT_APP.COLUMN_MAPS.termine.Hinweis]: this.form.querySelector('#appointment-note').value,
+            [SKT_APP.COLUMN_MAPS.termine.Absage]: isCancellation,
+            [SKT_APP.COLUMN_MAPS.termine.Absagegrund]: isCancellation ? this.form.querySelector('#appointment-cancellation-reason').value : '',
+        };
+
+        let success = false;
+        if (rowId) {
+            appointmentsLog('Führe Update aus für Termin:', rowId);
+            success = await SKT_APP.seaTableUpdateRow('Termine', rowId, rowData);
+        } else {
+            appointmentsLog('Führe Hinzufügen aus...');
+            success = await SKT_APP.seaTableAddRow('Termine', rowData);
+        }
+
+        if (success) {
+            this.closeModal();
+            await this.fetchAndRender();
+        } else {
+            alert('Fehler beim Speichern des Termins.');
+        }
+
+        saveBtn.disabled = false;
+        saveBtn.querySelector('#save-btn-text').classList.remove('hidden');
+        saveBtn.querySelector('.loader-small').classList.add('hidden');
+    }
+}
+
 async function loadAndInitAppointmentsView() {
   const container = dom.appointmentsView;
-  // Wenn das Modul bereits geladen wurde, wird es nur neu initialisiert.
-  if (appointmentsViewLoaded) {
-    if (window.SKT_APPOINTMENTS_VIEW) {
-      window.SKT_APPOINTMENTS_VIEW.init(loggedInUserData._id);
-    }
-    return;
-  }
+  console.log('%c[Loader] %cLoading/Re-loading appointments view...', 'color: orange; font-weight: bold;', 'color: black;');
 
   try {
+    // Schritt 1: Lade IMMER das HTML neu, um sicherzustellen, dass es aktuell ist und Caching-Probleme vermieden werden.
+    console.log('%c[Loader] %cFetching ./appointments.html...', 'color: orange; font-weight: bold;', 'color: black;');
     const response = await fetch("./appointments.html");
-    if (!response.ok)
-      throw new Error(
-        `Die Datei 'appointments.html' konnte nicht gefunden werden (HTTP-Status: ${response.status}).`
-      );
-
+    if (!response.ok) throw new Error(`Die Datei 'appointments.html' konnte nicht gefunden werden (HTTP-Status: ${response.status}).`);
     const html = await response.text();
-
-    // Sicherheitsprüfung: Stellt sicher, dass die korrekte Datei geladen wurde.
     if (!html.includes('id="appointments-module-root"')) {
-      throw new Error(
-        "Falscher Inhalt für die Termin-Seite geladen. Möglicherweise ein Server-Problem."
-      );
+        throw new Error("Falscher Inhalt für die Termin-Seite geladen.");
     }
-
     container.innerHTML = html;
-    appointmentsViewLoaded = true;
+    console.log('%c[Loader] %cAppointments HTML injected.', 'color: orange; font-weight: bold;', 'color: black;');
 
-    const scriptTag = container.querySelector("script");
-    if (scriptTag) {
-      new Function(scriptTag.textContent)(); // Führt das Skript aus
+    // Schritt 2: Die View-Instanz erstellen (falls noch nicht geschehen)
+    if (!appointmentsViewInstance) {
+        console.log('%c[Loader] %cCreating new AppointmentsView instance...', 'color: orange; font-weight: bold;', 'color: black;');
+        appointmentsViewInstance = new AppointmentsView();
     }
+    
+    console.log('%c[Loader] %cInitializing appointments view instance...', 'color: orange; font-weight: bold;', 'color: black;');
+    await appointmentsViewInstance.init(loggedInUserData._id);
 
-    if (window.SKT_APPOINTMENTS_VIEW) {
-      window.SKT_APPOINTMENTS_VIEW.init(loggedInUserData._id);
-    }
   } catch (error) {
     console.error("Fehler beim Laden der Termin-Ansicht:", error);
     container.innerHTML = `<div class="text-center p-8 bg-red-50 rounded-lg border border-red-200"><i class="fas fa-exclamation-triangle fa-3x text-red-400 mb-4"></i><h3 class="text-xl font-bold text-skt-blue">Fehler beim Laden</h3><p class="text-red-600 mt-2">${error.message}</p><p class="text-gray-500 mt-4">Bitte stelle sicher, dass die Datei 'appointments.html' im selben Verzeichnis wie 'index.html' liegt.</p></div>`;
@@ -2014,13 +2468,6 @@ function setupEventListeners() {
     closeSettingsMenu();
     openEditUserModal();
   });
-
-  dom.appointmentsBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    closeSettingsMenu();
-    switchView("appointments");
-  });
-
   // --- Main Navigation ---
   dom.backButton.addEventListener("click", async () => {
     if (isSuperuserView) {
@@ -2107,6 +2554,10 @@ function setupEventListeners() {
   dom.einarbeitungBanner.addEventListener("click", () => {
     switchView("einarbeitung");
     fetchAndRenderOnboarding(loggedInUserData._id);
+  });
+
+  dom.dashboardHeaderBtn.addEventListener('click', () => {
+    switchView('dashboard');
   });
 
   dom.appointmentsHeaderBtn.addEventListener("click", () => {
@@ -2505,7 +2956,6 @@ window.SKT_APP = {
   seaTableSqlQuery,
   seaTableAddRow,
   seaTableUpdateRow,
-  seaTableUpdateRow,
   mapSqlResults,
   findRowById,
   getMonthlyCycleDates,
@@ -2515,6 +2965,10 @@ window.SKT_APP = {
   isUserLeader,
   db,
   COLUMN_MAPS,
+  get METADATA() { // Use a getter to ensure the latest value is always returned
+    return METADATA;
+  },
+
   get loggedInUserData() {
     return loggedInUserData;
   },
