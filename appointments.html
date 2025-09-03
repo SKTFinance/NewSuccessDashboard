@@ -1,47 +1,85 @@
 <!-- Ansicht für die Terminverwaltung -->
 <div id="appointments-module-root" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
-    <h2 id="appointments-title" class="text-3xl font-bold text-skt-blue mb-6 text-center">Terminverwaltung</h2>
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+        <h2 id="appointments-title" class="text-3xl font-bold text-skt-blue">Terminübersicht</h2>
+        <button id="add-appointment-btn" class="mt-4 sm:mt-0 w-full sm:w-auto bg-skt-green-accent text-white font-semibold py-2 px-5 rounded-lg shadow-md hover:bg-green-700 transition-colors flex items-center justify-center">
+            <i class="fas fa-plus mr-2"></i>Neuer Termin
+        </button>
+    </div>
 
-    <!-- Filter und Aktionen -->
-    <div class="bg-skt-grey-light p-4 rounded-xl mb-6 border border-gray-200">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-            <div class="md:col-span-2">
-                <label for="appointments-scope-filter" class="block text-sm font-medium text-gray-700 mb-1">Anzeigen für:</label>
-                <div class="flex space-x-2">
-                    <select id="appointments-scope-filter" class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
-                        <option value="personal">Meine Termine</option>
-                        <option value="group">Meine Gruppe</option>
-                        <option value="structure">Meine Struktur</option>
-                        <option value="single">Einzelner Mitarbeiter</option>
-                    </select>
-                    <select id="appointments-user-filter" class="hidden block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
-                        <!-- Mitarbeiter werden hier per JS geladen -->
-                    </select>
+    <!-- KPIs und Statistiken -->
+    <div id="stats-container" class="bg-skt-grey-light p-6 rounded-xl shadow-inner border border-gray-200 mb-8">
+        <div class="flex justify-between items-center">
+            <h3 class="text-xl font-bold text-skt-blue">Statistik</h3>
+            <button id="toggle-stats-visibility-btn" class="collapsed text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-300 transition-colors">
+                <i class="fas fa-chevron-up transition-transform duration-300"></i>
+            </button>
+        </div>
+        <div id="stats-content" class="stats-content-collapsible collapsed grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
+            <!-- Linke Spalte: Kreisdiagramm -->
+            <div id="pie-chart-section">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
+                    <h3 id="stats-chart-title" class="text-lg font-bold text-skt-blue">Termine nach...</h3>
+                    <div id="stats-chart-toggle" class="view-toggle flex space-x-2 mt-2 sm:mt-0">
+                        <button id="stats-by-employee-btn" class="active">Mitarbeiter</button>
+                        <button id="stats-by-status-btn">Status</button>
+                    </div>
+                </div>
+                <div class="flex flex-col md:flex-row items-center gap-4">
+                    <div id="stats-pie-chart-container" class="w-full md:w-1/2 flex justify-center items-center shrink-0"></div>
+                    <div id="stats-pie-chart-legend" class="w-full md:w-1/2 self-start"></div>
                 </div>
             </div>
-            <div>
-                <label for="appointments-month-filter" class="block text-sm font-medium text-gray-700 mb-1">Monat:</label>
-                <select id="appointments-month-filter" class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
-                    <!-- Monate werden hier per JS geladen -->
-                </select>
-            </div>
-            <div class="flex justify-end">
-                <button id="add-appointment-btn" class="w-full md:w-auto bg-skt-green-accent text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-green-700 transition-colors flex items-center justify-center">
-                    <i class="fas fa-plus mr-2"></i>Neuer Termin
-                </button>
+            <!-- Rechte Spalte: Umsatzprognose Details -->
+            <div id="prognosis-section">
+                <h3 class="text-lg font-bold text-skt-blue mb-4">Umsatzprognose (offene BTs)</h3>
+                <div id="prognosis-details-container" class="max-h-[180px] overflow-y-auto pr-2">
+                    <!-- Inhalt wird per JS generiert -->
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- Filter und Aktionen -->
+    <div class="bg-skt-grey-light p-4 rounded-xl mb-6 border border-gray-200">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div>
+                <label for="appointments-start-date" class="block text-sm font-medium text-gray-700 mb-1">Von</label>
+                <input type="date" id="appointments-start-date" class="modern-input">
+            </div>
+            <div>
+                <label for="appointments-end-date" class="block text-sm font-medium text-gray-700 mb-1">Bis</label>
+                <input type="date" id="appointments-end-date" class="modern-input">
+            </div>
+            <div>
+                <label for="appointments-scope-filter" class="block text-sm font-medium text-gray-700 mb-1">Anzeigen für</label>
+                <select id="appointments-scope-filter" class="modern-select">
+                    <option value="personal">Meine Termine</option>
+                    <option value="group">Meine Gruppe</option>
+                    <option value="structure">Meine Struktur</option>
+                </select>
+            </div>
+            <div class="flex items-end pb-1 justify-self-start lg:justify-self-end">
+                <div class="flex items-center space-x-3">
+                    <label for="appointments-show-cancelled" class="toggle-switch">
+                        <input type="checkbox" id="appointments-show-cancelled" class="sr-only peer">
+                        <div class="toggle-slider"></div>
+                    </label>
+                    <label for="appointments-show-cancelled" class="text-sm font-medium text-gray-700">Abgesagte</label>
+                </div>
+            </div>
+            <div class="lg:col-span-4 md:col-span-2">
+                <label for="appointments-search-filter" class="sr-only">Suchen</label>
+                <input type="text" id="appointments-search-filter" placeholder="Kunde, Bewerber oder Mitarbeiter suchen..." class="modern-input">
+            </div>
+        </div>
+    </div>
     <!-- Tabs -->
     <div class="border-b border-gray-200 mb-6">
         <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-            <button id="umsatz-tab" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue">
-                Umsatztermine
-            </button>
-            <button id="recruiting-tab" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
-                Recruitingtermine
-            </button>
+            <button id="umsatz-tab" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue">Umsatztermine</button>
+            <button id="recruiting-tab" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Recruitingtermine</button>
+            <button id="netzwerk-tab" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Netzwerktermine</button>
         </nav>
     </div>
 
@@ -49,287 +87,32 @@
         <div class="loader mx-auto"></div>
     </div>
 </div>
-
 <!-- Modal zum Bearbeiten/Hinzufügen von Terminen (zunächst verborgen) -->
-<div id="appointment-modal" class="modal-overlay hidden">
-    <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative">
+<div id="appointment-modal" class="modal-overlay">
+    <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-2xl w-full relative max-h-[90vh] overflow-y-auto">
         <button id="close-appointment-modal-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
         <h3 id="appointment-modal-title" class="text-2xl font-bold text-skt-blue mb-6">Termin anlegen</h3>
         <form id="appointment-form" class="space-y-4">
             <input type="hidden" id="appointment-id">
-            <div>
-                <label for="appointment-user" class="block text-sm font-medium text-gray-700">Mitarbeiter</label>
-                <select id="appointment-user" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></select>
-            </div>
-            <div>
-                <label for="appointment-date" class="block text-sm font-medium text-gray-700">Datum</label>
-                <input type="date" id="appointment-date" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
-            </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label for="appointment-category" class="block text-sm font-medium text-gray-700">Kategorie</label>
-                    <select id="appointment-category" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></select>
-                </div>
-                <div>
-                    <label for="appointment-status" class="block text-sm font-medium text-gray-700">Status</label>
-                    <select id="appointment-status" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></select>
-                </div>
+                <div><label for="appointment-user" class="block text-sm font-medium text-gray-700">Mitarbeiter</label><select id="appointment-user" required class="modern-select"></select></div>
+                <div><label for="appointment-date" class="block text-sm font-medium text-gray-700">Datum</label><input type="date" id="appointment-date" required class="modern-input"></div>
+                <div><label for="appointment-category" class="block text-sm font-medium text-gray-700">Kategorie</label><select id="appointment-category" required class="modern-select"></select></div>
+                <div><label for="appointment-status" class="block text-sm font-medium text-gray-700">Status</label><select id="appointment-status" required class="modern-select"></select></div>
             </div>
-            <div class="pt-4 flex justify-end space-x-3">
-                <button type="button" id="cancel-appointment-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button>
-                <button type="submit" id="save-appointment-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors flex items-center justify-center" style="min-width: 110px;">
-                    <span id="save-btn-text">Speichern</span>
-                    <div class="loader-small hidden"></div>
-                </button>
+            <div><label for="appointment-partner" class="block text-sm font-medium text-gray-700">Terminpartner</label><input type="text" id="appointment-partner" class="modern-input"></div>
+            <div id="appointment-prognose-container" class="hidden"><label for="appointment-prognose" class="block text-sm font-medium text-gray-700">Umsatzprognose (EH)</label><input type="number" step="0.01" id="appointment-prognose" class="modern-input"></div>
+            <div><label for="appointment-referrals" class="block text-sm font-medium text-gray-700">Empfehlungen</label><input type="number" id="appointment-referrals" class="modern-input"></div>
+            <div><label for="appointment-note" class="block text-sm font-medium text-gray-700">Hinweis</label><textarea id="appointment-note" rows="3" class="modern-input"></textarea></div>
+            <div class="flex items-center space-x-3 pt-2">
+                <label for="appointment-cancellation" class="toggle-switch">
+                    <input type="checkbox" id="appointment-cancellation" class="sr-only peer">
+                    <div class="toggle-slider"></div>
+                </label>
+                <label for="appointment-cancellation" class="text-sm font-medium text-gray-700">Absage/Storno</label>
             </div>
+            <div id="appointment-cancellation-reason-container" class="hidden"><label for="appointment-cancellation-reason" class="block text-sm font-medium text-gray-700">Absagegrund</label><textarea id="appointment-cancellation-reason" rows="2" class="modern-input"></textarea></div>
+            <div class="pt-4 flex justify-end space-x-3"><button type="button" id="cancel-appointment-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button><button type="submit" id="save-appointment-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors flex items-center justify-center" style="min-width: 110px; min-height: 42px;"><span id="save-btn-text">Speichern</span><div class="loader-small hidden"></div></button></div>
         </form>
     </div>
 </div>
-
-<script>
-    (function() {
-        const APP = window.SKT_APP;
-
-        const appointmentsView = {
-            listContainer: document.getElementById('appointments-list-container'),
-            scopeFilter: document.getElementById('appointments-scope-filter'),
-            userFilter: document.getElementById('appointments-user-filter'),
-            monthFilter: document.getElementById('appointments-month-filter'),
-            umsatzTab: document.getElementById('umsatz-tab'),
-            recruitingTab: document.getElementById('recruiting-tab'),
-            modal: document.getElementById('appointment-modal'),
-            form: document.getElementById('appointment-form'),
-
-            initialized: false,
-            currentUserId: null,
-            allAppointments: [],
-            currentScope: 'personal',
-            currentTab: 'umsatz',
-            downline: [],
-
-            async init(userId) {
-                this.currentUserId = userId;
-                
-                if (!this.initialized) {
-                    this.downline = APP.getAllSubordinatesRecursive(this.currentUserId);
-                    this.downline.sort((a, b) => a.Name.localeCompare(b.Name));
-                    this.setupEventListeners();
-                    this.populateFilters();
-                    this.initialized = true;
-                }
-
-                this.fetchAndRender();
-            },
-
-            populateFilters() {
-                const user = APP.findRowById('mitarbeiter', this.currentUserId);
-                if (user) {
-                    document.getElementById('appointments-title').textContent = `Terminverwaltung für ${user.Name}`;
-                }
-
-                this.userFilter.innerHTML = '';
-                this.downline.forEach(member => {
-                    this.userFilter.add(new Option(member.Name, member._id));
-                });
-
-                // Populate month filter
-                const cycles = this.getSalesMonthCycles();
-                this.monthFilter.innerHTML = '';
-                cycles.forEach(cycle => {
-                    this.monthFilter.add(new Option(cycle.display, cycle.value));
-                });
-
-                const terminTableMeta = APP.METADATA.tables?.find(t => t.name === 'Termine');
-                if (terminTableMeta && APP.COLUMN_MAPS.termine) {
-                    const categoryCol = terminTableMeta.columns.find(c => c.key === APP.COLUMN_MAPS.termine.Kategorie);
-                    const statusCol = terminTableMeta.columns.find(c => c.key === APP.COLUMN_MAPS.termine.Status);
-                    
-                    const categorySelect = document.getElementById('appointment-category');
-                    const statusSelect = document.getElementById('appointment-status');
-                    
-                    if (categorySelect && categoryCol?.data?.options) {
-                        categorySelect.innerHTML = '';
-                        categoryCol.data.options.forEach(opt => categorySelect.add(new Option(opt.name, opt.name)));
-                    }
-                    if (statusSelect && statusCol?.data?.options) {
-                        statusSelect.innerHTML = '';
-                        statusCol.data.options.forEach(opt => statusSelect.add(new Option(opt.name, opt.name)));
-                    }
-                } else {
-                    console.warn("Termin-Metadaten konnten nicht geladen werden. Dropdowns im Modal sind möglicherweise leer.");
-                }
-            },
-
-            async fetchAndRender() {
-                this.listContainer.innerHTML = '<div class="loader mx-auto"></div>';
-                let userIds = [];
-                switch (this.currentScope) {
-                    case 'personal': userIds = [this.currentUserId]; break;
-                    case 'group': userIds = [this.currentUserId, ...APP.getSubordinates(this.currentUserId, 'gruppe').map(u => u._id)]; break;
-                    case 'structure': userIds = [this.currentUserId, ...this.downline.map(u => u._id)]; break;
-                    case 'single': userIds = [this.userFilter.value]; break;
-                }
-
-                const userNames = userIds.map(id => APP.findRowById('mitarbeiter', id)?.Name).filter(Boolean);
-                if (userNames.length === 0) {
-                    this.allAppointments = [];
-                    this.render();
-                    return;
-                }
-
-                const { startDate, endDate } = JSON.parse(this.monthFilter.value);
-                const startDateIso = new Date(startDate).toISOString().split('T')[0];
-                const endDateIso = new Date(endDate).toISOString().split('T')[0];
-
-                const namesInClause = userNames.map(name => `'${APP.escapeSql(name)}'`).join(',');
-                const query = `SELECT _id, Datum, Kategorie, Status, Mitarbeiter_ID FROM \`Termine\` WHERE \`Mitarbeiter_ID\` IN (${namesInClause}) AND \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' ORDER BY \`Datum\` DESC`;
-                const appointmentsRaw = await APP.seaTableSqlQuery(query, true);
-                this.allAppointments = APP.mapSqlResults(appointmentsRaw, 'Termine');
-                this.render();
-            },
-
-            render() {
-                this.listContainer.innerHTML = '';
-                let appointmentsToRender = [];
-                if (this.currentTab === 'umsatz') {
-                    appointmentsToRender = this.allAppointments.filter(t => t.Kategorie === 'AT' || t.Kategorie === 'BT');
-                } else { // recruiting
-                    appointmentsToRender = this.allAppointments.filter(t => t.Kategorie === 'ET');
-                }
-
-                if (appointmentsToRender.length === 0) {
-                    this.listContainer.innerHTML = `
-                        <div class="text-center py-16">
-                            <i class="fas fa-calendar-times fa-4x text-skt-grey-medium mb-4"></i>
-                            <h3 class="text-xl font-semibold text-skt-blue">Keine Termine gefunden</h3>
-                            <p class="text-gray-500 mt-2">Für die aktuelle Auswahl gibt es keine Termine.</p>
-                        </div>
-                    `;
-                    return;
-                }
-
-                appointmentsToRender.forEach(termin => {
-                    const card = document.createElement('div');
-                    let statusColorClass = 'border-gray-300';
-                    if (termin.Status === 'Gehalten') statusColorClass = 'border-skt-green-accent';
-                    else if (termin.Status === 'Ausgemacht') statusColorClass = 'border-skt-blue-main';
-                    else if (termin.Status === 'Storno') statusColorClass = 'border-skt-red-accent';
-
-                    card.className = `bg-white p-4 rounded-lg flex justify-between items-center transition-shadow hover:shadow-md border-l-4 ${statusColorClass}`;
-                    card.innerHTML = `
-                        <div class="flex-grow grid grid-cols-2 md:grid-cols-4 gap-4 items-center">
-                            <div><p class="text-xs text-gray-500">Datum</p><p class="font-bold text-skt-blue">${new Date(termin.Datum).toLocaleDateString('de-DE')}</p></div>
-                            <div><p class="text-xs text-gray-500">Kategorie</p><p class="font-semibold text-skt-blue-light">${termin.Kategorie || 'N/A'}</p></div>
-                            <div><p class="text-xs text-gray-500">Status</p><p class="font-semibold">${termin.Status || 'N/A'}</p></div>
-                            <div><p class="text-xs text-gray-500">Mitarbeiter</p><p class="font-semibold truncate" title="${termin.Mitarbeiter_ID || ''}">${termin.Mitarbeiter_ID || 'N/A'}</p></div>
-                        </div>
-                        <div class="ml-4 flex-shrink-0">
-                            <button data-id="${termin._id}" class="edit-appointment-btn bg-skt-blue-light text-white h-10 w-10 rounded-full hover:bg-skt-blue-main flex items-center justify-center" title="Bearbeiten">
-                                <i class="fas fa-pen"></i>
-                            </button>
-                        </div>
-                    `;
-                    card.querySelector('.edit-appointment-btn').addEventListener('click', () => this.openModal(termin));
-                    this.listContainer.appendChild(card);
-                });
-            },
-
-            openModal(termin = null) {
-                this.form.reset();
-                const title = this.modal.querySelector('#appointment-modal-title');
-                const idInput = this.modal.querySelector('#appointment-id');
-                const userSelect = this.modal.querySelector('#appointment-user');
-
-                userSelect.innerHTML = '';
-                const allRelevantUsers = [APP.findRowById('mitarbeiter', this.currentUserId), ...this.downline].filter(Boolean);
-                allRelevantUsers.forEach(u => userSelect.add(new Option(u.Name, u.Name)));
-
-                if (termin) { // Edit mode
-                    title.textContent = 'Termin bearbeiten';
-                    idInput.value = termin._id;
-                    document.getElementById('appointment-date').value = termin.Datum.split(' ')[0];
-                    document.getElementById('appointment-category').value = termin.Kategorie;
-                    document.getElementById('appointment-status').value = termin.Status;
-                    userSelect.value = termin.Mitarbeiter_ID;
-                } else { // Add mode
-                    title.textContent = 'Termin anlegen';
-                    idInput.value = '';
-                    userSelect.value = APP.findRowById('mitarbeiter', this.currentUserId).Name;
-                }
-                this.modal.classList.remove('hidden');
-                this.modal.classList.add('flex');
-            },
-
-            closeModal() {
-                this.modal.classList.add('hidden');
-                this.modal.classList.remove('flex');
-            },
-
-            async handleFormSubmit(e) {
-                e.preventDefault();
-                const saveBtn = document.getElementById('save-appointment-btn');
-                saveBtn.disabled = true;
-                saveBtn.querySelector('#save-btn-text').classList.add('invisible');
-                saveBtn.querySelector('.loader-small').classList.remove('hidden');
-
-                const rowId = document.getElementById('appointment-id').value;
-                const rowData = {
-                    [APP.COLUMN_MAPS.termine.Datum]: document.getElementById('appointment-date').value,
-                    [APP.COLUMN_MAPS.termine.Kategorie]: document.getElementById('appointment-category').value,
-                    [APP.COLUMN_MAPS.termine.Status]: document.getElementById('appointment-status').value,
-                    [APP.COLUMN_MAPS.termine.Mitarbeiter_ID]: document.getElementById('appointment-user').value,
-                };
-
-                let success = false;
-                if (rowId) { // Update
-                    success = await APP.seaTableUpdateRow('Termine', rowId, rowData);
-                } else { // Add
-                    success = await APP.seaTableAddRow('Termine', rowData);
-                }
-
-                if (success) {
-                    this.closeModal();
-                    await this.fetchAndRender();
-                } else {
-                    alert('Fehler beim Speichern des Termins.');
-                }
-
-                saveBtn.disabled = false;
-                saveBtn.querySelector('#save-btn-text').classList.remove('invisible');
-                saveBtn.querySelector('.loader-small').classList.add('hidden');
-            },
-
-            setupEventListeners() {
-                this.scopeFilter.addEventListener('change', (e) => {
-                    this.currentScope = e.target.value;
-                    this.userFilter.classList.toggle('hidden', this.currentScope !== 'single');
-                    this.fetchAndRender();
-                });
-
-                this.userFilter.addEventListener('change', () => this.fetchAndRender());
-
-                this.umsatzTab.addEventListener('click', () => {
-                    this.currentTab = 'umsatz';
-                    this.umsatzTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue';
-                    this.recruitingTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
-                    this.render();
-                });
-
-                this.recruitingTab.addEventListener('click', () => {
-                    this.currentTab = 'recruiting';
-                    this.recruitingTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue';
-                    this.umsatzTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
-                    this.render();
-                });
-
-                document.getElementById('add-appointment-btn').addEventListener('click', () => this.openModal());
-                document.getElementById('close-appointment-modal-btn').addEventListener('click', () => this.closeModal());
-                document.getElementById('cancel-appointment-btn').addEventListener('click', () => this.closeModal());
-                this.modal.addEventListener('click', (e) => { if (e.target === this.modal) this.closeModal(); });
-                this.form.addEventListener('submit', (e) => this.handleFormSubmit(e));
-            }
-        };
-
-        window.SKT_APPOINTMENTS_VIEW = appointmentsView;
-    })();
-</script>
