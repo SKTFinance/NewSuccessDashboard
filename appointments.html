@@ -1,6 +1,44 @@
 <!-- Ansicht für die Terminverwaltung -->
 <div id="appointments-module-root" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
-    <h2 id="appointments-title" class="text-3xl font-bold text-skt-blue mb-6 text-center">Terminübersicht</h2>
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+        <h2 id="appointments-title" class="text-3xl font-bold text-skt-blue">Terminübersicht</h2>
+        <button id="add-appointment-btn" class="mt-4 sm:mt-0 w-full sm:w-auto bg-skt-green-accent text-white font-semibold py-2 px-5 rounded-lg shadow-md hover:bg-green-700 transition-colors flex items-center justify-center">
+            <i class="fas fa-plus mr-2"></i>Neuer Termin
+        </button>
+    </div>
+
+    <!-- KPIs und Statistiken -->
+    <div id="stats-container" class="bg-skt-grey-light p-6 rounded-xl shadow-inner border border-gray-200 mb-8">
+        <div class="flex justify-between items-center">
+            <h3 class="text-xl font-bold text-skt-blue">Statistik</h3>
+            <button id="toggle-stats-visibility-btn" class="collapsed text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-300 transition-colors">
+                <i class="fas fa-chevron-up transition-transform duration-300"></i>
+            </button>
+        </div>
+        <div id="stats-content" class="stats-content-collapsible collapsed grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
+            <!-- Linke Spalte: Kreisdiagramm -->
+            <div id="pie-chart-section">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
+                    <h3 id="stats-chart-title" class="text-lg font-bold text-skt-blue">Termine nach...</h3>
+                    <div id="stats-chart-toggle" class="view-toggle flex space-x-2 mt-2 sm:mt-0">
+                        <button id="stats-by-employee-btn" class="active">Mitarbeiter</button>
+                        <button id="stats-by-status-btn">Status</button>
+                    </div>
+                </div>
+                <div class="flex flex-col md:flex-row items-center gap-4">
+                    <div id="stats-pie-chart-container" class="w-full md:w-1/2 flex justify-center items-center shrink-0"></div>
+                    <div id="stats-pie-chart-legend" class="w-full md:w-1/2 self-start"></div>
+                </div>
+            </div>
+            <!-- Rechte Spalte: Umsatzprognose Details -->
+            <div id="prognosis-section">
+                <h3 class="text-lg font-bold text-skt-blue mb-4">Umsatzprognose (offene BTs)</h3>
+                <div id="prognosis-details-container" class="max-h-[180px] overflow-y-auto pr-2">
+                    <!-- Inhalt wird per JS generiert -->
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Filter und Aktionen -->
     <div class="bg-skt-grey-light p-4 rounded-xl mb-6 border border-gray-200">
@@ -27,13 +65,25 @@
         </div>
         <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
             <div>
-                <label for="appointments-search-filter" class="sr-only">Suchen</label>
-                <input type="text" id="appointments-search-filter" placeholder="Kunde, Bewerber oder Mitarbeiter suchen..." class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                <label for="appointments-scope-filter" class="block text-sm font-medium text-gray-700 mb-1">Anzeigen für</label>
+                <select id="appointments-scope-filter" class="modern-select">
+                    <option value="personal">Meine Termine</option>
+                    <option value="group">Meine Gruppe</option>
+                    <option value="structure">Meine Struktur</option>
+                </select>
             </div>
-            <div class="flex items-end h-full justify-start md:justify-end">
-                <div class="flex items-center space-x-3 mt-4 md:mt-0">
-                    <input type="checkbox" id="appointments-show-cancelled" class="h-4 w-4 text-skt-red-accent border-gray-300 rounded focus:ring-skt-red-accent"><label for="appointments-show-cancelled" class="text-sm font-medium text-gray-700">Abgesagte Termine anzeigen</label>
+            <div class="flex items-end pb-1 justify-self-start lg:justify-self-end">
+                <div class="flex items-center space-x-3">
+                    <label for="appointments-show-cancelled" class="toggle-switch">
+                        <input type="checkbox" id="appointments-show-cancelled" class="sr-only peer">
+                        <div class="toggle-slider"></div>
+                    </label>
+                    <label for="appointments-show-cancelled" class="text-sm font-medium text-gray-700">Abgesagte</label>
                 </div>
+            </div>
+            <div class="lg:col-span-4 md:col-span-2">
+                <label for="appointments-search-filter" class="sr-only">Suchen</label>
+                <input type="text" id="appointments-search-filter" placeholder="Kunde, Bewerber oder Mitarbeiter suchen..." class="modern-input">
             </div>
         </div>
     </div>
@@ -42,6 +92,7 @@
         <nav class="-mb-px flex space-x-8" aria-label="Tabs">
             <button id="umsatz-tab" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue">Umsatztermine</button>
             <button id="recruiting-tab" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Recruitingtermine</button>
+            <button id="netzwerk-tab" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Netzwerktermine</button>
         </nav>
     </div>
 
@@ -62,12 +113,18 @@
                 <div><label for="appointment-category" class="block text-sm font-medium text-gray-700">Kategorie</label><select id="appointment-category" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></select></div>
                 <div><label for="appointment-status" class="block text-sm font-medium text-gray-700">Status</label><select id="appointment-status" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></select></div>
             </div>
-            <div><label for="appointment-partner" class="block text-sm font-medium text-gray-700">Terminpartner</label><input type="text" id="appointment-partner" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></div>
-            <div id="appointment-prognose-container" class="hidden"><label for="appointment-prognose" class="block text-sm font-medium text-gray-700">Umsatzprognose (EH)</label><input type="number" step="0.01" id="appointment-prognose" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></div>
-            <div><label for="appointment-referrals" class="block text-sm font-medium text-gray-700">Empfehlungen</label><input type="number" id="appointment-referrals" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></div>
-            <div><label for="appointment-note" class="block text-sm font-medium text-gray-700">Hinweis</label><textarea id="appointment-note" rows="3" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></textarea></div>
-            <div class="flex items-center space-x-3"><input type="checkbox" id="appointment-cancellation" class="h-4 w-4 text-skt-red-accent border-gray-300 rounded focus:ring-skt-red-accent"><label for="appointment-cancellation" class="text-sm font-medium text-gray-700">Absage/Storno</label></div>
-            <div id="appointment-cancellation-reason-container" class="hidden"><label for="appointment-cancellation-reason" class="block text-sm font-medium text-gray-700">Absagegrund</label><textarea id="appointment-cancellation-reason" rows="2" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></textarea></div>
+            <div><label for="appointment-partner" class="block text-sm font-medium text-gray-700">Terminpartner</label><input type="text" id="appointment-partner" class="modern-input"></div>
+            <div id="appointment-prognose-container" class="hidden"><label for="appointment-prognose" class="block text-sm font-medium text-gray-700">Umsatzprognose (EH)</label><input type="number" step="0.01" id="appointment-prognose" class="modern-input"></div>
+            <div><label for="appointment-referrals" class="block text-sm font-medium text-gray-700">Empfehlungen</label><input type="number" id="appointment-referrals" class="modern-input"></div>
+            <div><label for="appointment-note" class="block text-sm font-medium text-gray-700">Hinweis</label><textarea id="appointment-note" rows="3" class="modern-input"></textarea></div>
+            <div class="flex items-center space-x-3 pt-2">
+                <label for="appointment-cancellation" class="toggle-switch">
+                    <input type="checkbox" id="appointment-cancellation" class="sr-only peer">
+                    <div class="toggle-slider"></div>
+                </label>
+                <label for="appointment-cancellation" class="text-sm font-medium text-gray-700">Absage/Storno</label>
+            </div>
+            <div id="appointment-cancellation-reason-container" class="hidden"><label for="appointment-cancellation-reason" class="block text-sm font-medium text-gray-700">Absagegrund</label><textarea id="appointment-cancellation-reason" rows="2" class="modern-input"></textarea></div>
             <div class="pt-4 flex justify-end space-x-3"><button type="button" id="cancel-appointment-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button><button type="submit" id="save-appointment-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors flex items-center justify-center" style="min-width: 110px; min-height: 42px;"><span id="save-btn-text">Speichern</span><div class="loader-small hidden"></div></button></div>
         </form>
     </div>

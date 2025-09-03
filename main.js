@@ -241,7 +241,15 @@ async function seaTableSqlQuery(sql, convertLinks = true) {
         );
       }
       const data = await response.json();
-      return data.results || [];
+      // Für SELECT gibt es 'results', für INSERT/UPDATE nicht.
+      // Wir geben das ganze Objekt zurück, damit der Aufrufer 'success' prüfen kann.
+      // Wenn 'results' existiert, geben wir es zurück, ansonsten null, um Fehler von Erfolg (leeres Array) zu unterscheiden.
+      if (data.results) {
+          return data.results;
+      } else if (data.success) {
+          return []; // Leeres Array signalisiert einen erfolgreichen Schreibvorgang ohne Ergebnis-Set.
+      }
+      throw new Error(`Unexpected API response: ${JSON.stringify(data)}`);
     } catch (error) {
       if (error.message === "RateLimit") {
         retries--;
@@ -253,7 +261,7 @@ async function seaTableSqlQuery(sql, convertLinks = true) {
             `API-Limit erreicht. Daten konnten nicht geladen werden.`,
             true
           );
-          return [];
+          return null;
         }
         console.warn(`SQL query rate limited. Retrying in ${wait}ms...`);
         await delay(wait);
@@ -261,7 +269,7 @@ async function seaTableSqlQuery(sql, convertLinks = true) {
       } else {
         console.error("Error executing SeaTable SQL query:", error);
         setStatus(`Fehler bei der SQL-Abfrage.`, true);
-        return [];
+        return null;
       }
     }
   }
@@ -328,61 +336,197 @@ async function seaTableQuery(tableName) {
 }
 
 async function seaTableUpdateRow(tableName, rowId, rowData) {
+  // Führt für jedes Feld einen einzelnen SQL-Befehl aus, außer für die Mitarbeiter_ID, die per Link-API aktualisiert wird.
+  const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
+  if (!tableMap) {
+    console.error(`[HYBRID-UPDATE] No column map found for table: ${tableName}`);
+    return false;
+  }
+
+  const tableMeta = METADATA.tables.find(
+    (t) => t.name.toLowerCase() === tableName.toLowerCase()
+  );
+  if (!tableMeta) {
+    console.error(`[HYBRID-UPDATE] No table metadata found for: ${tableName}`);
+    return false;
+  }
+
+  let allUpdatesSucceeded = true;
+
+  for (const key in rowData) {
+    if (Object.hasOwnProperty.call(rowData, key)) {
+      const value = rowData[key];
+      const colName = Object.keys(tableMap).find(
+        (name) => tableMap[name] === key
+      );
+
+      if (!colName || colName === "_id") continue;
+
+      // HYBRID-LOGIK: API für die Mitarbeiter_ID, SQL für den Rest.
+      if (colName === "Mitarbeiter_ID") {
+        console.log(
+          `[API-LINK-UPDATE] Using link API for column '${colName}'.`
+        );
+        // Der Wert ist die _id des Mitarbeiters, die wir aus dem Formular bekommen.
+        const mitarbeiterRowId = value && value[0] ? value[0] : null;
+        const success = await seaTableUpdateLinkField(rowId, mitarbeiterRowId);
+        if (!success) {
+          console.error(`[API-LINK-UPDATE] Failed to update field: ${colName}`);
+          allUpdatesSucceeded = false;
+          break;
+        }
+      } else {
+        let formattedValue;
+        if (value === null || value === undefined) formattedValue = "NULL";
+        else if (typeof value === "string") formattedValue = `'${escapeSql(value)}'`;
+        else if (typeof value === "number") formattedValue = value;
+        else if (typeof value === "boolean") formattedValue = value ? "true" : "false";
+        else formattedValue = `'${escapeSql(String(value))}'`;
+
+        const sql = `UPDATE \`${tableName}\` SET \`${colName}\` = ${formattedValue} WHERE \`_id\` = '${rowId}'`;
+        console.log(`[SQL-UPDATE] Executing single-field update: ${sql}`);
+
+        const result = await seaTableSqlQuery(sql, false);
+        if (result === null) {
+          console.error(`[SQL-UPDATE] Failed to update field: ${colName}`);
+          allUpdatesSucceeded = false;
+          break;
+        }
+      }
+    }
+  }
+  return allUpdatesSucceeded;
+}
+
+async function seaTableUpdateLinkField(terminRowId, mitarbeiterRowId) {
   if (!seaTableAccessToken || !apiGatewayUrl) return false;
   try {
-    const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+    const termineTableMeta = METADATA.tables.find((t) => t.name === "Termine");
+    const mitarbeiterTableMeta = METADATA.tables.find((t) => t.name === "Mitarbeiter");
+    if (!termineTableMeta || !mitarbeiterTableMeta) throw new Error("Could not find 'Termine' or 'Mitarbeiter' table in metadata.");
+
+    const linkColumnMeta = termineTableMeta.columns.find((c) => c.name === "Mitarbeiter_ID");
+    if (!linkColumnMeta || !linkColumnMeta.data || !linkColumnMeta.data.link_id) throw new Error("Could not find 'link_id' for 'Mitarbeiter_ID' column.");
+
+    const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/links/`;
+    const body = {
+      table_id: termineTableMeta._id,
+      other_table_id: mitarbeiterTableMeta._id,
+      link_id: linkColumnMeta.data.link_id,
+      other_rows_ids_map: {
+        [terminRowId]: mitarbeiterRowId ? [mitarbeiterRowId] : [],
+      },
+    };
+
+    console.log("[API-LINK-UPDATE] PUT /links Payload:", JSON.stringify(body, null, 2));
+
     const response = await fetch(url, {
       method: "PUT",
       headers: {
         Authorization: `Bearer ${seaTableAccessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        table_name: tableName,
-        row_id: rowId,
-        row: rowData,
-      }),
+      body: JSON.stringify(body),
     });
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(
-        `HTTP error! status: ${response.status}, message: ${errorData.error_message}`
-      );
+      const errorText = await response.text();
+      throw new Error(`Link update failed: ${response.status} ${errorText}`);
     }
+    console.log("[API-LINK-UPDATE] Link updated successfully.");
     return true;
   } catch (error) {
-    console.error(`Error updating row in table ${tableName}:`, error);
-    setStatus(
-      `Fehler beim Speichern der Daten in Tabelle: ${tableName}.`,
-      true
-    );
+    console.error("Error updating link field:", error);
     return false;
   }
 }
 
 async function seaTableAddRow(tableName, rowData) {
-  if (!seaTableAccessToken || !apiGatewayUrl) return false;
-  try {
-    const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${seaTableAccessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ table_name: tableName, row: rowData }),
-    });
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(
-        `HTTP error! status: ${response.status}, message: ${errorData.error_message}`
-      );
-    }
-    return await response.json();
-  } catch (error) {
-    console.error(`Error adding row to table ${tableName}:`, error);
+  // Neuer, effizienter Ansatz basierend auf dem Skript des Benutzers:
+  // 1. Daten für die Verknüpfung (Mitarbeiter_ID) von den restlichen Daten trennen.
+  // 2. Spalten-Keys in Spalten-NAMEN umwandeln, da der /rows Endpunkt Namen erwartet.
+  // 3. Eine neue Zeile mit den umgewandelten Daten erstellen.
+  // 4. Die Verknüpfung in einem separaten Schritt über die Links-API setzen.
+  console.log("[ADD-ROW-NEW] Starting new add-row process.");
+
+  if (!seaTableAccessToken || !apiGatewayUrl) {
+    console.error("Cannot add row without access token and gateway URL.");
     return false;
   }
+
+  // --- SCHRITT 1: Daten vorbereiten (Link trennen, Keys in Namen umwandeln) ---
+  const mitarbeiterIdKey = SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID;
+  const mitarbeiterRowId = rowData[mitarbeiterIdKey] ? rowData[mitarbeiterIdKey][0] : null;
+  
+  const rowDataForCreation = { ...rowData };
+  delete rowDataForCreation[mitarbeiterIdKey];
+
+  // KORREKTUR: Der 'rows' Endpunkt erwartet Spalten-NAMEN, nicht Spalten-Keys.
+  // Wir müssen die Keys (z.B. '0000') in Namen (z.B. 'Terminpartner') umwandeln.
+  const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
+  if (!tableMap) {
+      console.error(`[ADD-ROW-NEW] Column map for table '${tableName}' not found.`);
+      return false;
+  }
+  const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
+
+  const rowDataWithNames = {};
+  for (const key in rowDataForCreation) {
+      const name = reversedMap[key];
+      if (name) {
+          rowDataWithNames[name] = rowDataForCreation[key];
+      }
+  }
+
+  let newRowId = null;
+
+  // --- SCHRITT 2: Zeile mit den meisten Daten anlegen ---
+  try {
+    // Wir verwenden den "Append rows" (plural) Endpunkt, wie im Skript des Benutzers.
+    const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+    const body = { table_name: tableName, rows: [rowDataWithNames] }; // KORREKTUR: rowDataWithNames verwenden
+
+    console.log(`[ADD-ROW-NEW] Step 1: Creating row. POST to ${url}`);
+    console.log(`[ADD-ROW-NEW] Step 1 Body:`, JSON.parse(JSON.stringify(body)));
+
+    const response = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${seaTableAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const responseText = await response.text();
+    console.log(`[ADD-ROW-NEW] Step 1 Response Status: ${response.status}`);
+    console.log(`[ADD-ROW-NEW] Step 1 Response Body:`, responseText);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}, message: ${responseText}`);
+    }
+
+    const result = JSON.parse(responseText);
+    if (!result || !result.row_ids || result.row_ids.length === 0) {
+      // Falls die API einen 200 OK mit einer Fehlermeldung zurückgibt (z.B. bei falschem Spaltennamen)
+      const errorMessage = result.error_message || "API did not return a valid new row ID in 'row_ids' array.";
+      throw new Error(errorMessage);
+    }
+    // KORREKTUR: Die API gibt ein Array von Objekten zurück, wir brauchen die _id Eigenschaft daraus.
+    // Dein Skript hat dies korrekt gezeigt: `data.row_ids[0]._id`
+    newRowId = result.row_ids[0]?._id;
+    if (!newRowId) {
+      throw new Error("API response for new row is malformed, missing _id in row_ids[0].");
+    }
+    console.log(`[ADD-ROW-NEW] Step 1 Success: Created row with _id: ${newRowId}`);
+  } catch (error) {
+    console.error("[ADD-ROW-NEW] Step 1 FAILED: Could not create initial row.", error);
+    return false;
+  }
+
+  // --- SCHRITT 3: Mitarbeiter verknüpfen ---
+  if (mitarbeiterRowId) {
+    console.log(`[ADD-ROW-NEW] Step 2: Linking Mitarbeiter_ID ${mitarbeiterRowId} to new Termin ${newRowId}.`);
+    const linkSuccess = await seaTableUpdateLinkField(newRowId, mitarbeiterRowId);
+    if (!linkSuccess) {
+      console.error("[ADD-ROW-NEW] Step 2 FAILED: Could not link employee to the new row.");
+      return false; // Fehler, wenn die Verknüpfung fehlschlägt.
+    }
+    console.log("[ADD-ROW-NEW] Step 2 Success: Employee linked.");
+  }
+
+  console.log("[ADD-ROW-NEW] Process finished successfully.");
+  return true;
 }
 // --- DATA NORMALIZATION & MAPPING ---
 function normalizeAllData() {
@@ -2134,6 +2278,15 @@ class AppointmentsView {
         // Der Konstruktor ist absichtlich schlank. DOM-Elemente werden in init() geholt.
         this.listContainer = null;
         this.umsatzTab = null;
+        this.netzwerkTab = null;
+        this.statsChartTitle = null;
+        this.statsPieChartContainer = null;
+        this.statsPieChartLegend = null;
+        this.statsByEmployeeBtn = null;
+        this.statsByStatusBtn = null;
+        this.toggleStatsBtn = null;
+        this.statsContent = null;
+        this.prognosisDetailsContainer = null;
         this.recruitingTab = null;
         this.startDateInput = null;
         this.endDateInput = null;
@@ -2151,6 +2304,7 @@ class AppointmentsView {
         this.sortColumn = 'Datum';
         this.sortDirection = 'desc';
         this.filterText = '';
+        this.statsChartMode = 'employee';
         this.showCancelled = false;
     }
 
@@ -2158,6 +2312,15 @@ class AppointmentsView {
     _getDomElements() {
         this.listContainer = document.getElementById('appointments-list-container');
         this.umsatzTab = document.getElementById('umsatz-tab');
+        this.netzwerkTab = document.getElementById('netzwerk-tab');
+        this.statsChartTitle = document.getElementById('stats-chart-title');
+        this.statsPieChartContainer = document.getElementById('stats-pie-chart-container');
+        this.statsPieChartLegend = document.getElementById('stats-pie-chart-legend');
+        this.statsByEmployeeBtn = document.getElementById('stats-by-employee-btn');
+        this.statsByStatusBtn = document.getElementById('stats-by-status-btn');
+        this.toggleStatsBtn = document.getElementById('toggle-stats-visibility-btn');
+        this.statsContent = document.getElementById('stats-content');
+        this.prognosisDetailsContainer = document.getElementById('prognosis-details-container');
         this.recruitingTab = document.getElementById('recruiting-tab');
         this.startDateInput = document.getElementById('appointments-start-date');
         this.endDateInput = document.getElementById('appointments-end-date');
@@ -2167,7 +2330,7 @@ class AppointmentsView {
         this.searchInput = document.getElementById('appointments-search-filter');
         this.showCancelledCheckbox = document.getElementById('appointments-show-cancelled');
 
-        return this.listContainer && this.umsatzTab && this.recruitingTab && this.startDateInput && this.endDateInput && this.scopeFilter && this.modal && this.form && this.searchInput && this.showCancelledCheckbox;
+        return this.listContainer && this.umsatzTab && this.recruitingTab && this.netzwerkTab && this.statsPieChartContainer && this.toggleStatsBtn && this.statsContent && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.scopeFilter && this.modal && this.form && this.searchInput && this.showCancelledCheckbox;
     }
 
     async init(userId) {
@@ -2185,7 +2348,7 @@ class AppointmentsView {
 
         this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
         this.downline.sort((a, b) => a.Name.localeCompare(b.Name));
-        this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.authenticatedUserData));
+        this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.loggedInUserData));
 
         if (!this.initialized) {
             appointmentsLog('Erstmalige Initialisierung: Event-Listener werden eingerichtet.');
@@ -2263,8 +2426,9 @@ class AppointmentsView {
         let filteredAppointments = this.allAppointments.filter(t => {
             const isUmsatzTermin = ['AT', 'BT', 'ST'].includes(t.Kategorie);
             const isRecruitingTermin = t.Kategorie === 'ET';
+            const isNetzwerkTermin = t.Kategorie === 'NT';
 
-            const tabMatch = this.currentTab === 'umsatz' ? isUmsatzTermin : isRecruitingTermin;
+            const tabMatch = (this.currentTab === 'umsatz' && isUmsatzTermin) || (this.currentTab === 'recruiting' && isRecruitingTermin) || (this.currentTab === 'netzwerk' && isNetzwerkTermin);
             if (!tabMatch) return false;
 
             // KORREKTUR: Prüfe auf Status 'Storno' ODER das Absage-Flag
@@ -2310,6 +2474,10 @@ class AppointmentsView {
         });
 
         appointmentsLog(`Rendering ${filteredAppointments.length} appointments.`);
+
+        // NEU: KPIs und Statistiken rendern, bevor die Tabelle gebaut wird
+        this._renderStatsChart();
+        this._renderPrognosisDetails();
 
         if (filteredAppointments.length === 0) {
             this.listContainer.innerHTML = `<div class="text-center py-16"><i class="fas fa-calendar-times fa-4x text-skt-grey-medium mb-4"></i><h3 class="text-xl font-semibold text-skt-blue">Keine Termine gefunden</h3><p class="text-gray-500 mt-2">Für die aktuelle Auswahl gibt es keine Termine.</p></div>`;
@@ -2402,12 +2570,27 @@ class AppointmentsView {
 
         this.umsatzTab.addEventListener('click', () => { this.currentTab = 'umsatz'; this.updateTabs(); this.render(); });
         this.recruitingTab.addEventListener('click', () => { this.currentTab = 'recruiting'; this.updateTabs(); this.render(); });
+        this.netzwerkTab.addEventListener('click', () => { this.currentTab = 'netzwerk'; this.updateTabs(); this.render(); });
 
         document.getElementById('add-appointment-btn').addEventListener('click', () => this.openModal());
         document.getElementById('close-appointment-modal-btn').addEventListener('click', () => this.closeModal());
         document.getElementById('cancel-appointment-btn').addEventListener('click', () => this.closeModal());
         this.modal.addEventListener('click', (e) => { if (e.target === this.modal) this.closeModal(); });
         this.form.addEventListener('submit', (e) => this.handleFormSubmit(e));
+
+        this.toggleStatsBtn.addEventListener('click', () => this._toggleStatsVisibility());
+
+        // NEU: Event Listeners für Statistik-Umschalter
+        this.statsByEmployeeBtn.addEventListener('click', () => {
+            this.statsChartMode = 'employee';
+            this._updateStatsToggleButtons();
+            this._renderStatsChart();
+        });
+        this.statsByStatusBtn.addEventListener('click', () => {
+            this.statsChartMode = 'status';
+            this._updateStatsToggleButtons();
+            this._renderStatsChart();
+        });
 
         // Event Listeners für bedingte Felder im Modal
         this.form.querySelector('#appointment-category').addEventListener('change', (e) => this.toggleConditionalFields(e.target.value));
@@ -2446,13 +2629,160 @@ class AppointmentsView {
     }
 
     updateTabs() {
-        if (this.currentTab === 'umsatz') {
-            this.umsatzTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue';
-            this.recruitingTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
-        } else {
-            this.recruitingTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue';
-            this.umsatzTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
+        const tabs = [
+            { el: this.umsatzTab, name: 'umsatz' },
+            { el: this.recruitingTab, name: 'recruiting' },
+            { el: this.netzwerkTab, name: 'netzwerk' }
+        ];
+        const activeClass = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue';
+        const inactiveClass = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
+
+        tabs.forEach(tab => {
+            if (tab.el) {
+                tab.el.className = tab.name === this.currentTab ? activeClass : inactiveClass;
+            }
+        });
+    }
+
+    _renderPrognosisDetails() {
+        const container = this.prognosisDetailsContainer;
+        if (!container) return;
+        container.innerHTML = '';
+
+        const prognosisByEmployee = {};
+
+        this.allAppointments
+            .filter(t => t.Kategorie === 'BT' && t.Status !== 'Storno' && t.Absage !== true && t.Umsatzprognose > 0)
+            .forEach(t => {
+                const employeeName = t.Mitarbeiter_ID?.[0]?.display_value || 'Unbekannt';
+                prognosisByEmployee[employeeName] = (prognosisByEmployee[employeeName] || 0) + t.Umsatzprognose;
+            });
+
+        const sortedPrognosis = Object.entries(prognosisByEmployee)
+            .sort(([, a], [, b]) => b - a);
+
+        if (sortedPrognosis.length === 0) {
+            container.innerHTML = `<div class="h-full flex items-center justify-center text-gray-500">Keine offenen Prognosen vorhanden.</div>`;
+            return;
         }
+
+        const list = document.createElement('div');
+        list.className = 'space-y-2';
+        sortedPrognosis.forEach(([name, value]) => {
+            const item = document.createElement('div');
+            item.className = 'prognosis-item flex justify-between items-center';
+            item.innerHTML = `<span class="font-semibold text-skt-blue text-sm">${name}</span><span class="font-bold text-skt-green-accent">${value.toLocaleString('de-DE')} EH</span>`;
+            list.appendChild(item);
+        });
+        container.appendChild(list);
+    }
+
+    _toggleStatsVisibility() {
+        this.statsContent.classList.toggle('collapsed');
+        this.toggleStatsBtn.classList.toggle('collapsed');
+    }
+
+    _updateStatsToggleButtons() {
+        this.statsByEmployeeBtn.classList.toggle('active', this.statsChartMode === 'employee');
+        this.statsByStatusBtn.classList.toggle('active', this.statsChartMode === 'status');
+    }
+
+    _renderStatsChart() {
+        let data;
+
+        if (this.statsChartMode === 'employee') {
+            this.statsChartTitle.textContent = 'Termine nach Mitarbeiter';
+            const statsByMitarbeiter = {};
+            this.allAppointments.forEach(t => {
+                const name = t.Mitarbeiter_ID?.[0]?.display_value || 'Unbekannt';
+                statsByMitarbeiter[name] = (statsByMitarbeiter[name] || 0) + 1;
+            });
+            data = Object.entries(statsByMitarbeiter).map(([label, value], index) => ({
+                label,
+                value,
+                color: this._getColorForIndex(index)
+            }));
+        } else { // 'status'
+            this.statsChartTitle.textContent = 'Termine nach Status';
+            const statsByStatus = {};
+            this.allAppointments.forEach(t => {
+                const status = t.Status || 'Unbekannt';
+                statsByStatus[status] = (statsByStatus[status] || 0) + 1;
+            });
+            data = Object.entries(statsByStatus).map(([label, value]) => ({
+                label,
+                value,
+                color: this._getHexColorForStatus(label)
+            }));
+        }
+
+        data.sort((a, b) => b.value - a.value);
+        this._createPieChart(data);
+    }
+
+    _getColorForIndex(index) {
+        const colors = ['#002147', '#f97316', '#3b82f6', '#27ae60', '#8e44ad', '#f1c40f', '#FF6347', '#d4af37', '#043C64', '#c7c7c7'];
+        return colors[index % colors.length];
+    }
+
+    _getHexColorForStatus(status) {
+        const hexColorMap = {
+            'Storno': '#FF6347',
+            'Gehalten': '#27ae60',
+            'Ausgemacht': '#c7c7c7',
+            'weiterer BT': '#c7c7c7',
+            'weiterer ET': '#c7c7c7',
+            'Verschoben': '#f97316',
+            'offen': '#f97316',
+            'Info Eingeladen': '#f1c40f',
+            'Info Bestätigt': '#3b82f6',
+            'Info Anwesend': '#8e44ad',
+            'Wird Mitarbeiter': '#d4af37',
+            'default': '#9ca3af'
+        };
+        return hexColorMap[status] || hexColorMap['default'];
+    }
+
+    _createPieChart(data) {
+        const pieContainer = this.statsPieChartContainer;
+        const legendContainer = this.statsPieChartLegend;
+        pieContainer.innerHTML = '';
+        legendContainer.innerHTML = '';
+
+        if (data.length === 0 || data.every(d => d.value === 0)) {
+            pieContainer.innerHTML = `<div class="flex items-center justify-center h-full text-gray-500">Keine Daten für Diagramm</div>`;
+            return;
+        }
+
+        const totalValue = data.reduce((sum, item) => sum + item.value, 0);
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute('viewBox', '0 0 64 64');
+        svg.classList.add('pie-chart-svg');
+
+        let accumulatedPercentage = 0;
+        data.forEach(item => {
+            const percentage = (item.value / totalValue) * 100;
+            const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            circle.setAttribute('cx', '32');
+            circle.setAttribute('cy', '32');
+            circle.setAttribute('r', '16');
+            circle.style.stroke = item.color;
+            circle.style.strokeDasharray = `${percentage} 100`;
+            circle.style.strokeDashoffset = -accumulatedPercentage;
+            svg.appendChild(circle);
+            accumulatedPercentage += percentage;
+
+            const legendItem = document.createElement('div');
+            legendItem.className = 'legend-item';
+            legendItem.innerHTML = `
+                <div class="legend-color-dot" style="background-color: ${item.color};"></div>
+                <div class="legend-label" title="${item.label}">${item.label}</div>
+                <div class="legend-value">${item.value}</div>
+            `;
+            legendContainer.appendChild(legendItem);
+        });
+
+        pieContainer.appendChild(svg);
     }
 
     toggleConditionalFields(category) {
@@ -2509,7 +2839,7 @@ class AppointmentsView {
                 const user = allRelevantUsers.find(u => u.Name === termin.Mitarbeiter_ID?.[0]?.display_value);
                 if (user) userSelect.value = user._id;
                 
-                this.form.querySelector('#appointment-date').value = termin.Datum ? termin.Datum.split(' ')[0] : '';
+                this.form.querySelector('#appointment-date').value = termin.Datum ? termin.Datum.split('T')[0] : '';
                 categorySelect.value = termin.Kategorie || '';
                 statusSelect.value = termin.Status || '';
                 this.form.querySelector('#appointment-partner').value = termin.Terminpartner || '';
@@ -2544,50 +2874,93 @@ class AppointmentsView {
     closeModal() {
         this.modal.classList.remove('visible');
         document.body.classList.remove('modal-open');
+
+        // Setzt den Speicher-Button zuverlässig in den Standardzustand zurück, wenn das Modal geschlossen wird.
+        const saveBtn = document.getElementById('save-appointment-btn');
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.querySelector('#save-btn-text').textContent = 'Speichern';
+            saveBtn.querySelector('#save-btn-text').classList.remove('hidden');
+            saveBtn.querySelector('.loader-small').classList.add('hidden');
+            saveBtn.classList.remove('bg-skt-green-accent');
+            saveBtn.classList.add('bg-skt-blue', 'hover:bg-skt-blue-light');
+        }
     }
 
     async handleFormSubmit(e) {
         e.preventDefault();
+        appointmentsLog('--- START: handleFormSubmit ---');
         const saveBtn = document.getElementById('save-appointment-btn');
+        const saveBtnText = saveBtn.querySelector('#save-btn-text');
+        const saveBtnLoader = saveBtn.querySelector('.loader-small');
+
         saveBtn.disabled = true;
-        saveBtn.querySelector('#save-btn-text').classList.add('hidden');
-        saveBtn.querySelector('.loader-small').classList.remove('hidden');
+        saveBtnText.classList.add('hidden');
+        saveBtnLoader.classList.remove('hidden');
 
-        const rowId = this.form.querySelector('#appointment-id').value;
-        const isCancellation = this.form.querySelector('#appointment-cancellation').checked;
+        try {
+            const rowId = this.form.querySelector('#appointment-id').value;
+            const isCancellation = this.form.querySelector('#appointment-cancellation').checked;
 
-        const rowData = {
-            [SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID]: [this.form.querySelector('#appointment-user').value],
-            [SKT_APP.COLUMN_MAPS.termine.Datum]: this.form.querySelector('#appointment-date').value,
-            [SKT_APP.COLUMN_MAPS.termine.Kategorie]: this.form.querySelector('#appointment-category').value,
-            [SKT_APP.COLUMN_MAPS.termine.Status]: isCancellation ? 'Storno' : this.form.querySelector('#appointment-status').value,
-            [SKT_APP.COLUMN_MAPS.termine.Terminpartner]: this.form.querySelector('#appointment-partner').value,
-            [SKT_APP.COLUMN_MAPS.termine.Umsatzprognose]: parseFloat(this.form.querySelector('#appointment-prognose').value) || null,
-            [SKT_APP.COLUMN_MAPS.termine.Empfehlungen]: parseInt(this.form.querySelector('#appointment-referrals').value) || null,
-            [SKT_APP.COLUMN_MAPS.termine.Hinweis]: this.form.querySelector('#appointment-note').value,
-            [SKT_APP.COLUMN_MAPS.termine.Absage]: isCancellation,
-            [SKT_APP.COLUMN_MAPS.termine.Absagegrund]: isCancellation ? this.form.querySelector('#appointment-cancellation-reason').value : '',
-        };
+            // Log individual form values
+            const mitarbeiterId = this.form.querySelector('#appointment-user').value;
+            const datum = this.form.querySelector('#appointment-date').value;
+            const kategorie = this.form.querySelector('#appointment-category').value;
+            const status = this.form.querySelector('#appointment-status').value;
+            const terminpartner = this.form.querySelector('#appointment-partner').value;
+            const prognoseRaw = this.form.querySelector('#appointment-prognose').value;
+            const empfehlungenRaw = this.form.querySelector('#appointment-referrals').value;
+            const hinweis = this.form.querySelector('#appointment-note').value;
+            const absagegrund = this.form.querySelector('#appointment-cancellation-reason').value;
 
-        let success = false;
-        if (rowId) {
-            appointmentsLog('Führe Update aus für Termin:', rowId);
-            success = await SKT_APP.seaTableUpdateRow('Termine', rowId, rowData);
-        } else {
-            appointmentsLog('Führe Hinzufügen aus...');
-            success = await SKT_APP.seaTableAddRow('Termine', rowData);
+            const rowData = {
+                [SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID]: [mitarbeiterId],
+                [SKT_APP.COLUMN_MAPS.termine.Datum]: datum,
+                [SKT_APP.COLUMN_MAPS.termine.Kategorie]: kategorie,
+                [SKT_APP.COLUMN_MAPS.termine.Status]: isCancellation ? 'Storno' : status,
+                [SKT_APP.COLUMN_MAPS.termine.Terminpartner]: terminpartner,
+                [SKT_APP.COLUMN_MAPS.termine.Umsatzprognose]: parseFloat(prognoseRaw) || null,
+                [SKT_APP.COLUMN_MAPS.termine.Empfehlungen]: parseInt(empfehlungenRaw) || null,
+                [SKT_APP.COLUMN_MAPS.termine.Hinweis]: hinweis,
+                [SKT_APP.COLUMN_MAPS.termine.Absage]: isCancellation,
+                [SKT_APP.COLUMN_MAPS.termine.Absagegrund]: isCancellation ? absagegrund : '',
+            };
+
+            appointmentsLog('Constructed rowData object for API:', JSON.parse(JSON.stringify(rowData)));
+
+            const success = rowId 
+                ? await SKT_APP.seaTableUpdateRow('Termine', rowId, rowData)
+                : await SKT_APP.seaTableAddRow('Termine', rowData);
+
+            appointmentsLog(`API call finished. Success: ${success ? 'true' : 'false'}`);
+
+            if (success) {
+                appointmentsLog('API call successful. Showing success message and refreshing.');
+                
+                saveBtnText.textContent = 'Gespeichert!';
+                saveBtnLoader.classList.add('hidden');
+                saveBtnText.classList.remove('hidden');
+                saveBtn.classList.remove('bg-skt-blue', 'hover:bg-skt-blue-light');
+                saveBtn.classList.add('bg-skt-green-accent');
+
+                await this.fetchAndRender(); 
+
+                setTimeout(() => this.closeModal(), 1500);
+
+            } else {
+                appointmentsLog('!!! FEHLER: API call was not successful.');
+                console.error('Fehler beim Speichern des Termins. API-Aufruf war nicht erfolgreich. Überprüfe die Netzwerk-Antwort in den Entwicklertools für mehr Details.');
+                saveBtn.disabled = false;
+                saveBtnText.classList.remove('hidden');
+                saveBtnLoader.classList.add('hidden');
+            }
+        } catch (error) {
+            appointmentsLog('!!! CRITICAL ERROR in handleFormSubmit !!!', error);
+            console.error('Ein kritischer Fehler ist aufgetreten. Details siehe Konsole.', error);
+            saveBtn.disabled = false;
+            saveBtnText.classList.remove('hidden');
+            saveBtnLoader.classList.add('hidden');
         }
-
-        if (success) {
-            this.closeModal();
-            await this.fetchAndRender();
-        } else {
-            alert('Fehler beim Speichern des Termins.');
-        }
-
-        saveBtn.disabled = false;
-        saveBtn.querySelector('#save-btn-text').classList.remove('hidden');
-        saveBtn.querySelector('.loader-small').classList.add('hidden');
     }
 }
 
@@ -2614,8 +2987,7 @@ async function loadAndInitAppointmentsView() {
     }
     
     console.log('%c[Loader] %cInitializing appointments view instance...', 'color: orange; font-weight: bold;', 'color: black;');
-    await appointmentsViewInstance.init(currentlyViewedUserData._id);
-
+    await appointmentsViewInstance.init(loggedInUserData._id);
   } catch (error) {
     console.error("Fehler beim Laden der Termin-Ansicht:", error);
     container.innerHTML = `<div class="text-center p-8 bg-red-50 rounded-lg border border-red-200"><i class="fas fa-exclamation-triangle fa-3x text-red-400 mb-4"></i><h3 class="text-xl font-bold text-skt-blue">Fehler beim Laden</h3><p class="text-red-600 mt-2">${error.message}</p><p class="text-gray-500 mt-4">Bitte stelle sicher, dass die Datei 'appointments.html' im selben Verzeichnis wie 'index.html' liegt.</p></div>`;
@@ -2753,6 +3125,7 @@ function setupEventListeners() {
     closeSettingsMenu();
     openEditUserModal();
   });
+
   // --- Main Navigation ---
   dom.backButton.addEventListener("click", async () => {
     if (isSuperuserView) {
@@ -2837,7 +3210,7 @@ function setupEventListeners() {
   });
   dom.einarbeitungBanner.addEventListener("click", () => {
     switchView("einarbeitung");
-    fetchAndRenderOnboarding(authenticatedUserData._id);
+    fetchAndRenderOnboarding(loggedInUserData._id);
   });
 
   dom.dashboardHeaderBtn.addEventListener('click', () => {
@@ -3262,7 +3635,12 @@ window.SKT_APP = {
   getAllSubordinatesRecursive,
   isUserLeader,
   db,
-  COLUMN_MAPS,
+  get COLUMN_MAPS() { // Use a getter to ensure the latest value is always returned
+    return COLUMN_MAPS;
+  },
+  get METADATA() { // Use a getter to ensure the latest value is always returned
+    return METADATA;
+  },
   get METADATA() { // Use a getter to ensure the latest value is always returned
     return METADATA;
   },
