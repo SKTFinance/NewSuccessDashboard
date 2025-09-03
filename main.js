@@ -3321,6 +3321,7 @@ async function saveUserData() {
   dom.saveUserBtn.disabled = false;
 }
 
+
 // --- START ---
 document.addEventListener("DOMContentLoaded", initializeDashboard);
 
