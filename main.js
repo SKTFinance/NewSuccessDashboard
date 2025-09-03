@@ -26,8 +26,7 @@ let db = {
 let personalData = {};
 let teamData = {};
 let structureData = {};
-let authenticatedUserData = {}; // The user who is logged in
-let currentlyViewedUserData = {}; // The user whose dashboard is currently shown
+let loggedInUserData = {};
 let viewHistory = [];
 
 let currentPlanningView = "team";
@@ -149,7 +148,6 @@ const dom = {
   cancelEditUserBtn: document.getElementById("cancel-edit-user-btn"),
   cancelEditUserBtn2: document.getElementById("cancel-edit-user-btn-2"),
   saveUserBtn: document.getElementById("save-user-btn"),
-  nextInfoDate: document.getElementById("next-info-date"),
 };
 
 // --- SEATABLE API FUNKTIONEN ---
@@ -775,17 +773,15 @@ function animateValue(element, start, end, duration, formatAsCurrency = false) {
   const step = (timestamp) => {
     if (!startTimestamp) startTimestamp = timestamp;
     const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-    const value = progress * (end - start) + start;
-    const displayValue = Math.round(value);
-
+    const value = Math.floor(progress * (end - start) + start);
     element.textContent = formatAsCurrency
-      ? displayValue.toLocaleString("de-DE", {
+      ? value.toLocaleString("de-DE", {
           style: "currency",
           currency: "EUR",
           minimumFractionDigits: 0,
           maximumFractionDigits: 0,
         })
-      : displayValue.toLocaleString("de-DE", { maximumFractionDigits: 0 });
+      : value.toLocaleString("de-DE");
     if (progress < 1) window.requestAnimationFrame(step);
   };
   window.requestAnimationFrame(step);
@@ -959,14 +955,8 @@ async function fetchDashboardDataWithSql(mitarbeiterId) {
 function isUserLeader(user) {
   if (!user || !user.Karrierestufe) return false;
   const pos = user.Karrierestufe.toLowerCase();
-
-  // Definiere die Schlüsselwörter für Nicht-Führungskräfte basierend auf der Anforderung.
-  // Dazu gehören alle "Trainee"-Stufen und "JGST".
-  const isTrainee = pos.includes("trainee");
-  const isJgst = pos.includes("jgst");
-
-  // Eine Führungskraft ist jeder, der NICHT eine dieser Stufen hat.
-  return !(isTrainee || isJgst);
+  // Eine Führungskraft ist jeder, der kein 'Trainee' in der Karrierestufe hat.
+  return !pos.includes("trainee");
 }
 
 function buildHierarchy() {
@@ -1212,18 +1202,13 @@ async function calculateGesamtansichtData() {
     members: [],
     earnings: 0,
   };
-  // Anforderung: In der Gesamtübersicht sollen die Einheiten aller Führungskräfte summiert werden.
-  // Wir summieren hier die individuellen Plandaten jeder Führungskraft.
-  führungskräfte.forEach((leader) => {
-    const leaderData = augmentedMemberData.find((d) => d.id === leader._id);
-    if (leaderData) {
-      totalData.ehGoal += leaderData.ehGoal || 0;
-      totalData.ehCurrent += leaderData.ehCurrent || 0;
-      totalData.etGoal += leaderData.etGoal || 0;
-      totalData.etCurrent += leaderData.etCurrent || 0;
-      totalData.atGoal += leaderData.atGoal || 0;
-      totalData.atCurrent += leaderData.atCurrent || 0;
-      totalData.atVereinbart += leaderData.atVereinbart || 0;
+  geschäftsstelleRows.forEach((gsRow) => {
+    const gsData = augmentedMemberData.find((d) => d.id === gsRow._id);
+    if (gsData) {
+      Object.keys(totalData).forEach((key) => {
+        if (typeof totalData[key] === "number" && gsData[key])
+          totalData[key] += gsData[key];
+      });
     }
   });
   totalData.members = führungskräfte.map((leader) => {
@@ -1245,170 +1230,41 @@ async function calculateGesamtansichtData() {
   return totalData;
 }
 
-function drawSegmentDividers() {
-  const { startDate, endDate } = getMonthlyCycleDates();
-  clearChildren(dom.segmentDividersEh);
-  const totalDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
-  const totalWeeks = Math.ceil(totalDays / 7);
-
-  for (let i = 1; i < totalWeeks; i++) {
-    const angle = i * (360 / totalWeeks);
-    const line = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "line"
-    );
-
-    const innerRadius = 35;
-    const strokeWidth = 4;
-    const innerEdgeRadius = innerRadius - strokeWidth / 2;
-    const outerEdgeRadius = innerRadius + strokeWidth / 2;
-
-    const x1 = 50 + innerEdgeRadius * Math.cos((angle * Math.PI) / 180);
-    const y1 = 50 + innerEdgeRadius * Math.sin((angle * Math.PI) / 180);
-    const x2 = 50 + outerEdgeRadius * Math.cos((angle * Math.PI) / 180);
-    const y2 = 50 + outerEdgeRadius * Math.sin((angle * Math.PI) / 180);
-
-    line.setAttribute("x1", x1);
-    line.setAttribute("y1", y1);
-    line.setAttribute("x2", x2);
-    line.setAttribute("y2", y2);
-
-    dom.segmentDividersEh.appendChild(line);
-  }
-}
-
 // --- UI FUNKTIONEN ---
 function updateWeeklyProgress() {
-            const { startDate, endDate } = getMonthlyCycleDates();
-            const today = new Date();
-            clearChildren(dom.weeklyProgressContainer);
-
-            const totalDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
-            const daysInAWeek = 7;
-            const totalWeeks = Math.ceil(totalDays / daysInAWeek);
-            const dateOptions = { day: '2-digit', month: '2-digit' };
-
-            const createDivider = (left) => {
-                const d = document.createElement('div');
-                d.className = 'start-end-divider'; d.style.left = left;
-                dom.weeklyProgressContainer.appendChild(d);
-            };
-            const createLabel = (left, text, transform) => {
-                const l = document.createElement('div');
-                l.className = 'centered-date-label'; l.style.left = left;
-                l.style.transform = transform; l.textContent = text;
-                dom.weeklyProgressContainer.appendChild(l);
-            };
-            
-            createDivider('0%');
-            createLabel('0%', startDate.toLocaleDateString('de-DE', dateOptions), 'translateX(-50%)');
-
-            for (let i = 0; i < totalWeeks; i++) {
-                const weekStart = new Date(startDate.getTime() + i * daysInAWeek * 24 * 60 * 60 * 1000);
-                const weekEnd = new Date(weekStart.getTime() + daysInAWeek * 24 * 60 * 60 * 1000);
-                let progress = 0;
-                if (today >= weekEnd) progress = 100;
-                else if (today >= weekStart && today < weekEnd) {
-                    const daysPassed = (today - weekStart) / (1000 * 60 * 60 * 24);
-                    progress = (daysPassed / daysInAWeek) * 100;
-                }
-                const weekDiv = document.createElement('div');
-                weekDiv.className = 'flex-1 h-full relative p-2 flex flex-col items-center z-20';
-                weekDiv.innerHTML = `<div class="w-full bg-skt-grey-medium h-2 rounded-full overflow-hidden"><div class="h-full bg-skt-green-accent rounded-full transition-all duration-500" style="width: ${Math.min(progress, 100)}%;"></div></div>`;
-                dom.weeklyProgressContainer.appendChild(weekDiv);
-            }
-
-            const weeksDivs = dom.weeklyProgressContainer.querySelectorAll('.flex-1');
-            weeksDivs.forEach((div, i) => {
-                if (i === weeksDivs.length - 1) return;
-                const pos = `${(i + 1) * (100 / weeksDivs.length)}%`;
-                const weekDivider = document.createElement('div');
-                weekDivider.className = 'week-divider'; weekDivider.style.left = pos;
-                dom.weeklyProgressContainer.appendChild(weekDivider);
-                const wednesday = new Date(startDate.getTime() + i * daysInAWeek * 24 * 60 * 60 * 1000);
-                wednesday.setDate(wednesday.getDate() + (3 - wednesday.getDay() + 7) % 7);
-                createLabel(pos, wednesday.toLocaleDateString('de-DE', dateOptions), 'translateX(-50%)');
-            });
-            
-            const endDivider = document.createElement('div');
-            endDivider.className = 'start-end-divider'; endDivider.style.right = '0%';
-            dom.weeklyProgressContainer.appendChild(endDivider);
-            createLabel('100%', endDate.toLocaleDateString('de-DE', dateOptions), 'translateX(-50%)');
-        }
+  clearChildren(dom.weeklyProgressContainer);
+}
 
 function updateMonthlyPlanningView(data) {
   updateWeeklyProgress();
-  
   if (isMoneyView) {
     let earningsToShow = 0;
-    let earningsGoal = 0;
-
     if (data.earnings) {
       if (isSuperuserView) {
-        earningsToShow = data.earnings;
-        const avgRate = data.ehCurrent > 0 ? data.earnings / data.ehCurrent : 0;
-        earningsGoal = data.ehGoal * avgRate;
+        earningsToShow = data.earnings; // In superuser view, data.earnings is just a number
       } else if (currentPlanningView === "personal") {
         earningsToShow = data.earnings.personal;
-        const rate = getVerdienstForPosition(data.position);
-        earningsGoal = data.ehGoal * rate;
       } else if (currentPlanningView === "team") {
         earningsToShow = data.earnings.group;
-        const leaderRate = getVerdienstForPosition(personalData.position);
-        const avgRate = data.ehCurrent > 0 ? data.earnings.group / data.ehCurrent : leaderRate;
-        earningsGoal = data.ehGoal * avgRate;
       } else if (currentPlanningView === "struktur") {
         earningsToShow = data.earnings.structure;
-        const leaderRate = getVerdienstForPosition(personalData.position);
-        const avgRate = data.ehCurrent > 0 ? data.earnings.structure / data.ehCurrent : leaderRate;
-        earningsGoal = data.ehGoal * avgRate;
       }
     }
-
     animateValue(dom.ehCenterCurrent, 0, earningsToShow || 0, 1000, true);
-    dom.ehCenterGoal.textContent = (earningsGoal || 0).toLocaleString("de-DE", { maximumFractionDigits: 0 });
-    dom.ehCenterUnitLabel.textContent = "Ist €";
-    dom.ehSollUnitLabel.textContent = "Soll €";
-
-    const moneyPercentage = earningsGoal > 0 ? (earningsToShow / earningsGoal) * 100 : 0;
-    updateCircleProgress(dom.ehProgressCircle, 45, moneyPercentage);
-
-    // Prognose- und Soll-Logik für Geld-Ansicht
-    const { startDate, endDate } = getMonthlyCycleDates();
-    const today = new Date();
-    const totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
-    const daysPassedInCycle = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24));
-    const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
-    updateCircleProgress(dom.prognosisCircleEh, 35, timeElapsedPercentage);
-
-    const sollValue = Math.round(earningsGoal * (timeElapsedPercentage / 100));
-    animateValue(dom.ehSollValue, 0, sollValue, 1000, true);
-
-    // Segmente in Geld-Ansicht ausblenden, da sie auf Wochen basieren
-    clearChildren(dom.segmentDividersEh);
+    dom.ehCenterGoal.textContent = "Verdienst";
+    dom.ehCenterUnitLabel.textContent = "in diesem Zyklus";
+    updateCircleProgress(dom.ehProgressCircle, 45, 0); // Kein Ziel in der Geld-Ansicht
+    dom.prognosisCircleEh.style.strokeDashoffset = 2 * Math.PI * 35; // Prognose ausblenden
+    dom.ehSollValue.textContent = "";
+    dom.ehSollUnitLabel.textContent = "";
   } else {
     animateValue(dom.ehCenterCurrent, 0, data.ehCurrent || 0, 1000);
-    dom.ehCenterGoal.textContent = (data.ehGoal || 0).toLocaleString("de-DE", {
-      maximumFractionDigits: 0,
-    });
-    dom.ehCenterUnitLabel.textContent = "Ist Einheiten";
-    dom.ehSollUnitLabel.textContent = "Soll Einheiten";
-
+    dom.ehCenterGoal.textContent = (data.ehGoal || 0).toLocaleString("de-DE");
+    dom.ehCenterUnitLabel.textContent = "Einheiten erreicht";
     const ehPercentage =
       data.ehGoal > 0 ? (data.ehCurrent / data.ehGoal) * 100 : 0;
     updateCircleProgress(dom.ehProgressCircle, 45, ehPercentage);
-
-    // Prognose- und Soll-Logik wiederhergestellt
-    const { startDate, endDate } = getMonthlyCycleDates();
-    const today = new Date();
-    const totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
-    const daysPassedInCycle = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24));
-    const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
-    updateCircleProgress(dom.prognosisCircleEh, 35, timeElapsedPercentage);
-
-    const sollValue = Math.round((data.ehGoal || 0) * (timeElapsedPercentage / 100));
-    animateValue(dom.ehSollValue, 0, sollValue, 1000);
-    drawSegmentDividers();
+    // Hier könnte die Prognose-Logik wieder eingefügt werden, falls gewünscht
   }
 
   dom.appointmentsText.textContent = `${data.atCurrent || 0} / ${
@@ -1431,7 +1287,6 @@ function updateMonthlyPlanningView(data) {
   const etPercent = data.etGoal > 0 ? (data.etCurrent / data.etGoal) * 100 : 0;
   if (dom.interviewsProgressBar)
     dom.interviewsProgressBar.style.width = `${Math.min(etPercent, 100)}%`;
-
 }
 
 function updateEmployeeCareerView() {
@@ -1536,7 +1391,7 @@ function updateLeadershipView() {
   }
   dom.leadershipViewTitle.textContent = title;
 
-  dom.leadershipViewCount.textContent = `Du hast ${data.members.length} aktive Mitarbeiter in deiner Gruppe.`;
+  dom.leadershipViewCount.textContent = `Zeige ${data.members.length} Mitarbeiter`;
   renderTeamMemberCards(data.members);
 }
 
@@ -1561,25 +1416,17 @@ function renderTeamMemberCards(members) {
   if (currentLeadershipViewMode === "grid") {
     dom.teamMembersContainer.className =
       "mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6";
-    activeMembers.forEach((member) => {
-      const card = createMemberCardGrid(
-        member,
-        totalDaysInCycle,
-        daysPassedInCycle
-      );
-      dom.teamMembersContainer.appendChild(card);
-    });
   } else {
     dom.teamMembersContainer.className = "mt-6 space-y-4";
-    activeMembers.forEach((member) => {
-      const card = createMemberCardList(
-        member,
-        totalDaysInCycle,
-        daysPassedInCycle
-      );
-      dom.teamMembersContainer.appendChild(card);
-    });
   }
+  activeMembers.forEach((member) => {
+    const card = createTeamMemberCard(
+      member,
+      totalDaysInCycle,
+      daysPassedInCycle
+    );
+    dom.teamMembersContainer.appendChild(card);
+  });
   if (passiveMembers.length > 0) {
     const details = document.createElement("details");
     details.className = "bg-white rounded-xl shadow-lg";
@@ -1608,227 +1455,108 @@ function renderTeamMemberCards(members) {
   }
 }
 
-function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
-    const ehPercentage = isMoneyView ? 0 : (member.ehGoal > 0 ? (member.ehCurrent / member.ehGoal * 100) : 0);
-    const etPercentage = member.etGoal > 0 ? (member.etCurrent / member.etGoal * 100) : 0;
-    const ehColorHex = getProgressColorHex(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
-    const prognosis = getPrognosis(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
-    
-    const ehValue = isMoneyView ? (member.earnings?.structure || 0) : member.ehCurrent;
-    const ehGoal = isMoneyView ? 0 : member.ehGoal;
-    const ehUnit = isMoneyView ? "Verdienst" : "Einheiten";
-    const ehDisplayValue = isMoneyView
-        ? ehValue.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })
-        : `${ehValue.toLocaleString("de-DE", {
-            maximumFractionDigits: 0,
-          })} / ${ehGoal.toLocaleString("de-DE", { maximumFractionDigits: 0 })}`;
+function createTeamMemberCard(member, totalDaysInCycle, daysPassedInCycle) {
+  const prognosis = getPrognosis(
+    member.ehCurrent,
+    member.ehGoal,
+    totalDaysInCycle,
+    daysPassedInCycle
+  );
+  const etPercentage =
+    member.etGoal > 0 ? (member.etCurrent / member.etGoal) * 100 : 0;
 
-    const card = document.createElement('div');
-    card.className = 'bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl flex flex-col';
+  const ehValue = isMoneyView
+    ? member.earnings?.structure || 0
+    : member.ehCurrent;
+  const ehGoal = isMoneyView ? 0 : member.ehGoal;
+  const ehUnit = isMoneyView ? "Verdienst" : "Einheiten (EH)";
+  const ehDisplayValue = isMoneyView
+    ? ehValue.toLocaleString("de-DE", {
+        style: "currency",
+        currency: "EUR",
+        maximumFractionDigits: 0,
+      })
+    : ehValue.toLocaleString("de-DE", { maximumFractionDigits: 0 });
+  const ehGoalDisplay = isMoneyView
+    ? ""
+    : `/ ${ehGoal.toLocaleString("de-DE", { maximumFractionDigits: 0 })}`;
 
-    const summary = document.createElement('div');
-    summary.className = 'p-4 cursor-pointer flex-grow';
-
-    const radius = 40;
-    const circumference = 2 * Math.PI * radius;
-    const offset = circumference * (1 - Math.min(ehPercentage, 100) / 100);
-    
-    const pos = member.position || "";
-    let positionHtml = '';
-    if (pos && !pos.toLowerCase().includes("trainee")) {
-        positionHtml = `<p class="text-sm text-skt-blue-light">${member.originalPosition || member.position}</p>`;
+  const ehPercentage =
+    member.ehGoal > 0 ? (member.ehCurrent / member.ehGoal) * 100 : 0;
+  const ehColorClass = getProgressColorClass(
+    member.ehCurrent,
+    member.ehGoal,
+    totalDaysInCycle,
+    daysPassedInCycle
+  );
+  const card = document.createElement("div");
+  card.className =
+    "bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl";
+  const summary = document.createElement("div");
+  summary.className = "p-4 cursor-pointer";
+  const pos = member.position || "";
+  const positionHtml =
+    pos && !pos.toLowerCase().includes("trainee")
+      ? `<p class="text-sm text-skt-blue-light">${
+          member.originalPosition || member.position
+        }</p>`
+      : "";
+  const prognosisHtml = !isMoneyView
+    ? `<span class="font-semibold text-sm ${prognosis.colorClass}" data-tooltip="Prognose basierend auf dem aktuellen Fortschritt im Verhältnis zur vergangenen Zeit im Monat.">${prognosis.text}</span>`
+    : "";
+  summary.innerHTML = `<div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-skt-blue text-lg break-words">${
+    member.leaderName || member.name
+  }</p>${positionHtml}</div><div class="flex items-center space-x-4 flex-shrink-0">${prognosisHtml}<button data-userid="${
+    member.id
+  }" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button><i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i></div></div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">${ehUnit}</p><p class="text-xs font-semibold text-skt-blue">${ehDisplayValue} ${ehGoalDisplay}</p></div>${
+    !isMoneyView
+      ? `<div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1"><div class="h-full ${ehColorClass}" style="width: ${Math.min(
+          ehPercentage,
+          100
+        )}%;"></div></div>`
+      : ""
+  }</div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">ET Termine</p><p class="text-xs font-semibold text-skt-blue">${
+    member.etCurrent
+  } / ${
+    member.etGoal
+  }</p></div><div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1"><div class="h-full bg-skt-green-accent" style="width: ${Math.min(
+    etPercentage,
+    100
+  )}%;"></div></div></div>`;
+  const details = document.createElement("div");
+  details.className = "team-member-details px-4";
+  details.innerHTML = `<div class="details-grid grid grid-cols-1 gap-4"><div class="text-center"><p class="text-sm font-semibold text-skt-blue mb-1">Analysetermine</p><p class="text-md font-bold text-skt-blue">${
+    member.atCurrent
+  } / ${member.atVereinbart} / ${
+    member.atGoal
+  }</p><p class="text-xs text-gray-500 mb-2">Gehalten / Vereinbart / Soll</p><div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden relative"><div class="h-full bg-skt-blue-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(
+    member.atGoal > 0 ? (member.atVereinbart / member.atGoal) * 100 : 0,
+    100
+  )}%;"></div><div class="h-full bg-skt-green-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(
+    member.atGoal > 0 ? (member.atCurrent / member.atGoal) * 100 : 0,
+    100
+  )}%;"></div></div></div></div>`;
+  card.appendChild(summary);
+  card.appendChild(details);
+  summary.addEventListener("click", (e) => {
+    if (!e.target.closest(".switch-view-btn")) {
+      details.classList.toggle("open");
+      summary.classList.toggle("open");
     }
-    const prognosisHtml = !isMoneyView ? `<p class="text-sm ${prognosis.colorClass} font-semibold">${prognosis.text}</p>` : '';
-
-    summary.innerHTML = `
-        <div class="flex justify-between items-start mb-4">
-            <div class="min-w-0">
-                <p class="font-bold text-skt-blue text-lg break-words">${member.leaderName || member.name}</p>
-                ${positionHtml || prognosisHtml}
-            </div>
-            <div class="flex items-center space-x-2">
-                 <button data-userid="${member.id}" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button>
-                 <i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i>
-            </div>
-        </div>
-        <div class="flex justify-center items-center flex-col">
-            <div class="w-40 h-40 relative">
-                <svg class="team-progress-circle w-full h-full" viewBox="0 0 100 100">
-                    <circle class="bg-circle" cx="50" cy="50" r="${radius}"></circle>
-                    <circle class="progress-arc" cx="50" cy="50" r="${radius}" 
-                            style="stroke: ${ehColorHex}; stroke-dasharray: ${circumference}; stroke-dashoffset: ${offset};"></circle>
-                </svg>
-                <div class="absolute inset-0 flex items-center justify-center flex-col text-center px-2">
-                    <p class="text-base sm:text-lg font-bold" style="color: ${ehColorHex}; font-size: clamp(0.75rem, 4vw, 1.125rem);">${ehDisplayValue}</p>
-                    <p class="text-xs text-skt-blue-light">${ehUnit}</p>
-                </div>
-            </div>
-        </div>
-        <div class="mt-4 px-2">
-            <div class="flex justify-between items-baseline text-xs">
-                <p class="text-skt-blue-light">ET Termine</p>
-                <p class="font-semibold text-skt-blue">${member.etCurrent} / ${member.etGoal}</p>
-            </div>
-            <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1">
-                 <div class="h-full bg-skt-green-accent" style="width: ${Math.min(etPercentage, 100)}%;"></div>
-            </div>
-        </div>
-    `;
-
-    const details = document.createElement('div');
-    details.className = 'team-member-details px-4';
-    details.innerHTML = `
-        <div class="details-grid grid grid-cols-1 gap-4">
-            <div class="text-center">
-                <p class="text-sm font-semibold text-skt-blue mb-1">Analysetermine</p>
-                <p class="text-md font-bold text-skt-blue">${member.atCurrent} / ${member.atVereinbart} / ${member.atGoal}</p>
-                <p class="text-xs text-gray-500 mb-2">Gehalten / Vereinbart / Soll</p>
-                <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden relative">
-                    <div class="h-full bg-skt-blue-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(member.atGoal > 0 ? (member.atVereinbart / member.atGoal) * 100 : 0, 100)}%;"></div>
-                    <div class="h-full bg-skt-green-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(member.atGoal > 0 ? (member.atCurrent / member.atGoal) * 100 : 0, 100)}%;"></div>
-                </div>
-            </div>
-        </div>`;
-
-    card.appendChild(summary);
-    card.appendChild(details);
-    
-    summary.addEventListener('click', (e) => { if (!e.target.closest('.switch-view-btn')) { details.classList.toggle('open'); summary.classList.toggle('open'); } });
-    summary.querySelector('.switch-view-btn').addEventListener('click', (e) => { 
-        e.stopPropagation();
-        const newuserId = e.currentTarget.dataset.userid;
-        if (newuserId) {
-            viewHistory.push(newuserId);
-            fetchAndRenderDashboard(newuserId);
-        }
-    });
-    return card;
-}
-
-function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
-    const prognosis = getPrognosis(
-        member.ehCurrent,
-        member.ehGoal,
-        totalDaysInCycle,
-        daysPassedInCycle
-    );
-    const etPercentage =
-        member.etGoal > 0 ? (member.etCurrent / member.etGoal) * 100 : 0;
-
-    const ehValue = isMoneyView
-        ? member.earnings?.structure || 0
-        : member.ehCurrent;
-    const ehGoal = isMoneyView ? 0 : member.ehGoal;
-    const ehUnit = isMoneyView ? "Verdienst" : "Einheiten (EH)";
-    const ehDisplayValue = isMoneyView
-        ? ehValue.toLocaleString("de-DE", {
-            style: "currency",
-            currency: "EUR",
-            maximumFractionDigits: 0,
-        })
-        : ehValue.toLocaleString("de-DE", { maximumFractionDigits: 0 });
-    const ehGoalDisplay = isMoneyView
-        ? ""
-        : `/ ${ehGoal.toLocaleString("de-DE", { maximumFractionDigits: 0 })}`;
-
-    const ehPercentage =
-        member.ehGoal > 0 ? (member.ehCurrent / member.ehGoal) * 100 : 0;
-    const ehColorClass = getProgressColorClass(
-        member.ehCurrent,
-        member.ehGoal,
-        totalDaysInCycle,
-        daysPassedInCycle
-    );
-    const card = document.createElement("div");
-    card.className =
-        "bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl";
-    const summary = document.createElement("div");
-    summary.className = "p-4 cursor-pointer";
-    const pos = member.position || "";
-    const positionHtml =
-        pos && !pos.toLowerCase().includes("trainee")
-        ? `<p class="text-sm text-skt-blue-light">${
-            member.originalPosition || member.position
-            }</p>`
-        : "";
-    const prognosisHtml = !isMoneyView
-        ? `<span class="font-semibold text-sm ${prognosis.colorClass}" data-tooltip="Prognose basierend auf dem aktuellen Fortschritt im Verhältnis zur vergangenen Zeit im Monat.">${prognosis.text}</span>`
-        : "";
-    summary.innerHTML = `<div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-skt-blue text-lg break-words">${
-        member.leaderName || member.name
-    }</p>${positionHtml}</div><div class="flex items-center space-x-4 flex-shrink-0">${prognosisHtml}<button data-userid="${
-        member.id
-    }" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button><i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i></div></div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">${ehUnit}</p><p class="text-xs font-semibold text-skt-blue">${ehDisplayValue} ${ehGoalDisplay}</p></div>${
-        !isMoneyView
-        ? `<div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1"><div class="h-full ${ehColorClass}" style="width: ${Math.min(
-            ehPercentage,
-            100
-            )}%;"></div></div>`
-        : ""
-    }</div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">ET Termine</p><p class="text-xs font-semibold text-skt-blue">${
-        member.etCurrent
-    } / ${
-        member.etGoal
-    }</p></div><div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1"><div class="h-full bg-skt-green-accent" style="width: ${Math.min(
-        etPercentage,
-        100
-    )}%;"></div></div></div>`;
-    const details = document.createElement("div");
-    details.className = "team-member-details px-4";
-    details.innerHTML = `<div class="details-grid grid grid-cols-1 gap-4"><div class="text-center"><p class="text-sm font-semibold text-skt-blue mb-1">Analysetermine</p><p class="text-md font-bold text-skt-blue">${
-        member.atCurrent
-    } / ${member.atVereinbart} / ${
-        member.atGoal
-    }</p><p class="text-xs text-gray-500 mb-2">Gehalten / Vereinbart / Soll</p><div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden relative"><div class="h-full bg-skt-blue-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(
-        member.atGoal > 0 ? (member.atVereinbart / member.atGoal) * 100 : 0,
-        100
-    )}%;"></div><div class="h-full bg-skt-green-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(
-        member.atGoal > 0 ? (member.atCurrent / member.atGoal) * 100 : 0,
-        100
-    )}%;"></div></div></div></div>`;
-    card.appendChild(summary);
-    card.appendChild(details);
-    summary.addEventListener("click", (e) => {
-        if (!e.target.closest(".switch-view-btn")) {
-        details.classList.toggle("open");
-        summary.classList.toggle("open");
-        }
-    });
-    summary.querySelector(".switch-view-btn").addEventListener("click", (e) => {
-        e.stopPropagation();
-        const newuserId = e.currentTarget.dataset.userid;
-        if (newuserId) {
-        viewHistory.push(newuserId);
-        fetchAndRenderDashboard(newuserId);
-        }
-    });
-    return card;
-}
-
-function findNextInfoDateAfter(startDate) {
-    // Referenzpunkt ist ein Mittwoch, der ein Infotag ist.
-    const referenceDate = new Date('2025-09-17T00:00:00Z');
-    const calculationStartDate = new Date(startDate);
-    calculationStartDate.setUTCHours(0, 0, 0, 0);
-
-    const msPerDay = 24 * 60 * 60 * 1000;
-    const cycleLengthDays = 21; // 3 Wochen
-
-    // Differenz in Tagen zwischen dem Startdatum des Mitarbeiters und dem Referenzdatum berechnen
-    const diffInMs = calculationStartDate.getTime() - referenceDate.getTime();
-    const diffInDays = Math.round(diffInMs / msPerDay);
-
-    // Berechnen, wie viele Tage es bis zum nächsten Infotag im Zyklus sind.
-    const daysIntoCycle = ((diffInDays % cycleLengthDays) + cycleLengthDays) % cycleLengthDays;
-    const daysUntilNext = (cycleLengthDays - daysIntoCycle) % cycleLengthDays;
-
-    const nextInfoDate = new Date(calculationStartDate.getTime() + daysUntilNext * msPerDay);
-    return nextInfoDate;
+  });
+  summary.querySelector(".switch-view-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    const newuserId = e.currentTarget.dataset.userid;
+    if (newuserId) {
+      viewHistory.push(newuserId);
+      fetchAndRenderDashboard(newuserId);
+    }
+  });
+  return card;
 }
 
 function fetchNextInfoDate() {
-    const nextInfoDateObj = findNextInfoDateAfter(new Date());
-    return nextInfoDateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return "Datum unbekannt";
 }
 
 function updateBackButtonVisibility() {
@@ -1874,7 +1602,7 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
     personalData.totalCurrentEh
   );
 
-  currentlyViewedUserData = user;
+  loggedInUserData = user;
   dom.welcomeHeader.textContent = `Willkommen, ${user.Name}`;
   dom.userPosition.textContent = user.Karrierestufe;
 
@@ -1911,7 +1639,15 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
   dom.planningViewToggle.classList.toggle("hidden", !isLeader);
   dom.einarbeitungBanner.classList.toggle("hidden", isLeader);
 
-  dom.nextInfoDate.textContent = `Nächstes Info: ${fetchNextInfoDate()}`;
+  let nextInfoDateEl = document.getElementById("next-info-date");
+  if (!nextInfoDateEl) {
+    nextInfoDateEl = document.createElement("p");
+    nextInfoDateEl.id = "next-info-date";
+    nextInfoDateEl.className = "text-center text-sm text-skt-blue-light mt-4";
+    dom.monthlyPlanningView.appendChild(nextInfoDateEl);
+  }
+  nextInfoDateEl.textContent = `Nächstes Info: ${fetchNextInfoDate()}`;
+
   setStatus("");
   dom.dashboardSections.classList.remove("hidden");
   setTimeout(() => dom.dashboardSections.classList.remove("opacity-0"), 50);
@@ -2097,21 +1833,13 @@ async function renderTraineeOnboardingView(
   mitarbeiterId,
   forceShowAllCompleted = false
 ) {
+  const allSteps = db.einarbeitungsschritte.sort((a, b) => a.Tag - b.Tag);
+
   const user = findRowById("mitarbeiter", mitarbeiterId);
   if (!user || !user.Startdatum || !user.Name) {
     dom.traineeOnboardingView.innerHTML = `<p class="text-center text-red-500">Für diesen Mitarbeiter sind nicht alle Daten (Startdatum/Name) hinterlegt.</p>`;
     return;
   }
-
-  const viewerIsTrainee = (authenticatedUserData.Karrierestufe || "")
-    .toLowerCase()
-    .includes("trainee");
-
-  let allSteps = db.einarbeitungsschritte;
-  if (viewerIsTrainee) {
-    allSteps = allSteps.filter((step) => step.Kategorie !== "Versteckt");
-  }
-  allSteps.sort((a, b) => a.Tag - b.Tag);
 
   const safeUserName = escapeSql(user.Name);
   const einarbeitungQuery = `SELECT \`Schritt_ID\` FROM \`Einarbeitung\` WHERE \`Mitarbeiter_ID\` = '${safeUserName}'`;
@@ -2124,13 +1852,8 @@ async function renderTraineeOnboardingView(
   const startDate = new Date(user.Startdatum);
 
   const processedSteps = allSteps.map((step) => {
-    let dueDate;
-    if (step.Schritt && step.Schritt.toLowerCase().includes("infoabend")) {
-      dueDate = findNextInfoDateAfter(startDate);
-    } else {
-      dueDate = new Date(startDate);
-      dueDate.setDate(startDate.getDate() + (step.Tag || 0));
-    }
+    const dueDate = new Date(startDate);
+    dueDate.setDate(startDate.getDate() + (step.Tag || 0));
     return { ...step, dueDate, completed: completedStepIds.has(step._id) };
   });
 
@@ -2221,12 +1944,6 @@ function renderTimelineSection(
         break;
       case "hausübung":
         iconClass = "fa-pencil-alt";
-        break;
-      case "versteckt":
-        iconClass = "fa-user-shield";
-        break;
-      default:
-        iconClass = "fa-question";
         break;
     }
 
@@ -2348,7 +2065,7 @@ class AppointmentsView {
 
         this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
         this.downline.sort((a, b) => a.Name.localeCompare(b.Name));
-        this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.authenticatedUserData));
+        this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.loggedInUserData));
 
         if (!this.initialized) {
             appointmentsLog('Erstmalige Initialisierung: Event-Listener werden eingerichtet.');
@@ -3013,7 +2730,11 @@ function setupEventListeners() {
 
   dom.settingsBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    if (isUserLeader(authenticatedUserData)) {
+    const user = findRowById(
+      "mitarbeiter",
+      localStorage.getItem("loggedInUserId")
+    );
+    if (isUserLeader(user)) {
       dom.superuserBtn.classList.remove("hidden");
     } else {
       dom.superuserBtn.classList.add("hidden");
@@ -3058,7 +2779,6 @@ function setupEventListeners() {
 
       if (user && user.PWD === enteredPassword) {
         localStorage.setItem("loggedInUserId", selectedUserId);
-        authenticatedUserData = user;
         viewHistory = [selectedUserId];
         document.getElementById("user-select-screen").classList.add("hidden");
         document.getElementById("dashboard-content").classList.remove("hidden");
@@ -3112,11 +2832,6 @@ function setupEventListeners() {
   dom.superuserBtn.addEventListener("click", async (e) => {
     e.preventDefault();
     closeSettingsMenu();
-    // Zusätzliche Sicherheitsprüfung: Blockiert den Zugriff, selbst wenn der Button sichtbar wäre.
-    if (!isUserLeader(authenticatedUserData)) {
-      alert("Du hast keine Berechtigung für diese Ansicht.");
-      return;
-    }
     await renderSuperuserView();
   });
 
@@ -3135,11 +2850,12 @@ function setupEventListeners() {
       return;
     }
     if (currentView === "einarbeitung" || currentView === "appointments") {
+      const currentUser = findRowById("mitarbeiter", loggedInUserData._id);
       if (
         currentOnboardingSubView === "trainee-detail" &&
-        isUserLeader(authenticatedUserData)
+        isUserLeader(currentUser)
       ) {
-        const teamMembers = getSubordinates(authenticatedUserData._id, "gruppe");
+        const teamMembers = getSubordinates(loggedInUserData._id, "gruppe");
         await renderLeaderOnboardingView(teamMembers);
         currentOnboardingSubView = "leader-list";
         dom.einarbeitungTitle.textContent = "Einarbeitung: Gruppen-Übersicht";
@@ -3206,11 +2922,11 @@ function setupEventListeners() {
   // --- Onboarding Navigation ---
   dom.einarbeitungBtn.addEventListener("click", () => {
     switchView("einarbeitung");
-    fetchAndRenderOnboarding(authenticatedUserData._id);
+    fetchAndRenderOnboarding(loggedInUserData._id);
   });
   dom.einarbeitungBanner.addEventListener("click", () => {
     switchView("einarbeitung");
-    fetchAndRenderOnboarding(authenticatedUserData._id);
+    fetchAndRenderOnboarding(loggedInUserData._id);
   });
 
   dom.dashboardHeaderBtn.addEventListener('click', () => {
@@ -3288,7 +3004,6 @@ async function initializeDashboard() {
 
   const loggedInUserId = localStorage.getItem("loggedInUserId");
   if (loggedInUserId && findRowById("mitarbeiter", loggedInUserId)) {
-    authenticatedUserData = findRowById("mitarbeiter", loggedInUserId);
     viewHistory = [loggedInUserId];
     document.getElementById("user-select-screen").classList.add("hidden");
     document.getElementById("dashboard-content").classList.remove("hidden");
@@ -3336,19 +3051,6 @@ function getProgressColorClass(current, goal, totalDays, daysPassed) {
   if (progressRatio >= timeRatio) return "bg-skt-green-accent";
   if (progressRatio >= timeRatio * 0.75) return "bg-skt-yellow-accent";
   return "bg-skt-red-accent";
-}
-
-function getProgressColorHex(current, goal, totalDays, daysPassed) {
-  if (goal <= 0) return "var(--color-skt-grey-medium)";
-  const progressRatio = current / goal;
-  if (progressRatio >= 1) return "var(--color-accent-green)";
-  if (daysPassed <= 0) return "var(--color-accent-green)";
-
-  const timeRatio = daysPassed / totalDays;
-
-  if (progressRatio >= timeRatio) return "var(--color-accent-green)";
-  if (progressRatio >= timeRatio * 0.75) return "var(--color-accent-yellow)";
-  return "var(--color-accent-red)";
 }
 
 function getVerdienstForPosition(position) {
@@ -3534,7 +3236,7 @@ async function handleAIAssistantClick() {
 
 // --- User Data Editing Modal ---
 function openEditUserModal() {
-  const user = currentlyViewedUserData;
+  const user = loggedInUserData;
   document.getElementById("edit-name").value = user.Name || "";
   document.getElementById("edit-pwd").value = user.PWD || "";
   document.getElementById("edit-eh-quote").value = user.EHproATQuote || 0;
@@ -3577,7 +3279,7 @@ function closeEditUserModal() {
 }
 
 async function saveUserData() {
-  const user = currentlyViewedUserData;
+  const user = loggedInUserData;
   const updatedRowData = {};
 
   updatedRowData[COLUMN_MAPS.mitarbeiter.Name] =
