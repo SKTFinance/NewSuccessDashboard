@@ -650,7 +650,14 @@ async function loadAllData() {
   }
 
   setStatus("Lade Stammdaten...");
-  const tablesToLoad = ["Mitarbeiter", "Karriereplan", "Einarbeitungsschritte"];
+  const tablesToLoad = [
+    "Mitarbeiter",
+    "Karriereplan",
+    "Einarbeitungsschritte",
+    "Monatsplanung",
+    "Termine",
+    "Einarbeitung",
+  ];
 
   for (const tableName of tablesToLoad) {
     const key = tableName.toLowerCase();
@@ -836,26 +843,24 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   const endDateIso = endDate.toISOString().split("T")[0];
   const currentMonthName = startDate.toLocaleString("de-DE", { month: "long" });
   const currentYear = startDate.getFullYear();
+  
+  // Plandaten aus dem vorgeladenen und normalisierten Cache laden.
+  const planResults = db.monatsplanung.filter(p => p.Monat === currentMonthName && p.Jahr === currentYear);
 
-  // Die Abfragen holen jetzt Daten für den gesamten Zeitraum, die Filterung nach Benutzern erfolgt im Code per ID.
-  // Das ist robuster als das Filtern nach Namen in der SQL-Abfrage.
-  const planQuery = `SELECT \`Mitarbeiter_ID\`, \`EH_Ziel\`, \`ET_Ziel\` FROM \`Monatsplanung\` WHERE \`Monat\` = '${currentMonthName}' AND \`Jahr\` = ${currentYear}`;
+  // Termindaten ebenfalls aus dem Cache laden und nach Datum filtern.
+  const termineResults = db.termine.filter(t => {
+      if (!t.Datum) return false;
+      const terminDate = new Date(t.Datum);
+      return terminDate >= startDate && terminDate <= endDate;
+  });
+
+  // Nur Umsatzdaten werden für die KPIs immer frisch per SQL geladen.
   const ehQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`ehIst\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' GROUP BY \`Mitarbeiter_ID\``;
-  const termineQuery = `SELECT \`Mitarbeiter_ID\`, \`Kategorie\`, \`Status\` FROM \`Termine\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}'`;
   const totalEhQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`totalEh\` FROM \`Umsatz\` GROUP BY \`Mitarbeiter_ID\``;
 
   // WICHTIG: convertLinks wird auf `false` gesetzt, um die stabilen Row-IDs statt der Namen zu erhalten.
-  const [planResultRaw, ehResultRaw, termineResultRaw, totalEhResultRaw] =
-    await Promise.all([
-      seaTableSqlQuery(planQuery, false),
-      seaTableSqlQuery(ehQuery, false),
-      seaTableSqlQuery(termineQuery, false),
-      seaTableSqlQuery(totalEhQuery, false),
-    ]);
-
-  const planResults = mapSqlResults(planResultRaw, "Monatsplanung");
+  const [ehResultRaw, totalEhResultRaw] = await Promise.all([seaTableSqlQuery(ehQuery, false), seaTableSqlQuery(totalEhQuery, false)]);
   const ehResults = mapSqlResults(ehResultRaw, "Umsatz");
-  const termineResults = mapSqlResults(termineResultRaw, "Termine");
   const totalEhResults = mapSqlResults(totalEhResultRaw, "Umsatz");
 
   const AT_STATUS_GEHALTEN = ["Gehalten"];
@@ -870,15 +875,8 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   ];
 
   return users.map((user) => {
-    // KORREKTUR: Die ID befindet sich in der `row_id` Eigenschaft des ersten Objekts im Array.
-    const plan =
-      planResults.find(
-        (p) =>
-          p.Mitarbeiter_ID &&
-          Array.isArray(p.Mitarbeiter_ID) &&
-          p.Mitarbeiter_ID[0] &&
-          p.Mitarbeiter_ID[0].row_id === user._id
-      ) || {};
+    // Plandaten kommen aus dem Cache und sind normalisiert.
+    const plan = planResults.find((p) => p.Mitarbeiter_ID === user._id) || {};
     const eh =
       ehResults.find(
         (e) =>
@@ -895,13 +893,8 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
           te.Mitarbeiter_ID[0] &&
           te.Mitarbeiter_ID[0].row_id === user._id
       ) || {};
-    const userTermine = termineResults.filter(
-      (t) =>
-        t.Mitarbeiter_ID &&
-        Array.isArray(t.Mitarbeiter_ID) &&
-        t.Mitarbeiter_ID[0] &&
-        t.Mitarbeiter_ID[0].row_id === user._id
-    );
+    // Termindaten aus dem Cache nach Benutzer filtern.
+    const userTermine = termineResults.filter((t) => t.Mitarbeiter_ID === user._id);
 
     let atIst = 0,
       atVereinbart = 0,
@@ -2027,10 +2020,8 @@ async function getOnboardingProgressForTrainee(traineeId) {
   if (!user || !user.Name)
     return { percentage: 0, sollPercentage: 0, totalSteps: 0 };
 
-  const safeUserName = escapeSql(user.Name);
-  const einarbeitungQuery = `SELECT \`Schritt_ID\` FROM \`Einarbeitung\` WHERE \`Mitarbeiter_ID\` = '${safeUserName}'`;
-  const userEinarbeitungRaw = await seaTableSqlQuery(einarbeitungQuery);
-  const userEinarbeitung = mapSqlResults(userEinarbeitungRaw, "Einarbeitung");
+  // Daten aus dem Cache verwenden statt einer neuen SQL-Abfrage
+  const userEinarbeitung = db.einarbeitung.filter(e => e.Mitarbeiter_ID === traineeId);
 
   const allSteps = db.einarbeitungsschritte;
 
@@ -2038,7 +2029,7 @@ async function getOnboardingProgressForTrainee(traineeId) {
     return { percentage: 0, sollPercentage: 0, totalSteps: 0 };
 
   const completedStepIds = new Set(
-    userEinarbeitung.map((e) => e["Schritt_ID"][0])
+    userEinarbeitung.map((e) => e["Schritt_ID"])
   );
   const completedSteps = allSteps.filter((s) =>
     completedStepIds.has(s._id)
@@ -2113,12 +2104,11 @@ async function renderTraineeOnboardingView(
   }
   allSteps.sort((a, b) => a.Tag - b.Tag);
 
-  const safeUserName = escapeSql(user.Name);
-  const einarbeitungQuery = `SELECT \`Schritt_ID\` FROM \`Einarbeitung\` WHERE \`Mitarbeiter_ID\` = '${safeUserName}'`;
-  const userEinarbeitungRaw = await seaTableSqlQuery(einarbeitungQuery);
-  const userEinarbeitung = mapSqlResults(userEinarbeitungRaw, "Einarbeitung");
+  // Daten aus dem Cache verwenden statt einer neuen SQL-Abfrage
+  const userEinarbeitung = db.einarbeitung.filter(e => e.Mitarbeiter_ID === mitarbeiterId);
+
   const completedStepIds = new Set(
-    userEinarbeitung.map((e) => e["Schritt_ID"][0])
+    userEinarbeitung.map((e) => e["Schritt_ID"])
   );
 
   const startDate = new Date(user.Startdatum);
@@ -2855,6 +2845,13 @@ class AppointmentsView {
                 idInput.value = '';
                 userSelect.value = this.currentUserId;
                 this.form.querySelector('#appointment-date').value = new Date().toISOString().split('T')[0];
+
+                // NEU: Standard-Kategorie basierend auf dem aktiven Tab setzen
+                if (this.currentTab === 'umsatz') {
+                    categorySelect.value = 'AT';
+                } else if (this.currentTab === 'recruiting' || this.currentTab === 'netzwerk') {
+                    categorySelect.value = 'ET';
+                }
             }
 
             this.toggleConditionalFields(categorySelect.value);
