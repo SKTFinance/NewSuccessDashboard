@@ -36,6 +36,7 @@ let isSuperuserView = false;
 let isMoneyView = false;
 let currentView = "dashboard";
 let appointmentsViewInstance = null;
+let potentialViewInstance = null;
 let HIERARCHY_CACHE = null;
 let currentOnboardingSubView = "leader-list";
 
@@ -117,6 +118,8 @@ const dom = {
   einarbeitungBanner: document.getElementById("einarbeitung-banner"),
   dashboardHeaderBtn: document.getElementById("dashboard-header-btn"),
   appointmentsHeaderBtn: document.getElementById("appointments-header-btn"),
+  potentialHeaderBtn: document.getElementById("potential-header-btn"),
+  potentialView: document.getElementById("potential-view"),
   appointmentsView: document.getElementById("appointments-view"),
   einarbeitungTitle: document.getElementById("einarbeitung-title"),
   traineeOnboardingView: document.getElementById("trainee-onboarding-view"),
@@ -336,66 +339,65 @@ async function seaTableQuery(tableName) {
 }
 
 async function seaTableUpdateRow(tableName, rowId, rowData) {
-  // Führt für jedes Feld einen einzelnen SQL-Befehl aus, außer für die Mitarbeiter_ID, die per Link-API aktualisiert wird.
-  const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
-  if (!tableMap) {
-    console.error(`[HYBRID-UPDATE] No column map found for table: ${tableName}`);
-    return false;
-  }
+    // Neuer, effizienter Ansatz, 1:1 an seaTableAddRow angelehnt.
+    console.log("[UPDATE-ROW-NEW] Starting new update-row process.");
 
-  const tableMeta = METADATA.tables.find(
-    (t) => t.name.toLowerCase() === tableName.toLowerCase()
-  );
-  if (!tableMeta) {
-    console.error(`[HYBRID-UPDATE] No table metadata found for: ${tableName}`);
-    return false;
-  }
-
-  let allUpdatesSucceeded = true;
-
-  for (const key in rowData) {
-    if (Object.hasOwnProperty.call(rowData, key)) {
-      const value = rowData[key];
-      const colName = Object.keys(tableMap).find(
-        (name) => tableMap[name] === key
-      );
-
-      if (!colName || colName === "_id") continue;
-
-      // HYBRID-LOGIK: API für die Mitarbeiter_ID, SQL für den Rest.
-      if (colName === "Mitarbeiter_ID") {
-        console.log(
-          `[API-LINK-UPDATE] Using link API for column '${colName}'.`
-        );
-        // Der Wert ist die _id des Mitarbeiters, die wir aus dem Formular bekommen.
-        const mitarbeiterRowId = value && value[0] ? value[0] : null;
-        const success = await seaTableUpdateLinkField(rowId, mitarbeiterRowId);
-        if (!success) {
-          console.error(`[API-LINK-UPDATE] Failed to update field: ${colName}`);
-          allUpdatesSucceeded = false;
-          break;
-        }
-      } else {
-        let formattedValue;
-        if (value === null || value === undefined) formattedValue = "NULL";
-        else if (typeof value === "string") formattedValue = `'${escapeSql(value)}'`;
-        else if (typeof value === "number") formattedValue = value;
-        else if (typeof value === "boolean") formattedValue = value ? "true" : "false";
-        else formattedValue = `'${escapeSql(String(value))}'`;
-
-        const sql = `UPDATE \`${tableName}\` SET \`${colName}\` = ${formattedValue} WHERE \`_id\` = '${rowId}'`;
-        console.log(`[SQL-UPDATE] Executing single-field update: ${sql}`);
-
-        const result = await seaTableSqlQuery(sql, false);
-        if (result === null) {
-          console.error(`[SQL-UPDATE] Failed to update field: ${colName}`);
-          allUpdatesSucceeded = false;
-          break;
-        }
-      }
+    if (!seaTableAccessToken || !apiGatewayUrl) {
+        console.error("Cannot update row without access token and gateway URL.");
+        return false;
     }
-  }
-  return allUpdatesSucceeded;
+
+    // --- SCHRITT 1: Daten vorbereiten (Link trennen, Keys in Namen umwandeln) ---
+    const mitarbeiterIdKey = SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID;
+    let mitarbeiterRowId = null;
+    let hasMitarbeiterId = Object.prototype.hasOwnProperty.call(rowData, mitarbeiterIdKey);
+
+    if (hasMitarbeiterId) {
+        mitarbeiterRowId = rowData[mitarbeiterIdKey] ? rowData[mitarbeiterIdKey][0] : null;
+    }
+    
+    const rowDataForUpdate = { ...rowData };
+    if (hasMitarbeiterId) {
+        delete rowDataForUpdate[mitarbeiterIdKey];
+    }
+
+    const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
+    if (!tableMap) {
+        console.error(`[UPDATE-ROW-NEW] Column map for table '${tableName}' not found.`);
+        return false;
+    }
+    const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
+
+    const rowDataWithNames = {};
+    for (const key in rowDataForUpdate) {
+        const name = reversedMap[key];
+        if (name && name !== '_id') { // _id cannot be updated
+            const value = rowDataForUpdate[key];
+            rowDataWithNames[name] = (value === undefined || value === '') ? null : value;
+        }
+    }
+
+    // --- SCHRITT 2: Zeile mit den meisten Daten aktualisieren ---
+    let mainUpdateSuccess = true;
+    if (Object.keys(rowDataWithNames).length > 0) {
+        try {
+            const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+            const body = { table_name: tableName, row_id: rowId, row: rowDataWithNames };
+            const response = await fetch(url, { method: "PUT", headers: { Authorization: `Bearer ${seaTableAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}, message: ${await response.text()}`);
+        } catch (error) {
+            console.error("[UPDATE-ROW-NEW] Step 1 FAILED: Could not update row.", error);
+            mainUpdateSuccess = false;
+        }
+    }
+
+    // --- SCHRITT 3: Mitarbeiter verknüpfen (nur wenn im Formular vorhanden) ---
+    let linkUpdateSuccess = true;
+    if (hasMitarbeiterId) {
+        linkUpdateSuccess = await seaTableUpdateLinkField(rowId, mitarbeiterRowId);
+    }
+
+    return mainUpdateSuccess && linkUpdateSuccess;
 }
 
 async function seaTableUpdateLinkField(terminRowId, mitarbeiterRowId) {
@@ -473,7 +475,11 @@ async function seaTableAddRow(tableName, rowData) {
   for (const key in rowDataForCreation) {
       const name = reversedMap[key];
       if (name) {
-          rowDataWithNames[name] = rowDataForCreation[key];
+          // API erwartet `null` für leere Felder, nicht `undefined`
+          const value = rowDataForCreation[key];
+          rowDataWithNames[name] = (value === undefined || value === '') ? null : value;
+      } else if (key !== '_id') {
+          console.warn(`[ADD-ROW-NEW] No column name found for key: ${key}`);
       }
   }
 
@@ -2991,6 +2997,380 @@ async function loadAndInitAppointmentsView() {
   }
 }
 
+// --- Potential View Logic ---
+const potentialLog = (message, ...data) => console.log(`%c[Potential] %c${message}`, 'color: #27ae60; font-weight: bold;', 'color: black;', ...data);
+
+class PotentialView {
+    constructor() {
+        this.listContainer = null;
+        this.modal = null;
+        this.form = null;
+        this.scheduleModal = null;
+        this.scheduleForm = null;
+        this.searchInput = null;
+
+        this.initialized = false;
+        this.currentUserId = null;
+        this.allPotentials = [];
+        this.downline = [];
+        this.filterText = '';
+    }
+
+    _getDomElements() {
+        this.listContainer = document.getElementById('potential-list-container');
+        this.modal = document.getElementById('potential-modal');
+        this.form = document.getElementById('potential-form');
+        this.scheduleModal = document.getElementById('schedule-modal');
+        this.scheduleForm = document.getElementById('schedule-form');
+        this.searchInput = document.getElementById('potential-search-filter');
+        return this.listContainer && this.modal && this.form && this.scheduleModal && this.scheduleForm && this.searchInput;
+    }
+
+    async init(userId) {
+        potentialLog(`Modul wird initialisiert für User-ID: ${userId}`);
+        this.currentUserId = userId;
+
+        if (!this._getDomElements()) {
+            potentialLog('!!! FEHLER: Benötigte DOM-Elemente für die Potential-Ansicht wurden nicht gefunden.');
+            return;
+        }
+
+        // NEU: Gib die verfügbaren Spaltennamen aus, um bei der Fehlersuche zu helfen.
+        console.log('Verfügbare Spalten in der "Termine" Tabelle:', SKT_APP.COLUMN_MAPS.termine);
+
+        this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
+        this.downline.sort((a, b) => a.Name.localeCompare(b.Name));
+
+        if (!this.initialized) {
+            potentialLog('Erstmalige Initialisierung: Event-Listener werden eingerichtet.');
+            this.setupEventListeners();
+            this.initialized = true;
+        }
+
+        await this.fetchAndRender();
+    }
+
+    async fetchAndRender() {
+        this.listContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        try {
+            const query = "SELECT * FROM `Termine` WHERE `Datum` IS NULL";
+            potentialLog('Sende SQL-Abfrage für Potentiale...');
+            const potentialsRaw = await SKT_APP.seaTableSqlQuery(query, true);
+            this.allPotentials = SKT_APP.mapSqlResults(potentialsRaw, 'Termine');
+            potentialLog(`${this.allPotentials.length} Potentiale geladen.`);
+            this.render();
+        } catch (error) {
+            potentialLog('!!! FEHLER in fetchAndRender !!!', error);
+            this.listContainer.innerHTML = `<div class="text-center py-16"><i class="fas fa-exclamation-triangle fa-4x text-red-400 mb-4"></i><h3 class="text-xl font-semibold text-skt-blue">Ein Fehler ist aufgetreten</h3><p class="text-gray-500 mt-2">${error.message}</p></div>`;
+        }
+    }
+
+    render() {
+        this.listContainer.innerHTML = '';
+        let filteredPotentials = this.allPotentials.filter(p => {
+            if (this.filterText) {
+                const searchText = this.filterText.toLowerCase();
+                const partner = (p.Terminpartner || '').toLowerCase();
+                const mitarbeiter = (p.Mitarbeiter_ID?.[0]?.display_value || '').toLowerCase();
+                return partner.includes(searchText) || mitarbeiter.includes(searchText);
+            }
+            return true;
+        });
+
+        if (filteredPotentials.length === 0) {
+            this.listContainer.innerHTML = `<div class="text-center py-16"><i class="fas fa-user-slash fa-4x text-skt-grey-medium mb-4"></i><h3 class="text-xl font-semibold text-skt-blue">Keine Potentiale gefunden</h3><p class="text-gray-500 mt-2">Lege neue Kontakte an, um sie hier zu bearbeiten.</p></div>`;
+            return;
+        }
+
+        const table = document.createElement('table');
+        table.className = 'appointments-table';
+        table.innerHTML = `<thead><tr><th>Terminpartner</th><th>Mitarbeiter</th><th>Kontakt</th><th>Kontaktstatus</th><th>Aktion</th></tr></thead>`;
+        const tbody = document.createElement('tbody');
+
+        filteredPotentials.forEach(p => {
+            const tr = document.createElement('tr');
+            tr.className = 'cursor-pointer';
+            tr.dataset.id = p._id;
+            const mitarbeiterName = p.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
+            tr.innerHTML = `
+                <td><p class="font-bold">${p.Terminpartner || '-'}</p></td>
+                <td>${mitarbeiterName}</td>
+                <td>
+                    <p>${p.Telefonnummer || '-'}</p>
+                    <p class="text-xs text-gray-500">${p.Email || '-'}</p>
+                </td>
+                <td><span class="px-2 py-1 text-xs font-semibold rounded-full bg-skt-grey-medium text-skt-blue-light">${p.Kontaktstatus || '-'}</span></td>
+                <td><button class="text-skt-blue hover:underline">Bearbeiten</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        this.listContainer.appendChild(table);
+
+        this.listContainer.querySelectorAll('tbody tr').forEach(tr => {
+            tr.addEventListener('click', () => {
+                const potential = this.allPotentials.find(p => p._id === tr.dataset.id);
+                if (potential) this.openModal(potential);
+            });
+        });
+    }
+
+    setupEventListeners() {
+        document.getElementById('add-potential-btn').addEventListener('click', () => this.openModal());
+        document.getElementById('download-template-btn').addEventListener('click', () => this.downloadExcelTemplate());
+        document.getElementById('import-excel-btn').addEventListener('click', () => {
+            alert('Die Import-Funktion wird in Kürze verfügbar sein. Bitte verwenden Sie die heruntergeladene Vorlage.');
+            // Hier würde die Logik zum Öffnen des Datei-Dialogs folgen
+        });
+        
+        this.searchInput.addEventListener('input', _.debounce(e => {
+            this.filterText = e.target.value;
+            this.render();
+        }, 300));
+
+        // Main Modal
+        this.form.addEventListener('submit', e => this.handleFormSubmit(e));
+        document.getElementById('close-potential-modal-btn').addEventListener('click', () => this.closeModal());
+        document.getElementById('cancel-potential-btn').addEventListener('click', () => this.closeModal());
+        document.getElementById('schedule-appointment-btn').addEventListener('click', () => {
+            const potentialId = this.form.querySelector('#potential-id').value;
+            const potential = this.allPotentials.find(p => p._id === potentialId);
+            if (potential) this.openScheduleModal(potential);
+        });
+
+        // Schedule Modal
+        this.scheduleForm.addEventListener('submit', e => this.handleScheduleSubmit(e));
+        document.getElementById('close-schedule-modal-btn').addEventListener('click', () => this.closeScheduleModal());
+        document.getElementById('cancel-schedule-btn').addEventListener('click', () => this.closeScheduleModal());
+    }
+
+    openModal(potential = null) {
+        this.form.reset();
+        const title = this.modal.querySelector('#potential-modal-title');
+        const idInput = this.form.querySelector('#potential-id');
+        const userSelect = this.form.querySelector('#potential-user');
+
+        const allRelevantUsers = [SKT_APP.authenticatedUserData, ...this.downline].filter(Boolean);
+        userSelect.innerHTML = '';
+        allRelevantUsers.forEach(u => userSelect.add(new Option(u.Name, u._id)));
+
+        if (potential) {
+            title.textContent = 'Kontakt bearbeiten';
+            idInput.value = potential._id;
+            this.form.querySelector('#potential-partner').value = potential.Terminpartner || '';
+            const user = allRelevantUsers.find(u => u.Name === potential.Mitarbeiter_ID?.[0]?.display_value);
+            if (user) userSelect.value = user._id;
+            this.form.querySelector('#potential-phone').value = potential.Telefonnummer || '';
+            this.form.querySelector('#potential-email').value = potential.Email || '';
+            this.form.querySelector('#potential-rating-kunde').value = potential.Rating_Kunde || '';
+            this.form.querySelector('#potential-rating-ma').value = potential.Rating_MA || '';
+            this.form.querySelector('#potential-rating-nt').value = potential.Rating_NT || '';
+            this.form.querySelector('#potential-kontaktstatus').value = potential.Kontaktiert || '';
+            this.form.querySelector('#potential-note').value = potential.Hinweis || '';
+        } else {
+            title.textContent = 'Neuen Kontakt anlegen';
+            idInput.value = '';
+            userSelect.value = this.currentUserId;
+        }
+        this.modal.classList.add('visible');
+    }
+
+    closeModal() {
+        this.modal.classList.remove('visible');
+    }
+
+    async handleFormSubmit(e) {
+        e.preventDefault();
+        const saveBtn = this.form.querySelector('#save-potential-btn');
+        saveBtn.disabled = true;
+        saveBtn.querySelector('.loader-small').classList.remove('hidden');
+        saveBtn.querySelector('#save-potential-btn-text').textContent = '';
+
+        const rowId = this.form.querySelector('#potential-id').value;
+        
+        // Data for the main row (non-link fields), using column NAMES
+        const rowDataWithNames = {
+            "Terminpartner": this.form.querySelector('#potential-partner').value,
+            "Telefonnummer": this.form.querySelector('#potential-phone').value || '',
+            "Email": this.form.querySelector('#potential-email').value || '',
+            "Rating_Kunde": parseFloat(this.form.querySelector('#potential-rating-kunde').value) || null,
+            "Rating_MA": parseFloat(this.form.querySelector('#potential-rating-ma').value) || null,
+            "Rating_NT": parseFloat(this.form.querySelector('#potential-rating-nt').value) || null,
+            "Kontaktiert": this.form.querySelector('#potential-kontaktstatus').value || null,
+            "Hinweis": this.form.querySelector('#potential-note').value || '',
+        };
+
+        // Data for the link field
+        const mitarbeiterRowId = this.form.querySelector('#potential-user').value;
+
+        let success = false;
+
+        try {
+            if (rowId) { // --- UPDATE ---
+                // Step 1: Update main data
+                const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+                const body = { table_name: 'Termine', row_id: rowId, row: rowDataWithNames };
+                const response = await fetch(url, { method: "PUT", headers: { Authorization: `Bearer ${seaTableAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                if (!response.ok) throw new Error(`Update failed: ${await response.text()}`);
+                
+                // Step 2: Update link data
+                const linkSuccess = await seaTableUpdateLinkField(rowId, mitarbeiterRowId);
+                if (!linkSuccess) throw new Error('Link update failed');
+                success = true;
+
+            } else { // --- CREATE ---
+                // Step 1: Create main data
+                const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+                const body = { table_name: 'Termine', rows: [rowDataWithNames] };
+                const response = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${seaTableAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                const result = await response.json();
+                if (!response.ok || !result.row_ids || result.row_ids.length === 0) {
+                    throw new Error(`Create failed: ${result.error_message || 'No row ID returned'}`);
+                }
+                const newRowId = result.row_ids[0]?._id;
+                if (!newRowId) throw new Error('Could not get new row ID');
+
+                // Step 2: Create link
+                const linkSuccess = await seaTableUpdateLinkField(newRowId, mitarbeiterRowId);
+                if (!linkSuccess) throw new Error('Link creation failed');
+                success = true;
+            }
+        } catch (error) {
+            console.error("[Potential Save] FAILED:", error);
+            success = false;
+        }
+
+        if (success) {
+            this.closeModal();
+            await this.fetchAndRender();
+        } else {
+            alert('Fehler beim Speichern des Kontakts. Details in der Konsole.');
+        }
+        saveBtn.disabled = false;
+        saveBtn.querySelector('.loader-small').classList.add('hidden');
+        saveBtn.querySelector('#save-potential-btn-text').textContent = 'Speichern';
+    }
+
+    openScheduleModal(potential) {
+        this.scheduleForm.reset();
+        this.scheduleForm.querySelector('#schedule-potential-id').value = potential._id;
+
+        const categorySelect = this.scheduleForm.querySelector('#schedule-category');
+        const statusSelect = this.scheduleForm.querySelector('#schedule-status');
+        categorySelect.innerHTML = '';
+        statusSelect.innerHTML = '';
+
+        const terminMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'termine');
+        const categoryColumn = terminMeta.columns.find(c => c.name === 'Kategorie');
+        const statusColumn = terminMeta.columns.find(c => c.name === 'Status');
+
+        categoryColumn.data.options.forEach(o => categorySelect.add(new Option(o.name, o.name)));
+        statusColumn.data.options.forEach(o => statusSelect.add(new Option(o.name, o.name)));
+
+        this.scheduleModal.classList.add('visible');
+    }
+
+    closeScheduleModal() {
+        this.scheduleModal.classList.remove('visible');
+    }
+
+    async handleScheduleSubmit(e) {
+        e.preventDefault();
+        const rowId = this.scheduleForm.querySelector('#schedule-potential-id').value;
+        const datum = this.scheduleForm.querySelector('#schedule-date').value;
+        const kategorie = this.scheduleForm.querySelector('#schedule-category').value;
+        const status = this.scheduleForm.querySelector('#schedule-status').value;
+
+        // Neuer Ansatz: Direkte SQL-Abfrage für das Update.
+        // Das ist oft robuster für spezifische Updates, wenn die API sich unerwartet verhält.
+        const sql = `UPDATE \`Termine\` SET \`Datum\` = '${datum}', \`Kategorie\` = '${kategorie}', \`Status\` = '${status}' WHERE \`_id\` = '${rowId}'`;
+        
+        let success = false;
+        try {
+            potentialLog(`[SCHEDULE] Versuche Termin zu speichern für rowId: ${rowId}`);
+            potentialLog(`[SCHEDULE] Sende folgende SQL-Abfrage:`, sql);
+
+            const result = await SKT_APP.seaTableSqlQuery(sql, false);
+            
+            // seaTableSqlQuery gibt bei erfolgreichem UPDATE ein leeres Array zurück.
+            // Bei einem Fehler gibt es `null` zurück.
+            if (result !== null) {
+                potentialLog(`[SCHEDULE] SQL Update erfolgreich.`);
+                success = true;
+            } else {
+                throw new Error("SQL Update API call returned null.");
+            }
+
+        } catch (error) {
+            console.error("[Potential Schedule] FAILED to update row via SQL.", error);
+        }
+
+        if (success) {
+            // WICHTIG: Die gecachten Daten müssen manuell aktualisiert werden,
+            // da wir nicht die ganze Tabelle neu laden.
+            const terminIndex = db.termine.findIndex(t => t._id === rowId);
+            if (terminIndex > -1) {
+                db.termine[terminIndex].Datum = datum;
+                db.termine[terminIndex].Kategorie = kategorie;
+                db.termine[terminIndex].Status = status;
+                console.log('[CACHE-UPDATE] Termin im lokalen Cache aktualisiert.');
+            }
+
+            this.closeScheduleModal();
+            this.closeModal();
+            await this.fetchAndRender();
+        } else {
+            alert('Fehler beim Speichern des Termins. Details in der Konsole.');
+        }
+    }
+
+    downloadExcelTemplate() {
+        potentialLog('Excel-Vorlage wird heruntergeladen...');
+        
+        // Diese Header müssen den Spaltennamen in SeaTable entsprechen,
+        // die später beim Import verwendet werden. Für die Vorlage verwenden wir benutzerfreundliche Namen.
+        const headers = [
+            "Terminpartner",
+            "Telefonnummer",
+            "Email",
+            "Rating_Kunde",
+            "Rating_MA",
+            "Rating_NT",
+            "Hinweis",
+            "Kontaktiert"
+        ];
+
+        // CSV-Inhalt erstellen. Wichtig: UTF-8 BOM für korrekte Darstellung von Umlauten in Excel.
+        const csvContent = "\uFEFF" + headers.join(';') + "\n";
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "potential_vorlage.csv";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+}
+
+async function loadAndInitPotentialView() {
+    const container = dom.potentialView;
+    console.log('%c[Loader] %cLoading/Re-loading potential view...', 'color: orange; font-weight: bold;', 'color: black;');
+    try {
+        const response = await fetch("./potential.html");
+        if (!response.ok) throw new Error(`Die Datei 'potential.html' konnte nicht gefunden werden.`);
+        container.innerHTML = await response.text();
+
+        if (!potentialViewInstance) {
+            potentialViewInstance = new PotentialView();
+        }
+        await potentialViewInstance.init(authenticatedUserData._id);
+    } catch (error) {
+        console.error("Fehler beim Laden der Potential-Ansicht:", error);
+        container.innerHTML = `<div class="text-center p-8 bg-red-50 rounded-lg border border-red-200"><h3 class="text-xl font-bold text-skt-blue">Fehler beim Laden</h3><p class="text-red-600 mt-2">${error.message}</p></div>`;
+    }
+}
+
 // --- INITIALISIERUNG & EVENT LISTENERS ---
 
 function setupEventListeners() {
@@ -3219,6 +3599,11 @@ function setupEventListeners() {
     switchView("appointments");
   });
 
+  dom.potentialHeaderBtn.addEventListener("click", () => {
+    // NEU
+    switchView("potential");
+  });
+
   // --- Modal Controls ---
   dom.closeHinweisModalBtn.addEventListener("click", () => {
     dom.hinweisModal.classList.remove("visible");
@@ -3247,14 +3632,17 @@ function switchView(viewName) {
   currentView = viewName;
   dom.mainDashboardView.classList.toggle(
     "hidden",
-    viewName === "einarbeitung" || viewName === "appointments"
+    viewName !== "dashboard"
   );
   dom.einarbeitungView.classList.toggle("hidden", viewName !== "einarbeitung");
   dom.appointmentsView.classList.toggle("hidden", viewName !== "appointments");
+  dom.potentialView.classList.toggle("hidden", viewName !== "potential");
   updateBackButtonVisibility();
 
   if (viewName === "appointments") {
     loadAndInitAppointmentsView();
+  } else if (viewName === "potential") {
+    loadAndInitPotentialView();
   }
 }
 

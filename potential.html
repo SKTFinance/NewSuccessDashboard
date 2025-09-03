@@ -1,0 +1,100 @@
+<!-- Ansicht für die Potential-Verwaltung -->
+<div id="potential-module-root" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+        <h2 id="potential-title" class="text-3xl font-bold text-skt-blue">Potentialbearbeitung</h2>
+    </div>
+
+    <!-- Filter und Aktionen -->
+    <div class="bg-skt-grey-light p-4 rounded-xl mb-6 border border-gray-200">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+            <!-- Suchfeld -->
+            <div>
+                <label for="potential-search-filter" class="sr-only">Suchen</label>
+                <input type="text" id="potential-search-filter" placeholder="Potential suchen..." class="modern-input">
+            </div>
+            <!-- Aktionsbuttons -->
+            <div class="flex justify-end space-x-3">
+                <button id="download-template-btn" class="bg-white border border-skt-blue text-skt-blue font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-grey-light transition-colors flex items-center justify-center">
+                    <i class="fas fa-file-download mr-2"></i>Vorlage
+                </button>
+                <button id="import-excel-btn" class="bg-skt-blue text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-light transition-colors flex items-center justify-center">
+                    <i class="fas fa-file-upload mr-2"></i>Import
+                </button>
+                <button id="add-potential-btn" class="bg-skt-green-accent text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-green-700 transition-colors flex items-center justify-center">
+                    <i class="fas fa-plus mr-2"></i>Neuer Kontakt
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Container für die Tabelle -->
+    <div id="potential-list-container" class="space-y-4">
+        <div class="loader mx-auto"></div>
+    </div>
+</div>
+
+<!-- Modal zum Bearbeiten/Hinzufügen von Potential -->
+<div id="potential-modal" class="modal-overlay">
+    <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-2xl w-full relative max-h-[90vh] overflow-y-auto">
+        <button id="close-potential-modal-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
+        <h3 id="potential-modal-title" class="text-2xl font-bold text-skt-blue mb-6">Kontakt bearbeiten</h3>
+        <form id="potential-form" class="space-y-4">
+            <input type="hidden" id="potential-id">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div><label for="potential-partner" class="block text-sm font-medium text-gray-700">Terminpartner</label><input type="text" id="potential-partner" required class="modern-input"></div>
+                <div><label for="potential-user" class="block text-sm font-medium text-gray-700">Zuständiger Mitarbeiter</label><select id="potential-user" required class="modern-select"></select></div>
+                <div><label for="potential-phone" class="block text-sm font-medium text-gray-700">Telefonnummer</label><input type="tel" id="potential-phone" class="modern-input"></div>
+                <div><label for="potential-email" class="block text-sm font-medium text-gray-700">E-Mail</label><input type="email" id="potential-email" class="modern-input"></div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div><label for="potential-rating-kunde" class="block text-sm font-medium text-gray-700">Rating Kunde</label><input type="number" id="potential-rating-kunde" class="modern-input"></div>
+                <div><label for="potential-rating-ma" class="block text-sm font-medium text-gray-700">Rating MA</label><input type="number" id="potential-rating-ma" class="modern-input"></div>
+                <div><label for="potential-rating-nt" class="block text-sm font-medium text-gray-700">Rating NT</label><input type="number" id="potential-rating-nt" class="modern-input"></div>
+            </div>
+            <div>
+                <label for="potential-kontaktstatus" class="block text-sm font-medium text-gray-700">Kontakt-Status</label>
+                <select id="potential-kontaktstatus" class="modern-select">
+                    <option value="">-- Bitte wählen --</option>
+                    <option value="offen">Offen</option>
+                    <option value="nicht abgehoben 1">Nicht abgehoben 1</option>
+                    <option value="nicht abgehoben 2">Nicht abgehoben 2</option>
+                    <option value="nicht abgehoben 3">Nicht abgehoben 3</option>
+                    <option value="nächste TP">Nächste TP</option>
+                    <option value="sperre">Gesperrt</option>
+                </select>
+            </div>
+            <div><label for="potential-note" class="block text-sm font-medium text-gray-700">Hinweis</label><textarea id="potential-note" rows="3" class="modern-input"></textarea></div>
+            
+            <div class="pt-4 flex justify-between items-center">
+                <button type="button" id="schedule-appointment-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors flex items-center justify-center">
+                    <i class="fas fa-calendar-check mr-2"></i>Termin vereinbaren
+                </button>
+                <div class="flex space-x-3">
+                    <button type="button" id="cancel-potential-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button>
+                    <button type="submit" id="save-potential-btn" class="bg-skt-green-accent text-white font-semibold py-2 px-5 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center" style="min-width: 110px; min-height: 42px;">
+                        <span id="save-potential-btn-text">Speichern</span>
+                        <div class="loader-small hidden"></div>
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal zum Terminieren eines Potentials -->
+<div id="schedule-modal" class="modal-overlay">
+    <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-md w-full relative">
+        <button id="close-schedule-modal-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
+        <h3 class="text-2xl font-bold text-skt-blue mb-6">Termin festlegen</h3>
+        <form id="schedule-form" class="space-y-4">
+            <input type="hidden" id="schedule-potential-id">
+            <div><label for="schedule-date" class="block text-sm font-medium text-gray-700">Datum</label><input type="date" id="schedule-date" required class="modern-input"></div>
+            <div><label for="schedule-category" class="block text-sm font-medium text-gray-700">Kategorie</label><select id="schedule-category" required class="modern-select"></select></div>
+            <div><label for="schedule-status" class="block text-sm font-medium text-gray-700">Status</label><select id="schedule-status" required class="modern-select"></select></div>
+            <div class="pt-4 flex justify-end space-x-3">
+                <button type="button" id="cancel-schedule-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button>
+                <button type="submit" id="save-schedule-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors">Termin speichern</button>
+            </div>
+        </form>
+    </div>
+</div>
