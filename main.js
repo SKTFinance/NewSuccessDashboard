@@ -2348,7 +2348,7 @@ class AppointmentsView {
 
         this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
         this.downline.sort((a, b) => a.Name.localeCompare(b.Name));
-        this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.loggedInUserData));
+        this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.authenticatedUserData));
         
         if (!this.initialized) {
             appointmentsLog('Erstmalige Initialisierung: Event-Listener werden eingerichtet.');
@@ -2803,7 +2803,7 @@ class AppointmentsView {
             appointmentsLog('Modal elements found.');
 
             // Dropdowns befüllen
-            const allRelevantUsers = [SKT_APP.loggedInUserData, ...this.downline].filter(Boolean);
+            const allRelevantUsers = [SKT_APP.authenticatedUserData, ...this.downline].filter(Boolean);
             userSelect.innerHTML = '';
             allRelevantUsers.forEach(u => userSelect.add(new Option(u.Name, u._id)));
             appointmentsLog('User dropdown populated.');
