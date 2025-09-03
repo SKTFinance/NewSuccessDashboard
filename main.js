@@ -21,6 +21,8 @@ let db = {
   termine: [],
   monatsplanung: [],
   einarbeitung: [],
+  gesellschaften: [],
+  produkte: [],
 };
 
 let personalData = {};
@@ -37,6 +39,7 @@ let isMoneyView = false;
 let currentView = "dashboard";
 let appointmentsViewInstance = null;
 let potentialViewInstance = null;
+let umsatzViewInstance = null;
 let HIERARCHY_CACHE = null;
 let currentOnboardingSubView = "leader-list";
 
@@ -119,6 +122,8 @@ const dom = {
   dashboardHeaderBtn: document.getElementById("dashboard-header-btn"),
   appointmentsHeaderBtn: document.getElementById("appointments-header-btn"),
   potentialHeaderBtn: document.getElementById("potential-header-btn"),
+  umsatzHeaderBtn: document.getElementById("umsatz-header-btn"),
+  umsatzView: document.getElementById("umsatz-view"),
   potentialView: document.getElementById("potential-view"),
   appointmentsView: document.getElementById("appointments-view"),
   einarbeitungTitle: document.getElementById("einarbeitung-title"),
@@ -212,6 +217,29 @@ async function fetchColumnMaps() {
     setStatus("Fehler beim Laden der Datenbankstruktur.", true);
     return {};
   }
+}
+
+async function seaTableDeleteRow(tableName, rowId) {
+    if (!seaTableAccessToken || !apiGatewayUrl) {
+        console.error("Cannot delete row without access token and gateway URL.");
+        return false;
+    }
+    try {
+        const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+        const body = {
+            table_name: tableName,
+            row_ids: [rowId]
+        };
+        const response = await fetch(url, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${seaTableAccessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        return response.ok;
+    } catch (error) {
+        console.error(`Error deleting row from table ${tableName}:`, error);
+        return false;
+    }
 }
 
 async function seaTableSqlQuery(sql, convertLinks = true) {
@@ -339,65 +367,54 @@ async function seaTableQuery(tableName) {
 }
 
 async function seaTableUpdateRow(tableName, rowId, rowData) {
-    // Neuer, effizienter Ansatz, 1:1 an seaTableAddRow angelehnt.
-    console.log("[UPDATE-ROW-NEW] Starting new update-row process.");
+  const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
+  if (!tableMap) {
+    console.error(`[HYBRID-UPDATE] No column map found for table: ${tableName}`);
+    return false;
+  }
 
-    if (!seaTableAccessToken || !apiGatewayUrl) {
-        console.error("Cannot update row without access token and gateway URL.");
-        return false;
-    }
+  const tableMeta = METADATA.tables.find( (t) => t.name.toLowerCase() === tableName.toLowerCase() );
+  if (!tableMeta) {
+    console.error(`[HYBRID-UPDATE] No table metadata found for: ${tableName}`);
+    return false;
+  }
 
-    // --- SCHRITT 1: Daten vorbereiten (Link trennen, Keys in Namen umwandeln) ---
-    const mitarbeiterIdKey = SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID;
-    let mitarbeiterRowId = null;
-    let hasMitarbeiterId = Object.prototype.hasOwnProperty.call(rowData, mitarbeiterIdKey);
+  let allUpdatesSucceeded = true;
 
-    if (hasMitarbeiterId) {
-        mitarbeiterRowId = rowData[mitarbeiterIdKey] ? rowData[mitarbeiterIdKey][0] : null;
-    }
-    
-    const rowDataForUpdate = { ...rowData };
-    if (hasMitarbeiterId) {
-        delete rowDataForUpdate[mitarbeiterIdKey];
-    }
+  for (const key in rowData) {
+    if (Object.hasOwnProperty.call(rowData, key)) {
+      const value = rowData[key];
+      const colName = Object.keys(tableMap).find( (name) => tableMap[name] === key );
 
-    const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
-    if (!tableMap) {
-        console.error(`[UPDATE-ROW-NEW] Column map for table '${tableName}' not found.`);
-        return false;
-    }
-    const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
+      if (!colName || colName === "_id") continue;
 
-    const rowDataWithNames = {};
-    for (const key in rowDataForUpdate) {
-        const name = reversedMap[key];
-        if (name && name !== '_id') { // _id cannot be updated
-            const value = rowDataForUpdate[key];
-            rowDataWithNames[name] = (value === undefined || value === '') ? null : value;
+      if (colName === "Mitarbeiter_ID") {
+        const mitarbeiterRowId = value && value[0] ? value[0] : null;
+        const success = await seaTableUpdateLinkField(rowId, mitarbeiterRowId);
+        if (!success) {
+          console.error(`[API-LINK-UPDATE] Failed to update field: ${colName}`);
+          allUpdatesSucceeded = false;
+          break;
         }
-    }
+      } else {
+        const colMeta = tableMeta.columns.find(c => c.key === key);
+        let formattedValue;
+        if (value === null || value === undefined || value === '') formattedValue = "NULL";
+        else if (colMeta && colMeta.type === 'number') { const numValue = parseFloat(value); formattedValue = isNaN(numValue) ? "NULL" : numValue; }
+        else if (typeof value === "boolean") formattedValue = value ? "true" : "false";
+        else formattedValue = `'${escapeSql(String(value))}'`;
 
-    // --- SCHRITT 2: Zeile mit den meisten Daten aktualisieren ---
-    let mainUpdateSuccess = true;
-    if (Object.keys(rowDataWithNames).length > 0) {
-        try {
-            const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
-            const body = { table_name: tableName, row_id: rowId, row: rowDataWithNames };
-            const response = await fetch(url, { method: "PUT", headers: { Authorization: `Bearer ${seaTableAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}, message: ${await response.text()}`);
-        } catch (error) {
-            console.error("[UPDATE-ROW-NEW] Step 1 FAILED: Could not update row.", error);
-            mainUpdateSuccess = false;
+        const sql = `UPDATE \`${tableName}\` SET \`${colName}\` = ${formattedValue} WHERE \`_id\` = '${rowId}'`;
+        const result = await seaTableSqlQuery(sql, false);
+        if (result === null) {
+          console.error(`[SQL-UPDATE] Failed to update field: ${colName}`);
+          allUpdatesSucceeded = false;
+          break;
         }
+      }
     }
-
-    // --- SCHRITT 3: Mitarbeiter verknüpfen (nur wenn im Formular vorhanden) ---
-    let linkUpdateSuccess = true;
-    if (hasMitarbeiterId) {
-        linkUpdateSuccess = await seaTableUpdateLinkField(rowId, mitarbeiterRowId);
-    }
-
-    return mainUpdateSuccess && linkUpdateSuccess;
+  }
+  return allUpdatesSucceeded;
 }
 
 async function seaTableUpdateLinkField(terminRowId, mitarbeiterRowId) {
@@ -534,6 +551,143 @@ async function seaTableAddRow(tableName, rowData) {
   console.log("[ADD-ROW-NEW] Process finished successfully.");
   return true;
 }
+
+async function updateSingleLink(baseTableName, baseRowId, linkColumnName, otherRowIds) {
+    if (!seaTableAccessToken || !apiGatewayUrl) return false;
+    try {
+        const baseTableMeta = METADATA.tables.find(t => t.name === baseTableName);
+        if (!baseTableMeta) throw new Error(`Could not find metadata for table '${baseTableName}'`);
+
+        const linkColumnMeta = baseTableMeta.columns.find(c => c.name === linkColumnName);
+        if (!linkColumnMeta || !linkColumnMeta.data || !linkColumnMeta.data.link_id) throw new Error(`Could not find link metadata for column '${linkColumnName}' in table '${baseTableName}'`);
+
+        const otherTableId = linkColumnMeta.data.other_table_id;
+
+        const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/links/`;
+        const body = {
+            table_id: baseTableMeta._id,
+            other_table_id: otherTableId,
+            link_id: linkColumnMeta.data.link_id,
+            other_rows_ids_map: {
+                [baseRowId]: Array.isArray(otherRowIds) ? otherRowIds.filter(Boolean) : (otherRowIds ? [otherRowIds] : [])
+            }
+        };
+        
+        umsatzLog(`[UPDATE-LINK] Updating link for ${linkColumnName}. Payload:`, body);
+        const response = await fetch(url, { method: 'PUT', headers: { Authorization: `Bearer ${seaTableAccessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (!response.ok) {
+            throw new Error(`Link update for ${linkColumnName} failed: ${response.status} ${await response.text()}`);
+        }
+        return true;
+    } catch (error) {
+        console.error(`Error updating link for ${linkColumnName}:`, error);
+        return false;
+    }
+}
+
+async function seaTableUpdateUmsatzRow(tableName, rowId, rowData) {
+    umsatzLog("[UPDATE-UMSATZ] Starting update-umsatz process.");
+    if (!seaTableAccessToken || !apiGatewayUrl) return false;
+
+    const linkColumns = {
+        Mitarbeiter_ID: COLUMN_MAPS.umsatz.Mitarbeiter_ID,
+        Gesellschaft_ID: COLUMN_MAPS.umsatz.Gesellschaft_ID,
+        Produkt_ID: COLUMN_MAPS.umsatz.Produkt_ID
+    };
+    const linkData = {};
+    const rowDataForUpdate = { ...rowData };
+
+    for (const name in linkColumns) {
+        const colKey = linkColumns[name];
+        if (Object.prototype.hasOwnProperty.call(rowDataForUpdate, colKey)) {
+            linkData[name] = rowDataForUpdate[colKey]?.[0] || null;
+            delete rowDataForUpdate[colKey];
+        }
+    }
+
+    const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
+    const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
+    const rowDataWithNames = {};
+    for (const key in rowDataForUpdate) {
+        const name = reversedMap[key];
+        if (name && name !== '_id') {
+            rowDataWithNames[name] = (rowDataForUpdate[key] === undefined || rowDataForUpdate[key] === '') ? null : rowDataForUpdate[key];
+        }
+    }
+
+    let mainUpdateSuccess = true;
+    if (Object.keys(rowDataWithNames).length > 0) {
+        try {
+            const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+            const body = { table_name: tableName, row_id: rowId, row: rowDataWithNames };
+            const response = await fetch(url, { method: "PUT", headers: { Authorization: `Bearer ${seaTableAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            if (!response.ok) throw new Error(`Main row update failed: ${await response.text()}`);
+        } catch (error) {
+            console.error("[UPDATE-UMSATZ] Step 1 FAILED:", error);
+            mainUpdateSuccess = false;
+        }
+    }
+
+    if (!mainUpdateSuccess) return false;
+
+    for (const colName in linkData) {
+        await updateSingleLink(tableName, rowId, colName, linkData[colName] ? [linkData[colName]] : []);
+    }
+
+    return true;
+}
+
+async function seaTableAddUmsatzRow(tableName, rowData) {
+    umsatzLog("[ADD-UMSATZ] Starting add-umsatz process.");
+    if (!seaTableAccessToken || !apiGatewayUrl) return false;
+
+    const linkColumns = {
+        Mitarbeiter_ID: COLUMN_MAPS.umsatz.Mitarbeiter_ID,
+        Gesellschaft_ID: COLUMN_MAPS.umsatz.Gesellschaft_ID,
+        Produkt_ID: COLUMN_MAPS.umsatz.Produkt_ID
+    };
+    const linkData = {};
+    const rowDataForCreation = { ...rowData };
+    for (const name in linkColumns) {
+        const colKey = linkColumns[name];
+        if (Object.prototype.hasOwnProperty.call(rowDataForCreation, colKey)) {
+            linkData[name] = rowDataForCreation[colKey]?.[0] || null;
+            delete rowDataForCreation[colKey];
+        }
+    }
+
+    const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
+    const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
+    const rowDataWithNames = {};
+    for (const key in rowDataForCreation) {
+        const name = reversedMap[key];
+        if (name) rowDataWithNames[name] = (rowDataForCreation[key] === undefined || rowDataForCreation[key] === '') ? null : rowDataForCreation[key];
+    }
+
+    let newRowId = null;
+    try {
+        const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+        const body = { table_name: tableName, rows: [rowDataWithNames] };
+        const response = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${seaTableAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        const result = await response.json();
+        if (!response.ok || !result.row_ids || result.row_ids.length === 0) {
+            throw new Error(`Create failed: ${result.error_message || 'No row ID returned'}`);
+        }
+        newRowId = result.row_ids[0]?._id;
+        if (!newRowId) throw new Error("Could not get new row ID");
+    } catch (error) {
+        console.error("[ADD-UMSATZ] Step 1 FAILED:", error);
+        return false;
+    }
+
+    for (const colName in linkData) {
+        if (linkData[colName]) {
+            await updateSingleLink(tableName, newRowId, colName, [linkData[colName]]);
+        }
+    }
+
+    return true;
+}
 // --- DATA NORMALIZATION & MAPPING ---
 function normalizeAllData() {
   const tableNames = Object.keys(db).filter((name) => COLUMN_MAPS[name]);
@@ -663,6 +817,8 @@ async function loadAllData() {
     "Monatsplanung",
     "Termine",
     "Einarbeitung",
+    "Gesellschaften",
+    "Produkte",
   ];
 
   for (const tableName of tablesToLoad) {
@@ -3186,66 +3342,33 @@ class PotentialView {
         saveBtn.querySelector('.loader-small').classList.remove('hidden');
         saveBtn.querySelector('#save-potential-btn-text').textContent = '';
 
+        // KORREKTUR: Logik vereinheitlicht, um die wiederhergestellte Update-Funktion zu nutzen.
         const rowId = this.form.querySelector('#potential-id').value;
-        
-        // Data for the main row (non-link fields), using column NAMES
-        const rowDataWithNames = {
-            "Terminpartner": this.form.querySelector('#potential-partner').value,
-            "Telefonnummer": this.form.querySelector('#potential-phone').value || '',
-            "Email": this.form.querySelector('#potential-email').value || '',
-            "Rating_Kunde": parseFloat(this.form.querySelector('#potential-rating-kunde').value) || null,
-            "Rating_MA": parseFloat(this.form.querySelector('#potential-rating-ma').value) || null,
-            "Rating_NT": parseFloat(this.form.querySelector('#potential-rating-nt').value) || null,
-            "Kontaktiert": this.form.querySelector('#potential-kontaktstatus').value || null,
-            "Hinweis": this.form.querySelector('#potential-note').value || '',
+
+        const rowData = {
+            [SKT_APP.COLUMN_MAPS.termine.Terminpartner]: this.form.querySelector('#potential-partner').value,
+            [SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID]: [this.form.querySelector('#potential-user').value],
+            [SKT_APP.COLUMN_MAPS.termine.Telefonnummer]: this.form.querySelector('#potential-phone').value || '',
+            [SKT_APP.COLUMN_MAPS.termine.Email]: this.form.querySelector('#potential-email').value || '',
+            [SKT_APP.COLUMN_MAPS.termine.Rating_Kunde]: parseFloat(this.form.querySelector('#potential-rating-kunde').value) || null,
+            [SKT_APP.COLUMN_MAPS.termine.Rating_MA]: parseFloat(this.form.querySelector('#potential-rating-ma').value) || null,
+            [SKT_APP.COLUMN_MAPS.termine.Rating_NT]: parseFloat(this.form.querySelector('#potential-rating-nt').value) || null,
+            [SKT_APP.COLUMN_MAPS.termine.Status]: this.form.querySelector('#potential-kontaktstatus').value || null,
+            [SKT_APP.COLUMN_MAPS.termine.Hinweis]: this.form.querySelector('#potential-note').value || '',
+            [SKT_APP.COLUMN_MAPS.termine.Datum]: null, // Wichtig für Potentiale
         };
 
-        // Data for the link field
-        const mitarbeiterRowId = this.form.querySelector('#potential-user').value;
-
-        let success = false;
-
-        try {
-            if (rowId) { // --- UPDATE ---
-                // Step 1: Update main data
-                const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
-                const body = { table_name: 'Termine', row_id: rowId, row: rowDataWithNames };
-                const response = await fetch(url, { method: "PUT", headers: { Authorization: `Bearer ${seaTableAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
-                if (!response.ok) throw new Error(`Update failed: ${await response.text()}`);
-                
-                // Step 2: Update link data
-                const linkSuccess = await seaTableUpdateLinkField(rowId, mitarbeiterRowId);
-                if (!linkSuccess) throw new Error('Link update failed');
-                success = true;
-
-            } else { // --- CREATE ---
-                // Step 1: Create main data
-                const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
-                const body = { table_name: 'Termine', rows: [rowDataWithNames] };
-                const response = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${seaTableAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
-                const result = await response.json();
-                if (!response.ok || !result.row_ids || result.row_ids.length === 0) {
-                    throw new Error(`Create failed: ${result.error_message || 'No row ID returned'}`);
-                }
-                const newRowId = result.row_ids[0]?._id;
-                if (!newRowId) throw new Error('Could not get new row ID');
-
-                // Step 2: Create link
-                const linkSuccess = await seaTableUpdateLinkField(newRowId, mitarbeiterRowId);
-                if (!linkSuccess) throw new Error('Link creation failed');
-                success = true;
-            }
-        } catch (error) {
-            console.error("[Potential Save] FAILED:", error);
-            success = false;
-        }
+        const success = rowId
+            ? await SKT_APP.seaTableUpdateRow('Termine', rowId, rowData)
+            : await SKT_APP.seaTableAddRow('Termine', rowData);
 
         if (success) {
             this.closeModal();
             await this.fetchAndRender();
         } else {
-            alert('Fehler beim Speichern des Kontakts. Details in der Konsole.');
+            alert('Fehler beim Speichern des Kontakts.');
         }
+
         saveBtn.disabled = false;
         saveBtn.querySelector('.loader-small').classList.add('hidden');
         saveBtn.querySelector('#save-potential-btn-text').textContent = 'Speichern';
@@ -3368,6 +3491,329 @@ async function loadAndInitPotentialView() {
     } catch (error) {
         console.error("Fehler beim Laden der Potential-Ansicht:", error);
         container.innerHTML = `<div class="text-center p-8 bg-red-50 rounded-lg border border-red-200"><h3 class="text-xl font-bold text-skt-blue">Fehler beim Laden</h3><p class="text-red-600 mt-2">${error.message}</p></div>`;
+    }
+}
+
+const umsatzLog = (message, ...data) => console.log(`%c[Umsatz] %c${message}`, 'color: #f97316; font-weight: bold;', 'color: black;', ...data);
+
+class UmsatzView {
+    constructor() {
+        this.listContainer = null;
+        this.modal = null;
+        this.form = null;
+        this.scopeFilter = null;
+        this.searchInput = null;
+        this.startDateInput = null;
+        this.endDateInput = null;
+
+        this.initialized = false;
+        this.currentUserId = null;
+        this.allUmsaetze = [];
+        this.downline = [];
+        this.sortColumn = 'Datum';
+        this.sortDirection = 'desc';
+        this.filterText = '';
+        this.lastSavedUmsatz = null;
+    }
+
+    _getDomElements() {
+        this.listContainer = document.getElementById('umsatz-list-container');
+        this.modal = document.getElementById('umsatz-modal');
+        this.form = document.getElementById('umsatz-form');
+        this.scopeFilter = document.getElementById('umsatz-scope-filter');
+        this.searchInput = document.getElementById('umsatz-search-filter');
+        this.startDateInput = document.getElementById('umsatz-start-date');
+        this.endDateInput = document.getElementById('umsatz-end-date');
+        return this.listContainer && this.modal && this.form && this.scopeFilter && this.searchInput && this.startDateInput && this.endDateInput;
+    }
+
+    async init(userId) {
+        umsatzLog(`Modul wird initialisiert für User-ID: ${userId}`);
+        this.currentUserId = userId;
+
+        umsatzLog('Geladene Metadaten:', SKT_APP.METADATA);
+
+
+        if (!this._getDomElements()) {
+            umsatzLog('!!! FEHLER: Benötigte DOM-Elemente für die Umsatz-Ansicht wurden nicht gefunden.');
+            return;
+        }
+
+        const { startDate, endDate } = SKT_APP.getMonthlyCycleDates();
+        this.startDateInput.value = startDate.toISOString().split('T')[0];
+        this.endDateInput.value = endDate.toISOString().split('T')[0];
+
+        this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
+        this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.authenticatedUserData));
+
+        if (!this.initialized) {
+            this.setupEventListeners();
+            this.initialized = true;
+        }
+        await this.fetchAndRender();
+    }
+
+    async fetchAndRender() {
+        this.listContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        try {
+            const scope = this.scopeFilter.value;
+            let userIds = new Set([this.currentUserId]);
+            if (scope === 'group') SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
+            else if (scope === 'structure') this.downline.forEach(u => userIds.add(u._id));
+
+            const startDateIso = this.startDateInput.value;
+            const endDateIso = this.endDateInput.value;
+
+            const userNamesSql = Array.from(userIds).map(id => `'${SKT_APP.findRowById('mitarbeiter', id)?.Name}'`).filter(Boolean).join(',');
+            const query = `SELECT * FROM \`Umsatz\` WHERE \`Mitarbeiter_ID\` IN (${userNamesSql}) AND \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' ORDER BY \`Datum\` DESC`;
+            
+            const umsaetzeRaw = await SKT_APP.seaTableSqlQuery(query, true);
+            if (umsaetzeRaw && umsaetzeRaw.length > 0) umsatzLog('Roh-Daten für einen Umsatz:', umsaetzeRaw[0]);
+            this.allUmsaetze = SKT_APP.mapSqlResults(umsaetzeRaw, 'Umsatz');
+            if (this.allUmsaetze && this.allUmsaetze.length > 0) umsatzLog('Gemappte Daten für einen Umsatz:', this.allUmsaetze[0]);
+            this.render();
+        } catch (error) {
+            umsatzLog('!!! FEHLER in fetchAndRender !!!', error);
+        }
+    }
+
+    render() {
+        let filteredData = this.allUmsaetze.filter(u => {
+            if (this.filterText) {
+                const searchText = this.filterText.toLowerCase();
+                return (u.Kunde || '').toLowerCase().includes(searchText) ||
+                       (u.Mitarbeiter_ID?.[0]?.display_value || '').toLowerCase().includes(searchText);
+            }
+            return true;
+        });
+
+        filteredData.sort((a, b) => {
+            let valA = a[this.sortColumn];
+            let valB = b[this.sortColumn];
+            if (this.sortColumn === 'Mitarbeiter_ID' || this.sortColumn === 'Gesellschaft_ID' || this.sortColumn === 'Produkt_ID') {
+                valA = valA?.[0]?.display_value || '';
+                valB = valB?.[0]?.display_value || '';
+            }
+            const comparison = new Intl.Collator('de').compare(valA, valB);
+            return this.sortDirection === 'asc' ? comparison : -comparison;
+        });
+
+        this.listContainer.innerHTML = '';
+        if (filteredData.length === 0) {
+            this.listContainer.innerHTML = `<p class="text-center text-gray-500">Keine Umsätze gefunden.</p>`;
+            return;
+        }
+
+        const table = document.createElement('table');
+        table.className = 'appointments-table';
+        const headers = [
+            { key: 'Kunde', label: 'Kunde' }, { key: 'Mitarbeiter_ID', label: 'Mitarbeiter' },
+            { key: 'EH', label: 'EH' }, { key: 'Gesellschaft_ID', label: 'Gesellschaft' },
+            { key: 'Produkt_ID', label: 'Produkt' }
+        ];
+        table.innerHTML = `<thead><tr>${headers.map(h => `<th data-sort-key="${h.key}">${h.label} <i class="fas fa-sort sort-icon"></i></th>`).join('')}</tr></thead>`;
+        const tbody = document.createElement('tbody');
+        filteredData.forEach(u => {
+            const tr = document.createElement('tr');
+            tr.className = 'cursor-pointer';
+            tr.dataset.id = u._id;
+            tr.innerHTML = `
+                <td>${u.Kunde || '-'}</td>
+                <td>${u.Mitarbeiter_ID?.[0]?.display_value || '-'}</td>
+                <td>${u.EH || '-'}</td>
+                <td>${u.Gesellschaft_ID?.[0]?.display_value || '-'}</td>
+                <td>${u.Produkt_ID?.[0]?.display_value || '-'}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        this.listContainer.appendChild(table);
+
+        table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort(e.currentTarget.dataset.sortKey)));
+        table.querySelectorAll('tbody tr').forEach(tr => tr.addEventListener('click', e => this.openModal(this.allUmsaetze.find(u => u._id === e.currentTarget.dataset.id))));
+    }
+
+    _handleSort(key) {
+        if (this.sortColumn === key) this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+        else { this.sortColumn = key; this.sortDirection = 'desc'; }
+        this.render();
+    }
+
+    setupEventListeners() {
+        document.getElementById('add-umsatz-btn').addEventListener('click', () => this.openModal());
+        this.scopeFilter.addEventListener('change', () => this.fetchAndRender());
+        this.searchInput.addEventListener('input', _.debounce(e => { this.filterText = e.target.value; this.render(); }, 300));
+        const debouncedFetch = _.debounce(() => this.fetchAndRender(), 300);
+        this.startDateInput.addEventListener('change', debouncedFetch);
+        this.endDateInput.addEventListener('change', debouncedFetch);
+        this.form.addEventListener('submit', e => this.handleFormSubmit(e));
+        document.getElementById('close-umsatz-modal-btn').addEventListener('click', () => this.modal.classList.remove('visible'));
+        document.getElementById('cancel-umsatz-btn').addEventListener('click', () => this.modal.classList.remove('visible'));
+        document.getElementById('delete-umsatz-btn').addEventListener('click', () => this.handleDelete());
+    }
+
+    openModal(umsatz = null) {
+        this.form.reset();
+        const idInput = this.form.querySelector('#umsatz-id');
+        const boFields = this.form.querySelector('#umsatz-bo-fields');
+        const deleteBtn = this.form.querySelector('#delete-umsatz-btn');
+
+        this.form.querySelector('#save-umsatz-btn').disabled = false;
+        this.form.querySelector('#save-umsatz-btn').textContent = 'Speichern';
+
+        const populateSelect = (selectId, data, displayField, selectedValue) => {
+            umsatzLog(`Befülle Dropdown ${selectId} mit ${data.length} Einträgen. Display-Feld: '${displayField}'`);
+            const select = this.form.querySelector(selectId);
+            select.innerHTML = '<option value="">-- Bitte wählen --</option>';
+            data.forEach(item => {
+                const text = item[displayField];
+                if (text === undefined) {
+                    console.warn(`Display-Feld '${displayField}' nicht im Objekt gefunden für Dropdown ${selectId}.`, item);
+                }
+                select.add(new Option(text || '', item._id));
+            });
+            if (selectedValue) {
+                umsatzLog(`Setze Wert für ${selectId} auf: ${selectedValue}`);
+                select.value = selectedValue;
+            }
+        };
+
+        const allUsers = [SKT_APP.authenticatedUserData, ...this.downline].filter(Boolean);
+        allUsers.sort((a, b) => a.Name.localeCompare(b.Name));
+
+        // WIEDERHERGESTELLT: Robuste Bestimmung des Anzeigenamens der primären Spalte
+        const getDisplayColumn = (tableName) => {
+            const tableMeta = SKT_APP.METADATA.tables.find(t => t.name.toLowerCase() === tableName.toLowerCase());
+            if (tableMeta && tableMeta.columns) {
+                const primaryColumn = tableMeta.columns.find(c => c.is_primary);
+                if (primaryColumn) {
+                    return primaryColumn.name;
+                }
+            }
+            return 'Name'; // Fallback
+        };
+
+        const gesellschaftenDisplayCol = getDisplayColumn('Gesellschaften');
+        const produkteDisplayCol = getDisplayColumn('Produkte');
+
+        if (umsatz) {
+            this.lastSavedUmsatz = null; // Clear pre-fill cache when editing
+            idInput.value = umsatz._id;
+            this.form.querySelector('#umsatz-kunde').value = umsatz.Kunde || '';
+            this.form.querySelector('#umsatz-eh').value = umsatz.EH || '';
+            this.form.querySelector('#umsatz-hinweis-bo').value = umsatz.Hinweis_BO || '';
+            this.form.querySelector('#umsatz-status-ok').checked = umsatz.Status_OK || false;
+            
+            populateSelect('#umsatz-mitarbeiter', allUsers, 'Name', umsatz?.Mitarbeiter_ID?.[0]?.row_id);
+            populateSelect('#umsatz-gesellschaft', db.gesellschaften, gesellschaftenDisplayCol, umsatz?.Gesellschaft_ID?.[0]?.row_id);
+            populateSelect('#umsatz-produkt', db.produkte, produkteDisplayCol, umsatz?.Produkt_ID?.[0]?.row_id);
+
+            boFields.classList.remove('hidden');
+            deleteBtn.classList.remove('hidden');
+        } else {
+            idInput.value = '';
+            boFields.classList.add('hidden');
+            deleteBtn.classList.add('hidden');
+
+            if (this.lastSavedUmsatz) {
+                umsatzLog('Fülle Formular mit zuletzt gespeicherten Daten.', this.lastSavedUmsatz);
+                this.form.querySelector('#umsatz-kunde').value = this.lastSavedUmsatz.Kunde;
+                this.form.querySelector('#umsatz-eh').value = ''; // EH bleibt leer
+                populateSelect('#umsatz-mitarbeiter', allUsers, 'Name', this.lastSavedUmsatz.Mitarbeiter_ID);
+                populateSelect('#umsatz-gesellschaft', db.gesellschaften, gesellschaftenDisplayCol, this.lastSavedUmsatz.Gesellschaft_ID);
+                populateSelect('#umsatz-produkt', db.produkte, produkteDisplayCol, this.lastSavedUmsatz.Produkt_ID);
+            } else {
+                populateSelect('#umsatz-mitarbeiter', allUsers, 'Name', this.currentUserId);
+                populateSelect('#umsatz-gesellschaft', db.gesellschaften, gesellschaftenDisplayCol, null);
+                populateSelect('#umsatz-produkt', db.produkte, produkteDisplayCol, null);
+            }
+        }
+        this.modal.classList.add('visible');
+    }
+
+    async handleFormSubmit(e) {
+        e.preventDefault();
+        const saveBtn = this.form.querySelector('#save-umsatz-btn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Speichern...';
+
+        const rowId = this.form.querySelector('#umsatz-id').value;
+        const isNew = !rowId;
+
+        const formData = {
+            Kunde: this.form.querySelector('#umsatz-kunde').value,
+            EH: parseFloat(this.form.querySelector('#umsatz-eh').value) || null,
+            Mitarbeiter_ID: this.form.querySelector('#umsatz-mitarbeiter').value,
+            Gesellschaft_ID: this.form.querySelector('#umsatz-gesellschaft').value,
+            Produkt_ID: this.form.querySelector('#umsatz-produkt').value,
+            Hinweis_BO: this.form.querySelector('#umsatz-hinweis-bo').value,
+            Status_OK: this.form.querySelector('#umsatz-status-ok').checked,
+        };
+
+        const rowData = {
+            [COLUMN_MAPS.umsatz.Kunde]: formData.Kunde,
+            [COLUMN_MAPS.umsatz.EH]: formData.EH,
+            [COLUMN_MAPS.umsatz.Mitarbeiter_ID]: formData.Mitarbeiter_ID ? [formData.Mitarbeiter_ID] : [],
+            [COLUMN_MAPS.umsatz.Gesellschaft_ID]: formData.Gesellschaft_ID ? [formData.Gesellschaft_ID] : [],
+            [COLUMN_MAPS.umsatz.Produkt_ID]: formData.Produkt_ID ? [formData.Produkt_ID] : [],
+            [COLUMN_MAPS.umsatz.Hinweis_BO]: formData.Hinweis_BO,
+            [COLUMN_MAPS.umsatz.Status_OK]: formData.Status_OK,
+        };
+
+        if (isNew) rowData[COLUMN_MAPS.umsatz.Datum] = new Date().toISOString().split('T')[0];
+
+        const success = isNew 
+            ? await seaTableAddUmsatzRow('Umsatz', rowData)
+            : await seaTableUpdateUmsatzRow('Umsatz', rowId, rowData);
+
+        if (success) {
+            saveBtn.textContent = 'Gespeichert!';
+            saveBtn.classList.remove('hover:bg-green-700');
+            saveBtn.classList.add('bg-skt-green-accent');
+
+            if (isNew) {
+                this.lastSavedUmsatz = formData;
+            } else {
+                this.lastSavedUmsatz = null;
+            }
+
+            await this.fetchAndRender();
+            setTimeout(() => {
+                this.modal.classList.remove('visible');
+                saveBtn.textContent = 'Speichern';
+                saveBtn.disabled = false;
+            }, 1500);
+        } else {
+            alert('Fehler beim Speichern.');
+            saveBtn.textContent = 'Speichern';
+            saveBtn.disabled = false;
+        }
+    }
+
+    async handleDelete() {
+        const rowId = this.form.querySelector('#umsatz-id').value;
+        if (confirm('Möchten Sie diesen Umsatz wirklich löschen?')) {
+            const success = await seaTableDeleteRow('Umsatz', rowId);
+            if (success) {
+                this.modal.classList.remove('visible');
+                await this.fetchAndRender();
+            } else {
+                alert('Fehler beim Löschen.');
+            }
+        }
+    }
+}
+
+async function loadAndInitUmsatzView() {
+    const container = dom.umsatzView;
+    try {
+        const response = await fetch("./umsatz.html");
+        if (!response.ok) throw new Error(`Die Datei 'umsatz.html' konnte nicht gefunden werden.`);
+        container.innerHTML = await response.text();
+        if (!umsatzViewInstance) umsatzViewInstance = new UmsatzView();
+        await umsatzViewInstance.init(authenticatedUserData._id);
+    } catch (error) {
+        console.error("Fehler beim Laden der Umsatz-Ansicht:", error);
     }
 }
 
@@ -3604,6 +4050,11 @@ function setupEventListeners() {
     switchView("potential");
   });
 
+  dom.umsatzHeaderBtn.addEventListener("click", () => {
+    // NEU
+    switchView("umsatz");
+  });
+
   // --- Modal Controls ---
   dom.closeHinweisModalBtn.addEventListener("click", () => {
     dom.hinweisModal.classList.remove("visible");
@@ -3637,12 +4088,15 @@ function switchView(viewName) {
   dom.einarbeitungView.classList.toggle("hidden", viewName !== "einarbeitung");
   dom.appointmentsView.classList.toggle("hidden", viewName !== "appointments");
   dom.potentialView.classList.toggle("hidden", viewName !== "potential");
+  dom.umsatzView.classList.toggle("hidden", viewName !== "umsatz");
   updateBackButtonVisibility();
 
   if (viewName === "appointments") {
     loadAndInitAppointmentsView();
   } else if (viewName === "potential") {
     loadAndInitPotentialView();
+  } else if (viewName === "umsatz") {
+    loadAndInitUmsatzView();
   }
 }
 

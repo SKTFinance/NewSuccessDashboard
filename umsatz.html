@@ -1,0 +1,70 @@
+<!-- Ansicht für die Umsatz-Verwaltung -->
+<div id="umsatz-module-root" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+        <h2 id="umsatz-title" class="text-3xl font-bold text-skt-blue">Umsatzübersicht</h2>
+    </div>
+
+    <!-- Filter und Aktionen -->
+    <div class="bg-skt-grey-light p-4 rounded-xl mb-6 border border-gray-200">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div>
+                <label for="umsatz-start-date" class="block text-sm font-medium text-gray-700 mb-1">Von</label>
+                <input type="date" id="umsatz-start-date" class="modern-input">
+            </div>
+            <div>
+                <label for="umsatz-end-date" class="block text-sm font-medium text-gray-700 mb-1">Bis</label>
+                <input type="date" id="umsatz-end-date" class="modern-input">
+            </div>
+            <!-- Scope Filter -->
+            <div>
+                <label for="umsatz-scope-filter" class="block text-sm font-medium text-gray-700 mb-1">Anzeigen für</label>
+                <select id="umsatz-scope-filter" class="modern-select">
+                    <option value="personal">Meine Umsätze</option>
+                    <option value="group">Meine Gruppe</option>
+                    <option value="structure">Meine Struktur</option>
+                </select>
+            </div>
+            <!-- Suchfeld -->
+            <div>
+                <label for="umsatz-search-filter" class="sr-only">Suchen</label>
+                <input type="text" id="umsatz-search-filter" placeholder="Kunde oder Mitarbeiter..." class="modern-input">
+            </div>
+        </div>
+        <div class="mt-4 flex justify-end">
+            <button id="add-umsatz-btn" class="bg-skt-green-accent text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-green-700 transition-colors flex items-center justify-center">
+                <i class="fas fa-plus mr-2"></i>Neuer Umsatz
+            </button>
+        </div>
+    </div>
+
+    <!-- Container für die Tabelle -->
+    <div id="umsatz-list-container" class="space-y-4">
+        <div class="loader mx-auto"></div>
+    </div>
+</div>
+
+<!-- Modal zum Bearbeiten/Hinzufügen von Umsatz -->
+<div id="umsatz-modal" class="modal-overlay">
+    <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-2xl w-full relative max-h-[90vh] overflow-y-auto">
+        <button id="close-umsatz-modal-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
+        <h3 id="umsatz-modal-title" class="text-2xl font-bold text-skt-blue mb-6">Umsatz bearbeiten</h3>
+        <form id="umsatz-form" class="space-y-4">
+            <input type="hidden" id="umsatz-id">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div><label for="umsatz-kunde" class="block text-sm font-medium text-gray-700">Kunde</label><input type="text" id="umsatz-kunde" required class="modern-input"></div>
+                <div><label for="umsatz-eh" class="block text-sm font-medium text-gray-700">EH</label><input type="number" step="0.01" id="umsatz-eh" required class="modern-input"></div>
+                <div><label for="umsatz-mitarbeiter" class="block text-sm font-medium text-gray-700">Mitarbeiter</label><select id="umsatz-mitarbeiter" required class="modern-select"></select></div>
+                <div><label for="umsatz-gesellschaft" class="block text-sm font-medium text-gray-700">Gesellschaft</label><select id="umsatz-gesellschaft" class="modern-select"></select></div>
+                <div><label for="umsatz-produkt" class="block text-sm font-medium text-gray-700">Produkt</label><select id="umsatz-produkt" class="modern-select"></select></div>
+            </div>
+            <div id="umsatz-bo-fields" class="hidden space-y-4 pt-4 border-t">
+                 <div><label for="umsatz-hinweis-bo" class="block text-sm font-medium text-gray-700">Hinweis BO</label><textarea id="umsatz-hinweis-bo" rows="3" class="modern-input"></textarea></div>
+                 <div class="flex items-center space-x-3"><label for="umsatz-status-ok" class="toggle-switch"><input type="checkbox" id="umsatz-status-ok" class="sr-only peer"><div class="toggle-slider"></div></label><label for="umsatz-status-ok" class="text-sm font-medium text-gray-700">Status OK</label></div>
+            </div>
+            <div class="pt-4 flex justify-between items-center">
+                <button type="button" id="delete-umsatz-btn" class="bg-red-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-red-700 transition-colors hidden"><i class="fas fa-trash-alt mr-2"></i>Löschen</button>
+                <div class="flex justify-end w-full space-x-3"><button type="button" id="cancel-umsatz-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button><button type="submit" id="save-umsatz-btn" class="bg-skt-green-accent text-white font-semibold py-2 px-5 rounded-lg hover:bg-green-700 transition-colors">Speichern</button></div>
+            </div>
+        </form>
+    </div>
+</div>
