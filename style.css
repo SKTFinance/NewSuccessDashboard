@@ -453,3 +453,5 @@ details[open] > summary::before { transform: rotate(180deg); }
 .sort-icon { margin-left: 0.5rem; opacity: 0.4; transition: opacity 0.2s ease; }
 .sort-icon.active { opacity: 1; color: var(--color-skt-blue); }
 
+
+
