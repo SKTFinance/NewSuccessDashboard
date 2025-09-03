@@ -2349,7 +2349,7 @@ class AppointmentsView {
         this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
         this.downline.sort((a, b) => a.Name.localeCompare(b.Name));
         this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.loggedInUserData));
-
+        
         if (!this.initialized) {
             appointmentsLog('Erstmalige Initialisierung: Event-Listener werden eingerichtet.');
             this.setupEventListeners();
@@ -2987,7 +2987,7 @@ async function loadAndInitAppointmentsView() {
     }
     
     console.log('%c[Loader] %cInitializing appointments view instance...', 'color: orange; font-weight: bold;', 'color: black;');
-    await appointmentsViewInstance.init(loggedInUserData._id);
+    await appointmentsViewInstance.init(authenticatedUserData._id);
   } catch (error) {
     console.error("Fehler beim Laden der Termin-Ansicht:", error);
     container.innerHTML = `<div class="text-center p-8 bg-red-50 rounded-lg border border-red-200"><i class="fas fa-exclamation-triangle fa-3x text-red-400 mb-4"></i><h3 class="text-xl font-bold text-skt-blue">Fehler beim Laden</h3><p class="text-red-600 mt-2">${error.message}</p><p class="text-gray-500 mt-4">Bitte stelle sicher, dass die Datei 'appointments.html' im selben Verzeichnis wie 'index.html' liegt.</p></div>`;
@@ -3210,7 +3210,7 @@ function setupEventListeners() {
   });
   dom.einarbeitungBanner.addEventListener("click", () => {
     switchView("einarbeitung");
-    fetchAndRenderOnboarding(loggedInUserData._id);
+    fetchAndRenderOnboarding(authenticatedUserData._id);
   });
 
   dom.dashboardHeaderBtn.addEventListener('click', () => {
@@ -3637,9 +3637,6 @@ window.SKT_APP = {
   db,
   get COLUMN_MAPS() { // Use a getter to ensure the latest value is always returned
     return COLUMN_MAPS;
-  },
-  get METADATA() { // Use a getter to ensure the latest value is always returned
-    return METADATA;
   },
   get METADATA() { // Use a getter to ensure the latest value is always returned
     return METADATA;
