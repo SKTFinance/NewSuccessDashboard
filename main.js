@@ -26,7 +26,8 @@ let db = {
 let personalData = {};
 let teamData = {};
 let structureData = {};
-let loggedInUserData = {};
+let authenticatedUserData = {}; // The user who is logged in
+let currentlyViewedUserData = {}; // The user whose dashboard is currently shown
 let viewHistory = [];
 
 let currentPlanningView = "team";
@@ -34,7 +35,7 @@ let currentLeadershipViewMode = "list";
 let isSuperuserView = false;
 let isMoneyView = false;
 let currentView = "dashboard";
-let appointmentsViewLoaded = false;
+let appointmentsViewInstance = null;
 let HIERARCHY_CACHE = null;
 let currentOnboardingSubView = "leader-list";
 
@@ -114,9 +115,9 @@ const dom = {
   einarbeitungView: document.getElementById("einarbeitung-view"),
   einarbeitungBtn: document.getElementById("einarbeitung-btn"),
   einarbeitungBanner: document.getElementById("einarbeitung-banner"),
-  appointmentsHeaderBtn: document.getElementById("appointments-header-btn"), // NEU
+  dashboardHeaderBtn: document.getElementById("dashboard-header-btn"),
+  appointmentsHeaderBtn: document.getElementById("appointments-header-btn"),
   appointmentsView: document.getElementById("appointments-view"),
-  appointmentsBtn: document.getElementById("appointments-btn"),
   einarbeitungTitle: document.getElementById("einarbeitung-title"),
   traineeOnboardingView: document.getElementById("trainee-onboarding-view"),
   leaderOnboardingView: document.getElementById("leader-onboarding-view"),
@@ -148,6 +149,7 @@ const dom = {
   cancelEditUserBtn: document.getElementById("cancel-edit-user-btn"),
   cancelEditUserBtn2: document.getElementById("cancel-edit-user-btn-2"),
   saveUserBtn: document.getElementById("save-user-btn"),
+  nextInfoDate: document.getElementById("next-info-date"),
 };
 
 // --- SEATABLE API FUNKTIONEN ---
@@ -629,15 +631,17 @@ function animateValue(element, start, end, duration, formatAsCurrency = false) {
   const step = (timestamp) => {
     if (!startTimestamp) startTimestamp = timestamp;
     const progress = Math.min((timestamp - startTimestamp) / duration, 1);
-    const value = Math.floor(progress * (end - start) + start);
+    const value = progress * (end - start) + start;
+    const displayValue = Math.round(value);
+
     element.textContent = formatAsCurrency
-      ? value.toLocaleString("de-DE", {
+      ? displayValue.toLocaleString("de-DE", {
           style: "currency",
           currency: "EUR",
           minimumFractionDigits: 0,
           maximumFractionDigits: 0,
         })
-      : value.toLocaleString("de-DE");
+      : displayValue.toLocaleString("de-DE", { maximumFractionDigits: 0 });
     if (progress < 1) window.requestAnimationFrame(step);
   };
   window.requestAnimationFrame(step);
@@ -811,8 +815,14 @@ async function fetchDashboardDataWithSql(mitarbeiterId) {
 function isUserLeader(user) {
   if (!user || !user.Karrierestufe) return false;
   const pos = user.Karrierestufe.toLowerCase();
-  // Eine Führungskraft ist jeder, der kein 'Trainee' in der Karrierestufe hat.
-  return !pos.includes("trainee");
+
+  // Definiere die Schlüsselwörter für Nicht-Führungskräfte basierend auf der Anforderung.
+  // Dazu gehören alle "Trainee"-Stufen und "JGST".
+  const isTrainee = pos.includes("trainee");
+  const isJgst = pos.includes("jgst");
+
+  // Eine Führungskraft ist jeder, der NICHT eine dieser Stufen hat.
+  return !(isTrainee || isJgst);
 }
 
 function buildHierarchy() {
@@ -1058,13 +1068,18 @@ async function calculateGesamtansichtData() {
     members: [],
     earnings: 0,
   };
-  geschäftsstelleRows.forEach((gsRow) => {
-    const gsData = augmentedMemberData.find((d) => d.id === gsRow._id);
-    if (gsData) {
-      Object.keys(totalData).forEach((key) => {
-        if (typeof totalData[key] === "number" && gsData[key])
-          totalData[key] += gsData[key];
-      });
+  // Anforderung: In der Gesamtübersicht sollen die Einheiten aller Führungskräfte summiert werden.
+  // Wir summieren hier die individuellen Plandaten jeder Führungskraft.
+  führungskräfte.forEach((leader) => {
+    const leaderData = augmentedMemberData.find((d) => d.id === leader._id);
+    if (leaderData) {
+      totalData.ehGoal += leaderData.ehGoal || 0;
+      totalData.ehCurrent += leaderData.ehCurrent || 0;
+      totalData.etGoal += leaderData.etGoal || 0;
+      totalData.etCurrent += leaderData.etCurrent || 0;
+      totalData.atGoal += leaderData.atGoal || 0;
+      totalData.atCurrent += leaderData.atCurrent || 0;
+      totalData.atVereinbart += leaderData.atVereinbart || 0;
     }
   });
   totalData.members = führungskräfte.map((leader) => {
@@ -1086,41 +1101,170 @@ async function calculateGesamtansichtData() {
   return totalData;
 }
 
+function drawSegmentDividers() {
+  const { startDate, endDate } = getMonthlyCycleDates();
+  clearChildren(dom.segmentDividersEh);
+  const totalDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
+  const totalWeeks = Math.ceil(totalDays / 7);
+
+  for (let i = 1; i < totalWeeks; i++) {
+    const angle = i * (360 / totalWeeks);
+    const line = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "line"
+    );
+
+    const innerRadius = 35;
+    const strokeWidth = 4;
+    const innerEdgeRadius = innerRadius - strokeWidth / 2;
+    const outerEdgeRadius = innerRadius + strokeWidth / 2;
+
+    const x1 = 50 + innerEdgeRadius * Math.cos((angle * Math.PI) / 180);
+    const y1 = 50 + innerEdgeRadius * Math.sin((angle * Math.PI) / 180);
+    const x2 = 50 + outerEdgeRadius * Math.cos((angle * Math.PI) / 180);
+    const y2 = 50 + outerEdgeRadius * Math.sin((angle * Math.PI) / 180);
+
+    line.setAttribute("x1", x1);
+    line.setAttribute("y1", y1);
+    line.setAttribute("x2", x2);
+    line.setAttribute("y2", y2);
+
+    dom.segmentDividersEh.appendChild(line);
+  }
+}
+
 // --- UI FUNKTIONEN ---
 function updateWeeklyProgress() {
-  clearChildren(dom.weeklyProgressContainer);
-}
+            const { startDate, endDate } = getMonthlyCycleDates();
+            const today = new Date();
+            clearChildren(dom.weeklyProgressContainer);
+
+            const totalDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
+            const daysInAWeek = 7;
+            const totalWeeks = Math.ceil(totalDays / daysInAWeek);
+            const dateOptions = { day: '2-digit', month: '2-digit' };
+
+            const createDivider = (left) => {
+                const d = document.createElement('div');
+                d.className = 'start-end-divider'; d.style.left = left;
+                dom.weeklyProgressContainer.appendChild(d);
+            };
+            const createLabel = (left, text, transform) => {
+                const l = document.createElement('div');
+                l.className = 'centered-date-label'; l.style.left = left;
+                l.style.transform = transform; l.textContent = text;
+                dom.weeklyProgressContainer.appendChild(l);
+            };
+            
+            createDivider('0%');
+            createLabel('0%', startDate.toLocaleDateString('de-DE', dateOptions), 'translateX(-50%)');
+
+            for (let i = 0; i < totalWeeks; i++) {
+                const weekStart = new Date(startDate.getTime() + i * daysInAWeek * 24 * 60 * 60 * 1000);
+                const weekEnd = new Date(weekStart.getTime() + daysInAWeek * 24 * 60 * 60 * 1000);
+                let progress = 0;
+                if (today >= weekEnd) progress = 100;
+                else if (today >= weekStart && today < weekEnd) {
+                    const daysPassed = (today - weekStart) / (1000 * 60 * 60 * 24);
+                    progress = (daysPassed / daysInAWeek) * 100;
+                }
+                const weekDiv = document.createElement('div');
+                weekDiv.className = 'flex-1 h-full relative p-2 flex flex-col items-center z-20';
+                weekDiv.innerHTML = `<div class="w-full bg-skt-grey-medium h-2 rounded-full overflow-hidden"><div class="h-full bg-skt-green-accent rounded-full transition-all duration-500" style="width: ${Math.min(progress, 100)}%;"></div></div>`;
+                dom.weeklyProgressContainer.appendChild(weekDiv);
+            }
+
+            const weeksDivs = dom.weeklyProgressContainer.querySelectorAll('.flex-1');
+            weeksDivs.forEach((div, i) => {
+                if (i === weeksDivs.length - 1) return;
+                const pos = `${(i + 1) * (100 / weeksDivs.length)}%`;
+                const weekDivider = document.createElement('div');
+                weekDivider.className = 'week-divider'; weekDivider.style.left = pos;
+                dom.weeklyProgressContainer.appendChild(weekDivider);
+                const wednesday = new Date(startDate.getTime() + i * daysInAWeek * 24 * 60 * 60 * 1000);
+                wednesday.setDate(wednesday.getDate() + (3 - wednesday.getDay() + 7) % 7);
+                createLabel(pos, wednesday.toLocaleDateString('de-DE', dateOptions), 'translateX(-50%)');
+            });
+            
+            const endDivider = document.createElement('div');
+            endDivider.className = 'start-end-divider'; endDivider.style.right = '0%';
+            dom.weeklyProgressContainer.appendChild(endDivider);
+            createLabel('100%', endDate.toLocaleDateString('de-DE', dateOptions), 'translateX(-50%)');
+        }
 
 function updateMonthlyPlanningView(data) {
   updateWeeklyProgress();
+  
   if (isMoneyView) {
     let earningsToShow = 0;
+    let earningsGoal = 0;
+
     if (data.earnings) {
       if (isSuperuserView) {
-        earningsToShow = data.earnings; // In superuser view, data.earnings is just a number
+        earningsToShow = data.earnings;
+        const avgRate = data.ehCurrent > 0 ? data.earnings / data.ehCurrent : 0;
+        earningsGoal = data.ehGoal * avgRate;
       } else if (currentPlanningView === "personal") {
         earningsToShow = data.earnings.personal;
+        const rate = getVerdienstForPosition(data.position);
+        earningsGoal = data.ehGoal * rate;
       } else if (currentPlanningView === "team") {
         earningsToShow = data.earnings.group;
+        const leaderRate = getVerdienstForPosition(personalData.position);
+        const avgRate = data.ehCurrent > 0 ? data.earnings.group / data.ehCurrent : leaderRate;
+        earningsGoal = data.ehGoal * avgRate;
       } else if (currentPlanningView === "struktur") {
         earningsToShow = data.earnings.structure;
+        const leaderRate = getVerdienstForPosition(personalData.position);
+        const avgRate = data.ehCurrent > 0 ? data.earnings.structure / data.ehCurrent : leaderRate;
+        earningsGoal = data.ehGoal * avgRate;
       }
     }
+
     animateValue(dom.ehCenterCurrent, 0, earningsToShow || 0, 1000, true);
-    dom.ehCenterGoal.textContent = "Verdienst";
-    dom.ehCenterUnitLabel.textContent = "in diesem Zyklus";
-    updateCircleProgress(dom.ehProgressCircle, 45, 0); // Kein Ziel in der Geld-Ansicht
-    dom.prognosisCircleEh.style.strokeDashoffset = 2 * Math.PI * 35; // Prognose ausblenden
-    dom.ehSollValue.textContent = "";
-    dom.ehSollUnitLabel.textContent = "";
+    dom.ehCenterGoal.textContent = (earningsGoal || 0).toLocaleString("de-DE", { maximumFractionDigits: 0 });
+    dom.ehCenterUnitLabel.textContent = "Ist €";
+    dom.ehSollUnitLabel.textContent = "Soll €";
+
+    const moneyPercentage = earningsGoal > 0 ? (earningsToShow / earningsGoal) * 100 : 0;
+    updateCircleProgress(dom.ehProgressCircle, 45, moneyPercentage);
+
+    // Prognose- und Soll-Logik für Geld-Ansicht
+    const { startDate, endDate } = getMonthlyCycleDates();
+    const today = new Date();
+    const totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
+    const daysPassedInCycle = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24));
+    const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
+    updateCircleProgress(dom.prognosisCircleEh, 35, timeElapsedPercentage);
+
+    const sollValue = Math.round(earningsGoal * (timeElapsedPercentage / 100));
+    animateValue(dom.ehSollValue, 0, sollValue, 1000, true);
+
+    // Segmente in Geld-Ansicht ausblenden, da sie auf Wochen basieren
+    clearChildren(dom.segmentDividersEh);
   } else {
     animateValue(dom.ehCenterCurrent, 0, data.ehCurrent || 0, 1000);
-    dom.ehCenterGoal.textContent = (data.ehGoal || 0).toLocaleString("de-DE");
-    dom.ehCenterUnitLabel.textContent = "Einheiten erreicht";
+    dom.ehCenterGoal.textContent = (data.ehGoal || 0).toLocaleString("de-DE", {
+      maximumFractionDigits: 0,
+    });
+    dom.ehCenterUnitLabel.textContent = "Ist Einheiten";
+    dom.ehSollUnitLabel.textContent = "Soll Einheiten";
+
     const ehPercentage =
       data.ehGoal > 0 ? (data.ehCurrent / data.ehGoal) * 100 : 0;
     updateCircleProgress(dom.ehProgressCircle, 45, ehPercentage);
-    // Hier könnte die Prognose-Logik wieder eingefügt werden, falls gewünscht
+
+    // Prognose- und Soll-Logik wiederhergestellt
+    const { startDate, endDate } = getMonthlyCycleDates();
+    const today = new Date();
+    const totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
+    const daysPassedInCycle = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24));
+    const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
+    updateCircleProgress(dom.prognosisCircleEh, 35, timeElapsedPercentage);
+
+    const sollValue = Math.round((data.ehGoal || 0) * (timeElapsedPercentage / 100));
+    animateValue(dom.ehSollValue, 0, sollValue, 1000);
+    drawSegmentDividers();
   }
 
   dom.appointmentsText.textContent = `${data.atCurrent || 0} / ${
@@ -1143,6 +1287,7 @@ function updateMonthlyPlanningView(data) {
   const etPercent = data.etGoal > 0 ? (data.etCurrent / data.etGoal) * 100 : 0;
   if (dom.interviewsProgressBar)
     dom.interviewsProgressBar.style.width = `${Math.min(etPercent, 100)}%`;
+
 }
 
 function updateEmployeeCareerView() {
@@ -1247,7 +1392,7 @@ function updateLeadershipView() {
   }
   dom.leadershipViewTitle.textContent = title;
 
-  dom.leadershipViewCount.textContent = `Zeige ${data.members.length} Mitarbeiter`;
+  dom.leadershipViewCount.textContent = `Du hast ${data.members.length} aktive Mitarbeiter in deiner Gruppe.`;
   renderTeamMemberCards(data.members);
 }
 
@@ -1272,17 +1417,25 @@ function renderTeamMemberCards(members) {
   if (currentLeadershipViewMode === "grid") {
     dom.teamMembersContainer.className =
       "mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6";
+    activeMembers.forEach((member) => {
+      const card = createMemberCardGrid(
+        member,
+        totalDaysInCycle,
+        daysPassedInCycle
+      );
+      dom.teamMembersContainer.appendChild(card);
+    });
   } else {
     dom.teamMembersContainer.className = "mt-6 space-y-4";
+    activeMembers.forEach((member) => {
+      const card = createMemberCardList(
+        member,
+        totalDaysInCycle,
+        daysPassedInCycle
+      );
+      dom.teamMembersContainer.appendChild(card);
+    });
   }
-  activeMembers.forEach((member) => {
-    const card = createTeamMemberCard(
-      member,
-      totalDaysInCycle,
-      daysPassedInCycle
-    );
-    dom.teamMembersContainer.appendChild(card);
-  });
   if (passiveMembers.length > 0) {
     const details = document.createElement("details");
     details.className = "bg-white rounded-xl shadow-lg";
@@ -1311,108 +1464,227 @@ function renderTeamMemberCards(members) {
   }
 }
 
-function createTeamMemberCard(member, totalDaysInCycle, daysPassedInCycle) {
-  const prognosis = getPrognosis(
-    member.ehCurrent,
-    member.ehGoal,
-    totalDaysInCycle,
-    daysPassedInCycle
-  );
-  const etPercentage =
-    member.etGoal > 0 ? (member.etCurrent / member.etGoal) * 100 : 0;
+function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
+    const ehPercentage = isMoneyView ? 0 : (member.ehGoal > 0 ? (member.ehCurrent / member.ehGoal * 100) : 0);
+    const etPercentage = member.etGoal > 0 ? (member.etCurrent / member.etGoal * 100) : 0;
+    const ehColorHex = getProgressColorHex(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
+    const prognosis = getPrognosis(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
+    
+    const ehValue = isMoneyView ? (member.earnings?.structure || 0) : member.ehCurrent;
+    const ehGoal = isMoneyView ? 0 : member.ehGoal;
+    const ehUnit = isMoneyView ? "Verdienst" : "Einheiten";
+    const ehDisplayValue = isMoneyView
+        ? ehValue.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })
+        : `${ehValue.toLocaleString("de-DE", {
+            maximumFractionDigits: 0,
+          })} / ${ehGoal.toLocaleString("de-DE", { maximumFractionDigits: 0 })}`;
 
-  const ehValue = isMoneyView
-    ? member.earnings?.structure || 0
-    : member.ehCurrent;
-  const ehGoal = isMoneyView ? 0 : member.ehGoal;
-  const ehUnit = isMoneyView ? "Verdienst" : "Einheiten (EH)";
-  const ehDisplayValue = isMoneyView
-    ? ehValue.toLocaleString("de-DE", {
-        style: "currency",
-        currency: "EUR",
-        maximumFractionDigits: 0,
-      })
-    : ehValue.toLocaleString("de-DE", { maximumFractionDigits: 0 });
-  const ehGoalDisplay = isMoneyView
-    ? ""
-    : `/ ${ehGoal.toLocaleString("de-DE", { maximumFractionDigits: 0 })}`;
+    const card = document.createElement('div');
+    card.className = 'bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl flex flex-col';
 
-  const ehPercentage =
-    member.ehGoal > 0 ? (member.ehCurrent / member.ehGoal) * 100 : 0;
-  const ehColorClass = getProgressColorClass(
-    member.ehCurrent,
-    member.ehGoal,
-    totalDaysInCycle,
-    daysPassedInCycle
-  );
-  const card = document.createElement("div");
-  card.className =
-    "bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl";
-  const summary = document.createElement("div");
-  summary.className = "p-4 cursor-pointer";
-  const pos = member.position || "";
-  const positionHtml =
-    pos && !pos.toLowerCase().includes("trainee")
-      ? `<p class="text-sm text-skt-blue-light">${
-          member.originalPosition || member.position
-        }</p>`
-      : "";
-  const prognosisHtml = !isMoneyView
-    ? `<span class="font-semibold text-sm ${prognosis.colorClass}" data-tooltip="Prognose basierend auf dem aktuellen Fortschritt im Verhältnis zur vergangenen Zeit im Monat.">${prognosis.text}</span>`
-    : "";
-  summary.innerHTML = `<div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-skt-blue text-lg break-words">${
-    member.leaderName || member.name
-  }</p>${positionHtml}</div><div class="flex items-center space-x-4 flex-shrink-0">${prognosisHtml}<button data-userid="${
-    member.id
-  }" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button><i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i></div></div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">${ehUnit}</p><p class="text-xs font-semibold text-skt-blue">${ehDisplayValue} ${ehGoalDisplay}</p></div>${
-    !isMoneyView
-      ? `<div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1"><div class="h-full ${ehColorClass}" style="width: ${Math.min(
-          ehPercentage,
-          100
-        )}%;"></div></div>`
-      : ""
-  }</div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">ET Termine</p><p class="text-xs font-semibold text-skt-blue">${
-    member.etCurrent
-  } / ${
-    member.etGoal
-  }</p></div><div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1"><div class="h-full bg-skt-green-accent" style="width: ${Math.min(
-    etPercentage,
-    100
-  )}%;"></div></div></div>`;
-  const details = document.createElement("div");
-  details.className = "team-member-details px-4";
-  details.innerHTML = `<div class="details-grid grid grid-cols-1 gap-4"><div class="text-center"><p class="text-sm font-semibold text-skt-blue mb-1">Analysetermine</p><p class="text-md font-bold text-skt-blue">${
-    member.atCurrent
-  } / ${member.atVereinbart} / ${
-    member.atGoal
-  }</p><p class="text-xs text-gray-500 mb-2">Gehalten / Vereinbart / Soll</p><div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden relative"><div class="h-full bg-skt-blue-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(
-    member.atGoal > 0 ? (member.atVereinbart / member.atGoal) * 100 : 0,
-    100
-  )}%;"></div><div class="h-full bg-skt-green-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(
-    member.atGoal > 0 ? (member.atCurrent / member.atGoal) * 100 : 0,
-    100
-  )}%;"></div></div></div></div>`;
-  card.appendChild(summary);
-  card.appendChild(details);
-  summary.addEventListener("click", (e) => {
-    if (!e.target.closest(".switch-view-btn")) {
-      details.classList.toggle("open");
-      summary.classList.toggle("open");
+    const summary = document.createElement('div');
+    summary.className = 'p-4 cursor-pointer flex-grow';
+
+    const radius = 40;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference * (1 - Math.min(ehPercentage, 100) / 100);
+    
+    const pos = member.position || "";
+    let positionHtml = '';
+    if (pos && !pos.toLowerCase().includes("trainee")) {
+        positionHtml = `<p class="text-sm text-skt-blue-light">${member.originalPosition || member.position}</p>`;
     }
-  });
-  summary.querySelector(".switch-view-btn").addEventListener("click", (e) => {
-    e.stopPropagation();
-    const newuserId = e.currentTarget.dataset.userid;
-    if (newuserId) {
-      viewHistory.push(newuserId);
-      fetchAndRenderDashboard(newuserId);
-    }
-  });
-  return card;
+    const prognosisHtml = !isMoneyView ? `<p class="text-sm ${prognosis.colorClass} font-semibold">${prognosis.text}</p>` : '';
+
+    summary.innerHTML = `
+        <div class="flex justify-between items-start mb-4">
+            <div class="min-w-0">
+                <p class="font-bold text-skt-blue text-lg break-words">${member.leaderName || member.name}</p>
+                ${positionHtml || prognosisHtml}
+            </div>
+            <div class="flex items-center space-x-2">
+                 <button data-userid="${member.id}" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button>
+                 <i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i>
+            </div>
+        </div>
+        <div class="flex justify-center items-center flex-col">
+            <div class="w-40 h-40 relative">
+                <svg class="team-progress-circle w-full h-full" viewBox="0 0 100 100">
+                    <circle class="bg-circle" cx="50" cy="50" r="${radius}"></circle>
+                    <circle class="progress-arc" cx="50" cy="50" r="${radius}" 
+                            style="stroke: ${ehColorHex}; stroke-dasharray: ${circumference}; stroke-dashoffset: ${offset};"></circle>
+                </svg>
+                <div class="absolute inset-0 flex items-center justify-center flex-col text-center px-2">
+                    <p class="text-base sm:text-lg font-bold" style="color: ${ehColorHex}; font-size: clamp(0.75rem, 4vw, 1.125rem);">${ehDisplayValue}</p>
+                    <p class="text-xs text-skt-blue-light">${ehUnit}</p>
+                </div>
+            </div>
+        </div>
+        <div class="mt-4 px-2">
+            <div class="flex justify-between items-baseline text-xs">
+                <p class="text-skt-blue-light">ET Termine</p>
+                <p class="font-semibold text-skt-blue">${member.etCurrent} / ${member.etGoal}</p>
+            </div>
+            <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1">
+                 <div class="h-full bg-skt-green-accent" style="width: ${Math.min(etPercentage, 100)}%;"></div>
+            </div>
+        </div>
+    `;
+
+    const details = document.createElement('div');
+    details.className = 'team-member-details px-4';
+    details.innerHTML = `
+        <div class="details-grid grid grid-cols-1 gap-4">
+            <div class="text-center">
+                <p class="text-sm font-semibold text-skt-blue mb-1">Analysetermine</p>
+                <p class="text-md font-bold text-skt-blue">${member.atCurrent} / ${member.atVereinbart} / ${member.atGoal}</p>
+                <p class="text-xs text-gray-500 mb-2">Gehalten / Vereinbart / Soll</p>
+                <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden relative">
+                    <div class="h-full bg-skt-blue-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(member.atGoal > 0 ? (member.atVereinbart / member.atGoal) * 100 : 0, 100)}%;"></div>
+                    <div class="h-full bg-skt-green-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(member.atGoal > 0 ? (member.atCurrent / member.atGoal) * 100 : 0, 100)}%;"></div>
+                </div>
+            </div>
+        </div>`;
+
+    card.appendChild(summary);
+    card.appendChild(details);
+    
+    summary.addEventListener('click', (e) => { if (!e.target.closest('.switch-view-btn')) { details.classList.toggle('open'); summary.classList.toggle('open'); } });
+    summary.querySelector('.switch-view-btn').addEventListener('click', (e) => { 
+        e.stopPropagation();
+        const newuserId = e.currentTarget.dataset.userid;
+        if (newuserId) {
+            viewHistory.push(newuserId);
+            fetchAndRenderDashboard(newuserId);
+        }
+    });
+    return card;
+}
+
+function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
+    const prognosis = getPrognosis(
+        member.ehCurrent,
+        member.ehGoal,
+        totalDaysInCycle,
+        daysPassedInCycle
+    );
+    const etPercentage =
+        member.etGoal > 0 ? (member.etCurrent / member.etGoal) * 100 : 0;
+
+    const ehValue = isMoneyView
+        ? member.earnings?.structure || 0
+        : member.ehCurrent;
+    const ehGoal = isMoneyView ? 0 : member.ehGoal;
+    const ehUnit = isMoneyView ? "Verdienst" : "Einheiten (EH)";
+    const ehDisplayValue = isMoneyView
+        ? ehValue.toLocaleString("de-DE", {
+            style: "currency",
+            currency: "EUR",
+            maximumFractionDigits: 0,
+        })
+        : ehValue.toLocaleString("de-DE", { maximumFractionDigits: 0 });
+    const ehGoalDisplay = isMoneyView
+        ? ""
+        : `/ ${ehGoal.toLocaleString("de-DE", { maximumFractionDigits: 0 })}`;
+
+    const ehPercentage =
+        member.ehGoal > 0 ? (member.ehCurrent / member.ehGoal) * 100 : 0;
+    const ehColorClass = getProgressColorClass(
+        member.ehCurrent,
+        member.ehGoal,
+        totalDaysInCycle,
+        daysPassedInCycle
+    );
+    const card = document.createElement("div");
+    card.className =
+        "bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl";
+    const summary = document.createElement("div");
+    summary.className = "p-4 cursor-pointer";
+    const pos = member.position || "";
+    const positionHtml =
+        pos && !pos.toLowerCase().includes("trainee")
+        ? `<p class="text-sm text-skt-blue-light">${
+            member.originalPosition || member.position
+            }</p>`
+        : "";
+    const prognosisHtml = !isMoneyView
+        ? `<span class="font-semibold text-sm ${prognosis.colorClass}" data-tooltip="Prognose basierend auf dem aktuellen Fortschritt im Verhältnis zur vergangenen Zeit im Monat.">${prognosis.text}</span>`
+        : "";
+    summary.innerHTML = `<div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-skt-blue text-lg break-words">${
+        member.leaderName || member.name
+    }</p>${positionHtml}</div><div class="flex items-center space-x-4 flex-shrink-0">${prognosisHtml}<button data-userid="${
+        member.id
+    }" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button><i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i></div></div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">${ehUnit}</p><p class="text-xs font-semibold text-skt-blue">${ehDisplayValue} ${ehGoalDisplay}</p></div>${
+        !isMoneyView
+        ? `<div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1"><div class="h-full ${ehColorClass}" style="width: ${Math.min(
+            ehPercentage,
+            100
+            )}%;"></div></div>`
+        : ""
+    }</div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">ET Termine</p><p class="text-xs font-semibold text-skt-blue">${
+        member.etCurrent
+    } / ${
+        member.etGoal
+    }</p></div><div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1"><div class="h-full bg-skt-green-accent" style="width: ${Math.min(
+        etPercentage,
+        100
+    )}%;"></div></div></div>`;
+    const details = document.createElement("div");
+    details.className = "team-member-details px-4";
+    details.innerHTML = `<div class="details-grid grid grid-cols-1 gap-4"><div class="text-center"><p class="text-sm font-semibold text-skt-blue mb-1">Analysetermine</p><p class="text-md font-bold text-skt-blue">${
+        member.atCurrent
+    } / ${member.atVereinbart} / ${
+        member.atGoal
+    }</p><p class="text-xs text-gray-500 mb-2">Gehalten / Vereinbart / Soll</p><div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden relative"><div class="h-full bg-skt-blue-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(
+        member.atGoal > 0 ? (member.atVereinbart / member.atGoal) * 100 : 0,
+        100
+    )}%;"></div><div class="h-full bg-skt-green-accent absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${Math.min(
+        member.atGoal > 0 ? (member.atCurrent / member.atGoal) * 100 : 0,
+        100
+    )}%;"></div></div></div></div>`;
+    card.appendChild(summary);
+    card.appendChild(details);
+    summary.addEventListener("click", (e) => {
+        if (!e.target.closest(".switch-view-btn")) {
+        details.classList.toggle("open");
+        summary.classList.toggle("open");
+        }
+    });
+    summary.querySelector(".switch-view-btn").addEventListener("click", (e) => {
+        e.stopPropagation();
+        const newuserId = e.currentTarget.dataset.userid;
+        if (newuserId) {
+        viewHistory.push(newuserId);
+        fetchAndRenderDashboard(newuserId);
+        }
+    });
+    return card;
+}
+
+function findNextInfoDateAfter(startDate) {
+    // Referenzpunkt ist ein Mittwoch, der ein Infotag ist.
+    const referenceDate = new Date('2025-09-17T00:00:00Z');
+    const calculationStartDate = new Date(startDate);
+    calculationStartDate.setUTCHours(0, 0, 0, 0);
+
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const cycleLengthDays = 21; // 3 Wochen
+
+    // Differenz in Tagen zwischen dem Startdatum des Mitarbeiters und dem Referenzdatum berechnen
+    const diffInMs = calculationStartDate.getTime() - referenceDate.getTime();
+    const diffInDays = Math.round(diffInMs / msPerDay);
+
+    // Berechnen, wie viele Tage es bis zum nächsten Infotag im Zyklus sind.
+    const daysIntoCycle = ((diffInDays % cycleLengthDays) + cycleLengthDays) % cycleLengthDays;
+    const daysUntilNext = (cycleLengthDays - daysIntoCycle) % cycleLengthDays;
+
+    const nextInfoDate = new Date(calculationStartDate.getTime() + daysUntilNext * msPerDay);
+    return nextInfoDate;
 }
 
 function fetchNextInfoDate() {
-  return "Datum unbekannt";
+    const nextInfoDateObj = findNextInfoDateAfter(new Date());
+    return nextInfoDateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
 function updateBackButtonVisibility() {
@@ -1458,7 +1730,7 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
     personalData.totalCurrentEh
   );
 
-  loggedInUserData = user;
+  currentlyViewedUserData = user;
   dom.welcomeHeader.textContent = `Willkommen, ${user.Name}`;
   dom.userPosition.textContent = user.Karrierestufe;
 
@@ -1495,15 +1767,7 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
   dom.planningViewToggle.classList.toggle("hidden", !isLeader);
   dom.einarbeitungBanner.classList.toggle("hidden", isLeader);
 
-  let nextInfoDateEl = document.getElementById("next-info-date");
-  if (!nextInfoDateEl) {
-    nextInfoDateEl = document.createElement("p");
-    nextInfoDateEl.id = "next-info-date";
-    nextInfoDateEl.className = "text-center text-sm text-skt-blue-light mt-4";
-    dom.monthlyPlanningView.appendChild(nextInfoDateEl);
-  }
-  nextInfoDateEl.textContent = `Nächstes Info: ${fetchNextInfoDate()}`;
-
+  dom.nextInfoDate.textContent = `Nächstes Info: ${fetchNextInfoDate()}`;
   setStatus("");
   dom.dashboardSections.classList.remove("hidden");
   setTimeout(() => dom.dashboardSections.classList.remove("opacity-0"), 50);
@@ -1689,13 +1953,21 @@ async function renderTraineeOnboardingView(
   mitarbeiterId,
   forceShowAllCompleted = false
 ) {
-  const allSteps = db.einarbeitungsschritte.sort((a, b) => a.Tag - b.Tag);
-
   const user = findRowById("mitarbeiter", mitarbeiterId);
   if (!user || !user.Startdatum || !user.Name) {
     dom.traineeOnboardingView.innerHTML = `<p class="text-center text-red-500">Für diesen Mitarbeiter sind nicht alle Daten (Startdatum/Name) hinterlegt.</p>`;
     return;
   }
+
+  const viewerIsTrainee = (authenticatedUserData.Karrierestufe || "")
+    .toLowerCase()
+    .includes("trainee");
+
+  let allSteps = db.einarbeitungsschritte;
+  if (viewerIsTrainee) {
+    allSteps = allSteps.filter((step) => step.Kategorie !== "Versteckt");
+  }
+  allSteps.sort((a, b) => a.Tag - b.Tag);
 
   const safeUserName = escapeSql(user.Name);
   const einarbeitungQuery = `SELECT \`Schritt_ID\` FROM \`Einarbeitung\` WHERE \`Mitarbeiter_ID\` = '${safeUserName}'`;
@@ -1708,8 +1980,13 @@ async function renderTraineeOnboardingView(
   const startDate = new Date(user.Startdatum);
 
   const processedSteps = allSteps.map((step) => {
-    const dueDate = new Date(startDate);
-    dueDate.setDate(startDate.getDate() + (step.Tag || 0));
+    let dueDate;
+    if (step.Schritt && step.Schritt.toLowerCase().includes("infoabend")) {
+      dueDate = findNextInfoDateAfter(startDate);
+    } else {
+      dueDate = new Date(startDate);
+      dueDate.setDate(startDate.getDate() + (step.Tag || 0));
+    }
     return { ...step, dueDate, completed: completedStepIds.has(step._id) };
   });
 
@@ -1801,6 +2078,12 @@ function renderTimelineSection(
       case "hausübung":
         iconClass = "fa-pencil-alt";
         break;
+      case "versteckt":
+        iconClass = "fa-user-shield";
+        break;
+      default:
+        iconClass = "fa-question";
+        break;
     }
 
     stepEl.className = `timeline-item ${statusClass} ${stepType} ${
@@ -1842,43 +2125,497 @@ function renderTimelineSection(
   });
 }
 
+// --- Appointments View Logic (integriert in main.js) ---
+
+const appointmentsLog = (message, ...data) => console.log(`%c[Appointments] %c${message}`, 'color: #4f46e5; font-weight: bold;', 'color: black;', ...data);
+
+class AppointmentsView {
+    constructor() {
+        // Der Konstruktor ist absichtlich schlank. DOM-Elemente werden in init() geholt.
+        this.listContainer = null;
+        this.umsatzTab = null;
+        this.recruitingTab = null;
+        this.startDateInput = null;
+        this.endDateInput = null;
+        this.scopeFilter = null;
+        this.modal = null;
+        this.form = null;
+        this.searchInput = null;
+        this.showCancelledCheckbox = null;
+
+        this.initialized = false;
+        this.currentUserId = null;
+        this.allAppointments = [];
+        this.currentTab = 'umsatz';
+        this.downline = [];
+        this.sortColumn = 'Datum';
+        this.sortDirection = 'desc';
+        this.filterText = '';
+        this.showCancelled = false;
+    }
+
+    // Hilfsmethode, um DOM-Elemente zu holen, wird von init() aufgerufen.
+    _getDomElements() {
+        this.listContainer = document.getElementById('appointments-list-container');
+        this.umsatzTab = document.getElementById('umsatz-tab');
+        this.recruitingTab = document.getElementById('recruiting-tab');
+        this.startDateInput = document.getElementById('appointments-start-date');
+        this.endDateInput = document.getElementById('appointments-end-date');
+        this.scopeFilter = document.getElementById('appointments-scope-filter');
+        this.modal = document.getElementById('appointment-modal');
+        this.form = document.getElementById('appointment-form');
+        this.searchInput = document.getElementById('appointments-search-filter');
+        this.showCancelledCheckbox = document.getElementById('appointments-show-cancelled');
+
+        return this.listContainer && this.umsatzTab && this.recruitingTab && this.startDateInput && this.endDateInput && this.scopeFilter && this.modal && this.form && this.searchInput && this.showCancelledCheckbox;
+    }
+
+    async init(userId) {
+        appointmentsLog(`Modul wird initialisiert für User-ID: ${userId}`);
+        this.currentUserId = userId;
+        
+        if (!this._getDomElements()) {
+            appointmentsLog('!!! FEHLER: Benötigte DOM-Elemente für die Termin-Ansicht wurden nicht gefunden.');
+            return;
+        }
+
+        const { startDate, endDate } = SKT_APP.getMonthlyCycleDates();
+        this.startDateInput.value = startDate.toISOString().split('T')[0];
+        this.endDateInput.value = endDate.toISOString().split('T')[0];
+
+        this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
+        this.downline.sort((a, b) => a.Name.localeCompare(b.Name));
+        this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.authenticatedUserData));
+
+        if (!this.initialized) {
+            appointmentsLog('Erstmalige Initialisierung: Event-Listener werden eingerichtet.');
+            this.setupEventListeners();
+            this.initialized = true;
+        }
+
+        const user = SKT_APP.findRowById('mitarbeiter', this.currentUserId);
+        if (user) {
+            const titleElement = document.getElementById('appointments-title'); // Titel wird jetzt dynamischer
+            if (titleElement) {
+                titleElement.textContent = `Terminübersicht`;
+            }
+        }
+
+        await this.fetchAndRender();
+    }
+
+    async fetchAndRender() {
+        appointmentsLog('--- START: fetchAndRender ---');
+        this.listContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        try {
+            const startDateIso = this.startDateInput.value;
+            const endDateIso = this.endDateInput.value;
+            appointmentsLog(`1. Berechneter Zeitraum: ${startDateIso} bis ${endDateIso}`);
+
+            const scope = this.scopeFilter.value;
+            let userIds = new Set();
+            switch (scope) {
+                case 'personal':
+                    userIds.add(this.currentUserId);
+                    break;
+                case 'group':
+                    userIds.add(this.currentUserId);
+                    SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
+                    break;
+                case 'structure':
+                    userIds.add(this.currentUserId);
+                    this.downline.forEach(u => userIds.add(u._id));
+                    break;
+            }
+
+            if (userIds.size === 0) {
+                this.allAppointments = [];
+                this.render();
+                return;
+            }
+
+            const userNames = Array.from(userIds).map(id => SKT_APP.findRowById('mitarbeiter', id)?.Name).filter(Boolean);
+            const userNamesSql = userNames.map(name => `'${SKT_APP.escapeSql(name)}'`).join(',');
+            appointmentsLog(`2. Lade Termine für ${userNames.length} Mitarbeiter (Scope: ${scope})`);
+
+            const query = `SELECT *, Mitarbeiter_ID FROM \`Termine\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' AND \`Mitarbeiter_ID\` IN (${userNamesSql}) ORDER BY \`Datum\` DESC`;
+            appointmentsLog('3. Sende SQL-Abfrage an die Datenbank...');
+            const appointmentsRaw = await SKT_APP.seaTableSqlQuery(query, true); // convert_link_id: true
+            appointmentsLog('4. Roh-Antwort von der Datenbank erhalten:', JSON.parse(JSON.stringify(appointmentsRaw)));
+            
+            this.allAppointments = SKT_APP.mapSqlResults(appointmentsRaw, 'Termine');
+            appointmentsLog(`5. Antwort in ${this.allAppointments.length} Termin-Objekte umgewandelt.`);
+
+            appointmentsLog('6. Rufe render() auf, um die Termine anzuzeigen.');
+            this.render();
+        } catch (error) {
+            appointmentsLog('!!! FEHLER in fetchAndRender !!!', error);
+            this.listContainer.innerHTML = `<div class="text-center py-16"><i class="fas fa-exclamation-triangle fa-4x text-red-400 mb-4"></i><h3 class="text-xl font-semibold text-skt-blue">Ein Fehler ist aufgetreten</h3><p class="text-gray-500 mt-2">${error.message}</p></div>`;
+        }
+        appointmentsLog('--- ENDE: fetchAndRender ---');
+    }
+
+    render() {
+        appointmentsLog('--- START: render ---');
+        this.listContainer.innerHTML = '';
+
+        // 1. Filter data
+        let filteredAppointments = this.allAppointments.filter(t => {
+            const isUmsatzTermin = ['AT', 'BT', 'ST'].includes(t.Kategorie);
+            const isRecruitingTermin = t.Kategorie === 'ET';
+
+            const tabMatch = this.currentTab === 'umsatz' ? isUmsatzTermin : isRecruitingTermin;
+            if (!tabMatch) return false;
+
+            // KORREKTUR: Prüfe auf Status 'Storno' ODER das Absage-Flag
+            if (!this.showCancelled && (t.Status === 'Storno' || t.Absage === true)) {
+                return false;
+            }
+
+            if (this.filterText) {
+                const searchText = this.filterText.toLowerCase();
+                const partner = (t.Terminpartner || '').toLowerCase();
+                const mitarbeiter = (t.Mitarbeiter_ID?.[0]?.display_value || '').toLowerCase();
+                if (!partner.includes(searchText) && !mitarbeiter.includes(searchText)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        // 2. Sort data
+        const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+        filteredAppointments.sort((a, b) => {
+            let valA = a[this.sortColumn];
+            let valB = b[this.sortColumn];
+
+            if (this.sortColumn === 'Mitarbeiter_ID') {
+                valA = valA?.[0]?.display_value || '';
+                valB = valB?.[0]?.display_value || '';
+            }
+
+            if (valA === null || valA === undefined) valA = '';
+            if (valB === null || valB === undefined) valB = '';
+
+            let comparison = 0;
+            if (typeof valA === 'number' && typeof valB === 'number') {
+                comparison = valA - valB;
+            } else if (this.sortColumn === 'Datum') {
+                comparison = new Date(valA) - new Date(valB);
+            } else {
+                comparison = collator.compare(String(valA), String(valB));
+            }
+
+            return this.sortDirection === 'asc' ? comparison : -comparison;
+        });
+
+        appointmentsLog(`Rendering ${filteredAppointments.length} appointments.`);
+
+        if (filteredAppointments.length === 0) {
+            this.listContainer.innerHTML = `<div class="text-center py-16"><i class="fas fa-calendar-times fa-4x text-skt-grey-medium mb-4"></i><h3 class="text-xl font-semibold text-skt-blue">Keine Termine gefunden</h3><p class="text-gray-500 mt-2">Für die aktuelle Auswahl gibt es keine Termine.</p></div>`;
+            return;
+        }
+
+        // 3. Build table
+        const table = document.createElement('table');
+        table.className = 'appointments-table';
+
+        const isUmsatz = this.currentTab === 'umsatz';
+        const columns = [
+            { key: 'Datum', label: 'Datum' },
+            { key: 'Terminpartner', label: isUmsatz ? 'Kunde' : 'Bewerber' },
+            { key: 'Status', label: 'Status' },
+            { key: 'Mitarbeiter_ID', label: 'Mitarbeiter' },
+        ];
+        if (isUmsatz) {
+            columns.push({ key: 'Umsatzprognose', label: 'Umsatzprognose' });
+        }
+
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        columns.forEach(col => {
+            const th = document.createElement('th');
+            th.dataset.sortKey = col.key;
+            let iconHtml = '<i class="fas fa-sort sort-icon"></i>';
+            if (this.sortColumn === col.key) {
+                iconHtml = this.sortDirection === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>';
+            }
+            th.innerHTML = `${col.label} ${iconHtml}`;
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        filteredAppointments.forEach(termin => {
+            const tr = document.createElement('tr');
+            const statusColorClass = this._getStatusColorClass(termin);
+            tr.className = `border-l-4 ${statusColorClass} cursor-pointer`;
+            tr.dataset.id = termin._id;
+
+            columns.forEach(col => {
+                const td = document.createElement('td');
+                let value = termin[col.key];
+                if (col.key === 'Mitarbeiter_ID') {
+                    value = termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
+                } else if (col.key === 'Datum') {
+                    value = value ? new Date(value).toLocaleDateString('de-DE') : '-';
+                } else if (col.key === 'Umsatzprognose') {
+                    value = value ? value.toLocaleString('de-DE') + ' EH' : '-';
+                }
+                td.textContent = value || '-';
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+
+        this.listContainer.appendChild(table);
+
+        this.listContainer.querySelectorAll('thead th').forEach(th => {
+            th.addEventListener('click', () => this._handleSort(th.dataset.sortKey));
+        });
+        this.listContainer.querySelectorAll('tbody tr').forEach(tr => {
+            tr.addEventListener('click', () => {
+                const termin = this.allAppointments.find(t => t._id === tr.dataset.id);
+                if (termin) this.openModal(termin);
+            });
+        });
+
+        appointmentsLog('--- ENDE: render ---');
+    }
+
+    setupEventListeners() {
+        const debouncedFetch = _.debounce(() => this.fetchAndRender(), 300);
+        this.startDateInput.addEventListener('change', debouncedFetch);
+        this.endDateInput.addEventListener('change', debouncedFetch);
+        this.scopeFilter.addEventListener('change', () => this.fetchAndRender());
+
+        this.searchInput.addEventListener('input', _.debounce((e) => {
+            this.filterText = e.target.value;
+            this.render();
+        }, 300));
+        this.showCancelledCheckbox.addEventListener('change', (e) => {
+            this.showCancelled = e.target.checked;
+            this.render();
+        });
+
+        this.umsatzTab.addEventListener('click', () => { this.currentTab = 'umsatz'; this.updateTabs(); this.render(); });
+        this.recruitingTab.addEventListener('click', () => { this.currentTab = 'recruiting'; this.updateTabs(); this.render(); });
+
+        document.getElementById('add-appointment-btn').addEventListener('click', () => this.openModal());
+        document.getElementById('close-appointment-modal-btn').addEventListener('click', () => this.closeModal());
+        document.getElementById('cancel-appointment-btn').addEventListener('click', () => this.closeModal());
+        this.modal.addEventListener('click', (e) => { if (e.target === this.modal) this.closeModal(); });
+        this.form.addEventListener('submit', (e) => this.handleFormSubmit(e));
+
+        // Event Listeners für bedingte Felder im Modal
+        this.form.querySelector('#appointment-category').addEventListener('change', (e) => this.toggleConditionalFields(e.target.value));
+        this.form.querySelector('#appointment-cancellation').addEventListener('change', (e) => {
+            this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !e.target.checked);
+        });
+    }
+
+    _handleSort(columnKey) {
+        if (this.sortColumn === columnKey) {
+            this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.sortColumn = columnKey;
+            this.sortDirection = 'asc';
+        }
+        this.render();
+    }
+
+    _getStatusColorClass(termin) {
+        if (termin.Status === 'Storno' || termin.Absage === true) {
+            return 'border-skt-red-accent';
+        }
+        switch (termin.Status) {
+            case 'Gehalten': return 'border-skt-green-accent';
+            case 'Ausgemacht':
+            case 'weiterer BT':
+            case 'weiterer ET': return 'border-skt-grey-medium';
+            case 'Verschoben':
+            case 'offen': return 'border-skt-orange-accent';
+            case 'Info Eingeladen': return 'border-skt-yellow-accent';
+            case 'Info Bestätigt': return 'border-skt-blue-accent';
+            case 'Info Anwesend': return 'border-accent-purple';
+            case 'Wird Mitarbeiter': return 'border-skt-gold-accent';
+            default: return 'border-gray-300';
+        }
+    }
+
+    updateTabs() {
+        if (this.currentTab === 'umsatz') {
+            this.umsatzTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue';
+            this.recruitingTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
+        } else {
+            this.recruitingTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue';
+            this.umsatzTab.className = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
+        }
+    }
+
+    toggleConditionalFields(category) {
+        this.form.querySelector('#appointment-prognose-container').classList.toggle('hidden', !['BT', 'ST'].includes(category));
+    }
+
+    openModal(termin = null) {
+        appointmentsLog('--- START: openModal ---', termin ? `Editing term ID: ${termin?._id}` : 'Creating new term');
+        try {
+            this.form.reset();
+            appointmentsLog('Form reset.');
+
+            const title = this.modal.querySelector('#appointment-modal-title');
+            const idInput = this.modal.querySelector('#appointment-id');
+            const userSelect = this.modal.querySelector('#appointment-user');
+            const categorySelect = this.modal.querySelector('#appointment-category');
+            const statusSelect = this.modal.querySelector('#appointment-status');
+            appointmentsLog('Modal elements found.');
+
+            // Dropdowns befüllen
+            const allRelevantUsers = [SKT_APP.loggedInUserData, ...this.downline].filter(Boolean);
+            userSelect.innerHTML = '';
+            allRelevantUsers.forEach(u => userSelect.add(new Option(u.Name, u._id)));
+            appointmentsLog('User dropdown populated.');
+
+            if (!METADATA || !METADATA.tables) {
+                throw new Error("METADATA or METADATA.tables is not available.");
+            }
+            const terminMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'termine');
+            if (!terminMeta) {
+                throw new Error("Could not find metadata for table 'Termine'.");
+            }
+            appointmentsLog('Found metadata for Termine table.');
+
+            const categoryColumn = terminMeta.columns.find(c => c.name === 'Kategorie');
+            if (!categoryColumn || !categoryColumn.data || !categoryColumn.data.options) throw new Error("Could not find 'Kategorie' options in metadata.");
+            const categories = categoryColumn.data.options.map(o => o.name);
+
+            const statusColumn = terminMeta.columns.find(c => c.name === 'Status');
+            if (!statusColumn || !statusColumn.data || !statusColumn.data.options) throw new Error("Could not find 'Status' options in metadata.");
+            const statuses = statusColumn.data.options.map(o => o.name);
+            appointmentsLog('Categories and statuses extracted from metadata.');
+
+            categorySelect.innerHTML = '';
+            statusSelect.innerHTML = '';
+            categories.forEach(cat => categorySelect.add(new Option(cat, cat)));
+            statuses.forEach(stat => statusSelect.add(new Option(stat, stat)));
+            appointmentsLog('Category and status dropdowns populated.');
+
+            if (termin) { // Edit mode
+                appointmentsLog('Entering edit mode for termin:', termin);
+                title.textContent = 'Termin bearbeiten';
+                idInput.value = termin._id;
+                const user = allRelevantUsers.find(u => u.Name === termin.Mitarbeiter_ID?.[0]?.display_value);
+                if (user) userSelect.value = user._id;
+                
+                this.form.querySelector('#appointment-date').value = termin.Datum ? termin.Datum.split(' ')[0] : '';
+                categorySelect.value = termin.Kategorie || '';
+                statusSelect.value = termin.Status || '';
+                this.form.querySelector('#appointment-partner').value = termin.Terminpartner || '';
+                this.form.querySelector('#appointment-prognose').value = termin.Umsatzprognose || '';
+                this.form.querySelector('#appointment-referrals').value = termin.Empfehlungen || '';
+                this.form.querySelector('#appointment-note').value = termin.Hinweis || '';
+                this.form.querySelector('#appointment-cancellation').checked = termin.Absage || false;
+                this.form.querySelector('#appointment-cancellation-reason').value = termin.Absagegrund || '';
+
+            } else { // Add mode
+                appointmentsLog('Entering add mode.');
+                title.textContent = 'Termin anlegen';
+                idInput.value = '';
+                userSelect.value = this.currentUserId;
+                this.form.querySelector('#appointment-date').value = new Date().toISOString().split('T')[0];
+            }
+
+            this.toggleConditionalFields(categorySelect.value);
+            this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !this.form.querySelector('#appointment-cancellation').checked);
+            
+            this.modal.classList.add('visible');
+            document.body.classList.add('modal-open');
+            appointmentsLog('Modal is now visible.');
+
+        } catch (error) {
+            appointmentsLog('!!! ERROR in openModal !!!', error);
+            alert('Ein Fehler ist beim Öffnen des Formulars aufgetreten. Details siehe Konsole.');
+        }
+        appointmentsLog('--- END: openModal ---');
+    }
+
+    closeModal() {
+        this.modal.classList.remove('visible');
+        document.body.classList.remove('modal-open');
+    }
+
+    async handleFormSubmit(e) {
+        e.preventDefault();
+        const saveBtn = document.getElementById('save-appointment-btn');
+        saveBtn.disabled = true;
+        saveBtn.querySelector('#save-btn-text').classList.add('hidden');
+        saveBtn.querySelector('.loader-small').classList.remove('hidden');
+
+        const rowId = this.form.querySelector('#appointment-id').value;
+        const isCancellation = this.form.querySelector('#appointment-cancellation').checked;
+
+        const rowData = {
+            [SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID]: [this.form.querySelector('#appointment-user').value],
+            [SKT_APP.COLUMN_MAPS.termine.Datum]: this.form.querySelector('#appointment-date').value,
+            [SKT_APP.COLUMN_MAPS.termine.Kategorie]: this.form.querySelector('#appointment-category').value,
+            [SKT_APP.COLUMN_MAPS.termine.Status]: isCancellation ? 'Storno' : this.form.querySelector('#appointment-status').value,
+            [SKT_APP.COLUMN_MAPS.termine.Terminpartner]: this.form.querySelector('#appointment-partner').value,
+            [SKT_APP.COLUMN_MAPS.termine.Umsatzprognose]: parseFloat(this.form.querySelector('#appointment-prognose').value) || null,
+            [SKT_APP.COLUMN_MAPS.termine.Empfehlungen]: parseInt(this.form.querySelector('#appointment-referrals').value) || null,
+            [SKT_APP.COLUMN_MAPS.termine.Hinweis]: this.form.querySelector('#appointment-note').value,
+            [SKT_APP.COLUMN_MAPS.termine.Absage]: isCancellation,
+            [SKT_APP.COLUMN_MAPS.termine.Absagegrund]: isCancellation ? this.form.querySelector('#appointment-cancellation-reason').value : '',
+        };
+
+        let success = false;
+        if (rowId) {
+            appointmentsLog('Führe Update aus für Termin:', rowId);
+            success = await SKT_APP.seaTableUpdateRow('Termine', rowId, rowData);
+        } else {
+            appointmentsLog('Führe Hinzufügen aus...');
+            success = await SKT_APP.seaTableAddRow('Termine', rowData);
+        }
+
+        if (success) {
+            this.closeModal();
+            await this.fetchAndRender();
+        } else {
+            alert('Fehler beim Speichern des Termins.');
+        }
+
+        saveBtn.disabled = false;
+        saveBtn.querySelector('#save-btn-text').classList.remove('hidden');
+        saveBtn.querySelector('.loader-small').classList.add('hidden');
+    }
+}
+
 async function loadAndInitAppointmentsView() {
   const container = dom.appointmentsView;
-  // Wenn das Modul bereits geladen wurde, wird es nur neu initialisiert.
-  if (appointmentsViewLoaded) {
-    if (window.SKT_APPOINTMENTS_VIEW) {
-      window.SKT_APPOINTMENTS_VIEW.init(loggedInUserData._id);
-    }
-    return;
-  }
+  console.log('%c[Loader] %cLoading/Re-loading appointments view...', 'color: orange; font-weight: bold;', 'color: black;');
 
   try {
+    // Schritt 1: Lade IMMER das HTML neu, um sicherzustellen, dass es aktuell ist und Caching-Probleme vermieden werden.
+    console.log('%c[Loader] %cFetching ./appointments.html...', 'color: orange; font-weight: bold;', 'color: black;');
     const response = await fetch("./appointments.html");
-    if (!response.ok)
-      throw new Error(
-        `Die Datei 'appointments.html' konnte nicht gefunden werden (HTTP-Status: ${response.status}).`
-      );
-
+    if (!response.ok) throw new Error(`Die Datei 'appointments.html' konnte nicht gefunden werden (HTTP-Status: ${response.status}).`);
     const html = await response.text();
-
-    // Sicherheitsprüfung: Stellt sicher, dass die korrekte Datei geladen wurde.
     if (!html.includes('id="appointments-module-root"')) {
-      throw new Error(
-        "Falscher Inhalt für die Termin-Seite geladen. Möglicherweise ein Server-Problem."
-      );
+        throw new Error("Falscher Inhalt für die Termin-Seite geladen.");
     }
-
     container.innerHTML = html;
-    appointmentsViewLoaded = true;
+    console.log('%c[Loader] %cAppointments HTML injected.', 'color: orange; font-weight: bold;', 'color: black;');
 
-    const scriptTag = container.querySelector("script");
-    if (scriptTag) {
-      new Function(scriptTag.textContent)(); // Führt das Skript aus
+    // Schritt 2: Die View-Instanz erstellen (falls noch nicht geschehen)
+    if (!appointmentsViewInstance) {
+        console.log('%c[Loader] %cCreating new AppointmentsView instance...', 'color: orange; font-weight: bold;', 'color: black;');
+        appointmentsViewInstance = new AppointmentsView();
     }
+    
+    console.log('%c[Loader] %cInitializing appointments view instance...', 'color: orange; font-weight: bold;', 'color: black;');
+    await appointmentsViewInstance.init(currentlyViewedUserData._id);
 
-    if (window.SKT_APPOINTMENTS_VIEW) {
-      window.SKT_APPOINTMENTS_VIEW.init(loggedInUserData._id);
-    }
   } catch (error) {
     console.error("Fehler beim Laden der Termin-Ansicht:", error);
     container.innerHTML = `<div class="text-center p-8 bg-red-50 rounded-lg border border-red-200"><i class="fas fa-exclamation-triangle fa-3x text-red-400 mb-4"></i><h3 class="text-xl font-bold text-skt-blue">Fehler beim Laden</h3><p class="text-red-600 mt-2">${error.message}</p><p class="text-gray-500 mt-4">Bitte stelle sicher, dass die Datei 'appointments.html' im selben Verzeichnis wie 'index.html' liegt.</p></div>`;
@@ -1904,11 +2641,7 @@ function setupEventListeners() {
 
   dom.settingsBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    const user = findRowById(
-      "mitarbeiter",
-      localStorage.getItem("loggedInUserId")
-    );
-    if (isUserLeader(user)) {
+    if (isUserLeader(authenticatedUserData)) {
       dom.superuserBtn.classList.remove("hidden");
     } else {
       dom.superuserBtn.classList.add("hidden");
@@ -1953,6 +2686,7 @@ function setupEventListeners() {
 
       if (user && user.PWD === enteredPassword) {
         localStorage.setItem("loggedInUserId", selectedUserId);
+        authenticatedUserData = user;
         viewHistory = [selectedUserId];
         document.getElementById("user-select-screen").classList.add("hidden");
         document.getElementById("dashboard-content").classList.remove("hidden");
@@ -2006,6 +2740,11 @@ function setupEventListeners() {
   dom.superuserBtn.addEventListener("click", async (e) => {
     e.preventDefault();
     closeSettingsMenu();
+    // Zusätzliche Sicherheitsprüfung: Blockiert den Zugriff, selbst wenn der Button sichtbar wäre.
+    if (!isUserLeader(authenticatedUserData)) {
+      alert("Du hast keine Berechtigung für diese Ansicht.");
+      return;
+    }
     await renderSuperuserView();
   });
 
@@ -2014,13 +2753,6 @@ function setupEventListeners() {
     closeSettingsMenu();
     openEditUserModal();
   });
-
-  dom.appointmentsBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    closeSettingsMenu();
-    switchView("appointments");
-  });
-
   // --- Main Navigation ---
   dom.backButton.addEventListener("click", async () => {
     if (isSuperuserView) {
@@ -2030,12 +2762,11 @@ function setupEventListeners() {
       return;
     }
     if (currentView === "einarbeitung" || currentView === "appointments") {
-      const currentUser = findRowById("mitarbeiter", loggedInUserData._id);
       if (
         currentOnboardingSubView === "trainee-detail" &&
-        isUserLeader(currentUser)
+        isUserLeader(authenticatedUserData)
       ) {
-        const teamMembers = getSubordinates(loggedInUserData._id, "gruppe");
+        const teamMembers = getSubordinates(authenticatedUserData._id, "gruppe");
         await renderLeaderOnboardingView(teamMembers);
         currentOnboardingSubView = "leader-list";
         dom.einarbeitungTitle.textContent = "Einarbeitung: Gruppen-Übersicht";
@@ -2102,11 +2833,15 @@ function setupEventListeners() {
   // --- Onboarding Navigation ---
   dom.einarbeitungBtn.addEventListener("click", () => {
     switchView("einarbeitung");
-    fetchAndRenderOnboarding(loggedInUserData._id);
+    fetchAndRenderOnboarding(authenticatedUserData._id);
   });
   dom.einarbeitungBanner.addEventListener("click", () => {
     switchView("einarbeitung");
-    fetchAndRenderOnboarding(loggedInUserData._id);
+    fetchAndRenderOnboarding(authenticatedUserData._id);
+  });
+
+  dom.dashboardHeaderBtn.addEventListener('click', () => {
+    switchView('dashboard');
   });
 
   dom.appointmentsHeaderBtn.addEventListener("click", () => {
@@ -2180,6 +2915,7 @@ async function initializeDashboard() {
 
   const loggedInUserId = localStorage.getItem("loggedInUserId");
   if (loggedInUserId && findRowById("mitarbeiter", loggedInUserId)) {
+    authenticatedUserData = findRowById("mitarbeiter", loggedInUserId);
     viewHistory = [loggedInUserId];
     document.getElementById("user-select-screen").classList.add("hidden");
     document.getElementById("dashboard-content").classList.remove("hidden");
@@ -2227,6 +2963,19 @@ function getProgressColorClass(current, goal, totalDays, daysPassed) {
   if (progressRatio >= timeRatio) return "bg-skt-green-accent";
   if (progressRatio >= timeRatio * 0.75) return "bg-skt-yellow-accent";
   return "bg-skt-red-accent";
+}
+
+function getProgressColorHex(current, goal, totalDays, daysPassed) {
+  if (goal <= 0) return "var(--color-skt-grey-medium)";
+  const progressRatio = current / goal;
+  if (progressRatio >= 1) return "var(--color-accent-green)";
+  if (daysPassed <= 0) return "var(--color-accent-green)";
+
+  const timeRatio = daysPassed / totalDays;
+
+  if (progressRatio >= timeRatio) return "var(--color-accent-green)";
+  if (progressRatio >= timeRatio * 0.75) return "var(--color-accent-yellow)";
+  return "var(--color-accent-red)";
 }
 
 function getVerdienstForPosition(position) {
@@ -2412,7 +3161,7 @@ async function handleAIAssistantClick() {
 
 // --- User Data Editing Modal ---
 function openEditUserModal() {
-  const user = loggedInUserData;
+  const user = currentlyViewedUserData;
   document.getElementById("edit-name").value = user.Name || "";
   document.getElementById("edit-pwd").value = user.PWD || "";
   document.getElementById("edit-eh-quote").value = user.EHproATQuote || 0;
@@ -2455,7 +3204,7 @@ function closeEditUserModal() {
 }
 
 async function saveUserData() {
-  const user = loggedInUserData;
+  const user = currentlyViewedUserData;
   const updatedRowData = {};
 
   updatedRowData[COLUMN_MAPS.mitarbeiter.Name] =
@@ -2505,7 +3254,6 @@ window.SKT_APP = {
   seaTableSqlQuery,
   seaTableAddRow,
   seaTableUpdateRow,
-  seaTableUpdateRow,
   mapSqlResults,
   findRowById,
   getMonthlyCycleDates,
@@ -2515,7 +3263,15 @@ window.SKT_APP = {
   isUserLeader,
   db,
   COLUMN_MAPS,
-  get loggedInUserData() {
-    return loggedInUserData;
+  get METADATA() { // Use a getter to ensure the latest value is always returned
+    return METADATA;
+  },
+
+  get authenticatedUserData() {
+    return authenticatedUserData;
+  },
+
+  get currentlyViewedUserData() {
+    return currentlyViewedUserData;
   },
 };
