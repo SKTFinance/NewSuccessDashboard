@@ -2023,6 +2023,13 @@ function updateBackButtonVisibility() {
 
 async function fetchAndRenderDashboard(mitarbeiterId) {
   window.scrollTo(0, 0);
+  // NEU: Prüfung auf automatische Beförderung, BEVOR die restlichen Daten berechnet werden.
+  // Dies stellt sicher, dass alle folgenden Berechnungen auf der korrekten Karrierestufe basieren.
+  const promotionOccurred = await applyAutomaticPromotionToDatabase(mitarbeiterId);
+  if (promotionOccurred) {
+      // Wenn eine Beförderung stattgefunden hat, wurde das Dashboard bereits neu geladen.
+      return;
+  }
   setStatus("Lade & verarbeite Daten...");
   dom.dashboardSections.classList.add("opacity-0");
 
@@ -5086,6 +5093,77 @@ async function checkAndApplyAutomaticPromotion(mitarbeiterId, totalEh) {
       }
     }
   }
+}
+
+async function applyAutomaticPromotionToDatabase(mitarbeiterId) {
+    const user = findRowById("mitarbeiter", mitarbeiterId);
+    if (!user || !user.Karrierestufe) {
+        return false;
+    }
+
+    // 1. Lade die aktuellen Gesamt-EH des Mitarbeiters direkt aus der Datenbank.
+    const totalEhQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`totalEh\` FROM \`Umsatz\` GROUP BY \`Mitarbeiter_ID\``;
+    const totalEhResultsRaw = await seaTableSqlQuery(totalEhQuery, false);
+    const totalEhResults = mapSqlResults(totalEhResultsRaw || [], "Umsatz");
+    const userEhData = totalEhResults.find(
+        (te) =>
+          te.Mitarbeiter_ID &&
+          Array.isArray(te.Mitarbeiter_ID) &&
+          te.Mitarbeiter_ID[0] &&
+          te.Mitarbeiter_ID[0].row_id === mitarbeiterId
+      ) || {};
+    const totalEh = userEhData.totalEh || 0;
+
+    const recruitedEmployees = db.mitarbeiter.filter(m => m.Werber === mitarbeiterId).length;
+
+    const currentStage = db.karriereplan.find(p => p.Stufe === user.Karrierestufe);
+    if (!currentStage) {
+        console.warn(`[PROMOTION_DB] Aktuelle Karrierestufe '${user.Karrierestufe}' für ${user.Name} nicht im Karriereplan gefunden.`);
+        return false;
+    }
+
+    // 2. Finde die höchste erreichbare Stufe, für die die Kriterien erfüllt sind.
+    const promotableStages = db.karriereplan
+        .filter(p => p.Hierarchie > currentStage.Hierarchie && p.AutomatischeBefoerderung)
+        .sort((a, b) => b.Hierarchie - a.Hierarchie); // Absteigend sortieren, um die höchste zuerst zu prüfen.
+
+    for (const nextStage of promotableStages) {
+        if (totalEh >= nextStage.Kriterium_EH && recruitedEmployees >= nextStage.Kriterium_MA) {
+            console.log(`[PROMOTION_DB] Mitarbeiter ${user.Name} erfüllt die Kriterien für ${nextStage.Stufe}.`);
+
+            // 3. Finde den Spaltennamen für "Karrierestufe" dynamisch.
+            const karrierestufeKey = COLUMN_MAPS.mitarbeiter.Karrierestufe;
+            const tableMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'mitarbeiter');
+            const karrierestufeCol = tableMeta.columns.find(c => c.key === karrierestufeKey);
+            if (!karrierestufeCol) {
+                console.error(`[PROMOTION_DB] Metadaten für Spalte 'Karrierestufe' nicht gefunden.`);
+                return false;
+            }
+            const karrierestufeColName = karrierestufeCol.name;
+
+            // 4. Aktualisiere das Verknüpfungsfeld über die dedizierte Link-Update-Funktion,
+            // da ein direkter SQL-Update für Link-Spalten den "type mismatch"-Fehler verursacht.
+            console.log(`[PROMOTION_DB] Aktualisiere Verknüpfung für ${karrierestufeColName} zu ${nextStage.Stufe} (${nextStage._id})`);
+            const success = await updateSingleLink(
+                'Mitarbeiter',          // baseTableName
+                mitarbeiterId,          // baseRowId
+                karrierestufeColName,   // linkColumnName
+                [nextStage._id]         // otherRowIds
+            );
+
+            if (success) {
+                console.log(`[PROMOTION_DB] ${user.Name} erfolgreich zu ${nextStage.Stufe} befördert.`);
+                localStorage.removeItem(CACHE_PREFIX + 'mitarbeiter'); // Cache leeren
+                await loadAllData(); // Alle Daten neu laden
+                await fetchAndRenderDashboard(mitarbeiterId); // Dashboard neu rendern
+                return true; // Signalisiert, dass eine Beförderung stattgefunden hat.
+            } else {
+                console.error(`[PROMOTION_DB] API-Update zur Beförderung von ${user.Name} ist fehlgeschlagen.`);
+                return false;
+            }
+        }
+    }
+    return false; // Keine Beförderung durchgeführt.
 }
 
 async function handleAIAssistantClick() {
