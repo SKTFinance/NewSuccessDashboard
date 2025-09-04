@@ -942,6 +942,29 @@ function getMonthlyCycleDates() {
   endDate.setHours(23, 59, 59, 999);
   return { startDate, endDate };
 }
+
+function getWeeklyCycleDates() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dayOfWeek = today.getDay(); // Sunday = 0, ..., Thursday = 4, ...
+
+    // Finde den letzten Donnerstag. Donnerstag ist Tag 4.
+    const diff = dayOfWeek - 4;
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - diff);
+
+    // Wenn der berechnete Start in der Zukunft liegt (z.B. heute ist Di, diff=-2, start=heute+2),
+    // bedeutet das, die aktuelle Woche hat letzte Woche begonnen.
+    if (startDate > today) {
+        startDate.setDate(startDate.getDate() - 7);
+    }
+
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6); // 6 Tage nach Donnerstag ist Mittwoch
+    endDate.setHours(23, 59, 59, 999);
+
+    return { startDate, endDate };
+}
 function animateValue(element, start, end, duration, formatAsCurrency = false) {
   if (!element) return;
   let startTimestamp = null;
@@ -4014,8 +4037,10 @@ class AuswertungView {
         this.currentUserId = null;
         this.downline = [];
         this.currentTab = 'rangliste';
+        this.currentAktivitaetenTimespan = 'woche';
         this.sortConfig = {
             rangliste: { column: 'eh', direction: 'desc' },
+            aktivitaeten: { column: 'atGehalten', direction: 'desc' },
             fkRennliste: { column: 'eh', direction: 'desc' },
             infoabend: { column: 'Terminpartner', direction: 'asc' }
         };
@@ -4023,9 +4048,14 @@ class AuswertungView {
 
     _getDomElements() {
         this.ranglisteTab = document.getElementById('rangliste-tab');
+        this.aktivitaetenTab = document.getElementById('aktivitaeten-tab');
         this.fkRennlisteTab = document.getElementById('fk-rennliste-tab');
         this.naechstesInfoTab = document.getElementById('naechstes-info-tab');
         this.ranglisteView = document.getElementById('rangliste-view');
+        this.aktivitaetenView = document.getElementById('aktivitaeten-view');
+        this.aktivitaetenListContainer = document.getElementById('aktivitaeten-list-container');
+        this.aktivitaetenRoleFilter = document.getElementById('aktivitaeten-role-filter');
+        this.aktivitaetenDateRangeHint = document.getElementById('aktivitaeten-date-range-hint');
         this.fkRennlisteView = document.getElementById('fk-rennliste-view');
         this.naechstesInfoView = document.getElementById('naechstes-info-view');
         this.infoabendDateSelect = document.getElementById('infoabend-date-select');
@@ -4034,7 +4064,31 @@ class AuswertungView {
         this.infoabendListContainer = document.getElementById('infoabend-list-container');
         this.funnelChartContainer = document.getElementById('funnel-chart-container');
 
-        return this.ranglisteTab && this.fkRennlisteTab && this.naechstesInfoTab && this.ranglisteView && this.fkRennlisteView && this.naechstesInfoView;
+        return this.ranglisteTab && this.aktivitaetenTab && this.fkRennlisteTab && this.naechstesInfoTab && this.ranglisteView && this.aktivitaetenView && this.fkRennlisteView && this.naechstesInfoView;
+    }
+
+    _getHierarchyForGroup(groupName) {
+        // Handle special, combined groups first
+        if (groupName === 'Trainee & GA') return 0; // Lowest hierarchy, always at the bottom
+
+        // Find the corresponding career plan entry.
+        // This is robust against trailing spaces.
+        const trimmedGroupName = groupName.trim();
+        const plan = db.karriereplan.find(p => p.Stufe === trimmedGroupName);
+
+        if (plan && typeof plan.Hierarchie === 'number') {
+            return plan.Hierarchie;
+        }
+
+        // Fallback for gendered names like "Landesdirektor:in" if "Landesdirektor" is in the plan
+        const baseName = trimmedGroupName.split(':')[0];
+        if (baseName !== trimmedGroupName) {
+            const basePlan = db.karriereplan.find(p => p.Stufe === baseName);
+            if (basePlan && typeof basePlan.Hierarchie === 'number') {
+                return basePlan.Hierarchie;
+            }
+        }
+        return -1; // Ranks without hierarchy value will be at the very bottom
     }
 
     async init(userId) {
@@ -4064,6 +4118,17 @@ class AuswertungView {
                 this.renderCurrentView();
             });
         });
+
+        document.querySelectorAll('.aktivitaeten-timespan-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.currentAktivitaetenTimespan = e.currentTarget.dataset.timespan;
+                document.querySelectorAll('.aktivitaeten-timespan-btn').forEach(b => b.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+                this.renderAktivitaeten();
+            });
+        });
+
+        this.aktivitaetenRoleFilter.addEventListener('change', () => this.renderAktivitaeten());
 
         this.infoabendDateSelect.addEventListener('change', () => this.renderNaechstesInfo());
         this.infoabendScopeFilter.addEventListener('change', () => this.renderNaechstesInfo());
@@ -4096,6 +4161,9 @@ class AuswertungView {
             case 'rangliste':
                 await this.renderRangliste();
                 break;
+            case 'aktivitaeten':
+                await this.renderAktivitaeten();
+                break;
             case 'fk-rennliste':
                 await this.renderFkRennliste();
                 break;
@@ -4126,19 +4194,41 @@ class AuswertungView {
                 name: mitarbeiter?.Name || 'Unbekannt',
                 rang: mitarbeiter?.Karrierestufe || 'N/A',
                 eh: u.TotalEH,
-                werber: werber?.Name || '-'
             };
         }).filter(Boolean); // Entfernt alle null-Einträge
 
-        const groupedByRank = _.groupBy(enrichedUsers, 'rang');
-        const sortedRanks = db.karriereplan.sort((a, b) => b.Hierarchie - a.Hierarchie).map(r => r.Stufe);
+        // ANPASSUNG: Logik zur Gruppierung von Trainee/GA Rängen
+        const getRankGroup = (rank) => {
+            const rankStr = String(rank || '').trim();
+            const lowerRank = rankStr.toLowerCase();
+            if (lowerRank.includes('trainee') || (lowerRank.includes('ga') && lowerRank.length < 5)) {
+                return 'Trainee & GA';
+            }
+            return rankStr;
+        };
+
+        const groupedByRank = _.groupBy(enrichedUsers, user => getRankGroup(user.rang || 'N/A'));
+
+        const allGroupNames = Object.keys(groupedByRank);
+        // NEUE SORTIERUNG basierend auf Hierarchie
+        allGroupNames.sort((a, b) => {
+            const hierarchyA = this._getHierarchyForGroup(a);
+            const hierarchyB = this._getHierarchyForGroup(b);
+            if (hierarchyB !== hierarchyA) {
+                return hierarchyB - hierarchyA; // Descending by hierarchy
+            }
+            return a.localeCompare(b); // Alphabetical for same-level ranks
+        });
+        const displayGroups = allGroupNames;
+        
         const sortConfig = this.sortConfig.rangliste;
         const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
 
         this.ranglisteView.innerHTML = '';
-        for (const rank of sortedRanks) {
-            if (groupedByRank[rank]) {
-                const usersInRank = groupedByRank[rank];
+        // ANPASSUNG: Iteriere über die sortierten Anzeigegruppen
+        for (const groupName of displayGroups) {
+            if (groupedByRank[groupName]) {
+                const usersInRank = groupedByRank[groupName];
                 usersInRank.sort((a, b) => {
                     let valA = a[sortConfig.column];
                     let valB = b[sortConfig.column];
@@ -4152,13 +4242,13 @@ class AuswertungView {
                 });
 
                 const groupEl = document.createElement('div');
-                groupEl.innerHTML = `<h3 class="text-xl font-bold text-skt-blue mb-3">${rank}</h3>`;
+                groupEl.innerHTML = `<h3 class="text-xl font-bold text-skt-blue mb-3">${groupName}</h3>`;
                 const table = document.createElement('table');
                 table.className = 'appointments-table';
+                // ANPASSUNG: "Rangstufe" entfernt
                 const headers = [
                     { key: 'name', label: 'Name' },
                     { key: 'eh', label: 'Einheiten' },
-                    { key: 'werber', label: 'Werber' }
                 ];
                 table.innerHTML = `<thead><tr>${headers.map(h => {
                     const icon = sortConfig.column === h.key ? (sortConfig.direction === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>') : '<i class="fas fa-sort sort-icon"></i>';
@@ -4167,7 +4257,8 @@ class AuswertungView {
 
                 const tbody = document.createElement('tbody');
                 usersInRank.forEach(user => {
-                    tbody.innerHTML += `<tr><td>${user.name}</td><td>${user.eh.toFixed(2)}</td><td>${user.werber}</td></tr>`;
+                    // ANPASSUNG: Spaltenstruktur angepasst
+                    tbody.innerHTML += `<tr><td>${user.name}</td><td>${user.eh.toFixed(2)}</td></tr>`;
                 });
                 table.appendChild(tbody);
                 table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('rangliste', e.currentTarget.dataset.sortKey)));
@@ -4177,19 +4268,166 @@ class AuswertungView {
         }
     }
 
+    async renderAktivitaeten() {
+        this.aktivitaetenListContainer.innerHTML = '<div class="loader mx-auto"></div>';
+
+        const { startDate, endDate } = this.currentAktivitaetenTimespan === 'woche'
+            ? getWeeklyCycleDates()
+            : getMonthlyCycleDates();
+
+        this.aktivitaetenDateRangeHint.textContent = `Zeitraum: ${startDate.toLocaleDateString('de-DE')} - ${endDate.toLocaleDateString('de-DE')}`;
+
+        const startDateIso = startDate.toISOString().split('T')[0];
+        const endDateIso = endDate.toISOString().split('T')[0];
+
+        const query = `SELECT Mitarbeiter_ID, Kategorie, Status FROM Termine WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+        const termineRaw = await seaTableSqlQuery(query, true);
+        const termineData = mapSqlResults(termineRaw || [], 'Termine');
+
+        const AT_STATUS_GEHALTEN = ["Gehalten"];
+        const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
+        const ET_STATUS_GEHALTEN = ["Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+        const ET_STATUS_AUSGEMACHT = ["Ausgemacht", ...ET_STATUS_GEHALTEN];
+
+        const statsByMitarbeiter = {};
+
+        termineData.forEach(t => {
+            const mitarbeiterId = t.Mitarbeiter_ID?.[0]?.row_id;
+            if (!mitarbeiterId) return;
+
+            if (!statsByMitarbeiter[mitarbeiterId]) {
+                statsByMitarbeiter[mitarbeiterId] = { atAusgemacht: 0, atGehalten: 0, etAusgemacht: 0, etGehalten: 0 };
+            }
+
+            if (t.Kategorie === 'AT') {
+                if (AT_STATUS_AUSGEMACHT.includes(t.Status)) statsByMitarbeiter[mitarbeiterId].atAusgemacht++;
+                if (AT_STATUS_GEHALTEN.includes(t.Status)) statsByMitarbeiter[mitarbeiterId].atGehalten++;
+            } else if (t.Kategorie === 'ET') {
+                if (ET_STATUS_AUSGEMACHT.includes(t.Status)) statsByMitarbeiter[mitarbeiterId].etAusgemacht++;
+                if (ET_STATUS_GEHALTEN.includes(t.Status)) statsByMitarbeiter[mitarbeiterId].etGehalten++;
+            }
+        });
+
+        const enrichedUsers = Object.keys(statsByMitarbeiter).map(mitarbeiterId => {
+            const mitarbeiter = db.mitarbeiter.find(m => m._id === mitarbeiterId);
+            if (!mitarbeiter) return null;
+            return { name: mitarbeiter.Name, rang: mitarbeiter.Karrierestufe || 'N/A', ...statsByMitarbeiter[mitarbeiterId] };
+        }).filter(Boolean);
+
+        const filterValue = this.aktivitaetenRoleFilter.value;
+        const isTraineeOrGA = (rank) => {
+            const rankStr = String(rank || '').trim().toLowerCase();
+            return rankStr.includes('trainee') || (rankStr.includes('ga') && rankStr.length < 5);
+        };
+
+        const filteredUsers = enrichedUsers.filter(user => {
+            if (filterValue === 'all') return true;
+            if (filterValue === 'trainee') return isTraineeOrGA(user.rang);
+            if (filterValue === 'leader') return !isTraineeOrGA(user.rang);
+            return true; // Fallback to show all
+        });
+
+        const sortConfig = this.sortConfig.aktivitaeten;
+        const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+
+        // Sort all users directly, removing the grouping logic
+        filteredUsers.sort((a, b) => {
+            let valA = a[sortConfig.column];
+            let valB = b[sortConfig.column];
+            let comparison = 0;
+
+            if (typeof valA === 'number' && typeof valB === 'number') {
+                comparison = (valA || 0) - (valB || 0);
+            } else {
+                comparison = collator.compare(String(valA || ''), String(valB || ''));
+            }
+            return sortConfig.direction === 'asc' ? comparison : -comparison;
+        });
+
+        this.aktivitaetenListContainer.innerHTML = '';
+
+        if (filteredUsers.length === 0) {
+            this.aktivitaetenListContainer.innerHTML = `<p class="text-center text-gray-500 py-8">Keine Aktivitäten im ausgewählten Zeitraum gefunden.</p>`;
+            return;
+        }
+
+        // Create a single table for the filtered users
+        const table = document.createElement('table');
+        table.className = 'appointments-table';
+
+        // Add 'rang' to headers to retain the information
+        const headers = [
+            { key: 'name', label: 'Name' },
+            { key: 'rang', label: 'Rang' },
+            { key: 'atAusgemacht', label: 'AT Ausgem.' },
+            { key: 'atGehalten', label: 'AT Gehalt.' },
+            { key: 'etAusgemacht', label: 'ET Ausgem.' },
+            { key: 'etGehalten', label: 'ET Gehalt.' },
+        ];
+
+        table.innerHTML = `<thead><tr>${headers.map(h => {
+            const icon = sortConfig.column === h.key ? (sortConfig.direction === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>') : '<i class="fas fa-sort sort-icon"></i>';
+            return `<th data-sort-key="${h.key}">${h.label} ${icon}</th>`;
+        }).join('')}</tr></thead>`;
+
+        const tbody = document.createElement('tbody');
+        filteredUsers.forEach(user => {
+            tbody.innerHTML += `<tr><td>${user.name}</td><td>${user.rang}</td><td>${user.atAusgemacht}</td><td>${user.atGehalten}</td><td>${user.etAusgemacht}</td><td>${user.etGehalten}</td></tr>`;
+        });
+        table.appendChild(tbody);
+        table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('aktivitaeten', e.currentTarget.dataset.sortKey)));
+
+        this.aktivitaetenListContainer.appendChild(table);
+    }
+
     async renderFkRennliste() {
         this.fkRennlisteView.innerHTML = '<div class="loader mx-auto"></div>';
         const leaders = db.mitarbeiter.filter(m => isUserLeader(m));
         const { startDate, endDate } = getMonthlyCycleDates();
-        const [allMemberData] = await Promise.all([fetchBulkDashboardData(leaders.map(l => l._id))]);
+        const startDateIso = startDate.toISOString().split('T')[0];
+        const endDateIso = endDate.toISOString().split('T')[0];
 
+        // 1. Lade alle EH-Daten für den Zeitraum
+        const ehQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`ehIst\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' GROUP BY \`Mitarbeiter_ID\``;
+        const ehResultRaw = await seaTableSqlQuery(ehQuery, false);
+        const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
+
+        // 2. Lade alle relevanten Termindaten für den Zeitraum
+        const termineQuery = `SELECT Mitarbeiter_ID, Kategorie, Status FROM Termine WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+        const termineResultsRaw = await seaTableSqlQuery(termineQuery, true);
+        const termineResults = mapSqlResults(termineResultsRaw || [], "Termine");
+
+        const AT_STATUS_GEHALTEN = ["Gehalten"];
+        const ET_STATUS_GEHALTEN = ["Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+
+        // 3. Gruppiere Daten nach Mitarbeiter für schnellen Zugriff
+        const ehByMitarbeiter = _.keyBy(ehResults.map(e => ({ id: e.Mitarbeiter_ID?.[0]?.row_id, eh: e.ehIst })), 'id');
+        const termineByMitarbeiter = _.groupBy(termineResults, t => t.Mitarbeiter_ID?.[0]?.row_id);
+
+        // 4. Berechne die Strukturdaten für jede Führungskraft
         const structureDataList = leaders.map(leader => {
-            const structure = calculateGroupOrStructureData(leader._id, 'struktur', allMemberData);
+            const structureMembers = [leader, ...getAllSubordinatesRecursive(leader._id)];
+            
+            let eh = 0;
+            let at = 0;
+            let et = 0;
+
+            for (const member of structureMembers) {
+                eh += ehByMitarbeiter[member._id]?.eh || 0;
+
+                const memberTermine = termineByMitarbeiter[member._id] || [];
+                memberTermine.forEach(t => {
+                    if (t.Kategorie === "AT" && AT_STATUS_GEHALTEN.includes(t.Status)) at++;
+                    else if (t.Kategorie === "ET" && ET_STATUS_GEHALTEN.includes(t.Status)) et++;
+                });
+            }
+            
             return {
-                name: `Struktur ${leader.Name}`,
-                eh: structure.ehCurrent,
-                at: structure.atCurrent,
-                et: structure.etCurrent
+                name: leader.Name,
+                rang: leader.Karrierestufe,
+                eh: eh,
+                at: at,
+                et: et
             };
         });
 
@@ -4202,16 +4440,18 @@ class AuswertungView {
             if (typeof valA === 'number' && typeof valB === 'number') {
                 comparison = valA - valB;
             } else {
-                comparison = collator.compare(String(valA), String(valB));
+                comparison = collator.compare(String(valA || ''), String(valB || '')); // Fehlerbehebung: Fallback für undefined
             }
             return sortConfig.direction === 'asc' ? comparison : -comparison;
         });
 
         const table = document.createElement('table');
         table.className = 'appointments-table';
+        // ANPASSUNG: Spalten für Name und Rang hinzugefügt
         const headers = [
-            { key: 'name', label: 'Struktur' }, { key: 'eh', label: 'Gesamt EH' },
-            { key: 'at', label: 'Gesamt ATs' }, { key: 'et', label: 'Gesamt ETs' }
+            { key: 'name', label: 'Führungskraft' }, { key: 'rang', label: 'Rangstufe' },
+            { key: 'eh', label: 'Gesamt EH' }, { key: 'at', label: 'Gesamt ATs' },
+            { key: 'et', label: 'Gesamt ETs' }
         ];
         table.innerHTML = `<thead><tr>${headers.map(h => {
             const icon = sortConfig.column === h.key ? (sortConfig.direction === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>') : '<i class="fas fa-sort sort-icon"></i>';
@@ -4219,10 +4459,11 @@ class AuswertungView {
         }).join('')}</tr></thead>`;
         const tbody = document.createElement('tbody');
         structureDataList.forEach(s => {
-            tbody.innerHTML += `<tr><td>${s.name}</td><td>${s.eh.toFixed(2)}</td><td>${s.at}</td><td>${s.et}</td></tr>`;
+            // ANPASSUNG: Neue Spalten in der Tabelle ausgeben
+            tbody.innerHTML += `<tr><td>${s.name}</td><td>${s.rang}</td><td>${s.eh.toFixed(2)}</td><td>${s.at}</td><td>${s.et}</td></tr>`;
         });
         table.appendChild(tbody);
-        table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('fk-rennliste', e.currentTarget.dataset.sortKey)));
+        table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('fkRennliste', e.currentTarget.dataset.sortKey)));
         this.fkRennlisteView.innerHTML = '';
         this.fkRennlisteView.appendChild(table);
     }

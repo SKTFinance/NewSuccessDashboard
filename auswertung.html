@@ -8,6 +8,7 @@
     <div class="border-b border-gray-200 mb-6">
         <nav class="-mb-px flex space-x-8" aria-label="Tabs">
             <button id="rangliste-tab" data-view="rangliste" class="auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue">Rangliste</button>
+            <button id="aktivitaeten-tab" data-view="aktivitaeten" class="auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Aktivitäten</button>
             <button id="fk-rennliste-tab" data-view="fk-rennliste" class="auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">FK Rennliste</button>
             <button id="naechstes-info-tab" data-view="naechstes-info" class="auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Dein nächstes Info</button>
         </nav>
@@ -20,6 +21,25 @@
         <div id="rangliste-view" class="auswertung-view-content space-y-6">
             <!-- Inhalt wird per JS generiert -->
             <div class="loader mx-auto"></div>
+        </div>
+
+        <!-- Aktivitäten View -->
+        <div id="aktivitaeten-view" class="auswertung-view-content hidden">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+                <p id="aktivitaeten-date-range-hint" class="text-sm text-gray-600"></p>
+                <div class="flex items-center gap-4">
+                    <select id="aktivitaeten-role-filter" class="modern-select">
+                        <option value="all">Alle anzeigen</option>
+                        <option value="trainee">Trainees & GA</option>
+                        <option value="leader">Führungskräfte</option>
+                    </select>
+                    <div class="view-toggle flex space-x-2"><button id="aktivitaeten-woche-btn" data-timespan="woche" class="aktivitaeten-timespan-btn active">Woche</button><button id="aktivitaeten-monat-btn" data-timespan="monat" class="aktivitaeten-timespan-btn">Monat</button></div>
+                </div>
+            </div>
+            <div id="aktivitaeten-list-container" class="space-y-6">
+                <!-- Inhalt wird per JS generiert -->
+                <div class="loader mx-auto"></div>
+            </div>
         </div>
 
         <!-- FK Rennliste View -->
