@@ -1185,13 +1185,12 @@ function isUserLeader(user) {
   if (!user || !user.Karrierestufe) return false;
   const pos = user.Karrierestufe.toLowerCase();
 
-  // Definiere die Schlüsselwörter für Nicht-Führungskräfte basierend auf der Anforderung.
-  // Dazu gehören alle "Trainee"-Stufen und "JGST".
+  // Eine Führungskraft ist jeder, dessen Karrierestufe NICHT "Trainee" enthält.
+  // JGST wird nun als Führungskraft gewertet.
   const isTrainee = pos.includes("trainee");
-  const isJgst = pos.includes("jgst");
 
   // Eine Führungskraft ist jeder, der NICHT eine dieser Stufen hat.
-  return !(isTrainee || isJgst);
+  return !isTrainee;
 }
 
 function buildHierarchy() {
@@ -1303,7 +1302,7 @@ function getSubordinates(leaderId, type) {
     }
   }
 
-  return subordinates;
+  return subordinates.filter(m => m.Status !== 'Ausgeschieden');
 }
 
 function getAllSubordinatesRecursive(leaderId) {
@@ -1325,7 +1324,7 @@ function getAllSubordinatesRecursive(leaderId) {
       }
     });
   }
-  return subordinates;
+  return subordinates.filter(m => m.Status !== 'Ausgeschieden');
 }
 
 function calculateGroupOrStructureData(
@@ -1408,7 +1407,7 @@ function calculateGroupOrStructureData(
 
 async function calculateGesamtansichtData() {
   const führungskräfte = db.mitarbeiter.filter(
-    (m) => m.Karrierestufe && !m.Karrierestufe.toLowerCase().includes("trainee")
+    (m) => m.Karrierestufe && !m.Karrierestufe.toLowerCase().includes("trainee") && m.Status !== 'Ausgeschieden'
   );
   const geschäftsstelleRows = db.mitarbeiter.filter(
     (m) => m.Name && m.Name.toLowerCase().startsWith("geschäftsstelle")
@@ -4225,6 +4224,7 @@ class AuswertungView {
                 return null; // Ungültigen Datensatz überspringen
             }
             const mitarbeiter = db.mitarbeiter.find(m => m.Name === mitarbeiterName);
+            if (!mitarbeiter || mitarbeiter.Status === 'Ausgeschieden') return null;
             const werber = mitarbeiter ? db.mitarbeiter.find(m => m._id === mitarbeiter.Werber) : null;
             return {
                 name: mitarbeiter?.Name || 'Unbekannt',
@@ -4346,7 +4346,7 @@ class AuswertungView {
 
         const enrichedUsers = Object.keys(statsByMitarbeiter).map(mitarbeiterId => {
             const mitarbeiter = db.mitarbeiter.find(m => m._id === mitarbeiterId);
-            if (!mitarbeiter) return null;
+            if (!mitarbeiter || mitarbeiter.Status === 'Ausgeschieden') return null;
             return { name: mitarbeiter.Name, rang: mitarbeiter.Karrierestufe || 'N/A', ...statsByMitarbeiter[mitarbeiterId] };
         }).filter(Boolean);
 
@@ -4418,7 +4418,7 @@ class AuswertungView {
 
     async renderFkRennliste() {
         this.fkRennlisteView.innerHTML = '<div class="loader mx-auto"></div>';
-        const leaders = db.mitarbeiter.filter(m => isUserLeader(m));
+        const leaders = db.mitarbeiter.filter(m => isUserLeader(m) && m.Status !== 'Ausgeschieden');
         const { startDate, endDate } = getMonthlyCycleDates();
         const startDateIso = startDate.toISOString().split('T')[0];
         const endDateIso = endDate.toISOString().split('T')[0];
@@ -4967,7 +4967,7 @@ async function initializeDashboard() {
     return;
   }
 
-  const usersForLogin = db.mitarbeiter.filter((m) => m.Name);
+  const usersForLogin = db.mitarbeiter.filter((m) => m.Name && m.Status !== 'Ausgeschieden');
   usersForLogin.sort((a, b) => a.Name.localeCompare(b.Name));
   usersForLogin.forEach((user) => {
     const option = document.createElement("option");
@@ -5618,20 +5618,29 @@ class StrukturbaumView {
     buildHtmlTree(node, hierarchy, dataMap) {
         if (!node || !node.user) return '';
 
-        const userData = dataMap[node.user._id] || { kpi: {}, pqq: 0 };
-        let childrenHtml = '';
+        // Generate the HTML for all children first.
+        // This will be a string of `<li>...</li>` elements, as this function returns either an `<li>` string or a concatenated string of `<li>`s.
+        let childrenLis = '';
         if (node.children && node.children.length > 0) {
-            childrenHtml += '<ul>';
-            for (const childId of node.children) {
-                childrenHtml += this.buildHtmlTree(hierarchy[childId], hierarchy, dataMap);
-            }
-            childrenHtml += '</ul>';
+            childrenLis = node.children
+                .map(childId => this.buildHtmlTree(hierarchy[childId], hierarchy, dataMap))
+                .join('');
         }
+
+        // If the current node is inactive, don't render it. Just pass up the `<li>` elements of its children.
+        // This effectively re-parents the active children to the current node's parent.
+        if (node.user.Status === 'Ausgeschieden') {
+            return childrenLis;
+        }
+
+        // If the current node is active, wrap it in an `<li>` and its children in a `<ul>`.
+        const childrenUl = childrenLis ? `<ul>${childrenLis}</ul>` : '';
+        const hasActiveChildren = !!childrenLis;
 
         return `
             <li>
-                ${this.createNodeHtml(node.user, userData, node.children.length > 0)}
-                ${childrenHtml}
+                ${this.createNodeHtml(node.user, dataMap[node.user._id] || { kpi: {}, pqq: 0 }, hasActiveChildren)}
+                ${childrenUl}
             </li>
         `;
     }
@@ -6023,7 +6032,7 @@ function openAddUserModal() {
     clearChildren(werberSelect);
     clearChildren(bueroSelect);
 
-    const usersForWerber = [...db.mitarbeiter].sort((a, b) => a.Name.localeCompare(b.Name));
+    const usersForWerber = [...db.mitarbeiter.filter(m => m.Status !== 'Ausgeschieden')].sort((a, b) => a.Name.localeCompare(b.Name));
     usersForWerber.forEach(user => {
         werberSelect.add(new Option(user.Name, user._id));
     });
