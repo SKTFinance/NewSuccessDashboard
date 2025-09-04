@@ -3697,26 +3697,42 @@ class UmsatzView {
         const allUsers = [SKT_APP.authenticatedUserData, ...this.downline].filter(Boolean);
         allUsers.sort((a, b) => a.Name.localeCompare(b.Name));
 
-        // WIEDERHERGESTELLT: Robuste Bestimmung des Anzeigenamens der primären Spalte
-        const getDisplayColumn = (tableName) => {
+        // KORREKTUR: Robuste Bestimmung des Anzeige-Spalten-KEYS, um direkt auf Rohdaten zugreifen zu können.
+        const getDisplayColumnKey = (tableName) => {
             const tableMeta = SKT_APP.METADATA.tables.find(t => t.name.toLowerCase() === tableName.toLowerCase());
-            if (tableMeta && tableMeta.columns) {
-                const primaryColumn = tableMeta.columns.find(c => c.is_primary);
-                if (primaryColumn) {
-                    return primaryColumn.name;
-                }
-                // Fallback auf die erste Spalte, wenn keine primäre Spalte definiert ist.
-                // Dies ist eine häufige Konvention in SeaTable.
-                if (tableMeta.columns.length > 0) {
-                    return tableMeta.columns[0].name;
-                }
+            if (!tableMeta) {
+                console.warn(`Metadaten für Tabelle '${tableName}' nicht gefunden. Fallback auf '0000'.`);
+                return '0000';
             }
-            // Letzter Fallback, falls keine Spalten gefunden werden.
-            return 'Name';
+
+            // Spezifische Logik für bekannte Tabellen, da die "Display"-Spalte nicht konsistent ist.
+            let targetColumnName;
+            if (tableName.toLowerCase() === 'produkte') {
+                targetColumnName = 'Produkt'; // In der Produkte-Tabelle heißt die Spalte "Produkt"
+            } else if (tableName.toLowerCase() === 'gesellschaften') {
+                targetColumnName = 'Gesellschaft'; // In der Gesellschaften-Tabelle heißt die Spalte "Gesellschaft"
+            } else {
+                targetColumnName = 'Name'; // In Gesellschaften und anderen heißt sie "Name"
+            }
+
+            const displayColumn = tableMeta.columns.find(c => c.name === targetColumnName);
+            if (displayColumn) {
+                return displayColumn.key;
+            }
+
+            // Fallback: Wenn der spezifische Name nicht gefunden wird, nimm die primäre Spalte.
+            const primaryColumn = tableMeta.columns.find(c => c.is_primary);
+            if (primaryColumn) {
+                console.warn(`Spezifische Spalte '${targetColumnName}' nicht in '${tableName}' gefunden. Fallback auf primäre Spalte '${primaryColumn.name}'.`);
+                return primaryColumn.key;
+            }
+            
+            console.warn(`Keine passende Spalte in '${tableName}' gefunden. Fallback auf '0000'.`);
+            return '0000';
         };
 
-        const gesellschaftenDisplayCol = getDisplayColumn('Gesellschaften');
-        const produkteDisplayCol = getDisplayColumn('Produkte');
+        const gesellschaftenDisplayKey = getDisplayColumnKey('Gesellschaften');
+        const produkteDisplayKey = getDisplayColumnKey('Produkte');
 
         if (umsatz) {
             this.lastSavedUmsatz = null; // Clear pre-fill cache when editing
@@ -3727,8 +3743,8 @@ class UmsatzView {
             this.form.querySelector('#umsatz-status-ok').checked = umsatz.Status_OK || false;
             
             populateSelect('#umsatz-mitarbeiter', allUsers, 'Name', umsatz?.Mitarbeiter_ID?.[0]?.row_id);
-            populateSelect('#umsatz-gesellschaft', db.gesellschaften, gesellschaftenDisplayCol, umsatz?.Gesellschaft_ID?.[0]?.row_id);
-            populateSelect('#umsatz-produkt', db.produkte, produkteDisplayCol, umsatz?.Produkt_ID?.[0]?.row_id);
+            populateSelect('#umsatz-gesellschaft', db.gesellschaften, gesellschaftenDisplayKey, umsatz?.Gesellschaft_ID?.[0]?.row_id);
+            populateSelect('#umsatz-produkt', db.produkte, produkteDisplayKey, umsatz?.Produkt_ID?.[0]?.row_id);
 
             boFields.classList.remove('hidden');
             deleteBtn.classList.remove('hidden');
@@ -3742,12 +3758,12 @@ class UmsatzView {
                 this.form.querySelector('#umsatz-kunde').value = this.lastSavedUmsatz.Kunde;
                 this.form.querySelector('#umsatz-eh').value = ''; // EH bleibt leer
                 populateSelect('#umsatz-mitarbeiter', allUsers, 'Name', this.lastSavedUmsatz.Mitarbeiter_ID);
-                populateSelect('#umsatz-gesellschaft', db.gesellschaften, gesellschaftenDisplayCol, this.lastSavedUmsatz.Gesellschaft_ID);
-                populateSelect('#umsatz-produkt', db.produkte, produkteDisplayCol, this.lastSavedUmsatz.Produkt_ID);
+                populateSelect('#umsatz-gesellschaft', db.gesellschaften, gesellschaftenDisplayKey, this.lastSavedUmsatz.Gesellschaft_ID);
+                populateSelect('#umsatz-produkt', db.produkte, produkteDisplayKey, this.lastSavedUmsatz.Produkt_ID);
             } else {
                 populateSelect('#umsatz-mitarbeiter', allUsers, 'Name', this.currentUserId);
-                populateSelect('#umsatz-gesellschaft', db.gesellschaften, gesellschaftenDisplayCol, null);
-                populateSelect('#umsatz-produkt', db.produkte, produkteDisplayCol, null);
+                populateSelect('#umsatz-gesellschaft', db.gesellschaften, gesellschaftenDisplayKey, null);
+                populateSelect('#umsatz-produkt', db.produkte, produkteDisplayKey, null);
             }
         }
         this.modal.classList.add('visible');
