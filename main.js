@@ -3255,7 +3255,7 @@ class PotentialView {
                     <p>${p.Telefonnummer || '-'}</p>
                     <p class="text-xs text-gray-500">${p.Email || '-'}</p>
                 </td>
-                <td><span class="px-2 py-1 text-xs font-semibold rounded-full bg-skt-grey-medium text-skt-blue-light">${p.Kontaktstatus || '-'}</span></td>
+                <td><span class="px-2 py-1 text-xs font-semibold rounded-full bg-skt-grey-medium text-skt-blue-light">${p.Status || '-'}</span></td>
                 <td><button class="text-skt-blue hover:underline">Bearbeiten</button></td>
             `;
             tbody.appendChild(tr);
@@ -3305,10 +3305,26 @@ class PotentialView {
         const title = this.modal.querySelector('#potential-modal-title');
         const idInput = this.form.querySelector('#potential-id');
         const userSelect = this.form.querySelector('#potential-user');
+        const statusSelect = this.form.querySelector('#potential-kontaktstatus');
 
         const allRelevantUsers = [SKT_APP.authenticatedUserData, ...this.downline].filter(Boolean);
         userSelect.innerHTML = '';
         allRelevantUsers.forEach(u => userSelect.add(new Option(u.Name, u._id)));
+
+        // Status-Dropdown dynamisch befüllen, um Type Mismatch zu vermeiden
+        statusSelect.innerHTML = '<option value="">-- Bitte wählen --</option>';
+        try {
+            const terminMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'termine');
+            const statusColumn = terminMeta.columns.find(c => c.name === 'Status');
+            if (!statusColumn || !statusColumn.data || !statusColumn.data.options) {
+                throw new Error("Status-Optionen nicht in Metadaten gefunden.");
+            }
+            statusColumn.data.options.forEach(opt => {
+                statusSelect.add(new Option(opt.name, opt.name));
+            });
+        } catch (error) {
+            console.error("Fehler beim Befüllen des Status-Dropdowns:", error);
+        }
 
         if (potential) {
             title.textContent = 'Kontakt bearbeiten';
@@ -3321,7 +3337,7 @@ class PotentialView {
             this.form.querySelector('#potential-rating-kunde').value = potential.Rating_Kunde || '';
             this.form.querySelector('#potential-rating-ma').value = potential.Rating_MA || '';
             this.form.querySelector('#potential-rating-nt').value = potential.Rating_NT || '';
-            this.form.querySelector('#potential-kontaktstatus').value = potential.Kontaktiert || '';
+            statusSelect.value = potential.Status || '';
             this.form.querySelector('#potential-note').value = potential.Hinweis || '';
         } else {
             title.textContent = 'Neuen Kontakt anlegen';
@@ -3689,8 +3705,14 @@ class UmsatzView {
                 if (primaryColumn) {
                     return primaryColumn.name;
                 }
+                // Fallback auf die erste Spalte, wenn keine primäre Spalte definiert ist.
+                // Dies ist eine häufige Konvention in SeaTable.
+                if (tableMeta.columns.length > 0) {
+                    return tableMeta.columns[0].name;
+                }
             }
-            return 'Name'; // Fallback
+            // Letzter Fallback, falls keine Spalten gefunden werden.
+            return 'Name';
         };
 
         const gesellschaftenDisplayCol = getDisplayColumn('Gesellschaften');
