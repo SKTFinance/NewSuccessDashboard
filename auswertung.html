@@ -1,0 +1,104 @@
+<!-- Ansicht für die Auswertungen -->
+<div id="auswertung-module-root" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+        <h2 id="auswertung-title" class="text-3xl font-bold text-skt-blue">Auswertungen</h2>
+    </div>
+
+    <!-- Tabs -->
+    <div class="border-b border-gray-200 mb-6">
+        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+            <button id="rangliste-tab" data-view="rangliste" class="auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue">Rangliste</button>
+            <button id="fk-rennliste-tab" data-view="fk-rennliste" class="auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">FK Rennliste</button>
+            <button id="naechstes-info-tab" data-view="naechstes-info" class="auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Dein nächstes Info</button>
+        </nav>
+    </div>
+
+    <!-- Container für die verschiedenen Ansichten -->
+    <div id="auswertung-content-container">
+
+        <!-- Rangliste View -->
+        <div id="rangliste-view" class="auswertung-view-content space-y-6">
+            <!-- Inhalt wird per JS generiert -->
+            <div class="loader mx-auto"></div>
+        </div>
+
+        <!-- FK Rennliste View -->
+        <div id="fk-rennliste-view" class="auswertung-view-content hidden">
+            <div id="fk-rennliste-container">
+                <!-- Inhalt wird per JS generiert -->
+                <div class="loader mx-auto"></div>
+            </div>
+        </div>
+
+        <!-- Nächstes Info View -->
+        <div id="naechstes-info-view" class="auswertung-view-content hidden">
+            <!-- Filter -->
+            <div class="bg-skt-grey-light p-4 rounded-xl mb-6 border border-gray-200">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <div>
+                        <label for="infoabend-date-select" class="block text-sm font-medium text-gray-700 mb-1">Infoabend Datum</label>
+                        <select id="infoabend-date-select" class="modern-select"></select>
+                    </div>
+                    <div>
+                        <label for="infoabend-scope-filter" class="block text-sm font-medium text-gray-700 mb-1">Anzeigen für</label>
+                        <select id="infoabend-scope-filter" class="modern-select">
+                            <option value="personal">Meine</option>
+                            <option value="group">Meine Gruppe</option>
+                            <option value="structure">Meine Struktur</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center space-x-3 self-center justify-self-start pt-6">
+                        <label for="infoabend-show-cancelled" class="toggle-switch">
+                            <input type="checkbox" id="infoabend-show-cancelled" class="sr-only peer">
+                            <div class="toggle-slider"></div>
+                        </label>
+                        <label for="infoabend-show-cancelled" class="text-sm font-medium text-gray-700">Abgesagte anzeigen</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistik -->
+            <div class="mb-6">
+                <details id="infoabend-stats-details" class="bg-skt-grey-light rounded-xl border border-gray-200">
+                    <summary class="p-4 font-semibold text-skt-blue cursor-pointer">
+                        Statistik anzeigen
+                    </summary>
+                    <div id="infoabend-stats-container" class="p-4 pt-0">
+                        <h3 class="text-lg font-bold text-skt-blue mb-4 text-center">Recruiting Trichter</h3>
+                        <div id="funnel-chart-container" class="w-full max-w-2xl mx-auto space-y-1">
+                            <!-- Trichter wird per JS generiert -->
+                        </div>
+                    </div>
+                </details>
+            </div>
+
+            <!-- Tabelle -->
+            <div id="infoabend-list-container">
+                <!-- Inhalt wird per JS generiert -->
+                <div class="loader mx-auto"></div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<style>
+    .funnel-step {
+        background-color: var(--color-skt-blue-light);
+        color: white;
+        padding: 0.75rem;
+        margin: 0 auto;
+        transition: width 0.5s ease-in-out;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-radius: 0.25rem;
+    }
+    .funnel-label {
+        font-weight: 600;
+    }
+    .funnel-value {
+        font-weight: 700;
+        font-size: 1.125rem;
+    }
+</style>

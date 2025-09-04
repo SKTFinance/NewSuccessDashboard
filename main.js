@@ -40,6 +40,7 @@ let currentView = "dashboard";
 let appointmentsViewInstance = null;
 let potentialViewInstance = null;
 let umsatzViewInstance = null;
+let auswertungViewInstance = null;
 let HIERARCHY_CACHE = null;
 let currentOnboardingSubView = "leader-list";
 
@@ -123,6 +124,8 @@ const dom = {
   appointmentsHeaderBtn: document.getElementById("appointments-header-btn"),
   potentialHeaderBtn: document.getElementById("potential-header-btn"),
   umsatzHeaderBtn: document.getElementById("umsatz-header-btn"),
+  auswertungHeaderBtn: document.getElementById("auswertung-header-btn"),
+  auswertungView: document.getElementById("auswertung-view"),
   umsatzView: document.getElementById("umsatz-view"),
   potentialView: document.getElementById("potential-view"),
   appointmentsView: document.getElementById("appointments-view"),
@@ -1023,8 +1026,8 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
 
   // WICHTIG: convertLinks wird auf `false` gesetzt, um die stabilen Row-IDs statt der Namen zu erhalten.
   const [ehResultRaw, totalEhResultRaw] = await Promise.all([seaTableSqlQuery(ehQuery, false), seaTableSqlQuery(totalEhQuery, false)]);
-  const ehResults = mapSqlResults(ehResultRaw, "Umsatz");
-  const totalEhResults = mapSqlResults(totalEhResultRaw, "Umsatz");
+  const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
+  const totalEhResults = mapSqlResults(totalEhResultRaw || [], "Umsatz");
 
   const AT_STATUS_GEHALTEN = ["Gehalten"];
   const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
@@ -4003,6 +4006,350 @@ async function loadAndInitUmsatzView() {
     }
 }
 
+const auswertungLog = (message, ...data) => console.log(`%c[Auswertung] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
+
+class AuswertungView {
+    constructor() {
+        this.initialized = false;
+        this.currentUserId = null;
+        this.downline = [];
+        this.currentTab = 'rangliste';
+        this.sortConfig = {
+            rangliste: { column: 'eh', direction: 'desc' },
+            fkRennliste: { column: 'eh', direction: 'desc' },
+            infoabend: { column: 'Terminpartner', direction: 'asc' }
+        };
+    }
+
+    _getDomElements() {
+        this.ranglisteTab = document.getElementById('rangliste-tab');
+        this.fkRennlisteTab = document.getElementById('fk-rennliste-tab');
+        this.naechstesInfoTab = document.getElementById('naechstes-info-tab');
+        this.ranglisteView = document.getElementById('rangliste-view');
+        this.fkRennlisteView = document.getElementById('fk-rennliste-view');
+        this.naechstesInfoView = document.getElementById('naechstes-info-view');
+        this.infoabendDateSelect = document.getElementById('infoabend-date-select');
+        this.infoabendScopeFilter = document.getElementById('infoabend-scope-filter');
+        this.infoabendShowCancelled = document.getElementById('infoabend-show-cancelled');
+        this.infoabendListContainer = document.getElementById('infoabend-list-container');
+        this.funnelChartContainer = document.getElementById('funnel-chart-container');
+
+        return this.ranglisteTab && this.fkRennlisteTab && this.naechstesInfoTab && this.ranglisteView && this.fkRennlisteView && this.naechstesInfoView;
+    }
+
+    async init(userId) {
+        auswertungLog(`Modul wird initialisiert für User-ID: ${userId}`);
+        this.currentUserId = userId;
+        this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
+
+        if (!this._getDomElements()) {
+            auswertungLog('!!! FEHLER: Benötigte DOM-Elemente wurden nicht gefunden.');
+            return;
+        }
+
+        if (!this.initialized) {
+            this.setupEventListeners();
+            this.initialized = true;
+        }
+
+        this.updateTabs();
+        await this.renderCurrentView();
+    }
+
+    setupEventListeners() {
+        document.querySelectorAll('.auswertung-tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                this.currentTab = e.currentTarget.dataset.view;
+                this.updateTabs();
+                this.renderCurrentView();
+            });
+        });
+
+        this.infoabendDateSelect.addEventListener('change', () => this.renderNaechstesInfo());
+        this.infoabendScopeFilter.addEventListener('change', () => this.renderNaechstesInfo());
+        this.infoabendShowCancelled.addEventListener('change', () => this.renderNaechstesInfo());
+    }
+
+    _handleSort(viewType, key) {
+        const config = this.sortConfig[viewType];
+        if (config.column === key) {
+            config.direction = config.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            config.column = key;
+            config.direction = 'asc';
+        }
+        this.renderCurrentView();
+    }
+
+    updateTabs() {
+        document.querySelectorAll('.auswertung-tab').forEach(tab => {
+            const isActive = tab.dataset.view === this.currentTab;
+            tab.className = `auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg ${isActive ? 'border-skt-blue text-skt-blue' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`;
+        });
+        document.querySelectorAll('.auswertung-view-content').forEach(view => {
+            view.classList.toggle('hidden', view.id !== `${this.currentTab}-view`);
+        });
+    }
+
+    async renderCurrentView() {
+        switch (this.currentTab) {
+            case 'rangliste':
+                await this.renderRangliste();
+                break;
+            case 'fk-rennliste':
+                await this.renderFkRennliste();
+                break;
+            case 'naechstes-info':
+                await this.renderNaechstesInfo(true); // true to repopulate dates
+                break;
+        }
+    }
+
+    async renderRangliste() {
+        this.ranglisteView.innerHTML = '<div class="loader mx-auto"></div>';
+        const { startDate, endDate } = getMonthlyCycleDates();
+        const startDateIso = startDate.toISOString().split('T')[0];
+        const endDateIso = endDate.toISOString().split('T')[0];
+
+        const query = `SELECT Mitarbeiter_ID, SUM(EH) as TotalEH FROM Umsatz WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}' GROUP BY Mitarbeiter_ID HAVING SUM(EH) >= 1`;
+        const activeUsersRaw = await seaTableSqlQuery(query, true);
+        const activeUsersData = mapSqlResults(activeUsersRaw || [], 'Umsatz');
+
+        const enrichedUsers = activeUsersData.map(u => {
+            const mitarbeiterName = u.Mitarbeiter_ID?.[0]?.display_value;
+            if (!mitarbeiterName) {
+                return null; // Ungültigen Datensatz überspringen
+            }
+            const mitarbeiter = db.mitarbeiter.find(m => m.Name === mitarbeiterName);
+            const werber = mitarbeiter ? db.mitarbeiter.find(m => m._id === mitarbeiter.Werber) : null;
+            return {
+                name: mitarbeiter?.Name || 'Unbekannt',
+                rang: mitarbeiter?.Karrierestufe || 'N/A',
+                eh: u.TotalEH,
+                werber: werber?.Name || '-'
+            };
+        }).filter(Boolean); // Entfernt alle null-Einträge
+
+        const groupedByRank = _.groupBy(enrichedUsers, 'rang');
+        const sortedRanks = db.karriereplan.sort((a, b) => b.Hierarchie - a.Hierarchie).map(r => r.Stufe);
+        const sortConfig = this.sortConfig.rangliste;
+        const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+
+        this.ranglisteView.innerHTML = '';
+        for (const rank of sortedRanks) {
+            if (groupedByRank[rank]) {
+                const usersInRank = groupedByRank[rank];
+                usersInRank.sort((a, b) => {
+                    let valA = a[sortConfig.column];
+                    let valB = b[sortConfig.column];
+                    let comparison = 0;
+                    if (typeof valA === 'number' && typeof valB === 'number') {
+                        comparison = valA - valB;
+                    } else {
+                        comparison = collator.compare(String(valA), String(valB));
+                    }
+                    return sortConfig.direction === 'asc' ? comparison : -comparison;
+                });
+
+                const groupEl = document.createElement('div');
+                groupEl.innerHTML = `<h3 class="text-xl font-bold text-skt-blue mb-3">${rank}</h3>`;
+                const table = document.createElement('table');
+                table.className = 'appointments-table';
+                const headers = [
+                    { key: 'name', label: 'Name' },
+                    { key: 'eh', label: 'Einheiten' },
+                    { key: 'werber', label: 'Werber' }
+                ];
+                table.innerHTML = `<thead><tr>${headers.map(h => {
+                    const icon = sortConfig.column === h.key ? (sortConfig.direction === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>') : '<i class="fas fa-sort sort-icon"></i>';
+                    return `<th data-sort-key="${h.key}">${h.label} ${icon}</th>`;
+                }).join('')}</tr></thead>`;
+
+                const tbody = document.createElement('tbody');
+                usersInRank.forEach(user => {
+                    tbody.innerHTML += `<tr><td>${user.name}</td><td>${user.eh.toFixed(2)}</td><td>${user.werber}</td></tr>`;
+                });
+                table.appendChild(tbody);
+                table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('rangliste', e.currentTarget.dataset.sortKey)));
+                groupEl.appendChild(table);
+                this.ranglisteView.appendChild(groupEl);
+            }
+        }
+    }
+
+    async renderFkRennliste() {
+        this.fkRennlisteView.innerHTML = '<div class="loader mx-auto"></div>';
+        const leaders = db.mitarbeiter.filter(m => isUserLeader(m));
+        const { startDate, endDate } = getMonthlyCycleDates();
+        const [allMemberData] = await Promise.all([fetchBulkDashboardData(leaders.map(l => l._id))]);
+
+        const structureDataList = leaders.map(leader => {
+            const structure = calculateGroupOrStructureData(leader._id, 'struktur', allMemberData);
+            return {
+                name: `Struktur ${leader.Name}`,
+                eh: structure.ehCurrent,
+                at: structure.atCurrent,
+                et: structure.etCurrent
+            };
+        });
+
+        const sortConfig = this.sortConfig.fkRennliste;
+        const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+        structureDataList.sort((a, b) => {
+            let valA = a[sortConfig.column];
+            let valB = b[sortConfig.column];
+            let comparison = 0;
+            if (typeof valA === 'number' && typeof valB === 'number') {
+                comparison = valA - valB;
+            } else {
+                comparison = collator.compare(String(valA), String(valB));
+            }
+            return sortConfig.direction === 'asc' ? comparison : -comparison;
+        });
+
+        const table = document.createElement('table');
+        table.className = 'appointments-table';
+        const headers = [
+            { key: 'name', label: 'Struktur' }, { key: 'eh', label: 'Gesamt EH' },
+            { key: 'at', label: 'Gesamt ATs' }, { key: 'et', label: 'Gesamt ETs' }
+        ];
+        table.innerHTML = `<thead><tr>${headers.map(h => {
+            const icon = sortConfig.column === h.key ? (sortConfig.direction === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>') : '<i class="fas fa-sort sort-icon"></i>';
+            return `<th data-sort-key="${h.key}">${h.label} ${icon}</th>`;
+        }).join('')}</tr></thead>`;
+        const tbody = document.createElement('tbody');
+        structureDataList.forEach(s => {
+            tbody.innerHTML += `<tr><td>${s.name}</td><td>${s.eh.toFixed(2)}</td><td>${s.at}</td><td>${s.et}</td></tr>`;
+        });
+        table.appendChild(tbody);
+        table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('fk-rennliste', e.currentTarget.dataset.sortKey)));
+        this.fkRennlisteView.innerHTML = '';
+        this.fkRennlisteView.appendChild(table);
+    }
+
+    async renderNaechstesInfo(repopulateDates = false) {
+        if (repopulateDates) {
+            this.infoabendDateSelect.innerHTML = '';
+            let currentDate = new Date();
+            for (let i = 0; i < 5; i++) {
+                const infoDate = findNextInfoDateAfter(currentDate);
+                const dateString = infoDate.toISOString().split('T')[0];
+                this.infoabendDateSelect.add(new Option(infoDate.toLocaleDateString('de-DE'), dateString));
+                currentDate = new Date(infoDate.getTime() + 24 * 60 * 60 * 1000);
+            }
+        }
+
+        this.infoabendListContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        const selectedDate = this.infoabendDateSelect.value;
+        const scope = this.infoabendScopeFilter.value;
+        const showCancelled = this.infoabendShowCancelled.checked;
+
+        let userIds = new Set([this.currentUserId]);
+        if (scope === 'group') getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
+        else if (scope === 'structure') this.downline.forEach(u => userIds.add(u._id));
+
+        const allETs = db.termine.filter(t => t.Kategorie === 'ET');
+        
+        let filteredTermine = allETs.filter(t => {
+            const userMatch = userIds.has(t.Mitarbeiter_ID);
+            const dateMatch = t.Infoabend && t.Infoabend.startsWith(selectedDate);
+            const cancelledMatch = showCancelled || (t.Status !== 'Storno' && !t.Absage);
+            return userMatch && dateMatch && cancelledMatch;
+        });
+
+        this.renderInfoabendTable(filteredTermine);
+        this.renderFunnelChart(allETs.filter(t => t.Infoabend && t.Infoabend.startsWith(selectedDate)));
+    }
+
+    renderInfoabendTable(termine) {
+        this.infoabendListContainer.innerHTML = '';
+        if (termine.length === 0) {
+            this.infoabendListContainer.innerHTML = '<p class="text-center text-gray-500">Keine Bewerber für diesen Infoabend gefunden.</p>';
+            return;
+        }
+
+        const sortConfig = this.sortConfig.infoabend;
+        const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+        termine.sort((a, b) => {
+            let valA, valB;
+            if (sortConfig.column === 'Mitarbeiter') {
+                valA = db.mitarbeiter.find(m => m._id === a.Mitarbeiter_ID)?.Name || '';
+                valB = db.mitarbeiter.find(m => m._id === b.Mitarbeiter_ID)?.Name || '';
+            } else {
+                valA = a[sortConfig.column];
+                valB = b[sortConfig.column];
+            }
+            let comparison = collator.compare(String(valA), String(valB));
+            return sortConfig.direction === 'asc' ? comparison : -comparison;
+        });
+
+        const table = document.createElement('table');
+        table.className = 'appointments-table';
+        const headers = [
+            { key: 'Terminpartner', label: 'Bewerber' }, { key: 'Status', label: 'Status' },
+            { key: 'Mitarbeiter', label: 'Mitarbeiter' }, { key: 'Hinweis', label: 'Hinweis' }
+        ];
+        table.innerHTML = `<thead><tr>${headers.map(h => {
+            const icon = sortConfig.column === h.key ? (sortConfig.direction === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>') : '<i class="fas fa-sort sort-icon"></i>';
+            return `<th data-sort-key="${h.key}">${h.label} ${icon}</th>`;
+        }).join('')}</tr></thead>`;
+
+        const tbody = document.createElement('tbody');
+        termine.forEach(t => {
+            const mitarbeiter = db.mitarbeiter.find(m => m._id === t.Mitarbeiter_ID);
+            tbody.innerHTML += `<tr><td>${t.Terminpartner}</td><td>${t.Status}</td><td>${mitarbeiter?.Name || '-'}</td><td>${t.Hinweis || '-'}</td></tr>`;
+        });
+        table.appendChild(tbody);
+        table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('infoabend', e.currentTarget.dataset.sortKey)));
+        this.infoabendListContainer.appendChild(table);
+    }
+
+    renderFunnelChart(termine) {
+        const stats = {
+            'Ausgemacht': termine.length,
+            'Gehalten': termine.filter(t => t.Status === 'Gehalten').length,
+            'Eingeladen': termine.filter(t => t.Status === 'Info Eingeladen').length,
+            'Bestätigt': termine.filter(t => t.Status === 'Info Bestätigt').length,
+            'Anwesend': termine.filter(t => t.Status === 'Info Anwesend').length,
+            'Wird Mitarbeiter': termine.filter(t => t.Status === 'Wird Mitarbeiter').length,
+        };
+
+        const funnelSteps = [
+            { label: 'ET Ausgemacht', value: stats.Ausgemacht },
+            { label: 'ET Gehalten', value: stats.Gehalten },
+            { label: 'Info Eingeladen', value: stats.Eingeladen },
+            { label: 'Info Bestätigt', value: stats.Bestätigt },
+            { label: 'Info Anwesend', value: stats.Anwesend },
+            { label: 'Wird Mitarbeiter', value: stats['Wird Mitarbeiter'] }
+        ];
+
+        this.funnelChartContainer.innerHTML = '';
+        const maxValue = Math.max(...funnelSteps.map(s => s.value), 1);
+
+        funnelSteps.forEach(step => {
+            const percentage = (step.value / maxValue) * 100;
+            const stepEl = document.createElement('div');
+            stepEl.className = 'funnel-step';
+            stepEl.style.width = `${percentage}%`;
+            stepEl.innerHTML = `<span class="funnel-label">${step.label}</span><span class="funnel-value">${step.value}</span>`;
+            this.funnelChartContainer.appendChild(stepEl);
+        });
+    }
+}
+
+async function loadAndInitAuswertungView() {
+    const container = dom.auswertungView;
+    try {
+        const response = await fetch("./auswertung.html");
+        if (!response.ok) throw new Error(`Die Datei 'auswertung.html' konnte nicht gefunden werden.`);
+        container.innerHTML = await response.text();
+        if (!auswertungViewInstance) auswertungViewInstance = new AuswertungView();
+        await auswertungViewInstance.init(authenticatedUserData._id);
+    } catch (error) {
+        console.error("Fehler beim Laden der Auswertungs-Ansicht:", error);
+    }
+}
+
 // --- INITIALISIERUNG & EVENT LISTENERS ---
 
 function setupEventListeners() {
@@ -4241,6 +4588,10 @@ function setupEventListeners() {
     switchView("umsatz");
   });
 
+  dom.auswertungHeaderBtn.addEventListener("click", () => {
+    switchView("auswertung");
+  });
+
   // --- Modal Controls ---
   dom.closeHinweisModalBtn.addEventListener("click", () => {
     dom.hinweisModal.classList.remove("visible");
@@ -4275,6 +4626,7 @@ function switchView(viewName) {
   dom.appointmentsView.classList.toggle("hidden", viewName !== "appointments");
   dom.potentialView.classList.toggle("hidden", viewName !== "potential");
   dom.umsatzView.classList.toggle("hidden", viewName !== "umsatz");
+  dom.auswertungView.classList.toggle("hidden", viewName !== "auswertung");
   updateBackButtonVisibility();
 
   if (viewName === "appointments") {
@@ -4283,6 +4635,8 @@ function switchView(viewName) {
     loadAndInitPotentialView();
   } else if (viewName === "umsatz") {
     loadAndInitUmsatzView();
+  } else if (viewName === "auswertung") {
+    loadAndInitAuswertungView();
   }
 }
 
