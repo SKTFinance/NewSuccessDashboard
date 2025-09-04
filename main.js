@@ -5586,11 +5586,27 @@ class StrukturbaumView {
             return;
         }
 
-        const allUserIdsInTree = [this.currentUserId, ...getAllSubordinatesRecursive(this.currentUserId).map(u => u._id)];
-        strukturbaumLog(`Lade Daten für ${allUserIdsInTree.length} Mitarbeiter im Baum...`);
+        // --- Caching Logic ---
+        const { startDate: currentCycleStart } = getMonthlyCycleDates();
+        const { startDate: prevCycleStart } = getPreviousMonthlyCycleDates();
+        const kpiPeriodKey = `${currentCycleStart.getFullYear()}-${currentCycleStart.getMonth()}`;
+        const pqqPeriodKey = `${prevCycleStart.getFullYear()}-${prevCycleStart.getMonth()}`;
+        const cacheKey = `strukturbaum-data-${this.currentUserId}-${kpiPeriodKey}-${pqqPeriodKey}`;
+        const maxAgeMinutes = 60; // Cache for 1 hour
 
-        const dataMap = await this.getBulkDataForTree(allUserIdsInTree);
-        strukturbaumLog('Alle Daten für den Baum geladen.', dataMap);
+        let dataMap = loadFromCache(cacheKey, maxAgeMinutes);
+
+        if (dataMap) {
+            strukturbaumLog('Daten für den Baum aus dem Cache geladen.', dataMap);
+        } else {
+            const allUserIdsInTree = [this.currentUserId, ...getAllSubordinatesRecursive(this.currentUserId).map(u => u._id)];
+            strukturbaumLog(`Lade Daten für ${allUserIdsInTree.length} Mitarbeiter im Baum...`);
+            strukturbaumLog(`Keine gültigen Daten im Cache für Key: ${cacheKey}. Führe Neuberechnung durch.`);
+            dataMap = await this.getBulkDataForTree(allUserIdsInTree);
+            saveToCache(cacheKey, dataMap);
+            strukturbaumLog('Alle Daten für den Baum geladen und im Cache gespeichert.', dataMap);
+        }
+        // --- End Caching Logic ---
 
         const treeHtml = this.buildHtmlTree(rootNode, hierarchy, dataMap);
         this.container.innerHTML = treeHtml;
