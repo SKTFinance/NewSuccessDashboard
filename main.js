@@ -42,6 +42,7 @@ let appointmentsViewInstance = null;
 let potentialViewInstance = null;
 let umsatzViewInstance = null;
 let auswertungViewInstance = null;
+let strukturbaumViewInstance = null;
 let HIERARCHY_CACHE = null;
 let currentOnboardingSubView = "leader-list";
 
@@ -126,6 +127,7 @@ const dom = {
   potentialHeaderBtn: document.getElementById("potential-header-btn"),
   umsatzHeaderBtn: document.getElementById("umsatz-header-btn"),
   auswertungHeaderBtn: document.getElementById("auswertung-header-btn"),
+  strukturbaumHeaderBtn: document.getElementById("strukturbaum-header-btn"),
   auswertungView: document.getElementById("auswertung-view"),
   umsatzView: document.getElementById("umsatz-view"),
   potentialView: document.getElementById("potential-view"),
@@ -133,6 +135,7 @@ const dom = {
   einarbeitungTitle: document.getElementById("einarbeitung-title"),
   traineeOnboardingView: document.getElementById("trainee-onboarding-view"),
   leaderOnboardingView: document.getElementById("leader-onboarding-view"),
+  strukturbaumView: document.getElementById("strukturbaum-view"),
   grundseminarStepsContainer: document.getElementById(
     "grundseminar-steps-container"
   ),
@@ -4869,6 +4872,11 @@ function setupEventListeners() {
     switchView("auswertung");
   });
 
+  dom.strukturbaumHeaderBtn.addEventListener("click", () => {
+    // NEU
+    switchView("strukturbaum");
+  });
+
   // --- Modal Controls ---
   dom.closeHinweisModalBtn.addEventListener("click", () => {
     dom.hinweisModal.classList.remove("visible");
@@ -4927,6 +4935,7 @@ function switchView(viewName) {
   dom.potentialView.classList.toggle("hidden", viewName !== "potential");
   dom.umsatzView.classList.toggle("hidden", viewName !== "umsatz");
   dom.auswertungView.classList.toggle("hidden", viewName !== "auswertung");
+  dom.strukturbaumView.classList.toggle("hidden", viewName !== "strukturbaum");
   updateBackButtonVisibility();
 
   if (viewName === "appointments") {
@@ -4937,6 +4946,8 @@ function switchView(viewName) {
     loadAndInitUmsatzView();
   } else if (viewName === "auswertung") {
     loadAndInitAuswertungView();
+  } else if (viewName === "strukturbaum") {
+    loadAndInitStrukturbaumView();
   }
 }
 
@@ -5526,6 +5537,309 @@ async function calculateAndRenderPQQForCurrentView() {
     _renderSinglePQQGauge(dom.pqqEhIndicator, dom.pqqEhValueDisplay, ehQuote * 100);
     _renderSinglePQQGauge(dom.pqqEtIndicator, dom.pqqEtValueDisplay, etQuote * 100);
     pqqLog('Alle Gauges gerendert.');
+}
+
+// --- NEU: Strukturbaum View Logic ---
+const strukturbaumLog = (message, ...data) => console.log(`%c[Strukturbaum] %c${message}`, 'color: #8e44ad; font-weight: bold;', 'color: black;', ...data);
+
+class StrukturbaumView {
+    constructor() {
+        this.container = null;
+        this.kpiToggle = null;
+        this.zoomInBtn = null;
+        this.zoomOutBtn = null;
+        this.zoomLevelDisplay = null;
+        this.initialized = false;
+        this.currentUserId = null;
+        this.zoomLevel = 1;
+        this.zoomStep = 0.1;
+    }
+
+    _getDomElements() {
+        this.container = document.getElementById('strukturbaum-container');
+        this.kpiToggle = document.getElementById('strukturbaum-kpi-toggle');
+        this.zoomInBtn = document.getElementById('strukturbaum-zoom-in-btn');
+        this.zoomOutBtn = document.getElementById('strukturbaum-zoom-out-btn');
+        this.zoomLevelDisplay = document.getElementById('strukturbaum-zoom-level');
+        return this.container && this.kpiToggle && this.zoomInBtn && this.zoomOutBtn && this.zoomLevelDisplay;
+    }
+
+    async init(userId) {
+        strukturbaumLog(`Modul wird initialisiert für User-ID: ${userId}`);
+        this.currentUserId = userId;
+
+        if (!this._getDomElements()) {
+            strukturbaumLog('!!! FEHLER: Container für Strukturbaum nicht gefunden.');
+            return;
+        }
+
+        await this.render();
+    }
+
+    async render() {
+        this.container.innerHTML = '<div class="loader mx-auto"></div>';
+
+        const hierarchy = buildHierarchy();
+        const rootNode = hierarchy[this.currentUserId];
+        if (!rootNode) {
+            this.container.innerHTML = '<p>Startknoten nicht gefunden.</p>';
+            return;
+        }
+
+        const allUserIdsInTree = [this.currentUserId, ...getAllSubordinatesRecursive(this.currentUserId).map(u => u._id)];
+        strukturbaumLog(`Lade Daten für ${allUserIdsInTree.length} Mitarbeiter im Baum...`);
+
+        const dataMap = await this.getBulkDataForTree(allUserIdsInTree);
+        strukturbaumLog('Alle Daten für den Baum geladen.', dataMap);
+
+        const treeHtml = this.buildHtmlTree(rootNode, hierarchy, dataMap);
+        this.container.innerHTML = treeHtml;
+        this.setupNodeEventListeners();
+        this._updateZoom();
+        this._updateContainerSize(); // Initial size calculation
+    }
+
+    buildHtmlTree(node, hierarchy, dataMap) {
+        if (!node || !node.user) return '';
+
+        const userData = dataMap[node.user._id] || { kpi: {}, pqq: 0 };
+        let childrenHtml = '';
+        if (node.children && node.children.length > 0) {
+            childrenHtml += '<ul>';
+            for (const childId of node.children) {
+                childrenHtml += this.buildHtmlTree(hierarchy[childId], hierarchy, dataMap);
+            }
+            childrenHtml += '</ul>';
+        }
+
+        return `
+            <li>
+                ${this.createNodeHtml(node.user, userData, node.children.length > 0)}
+                ${childrenHtml}
+            </li>
+        `;
+    }
+
+    createNodeHtml(user, data, hasChildren) {
+        const pqqColor = this.getPqqColor(data.pqq);
+        const kpi = data.kpi || {};
+
+        return `
+            <div class="strukturbaum-node" data-userid="${user._id}" style="background-color: ${pqqColor};">
+                <p class="node-name">${user.Name}</p>
+                <p class="node-position">${user.Karrierestufe || 'N/A'}</p>
+                <div class="node-actions">
+                    ${hasChildren ? `<button class="toggle-children-btn" title="Struktur ein-/ausklappen"><i class="fas fa-sitemap"></i></button>` : ''}
+                </div>
+                <div class="node-kpis">
+                    <div><strong>EH:</strong> ${kpi.ehCurrent || 0} / ${kpi.ehGoal || 0}</div>
+                    <div><strong>ET:</strong> ${kpi.etCurrent || 0} / ${kpi.etGoal || 0}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    setupNodeEventListeners() {
+        this.kpiToggle.addEventListener('change', (e) => {
+            this.container.classList.toggle('kpis-visible', e.currentTarget.checked);
+        });
+        this.container.querySelectorAll('.toggle-children-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const li = e.currentTarget.closest('li');
+                const childrenUl = li.querySelector('ul');
+                if (childrenUl) {
+                    childrenUl.classList.toggle('collapsed');
+                    this._updateContainerSize();
+                }
+            });
+        });
+
+        this.zoomInBtn.addEventListener('click', () => {
+            this.zoomLevel += this.zoomStep;
+            this._updateZoom();
+            this._updateContainerSize();
+        });
+        this.zoomOutBtn.addEventListener('click', () => {
+            this.zoomLevel -= this.zoomStep;
+            this._updateZoom();
+            this._updateContainerSize();
+        });
+    }
+
+    getPqqColor(pqq) {
+        if (pqq > 120) return 'var(--color-accent-green)';
+        if (pqq >= 80) return 'var(--color-accent-yellow)';
+        if (pqq > 0) return 'var(--color-accent-red)';
+        return '#ffffff'; // Weiß, wenn keine PQQ vorhanden
+    }
+
+    _updateZoom() {
+        // Clamp zoom level between 50% and 200%
+        this.zoomLevel = Math.max(0.5, Math.min(this.zoomLevel, 2));
+        this.container.style.transform = `scale(${this.zoomLevel})`;
+        this.zoomLevelDisplay.textContent = `${Math.round(this.zoomLevel * 100)}%`;
+    }
+    
+    _updateContainerSize() {
+        // Use a timeout to allow the DOM to update after toggling the class.
+        // The transition duration for `ul` is 0.5s.
+        setTimeout(() => {
+            const allNodes = this.container.querySelectorAll('.strukturbaum-node');
+            if (allNodes.length === 0) {
+                this.container.style.minHeight = 'auto';
+                this.container.style.minWidth = 'auto';
+                return;
+            }
+    
+            let lowestBottom = 0;
+            let minLeft = Infinity;
+            let maxRight = -Infinity;
+
+            const containerTop = this.container.getBoundingClientRect().top;
+    
+            allNodes.forEach(node => {
+                // Check if the node is visible (not inside a collapsed ul)
+                if (node.offsetParent !== null) {
+                    const nodeRect = node.getBoundingClientRect();
+                    lowestBottom = Math.max(lowestBottom, nodeRect.bottom);
+                    minLeft = Math.min(minLeft, nodeRect.left);
+                    maxRight = Math.max(maxRight, nodeRect.right);
+                }
+            });
+    
+            const requiredHeight = lowestBottom - containerTop;
+            const unscaledHeight = (requiredHeight / this.zoomLevel) + 40; // 40px padding
+            this.container.style.minHeight = `${unscaledHeight}px`;
+
+            const requiredWidth = maxRight - minLeft;
+            const unscaledWidth = (requiredWidth / this.zoomLevel) + 40; // 40px padding
+            this.container.style.minWidth = `${unscaledWidth}px`;
+        }, 600); // Increased timeout slightly for safety
+    }
+
+    async getBulkDataForTree(userIds) {
+        const dataMap = {};
+        userIds.forEach(id => dataMap[id] = { kpi: {}, pqq: 0 });
+
+        // 1. Get personal KPI Data (current month) for all users in the tree
+        const kpiData = await fetchBulkDashboardData(userIds);
+        const kpiDataById = _.keyBy(kpiData, 'id');
+
+        // 2. Iterate and calculate final KPIs for each user (personal or aggregated group values)
+        for (const userId of userIds) {
+            const user = findRowById('mitarbeiter', userId);
+            if (!user) continue;
+
+            if (isUserLeader(user)) {
+                // For leaders, calculate aggregated group values
+                const groupMembers = [user, ...getSubordinates(userId, 'gruppe')];
+                const groupMemberIds = new Set(groupMembers.map(m => m._id));
+                
+                let ehCurrent = 0, ehGoal = 0, etCurrent = 0, etGoal = 0;
+                groupMemberIds.forEach(id => {
+                    const memberKpi = kpiDataById[id];
+                    if (memberKpi) {
+                        ehCurrent += memberKpi.ehCurrent || 0;
+                        ehGoal += memberKpi.ehGoal || 0;
+                        etCurrent += memberKpi.etCurrent || 0;
+                        etGoal += memberKpi.etGoal || 0;
+                    }
+                });
+                dataMap[userId].kpi = { ehCurrent, ehGoal, etCurrent, etGoal };
+            } else {
+                // For non-leaders, use their personal values
+                const personalKpi = kpiDataById[userId] || {};
+                dataMap[userId].kpi = { ehCurrent: personalKpi.ehCurrent || 0, ehGoal: personalKpi.ehGoal || 0, etCurrent: personalKpi.etCurrent || 0, etGoal: personalKpi.etGoal || 0 };
+            }
+        }
+
+        // 3. Get PQQ Data (previous month)
+        const { startDate: prevStart, endDate: prevEnd } = getPreviousMonthlyCycleDates();
+        const prevStartDateIso = prevStart.toISOString().split('T')[0];
+        const prevEndDateIso = prevEnd.toISOString().split('T')[0];
+        const prevMonthName = prevStart.toLocaleString("de-DE", { month: "long" });
+        const prevYear = prevStart.getFullYear();
+
+        const allNames = userIds.map(id => findRowById('mitarbeiter', id)?.Name).filter(Boolean);
+        const allNamesSql = allNames.map(name => `'${escapeSql(name)}'`).join(',');
+
+        const ehQuery = `SELECT Mitarbeiter_ID, SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID IN (${allNamesSql}) AND Datum >= '${prevStartDateIso}' AND Datum <= '${prevEndDateIso}' GROUP BY Mitarbeiter_ID`;
+        const etQuery = `SELECT Mitarbeiter_ID, Status FROM Termine WHERE Mitarbeiter_ID IN (${allNamesSql}) AND Kategorie = 'ET' AND Datum >= '${prevStartDateIso}' AND Datum <= '${prevEndDateIso}'`;
+
+        const [ehResultsRaw, etResultsRaw] = await Promise.all([
+            seaTableSqlQuery(ehQuery, true),
+            seaTableSqlQuery(etQuery, true)
+        ]);
+
+        const ehByMitarbeiter = _.groupBy(mapSqlResults(ehResultsRaw, 'Umsatz'), r => r.Mitarbeiter_ID[0].display_value);
+        const etByMitarbeiter = _.groupBy(mapSqlResults(etResultsRaw, 'Termine'), r => r.Mitarbeiter_ID[0].display_value);
+        const plans = db.monatsplanung.filter(p => p.Monat === prevMonthName && p.Jahr === prevYear);
+
+        for (const userId of userIds) {
+            const user = findRowById('mitarbeiter', userId);
+            if (!user) continue;
+
+            let idsForPqqCalc = [userId];
+            if (isUserLeader(user)) {
+                const groupMembers = getSubordinates(userId, 'gruppe');
+                idsForPqqCalc.push(...groupMembers.map(m => m._id));
+            }
+
+            const pqq = await this.calculatePQQForIds(idsForPqqCalc, plans, ehByMitarbeiter, etByMitarbeiter);
+            if (dataMap[userId]) {
+                dataMap[userId].pqq = pqq;
+            }
+        }
+
+        return dataMap;
+    }
+
+    async calculatePQQForIds(userIds, allPlans, allEh, allEt) {
+        const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+
+        let totalUrsprungszielEH = 0;
+        let totalUrsprungszielET = 0;
+        let totalActualEH = 0;
+        let totalActualET = 0;
+
+        for (const id of userIds) {
+            const user = findRowById('mitarbeiter', id);
+            if (!user) continue;
+
+            const plan = allPlans.find(p => p.Mitarbeiter_ID === id);
+            totalUrsprungszielEH += plan?.Ursprungsziel_EH || 0;
+            totalUrsprungszielET += plan?.Ursprungsziel_ET || 0;
+
+            totalActualEH += allEh[user.Name]?.[0]?.totalEH || 0;
+            const userEts = allEt[user.Name] || [];
+            totalActualET += userEts.filter(t => ET_STATUS_AUSGEMACHT.includes(t.Status)).length;
+        }
+
+        let ehQuote = 0;
+        if (totalActualEH > 0) ehQuote = totalUrsprungszielEH / totalActualEH;
+        else if (totalUrsprungszielEH === 0) ehQuote = 1;
+
+        let etQuote = 0;
+        if (totalActualET > 0) etQuote = totalUrsprungszielET / totalActualET;
+        else if (totalUrsprungszielET === 0) etQuote = 1;
+
+        return ((ehQuote + etQuote) / 2) * 100;
+    }
+}
+
+async function loadAndInitStrukturbaumView() {
+    const container = dom.strukturbaumView;
+    try {
+        const response = await fetch("./strukturbaum.html");
+        if (!response.ok) throw new Error(`Die Datei 'strukturbaum.html' konnte nicht gefunden werden.`);
+        container.innerHTML = await response.text();
+        if (!strukturbaumViewInstance) strukturbaumViewInstance = new StrukturbaumView();
+        await strukturbaumViewInstance.init(authenticatedUserData._id);
+    } catch (error) {
+        console.error("Fehler beim Laden der Strukturbaum-Ansicht:", error);
+        container.innerHTML = `<p class="text-red-500 text-center">${error.message}</p>`;
+    }
 }
 
 // --- User Data Editing Modal ---

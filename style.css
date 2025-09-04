@@ -717,3 +717,166 @@ details[open] > summary::before { transform: rotate(180deg); }
 #pqq-view.expanded #pqq-chevron {
     transform: rotate(180deg);
 }
+
+/* NEU: Stellt sicher, dass der Scroll-Container den Baum zentriert, wenn er klein ist, und linksbündig anzeigt, wenn er zu breit wird. */
+#strukturbaum-module-root {
+    /* Flexbox entfernt, um das vertikale Layout wiederherzustellen und das Problem mit der Kopfzeile zu beheben. */
+}
+
+/* --- NEU: Stile für den Strukturbaum --- */
+.strukturbaum {
+    display: inline-block; /* Erlaubt Zentrierung durch text-align des Parents */
+    white-space: nowrap;
+    text-align: center;
+    transform-origin: top center; /* Wichtig für das Zoomen */
+    transition: transform 0.3s ease-in-out;
+    padding: 20px;
+}
+.strukturbaum ul {
+    padding-top: 20px;
+    position: relative;
+    transition: all 0.5s;
+}
+
+/* KORREKTUR: Verschachtelte ULs absolut positionieren, um horizontales Verschieben zu verhindern */
+.strukturbaum li > ul {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+}
+.strukturbaum li {
+    display: inline-block;
+    text-align: center;
+    list-style-type: none;
+    position: relative;
+    padding: 20px 5px 0 5px;
+    vertical-align: top; /* NEU: Verhindert das Verrutschen von Geschwisterknoten */
+    transition: all 0.5s;
+}
+
+/* Linien zwischen den Knoten */
+.strukturbaum li::before, .strukturbaum li::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 50%;
+    border-top: 2px solid #ccc;
+    width: 50%;
+    height: 20px;
+}
+.strukturbaum li::after {
+    right: auto;
+    left: 50%;
+    border-left: 2px solid #ccc;
+}
+.strukturbaum li:only-child::after, .strukturbaum li:only-child::before {
+    display: none;
+}
+.strukturbaum li:only-child {
+    padding-top: 0;
+}
+.strukturbaum li:first-child::before, .strukturbaum li:last-child::after {
+    border: 0 none;
+}
+.strukturbaum li:last-child::before {
+    border-right: 2px solid #ccc;
+    border-radius: 0 5px 0 0;
+}
+.strukturbaum li:first-child::after {
+    border-radius: 5px 0 0 0;
+}
+.strukturbaum ul ul::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    border-left: 2px solid #ccc;
+    width: 0;
+    height: 20px;
+}
+
+/* Knoten-Styling */
+.strukturbaum-node {
+    border: 1px solid #ccc;
+    padding: 10px 15px;
+    text-decoration: none;
+    color: var(--color-skt-blue);
+    background-color: #fff;
+    display: inline-block;
+    border-radius: 8px;
+    transition: all 0.3s;
+    min-width: 200px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    cursor: pointer;
+}
+.strukturbaum-node:hover {
+    background-color: #f0f0f0;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 12px rgba(0,0,0,0.1);
+}
+.strukturbaum-node .node-name {
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+.strukturbaum-node .node-position {
+    font-size: 0.85rem;
+    color: var(--color-skt-blue-light);
+    margin-top: 4px;
+}
+.strukturbaum-node .node-kpis {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease-in-out, margin-top 0.4s ease-in-out, opacity 0.4s ease-in-out;
+    font-size: 0.8rem;
+    text-align: left;
+    margin-top: 0;
+    opacity: 0;
+}
+/* NEU: Globaler KPI-Schalter */
+.strukturbaum.kpis-visible .strukturbaum-node .node-kpis {
+    max-height: 100px;
+    margin-top: 10px;
+    opacity: 1;
+}
+.strukturbaum-node .node-actions {
+    margin-top: 8px;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+.strukturbaum-node .node-actions button {
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.strukturbaum-node .node-actions button:hover {
+    background-color: #e0e0e0;
+}
+.strukturbaum ul.collapsed {
+    display: none;
+}
+
+/* NEU: Stile für Zoom-Buttons */
+.zoom-btn {
+    background-color: white;
+    border: 1px solid transparent;
+    color: var(--color-skt-blue);
+    font-weight: bold;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.zoom-btn:hover {
+    background-color: #e9e9e9;
+}
