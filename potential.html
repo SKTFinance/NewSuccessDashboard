@@ -6,11 +6,20 @@
 
     <!-- Filter und Aktionen -->
     <div class="bg-skt-grey-light p-4 rounded-xl mb-6 border border-gray-200">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <!-- Suchfeld -->
             <div>
                 <label for="potential-search-filter" class="sr-only">Suchen</label>
                 <input type="text" id="potential-search-filter" placeholder="Potential suchen..." class="modern-input">
+            </div>
+            <!-- Scope Filter -->
+            <div>
+                <label for="potential-scope-filter" class="block text-sm font-medium text-gray-700 mb-1">Anzeigen für</label>
+                <select id="potential-scope-filter" class="modern-select">
+                    <option value="personal">Meine Potentiale</option>
+                    <option value="group">Meine Gruppe</option>
+                    <option value="structure">Meine Struktur</option>
+                </select>
             </div>
             <!-- Aktionsbuttons -->
             <div class="flex justify-end space-x-3">
@@ -20,6 +29,7 @@
                 <button id="import-excel-btn" class="bg-skt-blue text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-light transition-colors flex items-center justify-center">
                     <i class="fas fa-file-upload mr-2"></i>Import
                 </button>
+                <input type="file" id="potential-import-input" class="hidden" accept=".csv">
                 <button id="add-potential-btn" class="bg-skt-green-accent text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-green-700 transition-colors flex items-center justify-center">
                     <i class="fas fa-plus mr-2"></i>Neuer Kontakt
                 </button>

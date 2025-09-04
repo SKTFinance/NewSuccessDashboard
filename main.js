@@ -586,55 +586,50 @@ async function updateSingleLink(baseTableName, baseRowId, linkColumnName, otherR
 }
 
 async function seaTableUpdateUmsatzRow(tableName, rowId, rowData) {
-    umsatzLog("[UPDATE-UMSATZ] Starting update-umsatz process.");
+    umsatzLog("[UPDATE-UMSATZ-SQL] Starting SQL-based update process.");
     if (!seaTableAccessToken || !apiGatewayUrl) return false;
 
-    const linkColumns = {
-        Mitarbeiter_ID: COLUMN_MAPS.umsatz.Mitarbeiter_ID,
-        Gesellschaft_ID: COLUMN_MAPS.umsatz.Gesellschaft_ID,
-        Produkt_ID: COLUMN_MAPS.umsatz.Produkt_ID
-    };
-    const linkData = {};
-    const rowDataForUpdate = { ...rowData };
-
-    for (const name in linkColumns) {
-        const colKey = linkColumns[name];
-        if (Object.prototype.hasOwnProperty.call(rowDataForUpdate, colKey)) {
-            linkData[name] = rowDataForUpdate[colKey]?.[0] || null;
-            delete rowDataForUpdate[colKey];
-        }
-    }
-
     const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
+    if (!tableMap) {
+        console.error(`[UPDATE-UMSATZ-SQL] No column map for table: ${tableName}`);
+        return false;
+    }
+
+    const linkColumnKeys = [
+        COLUMN_MAPS.umsatz.Mitarbeiter_ID,
+        COLUMN_MAPS.umsatz.Gesellschaft_ID,
+        COLUMN_MAPS.umsatz.Produkt_ID
+    ];
+
     const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
-    const rowDataWithNames = {};
-    for (const key in rowDataForUpdate) {
-        const name = reversedMap[key];
-        if (name && name !== '_id') {
-            rowDataWithNames[name] = (rowDataForUpdate[key] === undefined || rowDataForUpdate[key] === '') ? null : rowDataForUpdate[key];
+    let allUpdatesSucceeded = true;
+
+    for (const key in rowData) {
+        if (!Object.prototype.hasOwnProperty.call(rowData, key)) continue;
+
+        const value = rowData[key];
+        const colName = reversedMap[key];
+
+        if (!colName || colName === '_id') continue;
+
+        if (linkColumnKeys.includes(key)) {
+            const linkRowId = value && value[0] ? value[0] : null;
+            const success = await updateSingleLink(tableName, rowId, colName, linkRowId ? [linkRowId] : []);
+            if (!success) { allUpdatesSucceeded = false; break; }
+        } else {
+            const colMeta = METADATA.tables.find(t => t.name.toLowerCase() === tableName.toLowerCase())?.columns.find(c => c.key === key);
+            let formattedValue;
+            if (value === null || value === undefined || value === '') { formattedValue = "NULL"; }
+            else if (colMeta && colMeta.type === 'number') { const numValue = parseFloat(value); formattedValue = isNaN(numValue) ? "NULL" : numValue; }
+            else if (typeof value === 'boolean') { formattedValue = value ? "true" : "false"; }
+            else { formattedValue = `'${escapeSql(String(value))}'`; }
+
+            const sql = `UPDATE \`${tableName}\` SET \`${colName}\` = ${formattedValue} WHERE \`_id\` = '${rowId}'`;
+            const result = await seaTableSqlQuery(sql, false);
+            if (result === null) { allUpdatesSucceeded = false; break; }
         }
     }
-
-    let mainUpdateSuccess = true;
-    if (Object.keys(rowDataWithNames).length > 0) {
-        try {
-            const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
-            const body = { table_name: tableName, row_id: rowId, row: rowDataWithNames };
-            const response = await fetch(url, { method: "PUT", headers: { Authorization: `Bearer ${seaTableAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
-            if (!response.ok) throw new Error(`Main row update failed: ${await response.text()}`);
-        } catch (error) {
-            console.error("[UPDATE-UMSATZ] Step 1 FAILED:", error);
-            mainUpdateSuccess = false;
-        }
-    }
-
-    if (!mainUpdateSuccess) return false;
-
-    for (const colName in linkData) {
-        await updateSingleLink(tableName, rowId, colName, linkData[colName] ? [linkData[colName]] : []);
-    }
-
-    return true;
+    return allUpdatesSucceeded;
 }
 
 async function seaTableAddUmsatzRow(tableName, rowData) {
@@ -680,13 +675,19 @@ async function seaTableAddUmsatzRow(tableName, rowData) {
         return false;
     }
 
+    let allLinksSuccess = true;
     for (const colName in linkData) {
         if (linkData[colName]) {
-            await updateSingleLink(tableName, newRowId, colName, [linkData[colName]]);
+            const success = await updateSingleLink(tableName, newRowId, colName, [linkData[colName]]);
+            if (!success) {
+                allLinksSuccess = false;
+                umsatzLog(`[ADD-UMSATZ] Link creation for ${colName} failed.`);
+                break;
+            }
         }
     }
 
-    return true;
+    return allLinksSuccess;
 }
 // --- DATA NORMALIZATION & MAPPING ---
 function normalizeAllData() {
@@ -2745,10 +2746,40 @@ class AppointmentsView {
         });
 
         // Event Listeners für bedingte Felder im Modal
-        this.form.querySelector('#appointment-category').addEventListener('change', (e) => this.toggleConditionalFields(e.target.value));
+        this.form.querySelector('#appointment-category').addEventListener('change', (e) => {
+            const newCategory = e.target.value;
+            this.toggleConditionalFields(newCategory);
+            this._updateStatusDropdown(newCategory);
+        });
         this.form.querySelector('#appointment-cancellation').addEventListener('change', (e) => {
             this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !e.target.checked);
         });
+    }
+
+    _updateStatusDropdown(category, currentStatus = null) {
+        const statusSelect = this.form.querySelector('#appointment-status');
+        const oldValue = currentStatus || statusSelect.value;
+        statusSelect.innerHTML = '';
+
+        const terminMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'termine');
+        const allStatuses = terminMeta.columns.find(c => c.name === 'Status').data.options.map(o => o.name);
+      //GROssbuchstaben! Also Weiterer ET, Weiterer BT, Offen, Verschoben usw.
+        const baseStati = ['Ausgemacht', 'Gehalten', 'Verschoben', 'Offen'];
+        let allowedStati = [...baseStati];
+
+        if (category === 'BT') {
+            allowedStati.push('Weiterer BT');
+        } else if (category === 'ET') {
+            allowedStati.push('Weiterer ET', 'Info Eingeladen', 'Info Bestätigt', 'Info Anwesend', 'Wird Mitarbeiter');
+        }
+        
+        const finalStati = allStatuses.filter(s => allowedStati.includes(s) || s === 'Storno');
+
+        finalStati.forEach(stat => statusSelect.add(new Option(stat, stat)));
+
+        if (finalStati.includes(oldValue)) {
+            statusSelect.value = oldValue;
+        }
     }
 
     _handleSort(columnKey) {
@@ -2762,21 +2793,21 @@ class AppointmentsView {
     }
 
     _getStatusColorClass(termin) {
-        if (termin.Status === 'Storno' || termin.Absage === true) {
+        if (termin.Absage === true || termin.Status === 'Storno') {
             return 'border-skt-red-accent';
         }
         switch (termin.Status) {
-            case 'Gehalten': return 'border-skt-green-accent';
-            case 'Ausgemacht':
-            case 'weiterer BT':
-            case 'weiterer ET': return 'border-skt-grey-medium';
+            case 'Ausgemacht': return 'border-skt-green-accent'; // Grün
             case 'Verschoben':
-            case 'offen': return 'border-skt-orange-accent';
-            case 'Info Eingeladen': return 'border-skt-yellow-accent';
-            case 'Info Bestätigt': return 'border-skt-blue-accent';
-            case 'Info Anwesend': return 'border-accent-purple';
-            case 'Wird Mitarbeiter': return 'border-skt-gold-accent';
-            default: return 'border-gray-300';
+            case 'offen': return 'border-skt-red-accent'; // Rot
+            case 'weiterer BT':
+            case 'weiterer ET': return 'border-skt-blue-accent'; // Blau
+            case 'Wird Mitarbeiter': return 'border-skt-gold-accent'; // Gold
+            case 'Info Eingeladen': return 'border-skt-yellow-accent'; // Gelb
+            case 'Info Bestätigt':
+            case 'Info Anwesend': return 'border-accent-purple'; // Lila
+            case 'Gehalten': return 'border-skt-grey-medium'; // Neutrales Grau für erledigt
+            default: return 'border-gray-300'; // Standard
         }
     }
 
@@ -3001,6 +3032,8 @@ class AppointmentsView {
                 this.form.querySelector('#appointment-cancellation').checked = termin.Absage || false;
                 this.form.querySelector('#appointment-cancellation-reason').value = termin.Absagegrund || '';
 
+                this._updateStatusDropdown(termin.Kategorie, termin.Status);
+
             } else { // Add mode
                 appointmentsLog('Entering add mode.');
                 title.textContent = 'Termin anlegen';
@@ -3014,8 +3047,10 @@ class AppointmentsView {
                 } else if (this.currentTab === 'recruiting' || this.currentTab === 'netzwerk') {
                     categorySelect.value = 'ET';
                 }
+                this._updateStatusDropdown(categorySelect.value);
             }
 
+            
             this.toggleConditionalFields(categorySelect.value);
             this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !this.form.querySelector('#appointment-cancellation').checked);
             
@@ -3164,6 +3199,7 @@ class PotentialView {
         this.scheduleModal = null;
         this.scheduleForm = null;
         this.searchInput = null;
+        this.scopeFilter = null;
 
         this.initialized = false;
         this.currentUserId = null;
@@ -3179,12 +3215,14 @@ class PotentialView {
         this.scheduleModal = document.getElementById('schedule-modal');
         this.scheduleForm = document.getElementById('schedule-form');
         this.searchInput = document.getElementById('potential-search-filter');
-        return this.listContainer && this.modal && this.form && this.scheduleModal && this.scheduleForm && this.searchInput;
+        this.scopeFilter = document.getElementById('potential-scope-filter');
+        return this.listContainer && this.modal && this.form && this.scheduleModal && this.scheduleForm && this.searchInput && this.scopeFilter;
     }
 
     async init(userId) {
         potentialLog(`Modul wird initialisiert für User-ID: ${userId}`);
         this.currentUserId = userId;
+        this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
 
         if (!this._getDomElements()) {
             potentialLog('!!! FEHLER: Benötigte DOM-Elemente für die Potential-Ansicht wurden nicht gefunden.');
@@ -3194,8 +3232,8 @@ class PotentialView {
         // NEU: Gib die verfügbaren Spaltennamen aus, um bei der Fehlersuche zu helfen.
         console.log('Verfügbare Spalten in der "Termine" Tabelle:', SKT_APP.COLUMN_MAPS.termine);
 
-        this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
         this.downline.sort((a, b) => a.Name.localeCompare(b.Name));
+        this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.authenticatedUserData));
 
         if (!this.initialized) {
             potentialLog('Erstmalige Initialisierung: Event-Listener werden eingerichtet.');
@@ -3209,7 +3247,27 @@ class PotentialView {
     async fetchAndRender() {
         this.listContainer.innerHTML = '<div class="loader mx-auto"></div>';
         try {
-            const query = "SELECT * FROM `Termine` WHERE `Datum` IS NULL";
+            const scope = this.scopeFilter.value;
+            let userIds = new Set();
+            switch (scope) {
+                case 'personal':
+                    userIds.add(this.currentUserId);
+                    break;
+                case 'group':
+                    userIds.add(this.currentUserId);
+                    SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
+                    break;
+                case 'structure':
+                    userIds.add(this.currentUserId);
+                    this.downline.forEach(u => userIds.add(u._id));
+                    break;
+            }
+
+            const userNames = Array.from(userIds).map(id => SKT_APP.findRowById('mitarbeiter', id)?.Name).filter(Boolean);
+            if (userNames.length === 0) { this.allPotentials = []; this.render(); return; }
+            const userNamesSql = userNames.map(name => `'${SKT_APP.escapeSql(name)}'`).join(',');
+
+            const query = `SELECT * FROM \`Termine\` WHERE \`Datum\` IS NULL AND \`Mitarbeiter_ID\` IN (${userNamesSql})`;
             potentialLog('Sende SQL-Abfrage für Potentiale...');
             const potentialsRaw = await SKT_APP.seaTableSqlQuery(query, true);
             this.allPotentials = SKT_APP.mapSqlResults(potentialsRaw, 'Termine');
@@ -3274,11 +3332,18 @@ class PotentialView {
     setupEventListeners() {
         document.getElementById('add-potential-btn').addEventListener('click', () => this.openModal());
         document.getElementById('download-template-btn').addEventListener('click', () => this.downloadExcelTemplate());
+        
+        const importBtn = document.getElementById('import-excel-btn');
+        const fileInput = document.getElementById('potential-import-input');
+        importBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => this.handleFileImport(e));
+
         document.getElementById('import-excel-btn').addEventListener('click', () => {
-            alert('Die Import-Funktion wird in Kürze verfügbar sein. Bitte verwenden Sie die heruntergeladene Vorlage.');
-            // Hier würde die Logik zum Öffnen des Datei-Dialogs folgen
+            document.getElementById('potential-import-input').click();
         });
         
+        this.scopeFilter.addEventListener('change', () => this.fetchAndRender());
+
         this.searchInput.addEventListener('input', _.debounce(e => {
             this.filterText = e.target.value;
             this.render();
@@ -3489,6 +3554,80 @@ class PotentialView {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    }
+
+    async handleFileImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        potentialLog(`Importiere Datei: ${file.name}`);
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const text = e.target.result;
+            const rows = text.split('\n').slice(1); // Header überspringen
+            const potentialsToCreate = [];
+            const headers = text.split('\n')[0].trim().replace(/\r/g, "").split(';');
+
+            const columnMapping = {
+                "Terminpartner": "Terminpartner",
+                "Telefonnummer": "Telefonnummer",
+                "Email": "Email",
+                "Rating_Kunde": "Rating_Kunde",
+                "Rating_MA": "Rating_MA",
+                "Rating_NT": "Rating_NT",
+                "Hinweis": "Hinweis",
+                "Kontaktiert": "Status" // CSV "Kontaktiert" auf DB "Status" mappen
+            };
+
+            for (const row of rows) {
+                if (row.trim() === '') continue;
+                const values = row.trim().split(';');
+                const potential = {};
+                headers.forEach((header, index) => {
+                    const dbColumn = columnMapping[header];
+                    if (dbColumn) {
+                        potential[dbColumn] = values[index] || null;
+                    }
+                });
+                potentialsToCreate.push(potential);
+            }
+
+            if (potentialsToCreate.length > 0) {
+                potentialLog(`Gefunden: ${potentialsToCreate.length} Potentiale zum Importieren.`);
+                const success = await this.bulkAddPotentials(potentialsToCreate);
+                if (success) {
+                    alert(`${potentialsToCreate.length} Kontakte erfolgreich importiert!`);
+                    await this.fetchAndRender();
+                } else {
+                    alert('Fehler beim Importieren der Kontakte.');
+                }
+            }
+        };
+        reader.readAsText(file, 'UTF-8');
+        event.target.value = ''; // File-Input zurücksetzen
+    }
+
+    async bulkAddPotentials(potentials) {
+        potentialLog('Füge Potentiale einzeln hinzu, um Verknüpfungen zu setzen...');
+        let successCount = 0;
+        for (const potential of potentials) {
+            const rowData = {
+                [SKT_APP.COLUMN_MAPS.termine.Terminpartner]: potential.Terminpartner,
+                [SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID]: [this.currentUserId],
+                [SKT_APP.COLUMN_MAPS.termine.Telefonnummer]: potential.Telefonnummer,
+                [SKT_APP.COLUMN_MAPS.termine.Email]: potential.Email,
+                [SKT_APP.COLUMN_MAPS.termine.Rating_Kunde]: parseFloat(potential.Rating_Kunde) || null,
+                [SKT_APP.COLUMN_MAPS.termine.Rating_MA]: parseFloat(potential.Rating_MA) || null,
+                [SKT_APP.COLUMN_MAPS.termine.Rating_NT]: parseFloat(potential.Rating_NT) || null,
+                [SKT_APP.COLUMN_MAPS.termine.Status]: potential.Status,
+                [SKT_APP.COLUMN_MAPS.termine.Hinweis]: potential.Hinweis,
+                [SKT_APP.COLUMN_MAPS.termine.Datum]: null,
+            };
+            const success = await SKT_APP.seaTableAddRow('Termine', rowData);
+            if (success) successCount++;
+        }
+        potentialLog(`${successCount} von ${potentials.length} Potentialen erfolgreich importiert.`);
+        return successCount > 0; // Gibt true zurück, wenn mindestens einer erfolgreich war
     }
 }
 
