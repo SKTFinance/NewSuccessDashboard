@@ -167,6 +167,11 @@ const dom = {
   cancelAddUserBtn: document.getElementById("cancel-add-user-btn"),
   cancelAddUserBtn2: document.getElementById("cancel-add-user-btn-2"),
   saveNewUserBtn: document.getElementById("save-new-user-btn"),
+  planningBtn: document.getElementById("planning-btn"),
+  planningModal: document.getElementById("planning-modal"),
+  planningForm: document.getElementById("planning-form"),
+  savePlanningBtn: document.getElementById("save-planning-btn"),
+  cancelPlanningBtn: document.getElementById("cancel-planning-btn"),
   nextInfoDate: document.getElementById("next-info-date"),
 };
 
@@ -4879,6 +4884,15 @@ function setupEventListeners() {
   dom.addUserForm.addEventListener("submit", (e) => { e.preventDefault(); saveNewUser(); });
   dom.cancelAddUserBtn.addEventListener("click", closeAddUserModal);
   dom.cancelAddUserBtn2.addEventListener("click", closeAddUserModal);
+
+  dom.planningBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    closeSettingsMenu();
+    openPlanningModal();
+  });
+  dom.planningForm.addEventListener("submit", (e) => { e.preventDefault(); savePlanningData(); });
+  dom.cancelPlanningBtn.addEventListener("click", closePlanningModal);
+  document.getElementById('cancel-planning-btn-2').addEventListener('click', closePlanningModal);
 }
 
 function switchView(viewName) {
@@ -5485,6 +5499,128 @@ async function saveNewUser() {
         saveBtn.disabled = false;
         saveBtn.textContent = 'Nutzer anlegen';
     }
+}
+
+// --- Planning Modal Logic ---
+function openPlanningModal() {
+    const userSelect = document.getElementById('planning-user-select');
+    const ehInput = document.getElementById('planning-eh-goal');
+    const etInput = document.getElementById('planning-et-goal');
+
+    dom.planningForm.reset();
+    clearChildren(userSelect);
+
+    const structureUsers = [authenticatedUserData, ...getAllSubordinatesRecursive(authenticatedUserData._id)];
+    structureUsers.sort((a, b) => a.Name.localeCompare(b.Name));
+
+    structureUsers.forEach(user => {
+        userSelect.add(new Option(user.Name, user._id));
+    });
+
+    userSelect.addEventListener('change', (e) => {
+        loadPlanningDataForUser(e.target.value);
+    });
+
+    // Initial load for the first user in the list
+    if (structureUsers.length > 0) {
+        loadPlanningDataForUser(structureUsers[0]._id);
+    }
+
+    const { startDate } = getMonthlyCycleDates();
+    const monthName = startDate.toLocaleString("de-DE", { month: "long" });
+    const year = startDate.getFullYear();
+    document.getElementById('planning-modal-title').textContent = `Planung für ${monthName} ${year}`;
+
+    dom.planningModal.classList.add('visible');
+    document.body.classList.add('modal-open');
+}
+
+function loadPlanningDataForUser(userId) {
+    const ehInput = document.getElementById('planning-eh-goal');
+    const etInput = document.getElementById('planning-et-goal');
+    const { startDate } = getMonthlyCycleDates();
+    const monthName = startDate.toLocaleString("de-DE", { month: "long" });
+    const year = startDate.getFullYear();
+
+    const existingPlan = db.monatsplanung.find(p =>
+        p.Mitarbeiter_ID === userId &&
+        p.Monat === monthName &&
+        p.Jahr === year
+    );
+
+    if (existingPlan) {
+        ehInput.value = existingPlan.EH_Ziel || 0;
+        etInput.value = existingPlan.ET_Ziel || 0;
+    } else {
+        ehInput.value = 0;
+        etInput.value = 0;
+    }
+}
+
+function closePlanningModal() {
+    dom.planningModal.classList.remove('visible');
+    document.body.classList.remove('modal-open');
+}
+
+async function savePlanningData() {
+    dom.savePlanningBtn.disabled = true;
+    dom.savePlanningBtn.textContent = 'Speichern...';
+
+    const userId = document.getElementById('planning-user-select').value;
+    const ehGoal = parseFloat(document.getElementById('planning-eh-goal').value) || 0;
+    const etGoal = parseInt(document.getElementById('planning-et-goal').value) || 0;
+
+    const { startDate } = getMonthlyCycleDates();
+    const monthName = startDate.toLocaleString("de-DE", { month: "long" });
+    const year = startDate.getFullYear();
+
+    const existingPlan = db.monatsplanung.find(p =>
+        p.Mitarbeiter_ID === userId &&
+        p.Monat === monthName &&
+        p.Jahr === year
+    );
+
+    let success = false;
+    if (existingPlan) {
+        // Update existing plan
+        const sql = `UPDATE \`Monatsplanung\` SET \`EH_Ziel\` = ${ehGoal}, \`ET_Ziel\` = ${etGoal} WHERE \`_id\` = '${existingPlan._id}'`;
+        const result = await seaTableSqlQuery(sql, false);
+        success = result !== null;
+    } else {
+        // Create new plan
+        const rowData = {
+            [COLUMN_MAPS.monatsplanung.Monat]: monthName,
+            [COLUMN_MAPS.monatsplanung.Jahr]: year,
+            [COLUMN_MAPS.monatsplanung.EH_Ziel]: ehGoal,
+            [COLUMN_MAPS.monatsplanung.ET_Ziel]: etGoal,
+            [COLUMN_MAPS.monatsplanung.Mitarbeiter_ID]: [userId],
+        };
+        success = await addPlanningRowToDatabase('Monatsplanung', rowData);
+    }
+
+    if (success) {
+        localStorage.removeItem(CACHE_PREFIX + 'monatsplanung');
+        await loadAllData();
+        await fetchAndRenderDashboard(currentlyViewedUserData._id);
+        closePlanningModal();
+    } else {
+        alert('Fehler beim Speichern der Plandaten.');
+    }
+
+    dom.savePlanningBtn.disabled = false;
+    dom.savePlanningBtn.textContent = 'Speichern';
+}
+
+async function addPlanningRowToDatabase(tableName, rowData) {
+    const rowDataForCreation = { ...rowData };
+    const mitarbeiterId = rowDataForCreation[COLUMN_MAPS.monatsplanung.Mitarbeiter_ID][0];
+    delete rowDataForCreation[COLUMN_MAPS.monatsplanung.Mitarbeiter_ID];
+
+    const newRowId = await seaTableAddRow(tableName, rowDataForCreation);
+    if (!newRowId) return false;
+
+    const success = await updateSingleLink(tableName, newRowId, 'Mitarbeiter_ID', [mitarbeiterId]);
+    return success;
 }
 
 // --- START ---

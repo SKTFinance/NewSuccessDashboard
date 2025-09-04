@@ -95,6 +95,7 @@
                              <a href="#" id="superuser-btn" class="hidden block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-users-cog w-5 mr-2"></i>Gesamtansicht</a>
                              <a href="#" id="money-view-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-euro-sign w-5 mr-2"></i>Geld-Ansicht</a>
                              <a href="#" id="edit-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-edit w-5 mr-2"></i>Personendaten</a>
+                             <a href="#" id="planning-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-tasks w-5 mr-2"></i>Planung</a>
                              <a href="#" id="add-new-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-plus w-5 mr-2"></i>Neuer Nutzer</a>
                              <a href="#" id="clear-cache-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sync-alt w-5 mr-2"></i>Cache leeren</a>
                              <a href="#" id="logout-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-right-from-bracket w-5 mr-2"></i>Logout</a>
@@ -419,6 +420,31 @@
                  <div class="pt-4 flex justify-end space-x-3">
                      <button type="button" id="cancel-add-user-btn-2" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button>
                      <button type="submit" id="save-new-user-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors">Nutzer anlegen</button>
+                 </div>
+             </form>
+        </div>
+    </div>
+    <!-- NEU: Modal für die Monatsplanung -->
+    <div id="planning-modal" class="modal-overlay">
+        <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative">
+             <button id="cancel-planning-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
+             <h3 id="planning-modal-title" class="text-2xl font-bold text-skt-blue mb-6">Monatsplanung bearbeiten</h3>
+             <form id="planning-form" class="space-y-4">
+                 <div>
+                     <label for="planning-user-select" class="block text-sm font-medium text-gray-700">Mitarbeiter</label>
+                     <select id="planning-user-select" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></select>
+                 </div>
+                 <div>
+                     <label for="planning-eh-goal" class="block text-sm font-medium text-gray-700">EH Ziel</label>
+                     <input type="number" id="planning-eh-goal" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                 </div>
+                 <div>
+                     <label for="planning-et-goal" class="block text-sm font-medium text-gray-700">ET Ziel</label>
+                     <input type="number" id="planning-et-goal" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                 </div>
+                 <div class="pt-4 flex justify-end space-x-3">
+                     <button type="button" id="cancel-planning-btn-2" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button>
+                     <button type="submit" id="save-planning-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors">Speichern</button>
                  </div>
              </form>
         </div>
