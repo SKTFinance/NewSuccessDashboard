@@ -2642,6 +2642,7 @@ class AppointmentsView {
         table.className = 'appointments-table';
 
         const isUmsatz = this.currentTab === 'umsatz';
+        const isRecruiting = this.currentTab === 'recruiting';
         const columns = [
             { key: 'Datum', label: 'Datum' },
             { key: 'Terminpartner', label: isUmsatz ? 'Kunde' : 'Bewerber' },
@@ -2650,6 +2651,9 @@ class AppointmentsView {
         ];
         if (isUmsatz) {
             columns.push({ key: 'Umsatzprognose', label: 'Umsatzprognose' });
+        }
+        if (isRecruiting) {
+            columns.push({ key: 'Infoabend', label: 'Infoabend' });
         }
 
         const thead = document.createElement('thead');
@@ -2679,7 +2683,7 @@ class AppointmentsView {
                 let value = termin[col.key];
                 if (col.key === 'Mitarbeiter_ID') {
                     value = termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
-                } else if (col.key === 'Datum') {
+                } else if (col.key === 'Datum' || col.key === 'Infoabend') {
                     value = value ? new Date(value).toLocaleDateString('de-DE') : '-';
                 } else if (col.key === 'Umsatzprognose') {
                     value = value ? value.toLocaleString('de-DE') + ' EH' : '-';
@@ -2748,8 +2752,15 @@ class AppointmentsView {
         // Event Listeners für bedingte Felder im Modal
         this.form.querySelector('#appointment-category').addEventListener('change', (e) => {
             const newCategory = e.target.value;
-            this.toggleConditionalFields(newCategory);
+            const isNew = !this.form.querySelector('#appointment-id').value;
+            this.toggleConditionalFields(newCategory, isNew);
             this._updateStatusDropdown(newCategory);
+
+            // NEU: Infoabend-Datum automatisch setzen, wenn auf ET umgeschaltet wird.
+            if (newCategory === 'ET') {
+                const nextInfoDate = findNextInfoDateAfter(new Date());
+                this.form.querySelector('#appointment-infoabend-date').value = nextInfoDate.toISOString().split('T')[0];
+            }
         });
         this.form.querySelector('#appointment-cancellation').addEventListener('change', (e) => {
             this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !e.target.checked);
@@ -2970,6 +2981,7 @@ class AppointmentsView {
 
     toggleConditionalFields(category) {
         this.form.querySelector('#appointment-prognose-container').classList.toggle('hidden', !['BT', 'ST'].includes(category));
+        this.form.querySelector('#appointment-infoabend-container').classList.toggle('hidden', category !== 'ET');
     }
 
     openModal(termin = null) {
@@ -2982,7 +2994,6 @@ class AppointmentsView {
             const idInput = this.modal.querySelector('#appointment-id');
             const userSelect = this.modal.querySelector('#appointment-user');
             const categorySelect = this.modal.querySelector('#appointment-category');
-            const statusSelect = this.modal.querySelector('#appointment-status');
             appointmentsLog('Modal elements found.');
 
             // Dropdowns befüllen
@@ -3004,16 +3015,9 @@ class AppointmentsView {
             if (!categoryColumn || !categoryColumn.data || !categoryColumn.data.options) throw new Error("Could not find 'Kategorie' options in metadata.");
             const categories = categoryColumn.data.options.map(o => o.name);
 
-            const statusColumn = terminMeta.columns.find(c => c.name === 'Status');
-            if (!statusColumn || !statusColumn.data || !statusColumn.data.options) throw new Error("Could not find 'Status' options in metadata.");
-            const statuses = statusColumn.data.options.map(o => o.name);
-            appointmentsLog('Categories and statuses extracted from metadata.');
-
             categorySelect.innerHTML = '';
-            statusSelect.innerHTML = '';
             categories.forEach(cat => categorySelect.add(new Option(cat, cat)));
-            statuses.forEach(stat => statusSelect.add(new Option(stat, stat)));
-            appointmentsLog('Category and status dropdowns populated.');
+            appointmentsLog('Category dropdown populated.');
 
             if (termin) { // Edit mode
                 appointmentsLog('Entering edit mode for termin:', termin);
@@ -3024,15 +3028,16 @@ class AppointmentsView {
                 
                 this.form.querySelector('#appointment-date').value = termin.Datum ? termin.Datum.split('T')[0] : '';
                 categorySelect.value = termin.Kategorie || '';
-                statusSelect.value = termin.Status || '';
                 this.form.querySelector('#appointment-partner').value = termin.Terminpartner || '';
                 this.form.querySelector('#appointment-prognose').value = termin.Umsatzprognose || '';
                 this.form.querySelector('#appointment-referrals').value = termin.Empfehlungen || '';
                 this.form.querySelector('#appointment-note').value = termin.Hinweis || '';
                 this.form.querySelector('#appointment-cancellation').checked = termin.Absage || false;
                 this.form.querySelector('#appointment-cancellation-reason').value = termin.Absagegrund || '';
+                this.form.querySelector('#appointment-infoabend-date').value = termin.Infoabend ? termin.Infoabend.split('T')[0] : '';
 
                 this._updateStatusDropdown(termin.Kategorie, termin.Status);
+                this.toggleConditionalFields(termin.Kategorie, false);
 
             } else { // Add mode
                 appointmentsLog('Entering add mode.');
@@ -3046,12 +3051,14 @@ class AppointmentsView {
                     categorySelect.value = 'AT';
                 } else if (this.currentTab === 'recruiting' || this.currentTab === 'netzwerk') {
                     categorySelect.value = 'ET';
+                    // Wert im Hintergrund setzen, auch wenn das Feld nicht sichtbar ist
+                    const nextInfoDate = findNextInfoDateAfter(new Date());
+                    this.form.querySelector('#appointment-infoabend-date').value = nextInfoDate.toISOString().split('T')[0];
                 }
                 this._updateStatusDropdown(categorySelect.value);
+                this.toggleConditionalFields(categorySelect.value, true);
             }
 
-            
-            this.toggleConditionalFields(categorySelect.value);
             this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !this.form.querySelector('#appointment-cancellation').checked);
             
             this.modal.classList.add('visible');
@@ -3106,6 +3113,7 @@ class AppointmentsView {
             const empfehlungenRaw = this.form.querySelector('#appointment-referrals').value;
             const hinweis = this.form.querySelector('#appointment-note').value;
             const absagegrund = this.form.querySelector('#appointment-cancellation-reason').value;
+            const infoabend = this.form.querySelector('#appointment-infoabend-date').value;
 
             const rowData = {
                 [SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID]: [mitarbeiterId],
@@ -3118,6 +3126,7 @@ class AppointmentsView {
                 [SKT_APP.COLUMN_MAPS.termine.Hinweis]: hinweis,
                 [SKT_APP.COLUMN_MAPS.termine.Absage]: isCancellation,
                 [SKT_APP.COLUMN_MAPS.termine.Absagegrund]: isCancellation ? absagegrund : '',
+                [SKT_APP.COLUMN_MAPS.termine.Infoabend]: kategorie === 'ET' ? infoabend : null,
             };
 
             appointmentsLog('Constructed rowData object for API:', JSON.parse(JSON.stringify(rowData)));
