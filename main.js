@@ -172,6 +172,15 @@ const dom = {
   planningForm: document.getElementById("planning-form"),
   savePlanningBtn: document.getElementById("save-planning-btn"),
   cancelPlanningBtn: document.getElementById("cancel-planning-btn"),
+  pqqView: document.getElementById('pqq-view'),
+  pqqIndicator: document.getElementById('pqq-indicator'),
+  pqqValueDisplay: document.getElementById('pqq-value-display'),
+  pqqChevron: document.getElementById('pqq-chevron'),
+  pqqDetailsContainer: document.getElementById('pqq-details-container'),
+  pqqEhIndicator: document.getElementById('pqq-eh-indicator'),
+  pqqEhValueDisplay: document.getElementById('pqq-eh-value-display'),
+  pqqEtIndicator: document.getElementById('pqq-et-indicator'),
+  pqqEtValueDisplay: document.getElementById('pqq-et-value-display'),
   nextInfoDate: document.getElementById("next-info-date"),
 };
 
@@ -918,37 +927,37 @@ function escapeSql(str) {
   return str.replace(/'/g, "''");
 }
 
+function _findCycleStartForMonth(year, month) {
+    const date = new Date(year, month, 1);
+    while (date.getDay() !== 4) { // Thursday
+        date.setDate(date.getDate() + 1);
+    }
+    if (date.getDate() <= 2) {
+        date.setDate(date.getDate() + 7);
+    }
+    return date;
+}
+
 function getMonthlyCycleDates() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const findCycleStartForMonth = (year, month) => {
-    const date = new Date(year, month, 1);
-    while (date.getDay() !== 4) {
-      date.setDate(date.getDate() + 1);
-    }
-    if (date.getDate() <= 2) {
-      date.setDate(date.getDate() + 7);
-    }
-    return date;
-  };
-
   let currentMonth = today.getMonth();
   let currentYear = today.getFullYear();
-  let thisMonthCycleStart = findCycleStartForMonth(currentYear, currentMonth);
+  let thisMonthCycleStart = _findCycleStartForMonth(currentYear, currentMonth);
   let startDate, endDate;
 
   if (today < thisMonthCycleStart) {
     let prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
     let prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-    startDate = findCycleStartForMonth(prevYear, prevMonth);
+    startDate = _findCycleStartForMonth(prevYear, prevMonth);
     endDate = new Date(thisMonthCycleStart);
     endDate.setDate(endDate.getDate() - 1);
   } else {
     let nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
     let nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
     startDate = thisMonthCycleStart;
-    let nextMonthCycleStart = findCycleStartForMonth(nextYear, nextMonth);
+    let nextMonthCycleStart = _findCycleStartForMonth(nextYear, nextMonth);
     endDate = new Date(nextMonthCycleStart);
     endDate.setDate(endDate.getDate() - 1);
   }
@@ -956,6 +965,24 @@ function getMonthlyCycleDates() {
   return { startDate, endDate };
 }
 
+function getPreviousMonthlyCycleDates() {
+    const { startDate: currentCycleStart } = getMonthlyCycleDates();
+
+    const endDate = new Date(currentCycleStart);
+    endDate.setDate(endDate.getDate() - 1);
+    endDate.setHours(23, 59, 59, 999);
+
+    let searchMonth = currentCycleStart.getMonth() - 1;
+    let searchYear = currentCycleStart.getFullYear();
+    if (searchMonth < 0) {
+        searchMonth = 11;
+        searchYear -= 1;
+    }
+
+    const startDate = _findCycleStartForMonth(searchYear, searchMonth);
+    startDate.setHours(0, 0, 0, 0);
+    return { startDate, endDate };
+}
 function getWeeklyCycleDates() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -2114,6 +2141,7 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
   dom.einarbeitungBanner.classList.toggle("hidden", isLeader);
 
   dom.nextInfoDate.textContent = `Nächstes Info: ${fetchNextInfoDate()}`;
+  await calculateAndRenderPQQForCurrentView();
   setStatus("");
   dom.dashboardSections.classList.remove("hidden");
   setTimeout(() => dom.dashboardSections.classList.remove("opacity-0"), 50);
@@ -4769,6 +4797,7 @@ function setupEventListeners() {
     dom.monthlyPlanningTitle.textContent = "Deine Monatsplanung";
     updateMonthlyPlanningView(personalData);
     updateLeadershipView();
+    calculateAndRenderPQQForCurrentView();
   });
   dom.teamViewBtn.addEventListener("click", () => {
     currentPlanningView = "team";
@@ -4778,6 +4807,7 @@ function setupEventListeners() {
     dom.monthlyPlanningTitle.textContent = "Gruppen-Übersicht";
     updateMonthlyPlanningView(teamData);
     updateLeadershipView();
+    calculateAndRenderPQQForCurrentView();
   });
   dom.strukturViewBtn.addEventListener("click", () => {
     currentPlanningView = "struktur";
@@ -4787,6 +4817,7 @@ function setupEventListeners() {
     dom.monthlyPlanningTitle.textContent = "Struktur-Übersicht";
     updateMonthlyPlanningView(structureData);
     updateLeadershipView();
+    calculateAndRenderPQQForCurrentView();
   });
 
   dom.gridViewBtn.addEventListener("click", () => {
@@ -4878,6 +4909,11 @@ function setupEventListeners() {
   dom.planningForm.addEventListener("submit", (e) => { e.preventDefault(); savePlanningData(); });
   dom.cancelPlanningBtn.addEventListener("click", closePlanningModal);
   document.getElementById('cancel-planning-btn-2').addEventListener('click', closePlanningModal);
+
+  dom.pqqView.addEventListener('click', () => {
+      dom.pqqDetailsContainer.classList.toggle('collapsed');
+      dom.pqqView.classList.toggle('expanded');
+  });
 }
 
 function switchView(viewName) {
@@ -5244,6 +5280,252 @@ async function handleAIAssistantClick() {
     dom.hinweisModalContent.textContent =
       "Der KI-Assistent ist im Moment leider nicht verfügbar. Bitte versuchen Sie es später erneut.";
   }
+}
+
+function _renderSinglePQQGauge(indicatorEl, valueDisplayEl, value) {
+    if (!indicatorEl || !valueDisplayEl) {
+        console.warn('[PQQ_RENDER] Gauge-Elemente nicht gefunden.');
+        return;
+    }
+    const pqqClamped = Math.max(60, Math.min(value, 140));
+    const indicatorPosition = ((pqqClamped - 60) / (140 - 60)) * 100;
+    indicatorEl.style.left = `${indicatorPosition}%`;
+    valueDisplayEl.style.left = `${indicatorPosition}%`;
+    valueDisplayEl.textContent = `${value.toFixed(0)}%`;
+}
+
+async function calculateAndRenderPQQ(mitarbeiterId) {
+    const pqqLog = (message, ...data) => console.log(`%c[PQQ_CALC] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
+    pqqLog('Starte PQQ-Berechnung...');
+
+    // 1. Get previous month's dates
+    const { startDate, endDate } = getPreviousMonthlyCycleDates();
+    const startDateIso = startDate.toISOString().split('T')[0];
+    const endDateIso = endDate.toISOString().split('T')[0];
+    const prevMonthName = startDate.toLocaleString("de-DE", { month: "long" });
+    const prevYear = startDate.getFullYear();
+    pqqLog(`Berechnungszeitraum: ${startDateIso} bis ${endDateIso}`);
+
+    // 2. Get planning data from cache
+    const plan = db.monatsplanung.find(p => 
+        p.Mitarbeiter_ID === mitarbeiterId &&
+        p.Monat === prevMonthName &&
+        p.Jahr === prevYear
+    );
+
+    if (!plan) {
+        pqqLog('Keine Plandaten für den Vormonat gefunden. PQQ-Ansicht wird ausgeblendet.');
+        dom.pqqView.classList.add('hidden');
+        return;
+    }
+    dom.pqqView.classList.remove('hidden');
+
+    const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
+    const ursprungszielET = plan?.Ursprungsziel_ET || 0;
+    pqqLog(`Plandaten gefunden: EH-Ziel=${ursprungszielEH}, ET-Ziel=${ursprungszielET}`);
+
+    // 3. Get actual data for previous month via SQL
+    const mitarbeiterName = findRowById('mitarbeiter', mitarbeiterId)?.Name;
+    if (!mitarbeiterName) return;
+    const mitarbeiterNameSql = `'${escapeSql(mitarbeiterName)}'`;
+
+    const ehQuery = `SELECT SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID = ${mitarbeiterNameSql} AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+    const etQuery = `SELECT Status FROM Termine WHERE Mitarbeiter_ID = ${mitarbeiterNameSql} AND Kategorie = 'ET' AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+
+    const [ehResultRaw, etResultRaw] = await Promise.all([
+        seaTableSqlQuery(ehQuery, true),
+        seaTableSqlQuery(etQuery, true)
+    ]);
+
+    const totalEH = ehResultRaw?.[0]?.totalEH || 0;
+    const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+    const totalETAusgemacht = etResultRaw.filter(t => ET_STATUS_AUSGEMACHT.includes(t.Status)).length;
+    pqqLog(`Ist-Werte ermittelt: Total EH=${totalEH}, Total ET Ausgemacht=${totalETAusgemacht}`);
+
+    // 4. Calculate PQQ parts
+    let ehQuote = 0;
+    if (totalEH > 0) {
+        ehQuote = ursprungszielEH / totalEH;
+    } else if (ursprungszielEH === 0) { // Ziel 0, Ist 0 -> 100% Zielerreichung
+        ehQuote = 1;
+    }
+
+    let etQuote = 0;
+    if (totalETAusgemacht > 0) {
+        etQuote = ursprungszielET / totalETAusgemacht;
+    } else if (ursprungszielET === 0) { // Ziel 0, Ist 0 -> 100% Zielerreichung
+        etQuote = 1;
+    }
+
+    const pqq = ((ehQuote + etQuote) / 2) * 100;
+    pqqLog(`Einzelquoten berechnet: EH-Quote=${(ehQuote * 100).toFixed(2)}%, ET-Quote=${(etQuote * 100).toFixed(2)}%`);
+    pqqLog(`Gesamt-PQQ berechnet: ${pqq.toFixed(2)}%`);
+
+    // 5. Render gauges
+    _renderSinglePQQGauge(dom.pqqIndicator, dom.pqqValueDisplay, pqq);
+    _renderSinglePQQGauge(dom.pqqEhIndicator, dom.pqqEhValueDisplay, ehQuote * 100);
+    _renderSinglePQQGauge(dom.pqqEtIndicator, dom.pqqEtValueDisplay, etQuote * 100);
+    pqqLog('Alle Gauges gerendert.');
+}
+
+// NEU: Berechnet und rendert die PQQ basierend auf der aktuellen Ansicht (Persönlich, Gruppe, Struktur)
+async function calculateAndRenderPQQForCurrentView() {
+    const pqqLog = (message, ...data) => console.log(`%c[PQQ_VIEW] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
+    pqqLog('Starte PQQ-Berechnung für aktuelle Ansicht...');
+
+    // --- Caching Logic ---
+    const { startDate: prevMonthStartDate } = getPreviousMonthlyCycleDates();
+    const cachePeriodKey = `${prevMonthStartDate.getFullYear()}-${prevMonthStartDate.getMonth()}`;
+    let scopeKey;
+    if (isSuperuserView) {
+        scopeKey = 'superuser';
+    } else {
+        scopeKey = `${currentlyViewedUserData._id}-${currentPlanningView}`;
+    }
+    const cacheKey = `pqq-${cachePeriodKey}-${scopeKey}`;
+    const maxAgeMinutes = 30 * 24 * 60; // Cache für 30 Tage
+
+    const cachedPQQ = loadFromCache(cacheKey, maxAgeMinutes);
+    if (cachedPQQ) {
+        pqqLog(`PQQ-Daten aus dem Cache geladen für Key: ${cacheKey}`);
+        dom.pqqView.classList.remove('hidden');
+        _renderSinglePQQGauge(dom.pqqIndicator, dom.pqqValueDisplay, cachedPQQ.pqq);
+        _renderSinglePQQGauge(dom.pqqEhIndicator, dom.pqqEhValueDisplay, cachedPQQ.ehQuote * 100);
+        _renderSinglePQQGauge(dom.pqqEtIndicator, dom.pqqEtValueDisplay, cachedPQQ.etQuote * 100);
+        pqqLog('Alle Gauges aus dem Cache gerendert.');
+        return; // Berechnung hier beenden, da Daten aus dem Cache kamen
+    }
+    pqqLog(`Keine gültigen PQQ-Daten im Cache gefunden für Key: ${cacheKey}. Führe Neuberechnung durch.`);
+
+    let userIds = [];
+    const currentUser = currentlyViewedUserData;
+    const isLeader = currentUser && currentUser.Karrierestufe ? !currentUser.Karrierestufe.toLowerCase().includes("trainee") : false;
+
+    // 1. Bestimme die relevanten Mitarbeiter-IDs basierend auf der aktuellen Ansicht
+    if (isSuperuserView) {
+        userIds = db.mitarbeiter.filter(m => m.Name && !m.Name.toLowerCase().startsWith("geschäftsstelle")).map(m => m._id);
+        pqqLog(`Superuser-Ansicht. Berechne PQQ für ${userIds.length} Mitarbeiter.`);
+    } else if (!isLeader) {
+        userIds = [currentUser._id];
+        pqqLog(`Trainee-Ansicht. Berechne PQQ für: ${currentUser.Name}`);
+    } else {
+        switch (currentPlanningView) {
+            case 'personal':
+                userIds = [currentUser._id];
+                pqqLog(`Führungskraft-Ansicht (Persönlich). Berechne PQQ für: ${currentUser.Name}`);
+                break;
+            case 'team':
+                const teamMembers = getSubordinates(currentUser._id, 'gruppe');
+                userIds = [currentUser._id, ...teamMembers.map(u => u._id)];
+                pqqLog(`Führungskraft-Ansicht (Gruppe). Berechne PQQ für ${userIds.length} Mitarbeiter.`);
+                break;
+            case 'struktur':
+                const structureMembers = getAllSubordinatesRecursive(currentUser._id);
+                userIds = [currentUser._id, ...structureMembers.map(u => u._id)];
+                pqqLog(`Führungskraft-Ansicht (Struktur). Berechne PQQ für ${userIds.length} Mitarbeiter.`);
+                break;
+            default:
+                userIds = [currentUser._id];
+                pqqLog(`Unbekannte Ansicht, Fallback auf Persönlich für: ${currentUser.Name}`);
+        }
+    }
+
+    if (userIds.length === 0) {
+        pqqLog('Keine Mitarbeiter-IDs für die Berechnung gefunden. Blende PQQ aus.');
+        dom.pqqView.classList.add('hidden');
+        return;
+    }
+
+    // 2. Hole Plandaten für den Vormonat
+    const { startDate, endDate } = getPreviousMonthlyCycleDates();
+    const startDateIso = startDate.toISOString().split('T')[0];
+    const endDateIso = endDate.toISOString().split('T')[0];
+    const prevMonthName = startDate.toLocaleString("de-DE", { month: "long" });
+    const prevYear = startDate.getFullYear();
+    pqqLog(`PQQ-Zeitraum: ${startDateIso} bis ${endDateIso} (${prevMonthName} ${prevYear})`);
+    pqqLog('Suche Plandaten in `db.monatsplanung` (insgesamt ' + db.monatsplanung.length + ' Einträge).');
+
+    const relevantPlans = db.monatsplanung.filter(p =>
+        userIds.includes(p.Mitarbeiter_ID) &&
+        p.Monat === prevMonthName &&
+        p.Jahr === prevYear
+    );
+
+    if (relevantPlans.length === 0) {
+        pqqLog('FEHLER: Keine Plandaten für den Vormonat in der ausgewählten Ansicht gefunden. PQQ-Ansicht wird ausgeblendet.');
+        const usersWithPlans = new Set(db.monatsplanung.filter(p => p.Monat === prevMonthName && p.Jahr === prevYear).map(p => p.Mitarbeiter_ID));
+        const usersWithoutPlans = userIds.filter(id => !usersWithPlans.has(id));
+        pqqLog('Mitarbeiter in der Ansicht, für die kein Plan gefunden wurde:', usersWithoutPlans.map(id => findRowById('mitarbeiter', id)?.Name || `ID: ${id}`));
+        dom.pqqView.classList.add('hidden');
+        return;
+    }
+
+    dom.pqqView.classList.remove('hidden');
+    const totalUrsprungszielEH = relevantPlans.reduce((sum, p) => sum + (p.Ursprungsziel_EH || 0), 0);
+    const totalUrsprungszielET = relevantPlans.reduce((sum, p) => sum + (p.Ursprungsziel_ET || 0), 0);
+    pqqLog(`Plandaten gefunden (${relevantPlans.length} Einträge): Gesamt-EH-Ziel=${totalUrsprungszielEH}, Gesamt-ET-Ziel=${totalUrsprungszielET}`);
+
+    // 3. Hole Ist-Daten für den Vormonat
+    const mitarbeiterNames = userIds.map(id => findRowById('mitarbeiter', id)?.Name).filter(Boolean);
+    if (mitarbeiterNames.length === 0) {
+        pqqLog('Keine gültigen Mitarbeiter für die SQL-Abfrage gefunden.');
+        dom.pqqView.classList.add('hidden');
+        return;
+    }
+    const mitarbeiterNamesSql = mitarbeiterNames.map(name => `'${escapeSql(name)}'`).join(',');
+
+    const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+    const etStatusSql = ET_STATUS_AUSGEMACHT.map(s => `'${escapeSql(s)}'`).join(',');
+
+    const ehQuery = `SELECT SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID IN (${mitarbeiterNamesSql}) AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+    const etQuery = `SELECT _id FROM Termine WHERE Mitarbeiter_ID IN (${mitarbeiterNamesSql}) AND Kategorie = 'ET' AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}' AND Status IN (${etStatusSql})`;
+
+    // NEU: Zusätzliches Logging für SQL-Abfragen und Kriterien
+    pqqLog('Sende SQL-Abfrage für IST-EH:', ehQuery);
+    pqqLog('Sende SQL-Abfrage für IST-ET (direkt gefiltert):', etQuery);
+
+    const [ehResultRaw, etResultRaw] = await Promise.all([
+        seaTableSqlQuery(ehQuery, true),
+        seaTableSqlQuery(etQuery, true)
+    ]);
+
+    const totalEH = ehResultRaw?.[0]?.totalEH || 0;
+    const totalETAusgemacht = etResultRaw ? etResultRaw.length : 0;
+    pqqLog(`Ist-Werte ermittelt: Total EH=${totalEH}, Total ET Ausgemacht=${totalETAusgemacht}`);
+
+    // 4. Berechne PQQ-Teile
+    let ehQuote = 0;
+    if (totalEH > 0) {
+        ehQuote = totalUrsprungszielEH / totalEH;
+    } else if (totalUrsprungszielEH === 0) {
+        ehQuote = 1;
+    }
+
+    let etQuote = 0;
+    if (totalETAusgemacht > 0) {
+        etQuote = totalUrsprungszielET / totalETAusgemacht;
+    } else if (totalUrsprungszielET === 0) {
+        etQuote = 1;
+    }
+
+    const pqq = ((ehQuote + etQuote) / 2) * 100;
+    pqqLog(`Einzelquoten berechnet: EH-Quote=${(ehQuote * 100).toFixed(2)}%, ET-Quote=${(etQuote * 100).toFixed(2)}%`);
+    pqqLog(`Gesamt-PQQ berechnet: ${pqq.toFixed(2)}%`);
+
+    // NEU: PQQ-Daten im Cache speichern
+    const pqqDataToCache = {
+        pqq: pqq,
+        ehQuote: ehQuote,
+        etQuote: etQuote
+    };
+    saveToCache(cacheKey, pqqDataToCache);
+    pqqLog('PQQ-Daten im Cache gespeichert.', pqqDataToCache);
+
+    // 5. Rendere die Gauges
+    _renderSinglePQQGauge(dom.pqqIndicator, dom.pqqValueDisplay, pqq);
+    _renderSinglePQQGauge(dom.pqqEhIndicator, dom.pqqEhValueDisplay, ehQuote * 100);
+    _renderSinglePQQGauge(dom.pqqEtIndicator, dom.pqqEtValueDisplay, etQuote * 100);
+    pqqLog('Alle Gauges gerendert.');
 }
 
 // --- User Data Editing Modal ---

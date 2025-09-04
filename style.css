@@ -678,3 +678,42 @@ details[open] > summary::before { transform: rotate(180deg); }
 #prognosis-details-container::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
 #prognosis-details-container::-webkit-scrollbar-thumb { background: #ccc; border-radius: 10px; }
 #prognosis-details-container::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+/* NEU: PQQ Gauge Styles */
+#pqq-bar {
+    background: linear-gradient(to right, 
+        var(--color-accent-red), 
+        var(--color-accent-green) 50%, 
+        var(--color-accent-gold)
+    );
+}
+#pqq-indicator {
+    transform: translateX(-50%);
+    transition: left 0.7s ease-out;
+    left: 50%; /* Default position */
+}
+#pqq-value-display {
+    top: -25px; /* Position above the indicator */
+    transform: translateX(-50%);
+    transition: left 0.7s ease-out;
+    left: 50%; /* Default position */
+    background-color: white;
+    padding: 2px 6px;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* NEU: PQQ Details Collapsible */
+.pqq-details-collapsible {
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 0.5s ease-in-out, opacity 0.4s ease-in-out, margin-top 0.5s ease-in-out;
+}
+.pqq-details-collapsible:not(.collapsed) {
+    max-height: 500px; /* A large enough value to show content */
+    opacity: 1;
+}
+#pqq-view.expanded #pqq-chevron {
+    transform: rotate(180deg);
+}

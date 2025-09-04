@@ -224,6 +224,60 @@
                     </div>
                 </section>
 
+                <!-- NEU: Planungsqualitätsquote (PQQ) - jetzt klickbar -->
+                <section id="pqq-view" class="hidden bg-white rounded-2xl p-6 md:p-8 shadow-lg cursor-pointer">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-2xl font-semibold text-skt-blue mb-2">Planungsqualitätsquote (PQQ)</h2>
+                        <i id="pqq-chevron" class="fas fa-chevron-down text-skt-blue-light transition-transform duration-300"></i>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-6">Erfüllungsquote deiner ursprünglichen Ziele des Vormonats.</p>
+                    <div class="w-full max-w-xl mx-auto">
+                        <div id="pqq-gauge" class="relative h-8 rounded-full">
+                            <div id="pqq-bar" class="h-full rounded-full"></div>
+                            <div id="pqq-indicator" class="absolute top-0 h-full flex items-center">
+                                <div class="w-1 h-10 bg-skt-blue rounded-full shadow-md"></div>
+                            </div>
+                            <div id="pqq-value-display" class="absolute text-skt-blue font-bold"></div>
+                        </div>
+                        <div class="flex justify-between text-xs font-semibold text-gray-500 mt-2 px-1">
+                            <span>60%</span>
+                            <span>100%</span>
+                            <span>140%</span>
+                        </div>
+                    </div>
+                    <!-- NEU: Detail-Container -->
+                    <div id="pqq-details-container" class="pqq-details-collapsible collapsed mt-8 space-y-6">
+                        <!-- EH Quote -->
+                        <div>
+                            <h3 class="text-lg font-semibold text-skt-blue mb-2">EH-Quote</h3>
+                            <div class="w-full max-w-xl mx-auto">
+                                <div class="relative h-8 rounded-full">
+                                    <div class="h-full rounded-full" style="background: linear-gradient(to right, var(--color-accent-red), var(--color-accent-green) 50%, var(--color-accent-gold));"></div>
+                                    <div id="pqq-eh-indicator" class="absolute top-0 h-full flex items-center" style="left: 50%; transition: left 0.7s ease-out;">
+                                        <div class="w-1 h-10 bg-skt-blue rounded-full shadow-md"></div>
+                                    </div>
+                                    <div id="pqq-eh-value-display" class="absolute text-skt-blue font-bold" style="top: -25px; left: 50%; transform: translateX(-50%); transition: left 0.7s ease-out;"></div>
+                                </div>
+                                <div class="flex justify-between text-xs font-semibold text-gray-500 mt-2 px-1"><span>60%</span><span>100%</span><span>140%</span></div>
+                            </div>
+                        </div>
+                        <!-- ET Quote -->
+                        <div>
+                            <h3 class="text-lg font-semibold text-skt-blue mb-2">ET-Quote</h3>
+                            <div class="w-full max-w-xl mx-auto">
+                                <div class="relative h-8 rounded-full">
+                                    <div class="h-full rounded-full" style="background: linear-gradient(to right, var(--color-accent-red), var(--color-accent-green) 50%, var(--color-accent-gold));"></div>
+                                    <div id="pqq-et-indicator" class="absolute top-0 h-full flex items-center" style="left: 50%; transition: left 0.7s ease-out;">
+                                        <div class="w-1 h-10 bg-skt-blue rounded-full shadow-md"></div>
+                                    </div>
+                                    <div id="pqq-et-value-display" class="absolute text-skt-blue font-bold" style="top: -25px; left: 50%; transform: translateX(-50%); transition: left 0.7s ease-out;"></div>
+                                </div>
+                                <div class="flex justify-between text-xs font-semibold text-gray-500 mt-2 px-1"><span>60%</span><span>100%</span><span>140%</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 <section id="leadership-view" class="hidden bg-white rounded-2xl p-6 md:p-8 shadow-lg">
                     <div id="leader-personal-goal-container" class="mb-8"></div>
                     <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
