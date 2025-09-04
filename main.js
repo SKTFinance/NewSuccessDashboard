@@ -23,6 +23,7 @@ let db = {
   einarbeitung: [],
   gesellschaften: [],
   produkte: [],
+  bürostandorte: [],
 };
 
 let personalData = {};
@@ -160,6 +161,12 @@ const dom = {
   cancelEditUserBtn: document.getElementById("cancel-edit-user-btn"),
   cancelEditUserBtn2: document.getElementById("cancel-edit-user-btn-2"),
   saveUserBtn: document.getElementById("save-user-btn"),
+  addNewUserBtn: document.getElementById("add-new-user-btn"),
+  addUserModal: document.getElementById("add-user-modal"),
+  addUserForm: document.getElementById("add-user-form"),
+  cancelAddUserBtn: document.getElementById("cancel-add-user-btn"),
+  cancelAddUserBtn2: document.getElementById("cancel-add-user-btn-2"),
+  saveNewUserBtn: document.getElementById("save-new-user-btn"),
   nextInfoDate: document.getElementById("next-info-date"),
 };
 
@@ -823,6 +830,7 @@ async function loadAllData() {
     "Einarbeitung",
     "Gesellschaften",
     "Produkte",
+    "Bürostandorte",
   ];
 
   for (const tableName of tablesToLoad) {
@@ -4862,6 +4870,15 @@ function setupEventListeners() {
   });
   dom.cancelEditUserBtn.addEventListener("click", closeEditUserModal);
   dom.cancelEditUserBtn2.addEventListener("click", closeEditUserModal);
+
+  dom.addNewUserBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    closeSettingsMenu();
+    openAddUserModal();
+  });
+  dom.addUserForm.addEventListener("submit", (e) => { e.preventDefault(); saveNewUser(); });
+  dom.cancelAddUserBtn.addEventListener("click", closeAddUserModal);
+  dom.cancelAddUserBtn2.addEventListener("click", closeAddUserModal);
 }
 
 function switchView(viewName) {
@@ -5232,41 +5249,33 @@ async function handleAIAssistantClick() {
 
 // --- User Data Editing Modal ---
 function openEditUserModal() {
-  const user = currentlyViewedUserData;
-  document.getElementById("edit-name").value = user.Name || "";
-  document.getElementById("edit-pwd").value = user.PWD || "";
-  document.getElementById("edit-eh-quote").value = user.EHproATQuote || 0;
+    const user = currentlyViewedUserData;
+    // Populate standard fields
+    document.getElementById('edit-name').value = user.Name || '';
+    document.getElementById('edit-pwd').value = user.PWD || '';
+    document.getElementById('edit-eh-quote').value = user.EHproATQuote || 0;
+    document.getElementById('edit-start-date').value = user.Startdatum?.split('T')[0] || '';
+    document.getElementById('edit-birthday').value = user.Geburtstag?.split('T')[0] || '';
+    document.getElementById('edit-promotion-date').value = user.Befoerderungsdatum?.split('T')[0] || '';
 
-  const statusSelect = document.getElementById("edit-status");
-  const positionSelect = document.getElementById("edit-position");
-  clearChildren(statusSelect);
-  clearChildren(positionSelect);
+    // Handle ausscheiden logic
+    const ausgeschiedenCheckbox = document.getElementById('edit-ausgeschieden');
+    const ausscheideFieldsContainer = document.getElementById('ausscheide-fields-container');
+    
+    // KORREKTUR: Explizite Prüfung auf `true`, da der Wert aus der DB ein Boolean ist.
+    ausgeschiedenCheckbox.checked = user.Status === 'Ausgeschieden' || user.Ausgeschieden === true;
+    document.getElementById('edit-ausscheidetag').value = user.Ausscheidetag?.split('T')[0] || '';
+    document.getElementById('edit-ausscheidegrund').value = user.Ausscheidegrund || '';
 
-  const mitarbeiterMeta = METADATA.tables.find(
-    (t) => t.name.toLowerCase() === "mitarbeiter"
-  );
-  const statusCol = mitarbeiterMeta.columns.find(
-    (c) => c.key === COLUMN_MAPS.mitarbeiter.Status
-  );
+    ausscheideFieldsContainer.classList.toggle('hidden', !ausgeschiedenCheckbox.checked);
 
-  statusCol.data.options.forEach((opt) => {
-    const optionEl = document.createElement("option");
-    optionEl.value = opt.name;
-    optionEl.textContent = opt.name;
-    if (user.Status === opt.name) optionEl.selected = true;
-    statusSelect.appendChild(optionEl);
-  });
+    // Add event listener to toggle visibility
+    ausgeschiedenCheckbox.addEventListener('change', (e) => {
+        ausscheideFieldsContainer.classList.toggle('hidden', !e.target.checked);
+    });
 
-  db.karriereplan.forEach((plan) => {
-    const optionEl = document.createElement("option");
-    optionEl.value = plan.Stufe;
-    optionEl.textContent = plan.Stufe;
-    if (user.Karrierestufe === plan.Stufe) optionEl.selected = true;
-    positionSelect.appendChild(optionEl);
-  });
-
-  dom.editUserModal.classList.add("visible");
-  document.body.classList.add("modal-open");
+    dom.editUserModal.classList.add('visible');
+    document.body.classList.add('modal-open');
 }
 
 function closeEditUserModal() {
@@ -5275,46 +5284,207 @@ function closeEditUserModal() {
 }
 
 async function saveUserData() {
-  const user = currentlyViewedUserData;
-  const updatedRowData = {};
-
-  updatedRowData[COLUMN_MAPS.mitarbeiter.Name] =
-    document.getElementById("edit-name").value;
-  updatedRowData[COLUMN_MAPS.mitarbeiter.PWD] =
-    document.getElementById("edit-pwd").value;
-  updatedRowData[COLUMN_MAPS.mitarbeiter.EHproATQuote] =
-    parseFloat(document.getElementById("edit-eh-quote").value) || 0;
-  updatedRowData[COLUMN_MAPS.mitarbeiter.Status] =
-    document.getElementById("edit-status").value;
-
-  const selectedPositionName = document.getElementById("edit-position").value;
-  const selectedPositionRow = db.karriereplan.find(
-    (p) => p.Stufe === selectedPositionName
-  );
-  if (selectedPositionRow) {
-    updatedRowData[COLUMN_MAPS.mitarbeiter.Karrierestufe] = [
-      selectedPositionRow._id,
-    ];
-  }
-
   dom.saveUserBtn.textContent = "Speichern...";
   dom.saveUserBtn.disabled = true;
+  const user = currentlyViewedUserData;
 
-  const success = await seaTableUpdateRow(
-    "Mitarbeiter",
-    user._id,
-    updatedRowData
-  );
+  const isAusgeschieden = document.getElementById('edit-ausgeschieden').checked;
+  const ausscheidetag = document.getElementById('edit-ausscheidetag').value;
+  const ausscheidegrund = document.getElementById('edit-ausscheidegrund').value;
 
-  if (success) {
+  if (isAusgeschieden && (!ausscheidetag || !ausscheidegrund)) {
+      alert('Wenn ein Mitarbeiter ausgeschieden ist, müssen Ausscheidedatum und -grund angegeben werden.');
+      dom.saveUserBtn.textContent = "Speichern";
+      dom.saveUserBtn.disabled = false;
+      return;
+  }
+
+  const dataToUpdate = {
+      Name: document.getElementById('edit-name').value,
+      PWD: document.getElementById('edit-pwd').value,
+      EHproATQuote: parseFloat(document.getElementById('edit-eh-quote').value) || 0,
+      Startdatum: document.getElementById('edit-start-date').value || null,
+      Geburtstag: document.getElementById('edit-birthday').value || null,
+      Befoerderungsdatum: document.getElementById('edit-promotion-date').value || null,
+      Ausgeschieden: isAusgeschieden,
+      Ausscheidetag: isAusgeschieden ? ausscheidetag : null,
+      Ausscheidegrund: isAusgeschieden ? ausscheidegrund : null,
+  };
+
+  const mitarbeiterTableMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'mitarbeiter');
+  const setClauses = [];
+
+  for (const keyName in dataToUpdate) {
+      const value = dataToUpdate[keyName];
+      const colKey = COLUMN_MAPS.mitarbeiter[keyName];
+      if (!colKey) continue;
+      const colMeta = mitarbeiterTableMeta.columns.find(c => c.key === colKey);
+      if (!colMeta) continue;
+
+      const colName = colMeta.name;
+      let formattedValue;
+      if (value === null || value === undefined) formattedValue = "NULL";
+      else if (colMeta.type === 'number') formattedValue = parseFloat(value) || 0;
+      else if (colMeta.type === 'checkbox') formattedValue = value ? "true" : "false";
+      else formattedValue = `'${escapeSql(String(value))}'`;
+      
+      setClauses.push(`\`${colName}\` = ${formattedValue}`);
+  }
+
+  // NEU: Status explizit und separat behandeln, um Fehler zu isolieren und zu loggen.
+  const statusColName = 'Status'; // Annahme: Spaltenname ist 'Status'
+  if (COLUMN_MAPS.mitarbeiter[statusColName]) {
+      const statusValue = isAusgeschieden ? 'Ausgeschieden' : 'Aktiv';
+      console.log(`[SAVE-USER] Status-Update: Setze '${statusColName}' auf '${statusValue}'.`);
+      setClauses.push(`\`${statusColName}\` = '${escapeSql(statusValue)}'`);
+  } else {
+      console.error(`[SAVE-USER] Fehler: Die Spalte '${statusColName}' wurde in den COLUMN_MAPS nicht gefunden. Status wird nicht aktualisiert.`);
+  }
+
+  const sql = `UPDATE \`Mitarbeiter\` SET ${setClauses.join(', ')} WHERE \`_id\` = '${user._id}'`;
+  console.log(`[SAVE-USER] Führe SQL-Update aus: ${sql}`);
+  const result = await seaTableSqlQuery(sql, false);
+
+  if (result !== null) {
     closeEditUserModal();
     setStatus("Daten werden neu geladen...");
+    localStorage.removeItem(CACHE_PREFIX + 'mitarbeiter');
     await loadAllData();
     await fetchAndRenderDashboard(user._id);
   }
 
   dom.saveUserBtn.textContent = "Speichern";
   dom.saveUserBtn.disabled = false;
+}
+
+async function addUserToDatabase(tableName, rowData) {
+    console.log("[ADD-USER-DB] Starting add user to database process.");
+    if (!seaTableAccessToken || !apiGatewayUrl) return false;
+
+    const linkColumns = {
+        Werber: COLUMN_MAPS.mitarbeiter.Werber,
+        Karrierestufe: COLUMN_MAPS.mitarbeiter.Karrierestufe,
+        Buero: COLUMN_MAPS.mitarbeiter.Buero
+    };
+    const linkData = {};
+    const rowDataForCreation = { ...rowData };
+    for (const name in linkColumns) {
+        const colKey = linkColumns[name];
+        if (Object.prototype.hasOwnProperty.call(rowDataForCreation, colKey)) {
+            linkData[name] = rowDataForCreation[colKey]?.[0] || null;
+            delete rowDataForCreation[colKey];
+        }
+    }
+
+    const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
+    const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
+    const rowDataWithNames = {};
+    for (const key in rowDataForCreation) {
+        const name = reversedMap[key];
+        if (name) rowDataWithNames[name] = (rowDataForCreation[key] === undefined || rowDataForCreation[key] === '') ? null : rowDataForCreation[key];
+    }
+
+    let newRowId = null;
+    try {
+        const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+        const body = { table_name: tableName, rows: [rowDataWithNames] };
+        const response = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${seaTableAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        const result = await response.json();
+        if (!response.ok || !result.row_ids || result.row_ids.length === 0) throw new Error(`Create failed: ${result.error_message || 'No row ID returned'}`);
+        newRowId = result.row_ids[0]?._id;
+        if (!newRowId) throw new Error("Could not get new row ID");
+    } catch (error) {
+        console.error("[ADD-USER-DB] Step 1 FAILED:", error);
+        return false;
+    }
+
+    for (const colName in linkData) {
+        if (linkData[colName] && !(await updateSingleLink(tableName, newRowId, colName, [linkData[colName]]))) return false;
+    }
+    return true;
+}
+
+// --- Add New User Modal ---
+function openAddUserModal() {
+    dom.addUserForm.reset();
+    const werberSelect = document.getElementById('add-werber');
+    const bueroSelect = document.getElementById('add-buero');
+    clearChildren(werberSelect);
+    clearChildren(bueroSelect);
+
+    const usersForWerber = [...db.mitarbeiter].sort((a, b) => a.Name.localeCompare(b.Name));
+    usersForWerber.forEach(user => {
+        werberSelect.add(new Option(user.Name, user._id));
+    });
+
+    if (db.bürostandorte) {
+        const bueros = [...db.bürostandorte].sort((a, b) => (a.Büro || '').localeCompare(b.Büro || ''));
+        bueros.forEach(buero => {
+            // Annahme: Die Anzeigespalte in der "Bürostandorte"-Tabelle heißt "Büro".
+            bueroSelect.add(new Option(buero.Büro, buero._id));
+        });
+    }
+
+    dom.addUserModal.classList.add('visible');
+    document.body.classList.add('modal-open');
+}
+
+function closeAddUserModal() {
+    dom.addUserModal.classList.remove('visible');
+    document.body.classList.remove('modal-open');
+}
+
+async function saveNewUser() {
+    const saveBtn = dom.saveNewUserBtn;
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Wird angelegt...';
+
+    const traineeI = db.karriereplan.find(p => p.Stufe === 'Trainee I');
+    if (!traineeI) {
+        alert('Karrierestufe "Trainee I" nicht gefunden. Nutzer kann nicht angelegt werden.');
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Nutzer anlegen';
+        return;
+    }
+
+    if (!COLUMN_MAPS.mitarbeiter.Buero) {
+        alert('Spalte "Buero" konnte in der Datenbank nicht gefunden werden. Bitte Konfiguration prüfen.');
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Nutzer anlegen';
+        return;
+    }
+
+    const startDate = findNextInfoDateAfter(new Date());
+
+    const rowData = {
+        [COLUMN_MAPS.mitarbeiter.Name]: document.getElementById('add-name').value,
+        [COLUMN_MAPS.mitarbeiter.PWD]: document.getElementById('add-pwd').value,
+        [COLUMN_MAPS.mitarbeiter.Geburtstag]: document.getElementById('add-birthday').value || null,
+        [COLUMN_MAPS.mitarbeiter.Startdatum]: startDate.toISOString().split('T')[0],
+        [COLUMN_MAPS.mitarbeiter.Werber]: [document.getElementById('add-werber').value],
+        [COLUMN_MAPS.mitarbeiter.Buero]: [document.getElementById('add-buero').value],
+        [COLUMN_MAPS.mitarbeiter.Karrierestufe]: [traineeI._id],
+        [COLUMN_MAPS.mitarbeiter.Status]: 'Aktiv',
+    };
+
+    const success = await addUserToDatabase('Mitarbeiter', rowData);
+
+    if (success) {
+        saveBtn.textContent = 'Angelegt!';
+        localStorage.removeItem(CACHE_PREFIX + 'mitarbeiter');
+        await loadAllData();
+        // Optional: Dropdown im Login-Screen aktualisieren
+        // ...
+        setTimeout(() => {
+            closeAddUserModal();
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Nutzer anlegen';
+        }, 1500);
+    } else {
+        alert('Fehler beim Anlegen des Nutzers.');
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Nutzer anlegen';
+    }
 }
 
 // --- START ---
