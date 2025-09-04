@@ -71,6 +71,18 @@
                     <button id="appointments-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Termine verwalten">
                         <i class="fas fa-calendar-alt"></i>
                     </button>
+                    <!-- NEU: Potential-Button im Header -->
+                    <button id="potential-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Potentialbearbeitung">
+                        <i class="fas fa-users"></i>
+                    </button>
+                    <!-- NEU: Umsatz-Button im Header -->
+                    <button id="umsatz-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Umsätze">
+                        <i class="fas fa-chart-line"></i>
+                    </button>
+                    <!-- NEU: Auswertung-Button im Header -->
+                    <button id="auswertung-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Auswertungen">
+                        <i class="fas fa-trophy"></i>
+                    </button>
                     <!-- NEU: KI Assistent Button -->
                     <button id="ai-assistant-btn" class="bg-accent-purple text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-purple-700 transition-colors h-10 w-10 flex items-center justify-center" title="KI-Assistent">
                         <i class="fas fa-robot"></i>
@@ -83,6 +95,8 @@
                              <a href="#" id="superuser-btn" class="hidden block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-users-cog w-5 mr-2"></i>Gesamtansicht</a>
                              <a href="#" id="money-view-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-euro-sign w-5 mr-2"></i>Geld-Ansicht</a>
                              <a href="#" id="edit-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-edit w-5 mr-2"></i>Personendaten</a>
+                             <a href="#" id="planning-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-tasks w-5 mr-2"></i>Planung</a>
+                             <a href="#" id="add-new-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-plus w-5 mr-2"></i>Neuer Nutzer</a>
                              <a href="#" id="clear-cache-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sync-alt w-5 mr-2"></i>Cache leeren</a>
                              <a href="#" id="logout-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-right-from-bracket w-5 mr-2"></i>Logout</a>
                         </div>
@@ -210,6 +224,60 @@
                     </div>
                 </section>
 
+                <!-- NEU: Planungsqualitätsquote (PQQ) - jetzt klickbar -->
+                <section id="pqq-view" class="hidden bg-white rounded-2xl p-6 md:p-8 shadow-lg cursor-pointer">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-2xl font-semibold text-skt-blue mb-2">Planungsqualitätsquote (PQQ)</h2>
+                        <i id="pqq-chevron" class="fas fa-chevron-down text-skt-blue-light transition-transform duration-300"></i>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-6">Erfüllungsquote deiner ursprünglichen Ziele des Vormonats.</p>
+                    <div class="w-full max-w-xl mx-auto">
+                        <div id="pqq-gauge" class="relative h-8 rounded-full">
+                            <div id="pqq-bar" class="h-full rounded-full"></div>
+                            <div id="pqq-indicator" class="absolute top-0 h-full flex items-center">
+                                <div class="w-1 h-10 bg-skt-blue rounded-full shadow-md"></div>
+                            </div>
+                            <div id="pqq-value-display" class="absolute text-skt-blue font-bold"></div>
+                        </div>
+                        <div class="flex justify-between text-xs font-semibold text-gray-500 mt-2 px-1">
+                            <span>60%</span>
+                            <span>100%</span>
+                            <span>140%</span>
+                        </div>
+                    </div>
+                    <!-- NEU: Detail-Container -->
+                    <div id="pqq-details-container" class="pqq-details-collapsible collapsed mt-8 space-y-6">
+                        <!-- EH Quote -->
+                        <div>
+                            <h3 class="text-lg font-semibold text-skt-blue mb-2">EH-Quote</h3>
+                            <div class="w-full max-w-xl mx-auto">
+                                <div class="relative h-8 rounded-full">
+                                    <div class="h-full rounded-full" style="background: linear-gradient(to right, var(--color-accent-red), var(--color-accent-green) 50%, var(--color-accent-gold));"></div>
+                                    <div id="pqq-eh-indicator" class="absolute top-0 h-full flex items-center" style="left: 50%; transition: left 0.7s ease-out;">
+                                        <div class="w-1 h-10 bg-skt-blue rounded-full shadow-md"></div>
+                                    </div>
+                                    <div id="pqq-eh-value-display" class="absolute text-skt-blue font-bold" style="top: -25px; left: 50%; transform: translateX(-50%); transition: left 0.7s ease-out;"></div>
+                                </div>
+                                <div class="flex justify-between text-xs font-semibold text-gray-500 mt-2 px-1"><span>60%</span><span>100%</span><span>140%</span></div>
+                            </div>
+                        </div>
+                        <!-- ET Quote -->
+                        <div>
+                            <h3 class="text-lg font-semibold text-skt-blue mb-2">ET-Quote</h3>
+                            <div class="w-full max-w-xl mx-auto">
+                                <div class="relative h-8 rounded-full">
+                                    <div class="h-full rounded-full" style="background: linear-gradient(to right, var(--color-accent-red), var(--color-accent-green) 50%, var(--color-accent-gold));"></div>
+                                    <div id="pqq-et-indicator" class="absolute top-0 h-full flex items-center" style="left: 50%; transition: left 0.7s ease-out;">
+                                        <div class="w-1 h-10 bg-skt-blue rounded-full shadow-md"></div>
+                                    </div>
+                                    <div id="pqq-et-value-display" class="absolute text-skt-blue font-bold" style="top: -25px; left: 50%; transform: translateX(-50%); transition: left 0.7s ease-out;"></div>
+                                </div>
+                                <div class="flex justify-between text-xs font-semibold text-gray-500 mt-2 px-1"><span>60%</span><span>100%</span><span>140%</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 <section id="leadership-view" class="hidden bg-white rounded-2xl p-6 md:p-8 shadow-lg">
                     <div id="leader-personal-goal-container" class="mb-8"></div>
                     <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
@@ -283,6 +351,21 @@
         <main id="appointments-view" class="hidden w-full max-w-7xl mx-auto flex-grow px-4 md:px-8 pt-6 pb-6">
             <!-- Inhalt von appointments.html wird hier geladen -->
         </main>
+
+        <!-- Container für die Potential-Ansicht -->
+        <main id="potential-view" class="hidden w-full max-w-7xl mx-auto flex-grow px-4 md:px-8 pt-6 pb-6">
+            <!-- Inhalt von potential.html wird hier geladen -->
+        </main>
+
+        <!-- Container für die Umsatz-Ansicht -->
+        <main id="umsatz-view" class="hidden w-full max-w-7xl mx-auto flex-grow px-4 md:px-8 pt-6 pb-6">
+            <!-- Inhalt von umsatz.html wird hier geladen -->
+        </main>
+
+        <!-- Container für die Auswertungs-Ansicht -->
+        <main id="auswertung-view" class="hidden w-full max-w-7xl mx-auto flex-grow px-4 md:px-8 pt-6 pb-6">
+            <!-- Inhalt von auswertung.html wird hier geladen -->
+        </main>
     </div>
 
     <!-- Modals -->
@@ -326,16 +409,96 @@
                      <input type="number" id="edit-eh-quote" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
                  </div>
                  <div>
-                     <label for="edit-status" class="block text-sm font-medium text-gray-700">Status</label>
-                     <select id="edit-status" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></select>
+                     <label for="edit-start-date" class="block text-sm font-medium text-gray-700">Startdatum</label>
+                     <input type="date" id="edit-start-date" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
                  </div>
                  <div>
-                     <label for="edit-position" class="block text-sm font-medium text-gray-700">Karrierestufe</label>
-                     <select id="edit-position" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></select>
+                     <label for="edit-birthday" class="block text-sm font-medium text-gray-700">Geburtstag</label>
+                     <input type="date" id="edit-birthday" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                 </div>
+                 <div>
+                     <label for="edit-promotion-date" class="block text-sm font-medium text-gray-700">Nächstes Rennen Startdatum</label>
+                     <input type="date" id="edit-promotion-date" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                     <p class="mt-1 text-xs text-gray-500">Startdatum deines nächsten Karriereschritts</p>
+                 </div>
+                 <div class="flex items-center space-x-3 pt-2">
+                     <label for="edit-ausgeschieden" class="toggle-switch">
+                         <input type="checkbox" id="edit-ausgeschieden" class="sr-only peer">
+                         <div class="toggle-slider"></div>
+                     </label>
+                     <label for="edit-ausgeschieden" class="text-sm font-medium text-gray-700">Mitarbeiter ausgeschieden</label>
+                 </div>
+                 <div id="ausscheide-fields-container" class="hidden space-y-4 border-t border-gray-200 pt-4 mt-4">
+                     <div>
+                         <label for="edit-ausscheidetag" class="block text-sm font-medium text-gray-700">Ausscheidedatum</label>
+                         <input type="date" id="edit-ausscheidetag" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                     </div>
+                     <div>
+                         <label for="edit-ausscheidegrund" class="block text-sm font-medium text-gray-700">Ausscheidegrund</label>
+                         <textarea id="edit-ausscheidegrund" rows="2" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></textarea>
+                     </div>
                  </div>
                  <div class="pt-4 flex justify-end space-x-3">
                      <button type="button" id="cancel-edit-user-btn-2" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button>
                      <button type="submit" id="save-user-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors">Speichern</button>
+                 </div>
+             </form>
+        </div>
+    </div>
+    <!-- NEU: Modal zum Hinzufügen von Benutzern -->
+    <div id="add-user-modal" class="modal-overlay">
+        <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative">
+             <button id="cancel-add-user-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
+             <h3 class="text-2xl font-bold text-skt-blue mb-6">Neuen Nutzer anlegen</h3>
+             <form id="add-user-form" class="space-y-4">
+                 <div>
+                     <label for="add-name" class="block text-sm font-medium text-gray-700">Name</label>
+                     <input type="text" id="add-name" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                 </div>
+                 <div>
+                     <label for="add-pwd" class="block text-sm font-medium text-gray-700">Passwort</label>
+                     <input type="text" id="add-pwd" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                 </div>
+                 <div>
+                     <label for="add-birthday" class="block text-sm font-medium text-gray-700">Geburtstag</label>
+                     <input type="date" id="add-birthday" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                 </div>
+                 <div>
+                     <label for="add-werber" class="block text-sm font-medium text-gray-700">Werber</label>
+                     <select id="add-werber" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></select>
+                 </div>
+                 <div>
+                     <label for="add-buero" class="block text-sm font-medium text-gray-700">Büro</label>
+                     <select id="add-buero" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></select>
+                 </div>
+                 <div class="pt-4 flex justify-end space-x-3">
+                     <button type="button" id="cancel-add-user-btn-2" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button>
+                     <button type="submit" id="save-new-user-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors">Nutzer anlegen</button>
+                 </div>
+             </form>
+        </div>
+    </div>
+    <!-- NEU: Modal für die Monatsplanung -->
+    <div id="planning-modal" class="modal-overlay">
+        <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative">
+             <button id="cancel-planning-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
+             <h3 id="planning-modal-title" class="text-2xl font-bold text-skt-blue mb-6">Monatsplanung bearbeiten</h3>
+             <form id="planning-form" class="space-y-4">
+                 <div>
+                     <label for="planning-user-select" class="block text-sm font-medium text-gray-700">Mitarbeiter</label>
+                     <select id="planning-user-select" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></select>
+                 </div>
+                 <div>
+                     <label for="planning-eh-goal" class="block text-sm font-medium text-gray-700">EH Ziel</label>
+                     <input type="number" id="planning-eh-goal" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                 </div>
+                 <div>
+                     <label for="planning-et-goal" class="block text-sm font-medium text-gray-700">ET Ziel</label>
+                     <input type="number" id="planning-et-goal" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                 </div>
+                 <div class="pt-4 flex justify-end space-x-3">
+                     <button type="button" id="cancel-planning-btn-2" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button>
+                     <button type="submit" id="save-planning-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors">Speichern</button>
                  </div>
              </form>
         </div>

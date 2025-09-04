@@ -2,9 +2,6 @@
 <div id="appointments-module-root" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
         <h2 id="appointments-title" class="text-3xl font-bold text-skt-blue">Terminübersicht</h2>
-        <button id="add-appointment-btn" class="mt-4 sm:mt-0 w-full sm:w-auto bg-skt-green-accent text-white font-semibold py-2 px-5 rounded-lg shadow-md hover:bg-green-700 transition-colors flex items-center justify-center">
-            <i class="fas fa-plus mr-2"></i>Neuer Termin
-        </button>
     </div>
 
     <!-- KPIs und Statistiken -->
@@ -46,24 +43,13 @@
             <div class="md:col-span-2 grid grid-cols-2 gap-2">
                 <div>
                     <label for="appointments-start-date" class="block text-sm font-medium text-gray-700 mb-1">Von</label>
-                    <input type="date" id="appointments-start-date" class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                    <input type="date" id="appointments-start-date" class="modern-input">
                 </div>
                 <div>
                     <label for="appointments-end-date" class="block text-sm font-medium text-gray-700 mb-1">Bis</label>
-                    <input type="date" id="appointments-end-date" class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                    <input type="date" id="appointments-end-date" class="modern-input">
                 </div>
             </div>
-            <div id="appointments-scope-container">
-                <label for="appointments-scope-filter" class="block text-sm font-medium text-gray-700 mb-1">Anzeigen für</label>
-                <select id="appointments-scope-filter" class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
-                    <option value="personal">Meine Termine</option>
-                    <option value="group">Meine Gruppe</option>
-                    <option value="structure">Meine Struktur</option>
-                </select>
-            </div>
-            <div class="flex justify-end"><button id="add-appointment-btn" class="w-full lg:w-auto bg-skt-green-accent text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-green-700 transition-colors flex items-center justify-center"><i class="fas fa-plus mr-2"></i>Neuer Termin</button></div>
-        </div>
-        <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
             <div>
                 <label for="appointments-scope-filter" class="block text-sm font-medium text-gray-700 mb-1">Anzeigen für</label>
                 <select id="appointments-scope-filter" class="modern-select">
@@ -72,7 +58,11 @@
                     <option value="structure">Meine Struktur</option>
                 </select>
             </div>
-            <div class="flex items-end pb-1 justify-self-start lg:justify-self-end">
+            <div class="lg:col-span-1">
+                <label for="appointments-search-filter" class="sr-only">Suchen</label>
+                <input type="text" id="appointments-search-filter" placeholder="Kunde, Bewerber oder Mitarbeiter suchen..." class="modern-input">
+            </div>
+            <div class="lg:col-span-4 flex justify-between items-center mt-4">
                 <div class="flex items-center space-x-3">
                     <label for="appointments-show-cancelled" class="toggle-switch">
                         <input type="checkbox" id="appointments-show-cancelled" class="sr-only peer">
@@ -80,10 +70,7 @@
                     </label>
                     <label for="appointments-show-cancelled" class="text-sm font-medium text-gray-700">Abgesagte</label>
                 </div>
-            </div>
-            <div class="lg:col-span-4 md:col-span-2">
-                <label for="appointments-search-filter" class="sr-only">Suchen</label>
-                <input type="text" id="appointments-search-filter" placeholder="Kunde, Bewerber oder Mitarbeiter suchen..." class="modern-input">
+                <button id="add-appointment-btn" class="bg-skt-green-accent text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-green-700 transition-colors flex items-center justify-center"><i class="fas fa-plus mr-2"></i>Neuer Termin</button>
             </div>
         </div>
     </div>
@@ -108,12 +95,17 @@
         <form id="appointment-form" class="space-y-4">
             <input type="hidden" id="appointment-id">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><label for="appointment-user" class="block text-sm font-medium text-gray-700">Mitarbeiter</label><select id="appointment-user" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></select></div>
-                <div><label for="appointment-date" class="block text-sm font-medium text-gray-700">Datum</label><input type="date" id="appointment-date" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></div>
-                <div><label for="appointment-category" class="block text-sm font-medium text-gray-700">Kategorie</label><select id="appointment-category" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></select></div>
-                <div><label for="appointment-status" class="block text-sm font-medium text-gray-700">Status</label><select id="appointment-status" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></select></div>
+                <div><label for="appointment-user" class="block text-sm font-medium text-gray-700 mb-1">Mitarbeiter</label><select id="appointment-user" required class="modern-select"></select></div>
+                <div><label for="appointment-date" class="block text-sm font-medium text-gray-700 mb-1">Datum</label><input type="date" id="appointment-date" required class="modern-input"></div>
+                <div><label for="appointment-category" class="block text-sm font-medium text-gray-700 mb-1">Kategorie</label><select id="appointment-category" required class="modern-select"></select></div>
+                <div><label for="appointment-status" class="block text-sm font-medium text-gray-700 mb-1">Status</label><select id="appointment-status" required class="modern-select"></select></div>
             </div>
             <div><label for="appointment-partner" class="block text-sm font-medium text-gray-700">Terminpartner</label><input type="text" id="appointment-partner" class="modern-input"></div>
+            <!-- NEU: Infoabend-Feld -->
+            <div id="appointment-infoabend-container" class="hidden">
+                <label for="appointment-infoabend-date" class="block text-sm font-medium text-gray-700">Nächster Infoabend</label>
+                <input type="date" id="appointment-infoabend-date" class="modern-input">
+            </div>
             <div id="appointment-prognose-container" class="hidden"><label for="appointment-prognose" class="block text-sm font-medium text-gray-700">Umsatzprognose (EH)</label><input type="number" step="0.01" id="appointment-prognose" class="modern-input"></div>
             <div><label for="appointment-referrals" class="block text-sm font-medium text-gray-700">Empfehlungen</label><input type="number" id="appointment-referrals" class="modern-input"></div>
             <div><label for="appointment-note" class="block text-sm font-medium text-gray-700">Hinweis</label><textarea id="appointment-note" rows="3" class="modern-input"></textarea></div>

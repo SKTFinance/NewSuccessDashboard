@@ -21,6 +21,9 @@ let db = {
   termine: [],
   monatsplanung: [],
   einarbeitung: [],
+  gesellschaften: [],
+  produkte: [],
+  bürostandorte: [],
 };
 
 let personalData = {};
@@ -36,6 +39,9 @@ let isSuperuserView = false;
 let isMoneyView = false;
 let currentView = "dashboard";
 let appointmentsViewInstance = null;
+let potentialViewInstance = null;
+let umsatzViewInstance = null;
+let auswertungViewInstance = null;
 let HIERARCHY_CACHE = null;
 let currentOnboardingSubView = "leader-list";
 
@@ -117,6 +123,12 @@ const dom = {
   einarbeitungBanner: document.getElementById("einarbeitung-banner"),
   dashboardHeaderBtn: document.getElementById("dashboard-header-btn"),
   appointmentsHeaderBtn: document.getElementById("appointments-header-btn"),
+  potentialHeaderBtn: document.getElementById("potential-header-btn"),
+  umsatzHeaderBtn: document.getElementById("umsatz-header-btn"),
+  auswertungHeaderBtn: document.getElementById("auswertung-header-btn"),
+  auswertungView: document.getElementById("auswertung-view"),
+  umsatzView: document.getElementById("umsatz-view"),
+  potentialView: document.getElementById("potential-view"),
   appointmentsView: document.getElementById("appointments-view"),
   einarbeitungTitle: document.getElementById("einarbeitung-title"),
   traineeOnboardingView: document.getElementById("trainee-onboarding-view"),
@@ -149,6 +161,26 @@ const dom = {
   cancelEditUserBtn: document.getElementById("cancel-edit-user-btn"),
   cancelEditUserBtn2: document.getElementById("cancel-edit-user-btn-2"),
   saveUserBtn: document.getElementById("save-user-btn"),
+  addNewUserBtn: document.getElementById("add-new-user-btn"),
+  addUserModal: document.getElementById("add-user-modal"),
+  addUserForm: document.getElementById("add-user-form"),
+  cancelAddUserBtn: document.getElementById("cancel-add-user-btn"),
+  cancelAddUserBtn2: document.getElementById("cancel-add-user-btn-2"),
+  saveNewUserBtn: document.getElementById("save-new-user-btn"),
+  planningBtn: document.getElementById("planning-btn"),
+  planningModal: document.getElementById("planning-modal"),
+  planningForm: document.getElementById("planning-form"),
+  savePlanningBtn: document.getElementById("save-planning-btn"),
+  cancelPlanningBtn: document.getElementById("cancel-planning-btn"),
+  pqqView: document.getElementById('pqq-view'),
+  pqqIndicator: document.getElementById('pqq-indicator'),
+  pqqValueDisplay: document.getElementById('pqq-value-display'),
+  pqqChevron: document.getElementById('pqq-chevron'),
+  pqqDetailsContainer: document.getElementById('pqq-details-container'),
+  pqqEhIndicator: document.getElementById('pqq-eh-indicator'),
+  pqqEhValueDisplay: document.getElementById('pqq-eh-value-display'),
+  pqqEtIndicator: document.getElementById('pqq-et-indicator'),
+  pqqEtValueDisplay: document.getElementById('pqq-et-value-display'),
   nextInfoDate: document.getElementById("next-info-date"),
 };
 
@@ -209,6 +241,29 @@ async function fetchColumnMaps() {
     setStatus("Fehler beim Laden der Datenbankstruktur.", true);
     return {};
   }
+}
+
+async function seaTableDeleteRow(tableName, rowId) {
+    if (!seaTableAccessToken || !apiGatewayUrl) {
+        console.error("Cannot delete row without access token and gateway URL.");
+        return false;
+    }
+    try {
+        const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+        const body = {
+            table_name: tableName,
+            row_ids: [rowId]
+        };
+        const response = await fetch(url, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${seaTableAccessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        return response.ok;
+    } catch (error) {
+        console.error(`Error deleting row from table ${tableName}:`, error);
+        return false;
+    }
 }
 
 async function seaTableSqlQuery(sql, convertLinks = true) {
@@ -336,16 +391,13 @@ async function seaTableQuery(tableName) {
 }
 
 async function seaTableUpdateRow(tableName, rowId, rowData) {
-  // Führt für jedes Feld einen einzelnen SQL-Befehl aus, außer für die Mitarbeiter_ID, die per Link-API aktualisiert wird.
   const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
   if (!tableMap) {
     console.error(`[HYBRID-UPDATE] No column map found for table: ${tableName}`);
     return false;
   }
 
-  const tableMeta = METADATA.tables.find(
-    (t) => t.name.toLowerCase() === tableName.toLowerCase()
-  );
+  const tableMeta = METADATA.tables.find( (t) => t.name.toLowerCase() === tableName.toLowerCase() );
   if (!tableMeta) {
     console.error(`[HYBRID-UPDATE] No table metadata found for: ${tableName}`);
     return false;
@@ -356,18 +408,11 @@ async function seaTableUpdateRow(tableName, rowId, rowData) {
   for (const key in rowData) {
     if (Object.hasOwnProperty.call(rowData, key)) {
       const value = rowData[key];
-      const colName = Object.keys(tableMap).find(
-        (name) => tableMap[name] === key
-      );
+      const colName = Object.keys(tableMap).find( (name) => tableMap[name] === key );
 
       if (!colName || colName === "_id") continue;
 
-      // HYBRID-LOGIK: API für die Mitarbeiter_ID, SQL für den Rest.
       if (colName === "Mitarbeiter_ID") {
-        console.log(
-          `[API-LINK-UPDATE] Using link API for column '${colName}'.`
-        );
-        // Der Wert ist die _id des Mitarbeiters, die wir aus dem Formular bekommen.
         const mitarbeiterRowId = value && value[0] ? value[0] : null;
         const success = await seaTableUpdateLinkField(rowId, mitarbeiterRowId);
         if (!success) {
@@ -376,16 +421,14 @@ async function seaTableUpdateRow(tableName, rowId, rowData) {
           break;
         }
       } else {
+        const colMeta = tableMeta.columns.find(c => c.key === key);
         let formattedValue;
-        if (value === null || value === undefined) formattedValue = "NULL";
-        else if (typeof value === "string") formattedValue = `'${escapeSql(value)}'`;
-        else if (typeof value === "number") formattedValue = value;
+        if (value === null || value === undefined || value === '') formattedValue = "NULL";
+        else if (colMeta && colMeta.type === 'number') { const numValue = parseFloat(value); formattedValue = isNaN(numValue) ? "NULL" : numValue; }
         else if (typeof value === "boolean") formattedValue = value ? "true" : "false";
         else formattedValue = `'${escapeSql(String(value))}'`;
 
         const sql = `UPDATE \`${tableName}\` SET \`${colName}\` = ${formattedValue} WHERE \`_id\` = '${rowId}'`;
-        console.log(`[SQL-UPDATE] Executing single-field update: ${sql}`);
-
         const result = await seaTableSqlQuery(sql, false);
         if (result === null) {
           console.error(`[SQL-UPDATE] Failed to update field: ${colName}`);
@@ -473,7 +516,11 @@ async function seaTableAddRow(tableName, rowData) {
   for (const key in rowDataForCreation) {
       const name = reversedMap[key];
       if (name) {
-          rowDataWithNames[name] = rowDataForCreation[key];
+          // API erwartet `null` für leere Felder, nicht `undefined`
+          const value = rowDataForCreation[key];
+          rowDataWithNames[name] = (value === undefined || value === '') ? null : value;
+      } else if (key !== '_id') {
+          console.warn(`[ADD-ROW-NEW] No column name found for key: ${key}`);
       }
   }
 
@@ -527,6 +574,144 @@ async function seaTableAddRow(tableName, rowData) {
 
   console.log("[ADD-ROW-NEW] Process finished successfully.");
   return true;
+}
+
+async function updateSingleLink(baseTableName, baseRowId, linkColumnName, otherRowIds) {
+    if (!seaTableAccessToken || !apiGatewayUrl) return false;
+    try {
+        const baseTableMeta = METADATA.tables.find(t => t.name === baseTableName);
+        if (!baseTableMeta) throw new Error(`Could not find metadata for table '${baseTableName}'`);
+
+        const linkColumnMeta = baseTableMeta.columns.find(c => c.name === linkColumnName);
+        if (!linkColumnMeta || !linkColumnMeta.data || !linkColumnMeta.data.link_id) throw new Error(`Could not find link metadata for column '${linkColumnName}' in table '${baseTableName}'`);
+
+        const otherTableId = linkColumnMeta.data.other_table_id;
+
+        const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/links/`;
+        const body = {
+            table_id: baseTableMeta._id,
+            other_table_id: otherTableId,
+            link_id: linkColumnMeta.data.link_id,
+            other_rows_ids_map: {
+                [baseRowId]: Array.isArray(otherRowIds) ? otherRowIds.filter(Boolean) : (otherRowIds ? [otherRowIds] : [])
+            }
+        };
+        
+        umsatzLog(`[UPDATE-LINK] Updating link for ${linkColumnName}. Payload:`, body);
+        const response = await fetch(url, { method: 'PUT', headers: { Authorization: `Bearer ${seaTableAccessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (!response.ok) {
+            throw new Error(`Link update for ${linkColumnName} failed: ${response.status} ${await response.text()}`);
+        }
+        return true;
+    } catch (error) {
+        console.error(`Error updating link for ${linkColumnName}:`, error);
+        return false;
+    }
+}
+
+async function seaTableUpdateUmsatzRow(tableName, rowId, rowData) {
+    umsatzLog("[UPDATE-UMSATZ-SQL] Starting SQL-based update process.");
+    if (!seaTableAccessToken || !apiGatewayUrl) return false;
+
+    const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
+    if (!tableMap) {
+        console.error(`[UPDATE-UMSATZ-SQL] No column map for table: ${tableName}`);
+        return false;
+    }
+
+    const linkColumnKeys = [
+        COLUMN_MAPS.umsatz.Mitarbeiter_ID,
+        COLUMN_MAPS.umsatz.Gesellschaft_ID,
+        COLUMN_MAPS.umsatz.Produkt_ID
+    ];
+
+    const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
+    let allUpdatesSucceeded = true;
+
+    for (const key in rowData) {
+        if (!Object.prototype.hasOwnProperty.call(rowData, key)) continue;
+
+        const value = rowData[key];
+        const colName = reversedMap[key];
+
+        if (!colName || colName === '_id') continue;
+
+        if (linkColumnKeys.includes(key)) {
+            const linkRowId = value && value[0] ? value[0] : null;
+            const success = await updateSingleLink(tableName, rowId, colName, linkRowId ? [linkRowId] : []);
+            if (!success) { allUpdatesSucceeded = false; break; }
+        } else {
+            const colMeta = METADATA.tables.find(t => t.name.toLowerCase() === tableName.toLowerCase())?.columns.find(c => c.key === key);
+            let formattedValue;
+            if (value === null || value === undefined || value === '') { formattedValue = "NULL"; }
+            else if (colMeta && colMeta.type === 'number') { const numValue = parseFloat(value); formattedValue = isNaN(numValue) ? "NULL" : numValue; }
+            else if (typeof value === 'boolean') { formattedValue = value ? "true" : "false"; }
+            else { formattedValue = `'${escapeSql(String(value))}'`; }
+
+            const sql = `UPDATE \`${tableName}\` SET \`${colName}\` = ${formattedValue} WHERE \`_id\` = '${rowId}'`;
+            const result = await seaTableSqlQuery(sql, false);
+            if (result === null) { allUpdatesSucceeded = false; break; }
+        }
+    }
+    return allUpdatesSucceeded;
+}
+
+async function seaTableAddUmsatzRow(tableName, rowData) {
+    umsatzLog("[ADD-UMSATZ] Starting add-umsatz process.");
+    if (!seaTableAccessToken || !apiGatewayUrl) return false;
+
+    const linkColumns = {
+        Mitarbeiter_ID: COLUMN_MAPS.umsatz.Mitarbeiter_ID,
+        Gesellschaft_ID: COLUMN_MAPS.umsatz.Gesellschaft_ID,
+        Produkt_ID: COLUMN_MAPS.umsatz.Produkt_ID
+    };
+    const linkData = {};
+    const rowDataForCreation = { ...rowData };
+    for (const name in linkColumns) {
+        const colKey = linkColumns[name];
+        if (Object.prototype.hasOwnProperty.call(rowDataForCreation, colKey)) {
+            linkData[name] = rowDataForCreation[colKey]?.[0] || null;
+            delete rowDataForCreation[colKey];
+        }
+    }
+
+    const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
+    const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
+    const rowDataWithNames = {};
+    for (const key in rowDataForCreation) {
+        const name = reversedMap[key];
+        if (name) rowDataWithNames[name] = (rowDataForCreation[key] === undefined || rowDataForCreation[key] === '') ? null : rowDataForCreation[key];
+    }
+
+    let newRowId = null;
+    try {
+        const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+        const body = { table_name: tableName, rows: [rowDataWithNames] };
+        const response = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${seaTableAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        const result = await response.json();
+        if (!response.ok || !result.row_ids || result.row_ids.length === 0) {
+            throw new Error(`Create failed: ${result.error_message || 'No row ID returned'}`);
+        }
+        newRowId = result.row_ids[0]?._id;
+        if (!newRowId) throw new Error("Could not get new row ID");
+    } catch (error) {
+        console.error("[ADD-UMSATZ] Step 1 FAILED:", error);
+        return false;
+    }
+
+    let allLinksSuccess = true;
+    for (const colName in linkData) {
+        if (linkData[colName]) {
+            const success = await updateSingleLink(tableName, newRowId, colName, [linkData[colName]]);
+            if (!success) {
+                allLinksSuccess = false;
+                umsatzLog(`[ADD-UMSATZ] Link creation for ${colName} failed.`);
+                break;
+            }
+        }
+    }
+
+    return allLinksSuccess;
 }
 // --- DATA NORMALIZATION & MAPPING ---
 function normalizeAllData() {
@@ -650,7 +835,17 @@ async function loadAllData() {
   }
 
   setStatus("Lade Stammdaten...");
-  const tablesToLoad = ["Mitarbeiter", "Karriereplan", "Einarbeitungsschritte"];
+  const tablesToLoad = [
+    "Mitarbeiter",
+    "Karriereplan",
+    "Einarbeitungsschritte",
+    "Monatsplanung",
+    "Termine",
+    "Einarbeitung",
+    "Gesellschaften",
+    "Produkte",
+    "Bürostandorte",
+  ];
 
   for (const tableName of tablesToLoad) {
     const key = tableName.toLowerCase();
@@ -732,42 +927,83 @@ function escapeSql(str) {
   return str.replace(/'/g, "''");
 }
 
+function _findCycleStartForMonth(year, month) {
+    const date = new Date(year, month, 1);
+    while (date.getDay() !== 4) { // Thursday
+        date.setDate(date.getDate() + 1);
+    }
+    if (date.getDate() <= 2) {
+        date.setDate(date.getDate() + 7);
+    }
+    return date;
+}
+
 function getMonthlyCycleDates() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const findCycleStartForMonth = (year, month) => {
-    const date = new Date(year, month, 1);
-    while (date.getDay() !== 4) {
-      date.setDate(date.getDate() + 1);
-    }
-    if (date.getDate() <= 2) {
-      date.setDate(date.getDate() + 7);
-    }
-    return date;
-  };
-
   let currentMonth = today.getMonth();
   let currentYear = today.getFullYear();
-  let thisMonthCycleStart = findCycleStartForMonth(currentYear, currentMonth);
+  let thisMonthCycleStart = _findCycleStartForMonth(currentYear, currentMonth);
   let startDate, endDate;
 
   if (today < thisMonthCycleStart) {
     let prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
     let prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-    startDate = findCycleStartForMonth(prevYear, prevMonth);
+    startDate = _findCycleStartForMonth(prevYear, prevMonth);
     endDate = new Date(thisMonthCycleStart);
     endDate.setDate(endDate.getDate() - 1);
   } else {
     let nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
     let nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
     startDate = thisMonthCycleStart;
-    let nextMonthCycleStart = findCycleStartForMonth(nextYear, nextMonth);
+    let nextMonthCycleStart = _findCycleStartForMonth(nextYear, nextMonth);
     endDate = new Date(nextMonthCycleStart);
     endDate.setDate(endDate.getDate() - 1);
   }
   endDate.setHours(23, 59, 59, 999);
   return { startDate, endDate };
+}
+
+function getPreviousMonthlyCycleDates() {
+    const { startDate: currentCycleStart } = getMonthlyCycleDates();
+
+    const endDate = new Date(currentCycleStart);
+    endDate.setDate(endDate.getDate() - 1);
+    endDate.setHours(23, 59, 59, 999);
+
+    let searchMonth = currentCycleStart.getMonth() - 1;
+    let searchYear = currentCycleStart.getFullYear();
+    if (searchMonth < 0) {
+        searchMonth = 11;
+        searchYear -= 1;
+    }
+
+    const startDate = _findCycleStartForMonth(searchYear, searchMonth);
+    startDate.setHours(0, 0, 0, 0);
+    return { startDate, endDate };
+}
+function getWeeklyCycleDates() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dayOfWeek = today.getDay(); // Sunday = 0, ..., Thursday = 4, ...
+
+    // Finde den letzten Donnerstag. Donnerstag ist Tag 4.
+    const diff = dayOfWeek - 4;
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - diff);
+
+    // Wenn der berechnete Start in der Zukunft liegt (z.B. heute ist Di, diff=-2, start=heute+2),
+    // bedeutet das, die aktuelle Woche hat letzte Woche begonnen.
+    if (startDate > today) {
+        startDate.setDate(startDate.getDate() - 7);
+    }
+
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6); // 6 Tage nach Donnerstag ist Mittwoch
+    endDate.setHours(23, 59, 59, 999);
+
+    return { startDate, endDate };
 }
 function animateValue(element, start, end, duration, formatAsCurrency = false) {
   if (!element) return;
@@ -836,27 +1072,25 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   const endDateIso = endDate.toISOString().split("T")[0];
   const currentMonthName = startDate.toLocaleString("de-DE", { month: "long" });
   const currentYear = startDate.getFullYear();
+  
+  // Plandaten aus dem vorgeladenen und normalisierten Cache laden.
+  const planResults = db.monatsplanung.filter(p => p.Monat === currentMonthName && p.Jahr === currentYear);
 
-  // Die Abfragen holen jetzt Daten für den gesamten Zeitraum, die Filterung nach Benutzern erfolgt im Code per ID.
-  // Das ist robuster als das Filtern nach Namen in der SQL-Abfrage.
-  const planQuery = `SELECT \`Mitarbeiter_ID\`, \`EH_Ziel\`, \`ET_Ziel\` FROM \`Monatsplanung\` WHERE \`Monat\` = '${currentMonthName}' AND \`Jahr\` = ${currentYear}`;
+  // Termindaten ebenfalls aus dem Cache laden und nach Datum filtern.
+  const termineResults = db.termine.filter(t => {
+      if (!t.Datum) return false;
+      const terminDate = new Date(t.Datum);
+      return terminDate >= startDate && terminDate <= endDate;
+  });
+
+  // Nur Umsatzdaten werden für die KPIs immer frisch per SQL geladen.
   const ehQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`ehIst\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' GROUP BY \`Mitarbeiter_ID\``;
-  const termineQuery = `SELECT \`Mitarbeiter_ID\`, \`Kategorie\`, \`Status\` FROM \`Termine\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}'`;
   const totalEhQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`totalEh\` FROM \`Umsatz\` GROUP BY \`Mitarbeiter_ID\``;
 
   // WICHTIG: convertLinks wird auf `false` gesetzt, um die stabilen Row-IDs statt der Namen zu erhalten.
-  const [planResultRaw, ehResultRaw, termineResultRaw, totalEhResultRaw] =
-    await Promise.all([
-      seaTableSqlQuery(planQuery, false),
-      seaTableSqlQuery(ehQuery, false),
-      seaTableSqlQuery(termineQuery, false),
-      seaTableSqlQuery(totalEhQuery, false),
-    ]);
-
-  const planResults = mapSqlResults(planResultRaw, "Monatsplanung");
-  const ehResults = mapSqlResults(ehResultRaw, "Umsatz");
-  const termineResults = mapSqlResults(termineResultRaw, "Termine");
-  const totalEhResults = mapSqlResults(totalEhResultRaw, "Umsatz");
+  const [ehResultRaw, totalEhResultRaw] = await Promise.all([seaTableSqlQuery(ehQuery, false), seaTableSqlQuery(totalEhQuery, false)]);
+  const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
+  const totalEhResults = mapSqlResults(totalEhResultRaw || [], "Umsatz");
 
   const AT_STATUS_GEHALTEN = ["Gehalten"];
   const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
@@ -870,15 +1104,8 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   ];
 
   return users.map((user) => {
-    // KORREKTUR: Die ID befindet sich in der `row_id` Eigenschaft des ersten Objekts im Array.
-    const plan =
-      planResults.find(
-        (p) =>
-          p.Mitarbeiter_ID &&
-          Array.isArray(p.Mitarbeiter_ID) &&
-          p.Mitarbeiter_ID[0] &&
-          p.Mitarbeiter_ID[0].row_id === user._id
-      ) || {};
+    // Plandaten kommen aus dem Cache und sind normalisiert.
+    const plan = planResults.find((p) => p.Mitarbeiter_ID === user._id) || {};
     const eh =
       ehResults.find(
         (e) =>
@@ -895,13 +1122,8 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
           te.Mitarbeiter_ID[0] &&
           te.Mitarbeiter_ID[0].row_id === user._id
       ) || {};
-    const userTermine = termineResults.filter(
-      (t) =>
-        t.Mitarbeiter_ID &&
-        Array.isArray(t.Mitarbeiter_ID) &&
-        t.Mitarbeiter_ID[0] &&
-        t.Mitarbeiter_ID[0].row_id === user._id
-    );
+    // Termindaten aus dem Cache nach Benutzer filtern.
+    const userTermine = termineResults.filter((t) => t.Mitarbeiter_ID === user._id);
 
     let atIst = 0,
       atVereinbart = 0,
@@ -1841,6 +2063,13 @@ function updateBackButtonVisibility() {
 
 async function fetchAndRenderDashboard(mitarbeiterId) {
   window.scrollTo(0, 0);
+  // NEU: Prüfung auf automatische Beförderung, BEVOR die restlichen Daten berechnet werden.
+  // Dies stellt sicher, dass alle folgenden Berechnungen auf der korrekten Karrierestufe basieren.
+  const promotionOccurred = await applyAutomaticPromotionToDatabase(mitarbeiterId);
+  if (promotionOccurred) {
+      // Wenn eine Beförderung stattgefunden hat, wurde das Dashboard bereits neu geladen.
+      return;
+  }
   setStatus("Lade & verarbeite Daten...");
   dom.dashboardSections.classList.add("opacity-0");
 
@@ -1912,6 +2141,7 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
   dom.einarbeitungBanner.classList.toggle("hidden", isLeader);
 
   dom.nextInfoDate.textContent = `Nächstes Info: ${fetchNextInfoDate()}`;
+  await calculateAndRenderPQQForCurrentView();
   setStatus("");
   dom.dashboardSections.classList.remove("hidden");
   setTimeout(() => dom.dashboardSections.classList.remove("opacity-0"), 50);
@@ -2027,10 +2257,8 @@ async function getOnboardingProgressForTrainee(traineeId) {
   if (!user || !user.Name)
     return { percentage: 0, sollPercentage: 0, totalSteps: 0 };
 
-  const safeUserName = escapeSql(user.Name);
-  const einarbeitungQuery = `SELECT \`Schritt_ID\` FROM \`Einarbeitung\` WHERE \`Mitarbeiter_ID\` = '${safeUserName}'`;
-  const userEinarbeitungRaw = await seaTableSqlQuery(einarbeitungQuery);
-  const userEinarbeitung = mapSqlResults(userEinarbeitungRaw, "Einarbeitung");
+  // Daten aus dem Cache verwenden statt einer neuen SQL-Abfrage
+  const userEinarbeitung = db.einarbeitung.filter(e => e.Mitarbeiter_ID === traineeId);
 
   const allSteps = db.einarbeitungsschritte;
 
@@ -2038,7 +2266,7 @@ async function getOnboardingProgressForTrainee(traineeId) {
     return { percentage: 0, sollPercentage: 0, totalSteps: 0 };
 
   const completedStepIds = new Set(
-    userEinarbeitung.map((e) => e["Schritt_ID"][0])
+    userEinarbeitung.map((e) => e["Schritt_ID"])
   );
   const completedSteps = allSteps.filter((s) =>
     completedStepIds.has(s._id)
@@ -2113,12 +2341,11 @@ async function renderTraineeOnboardingView(
   }
   allSteps.sort((a, b) => a.Tag - b.Tag);
 
-  const safeUserName = escapeSql(user.Name);
-  const einarbeitungQuery = `SELECT \`Schritt_ID\` FROM \`Einarbeitung\` WHERE \`Mitarbeiter_ID\` = '${safeUserName}'`;
-  const userEinarbeitungRaw = await seaTableSqlQuery(einarbeitungQuery);
-  const userEinarbeitung = mapSqlResults(userEinarbeitungRaw, "Einarbeitung");
+  // Daten aus dem Cache verwenden statt einer neuen SQL-Abfrage
+  const userEinarbeitung = db.einarbeitung.filter(e => e.Mitarbeiter_ID === mitarbeiterId);
+
   const completedStepIds = new Set(
-    userEinarbeitung.map((e) => e["Schritt_ID"][0])
+    userEinarbeitung.map((e) => e["Schritt_ID"])
   );
 
   const startDate = new Date(user.Startdatum);
@@ -2348,7 +2575,7 @@ class AppointmentsView {
 
         this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
         this.downline.sort((a, b) => a.Name.localeCompare(b.Name));
-        this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.loggedInUserData));
+        this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.authenticatedUserData));
         
         if (!this.initialized) {
             appointmentsLog('Erstmalige Initialisierung: Event-Listener werden eingerichtet.');
@@ -2489,6 +2716,7 @@ class AppointmentsView {
         table.className = 'appointments-table';
 
         const isUmsatz = this.currentTab === 'umsatz';
+        const isRecruiting = this.currentTab === 'recruiting';
         const columns = [
             { key: 'Datum', label: 'Datum' },
             { key: 'Terminpartner', label: isUmsatz ? 'Kunde' : 'Bewerber' },
@@ -2497,6 +2725,9 @@ class AppointmentsView {
         ];
         if (isUmsatz) {
             columns.push({ key: 'Umsatzprognose', label: 'Umsatzprognose' });
+        }
+        if (isRecruiting) {
+            columns.push({ key: 'Infoabend', label: 'Infoabend' });
         }
 
         const thead = document.createElement('thead');
@@ -2526,7 +2757,7 @@ class AppointmentsView {
                 let value = termin[col.key];
                 if (col.key === 'Mitarbeiter_ID') {
                     value = termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
-                } else if (col.key === 'Datum') {
+                } else if (col.key === 'Datum' || col.key === 'Infoabend') {
                     value = value ? new Date(value).toLocaleDateString('de-DE') : '-';
                 } else if (col.key === 'Umsatzprognose') {
                     value = value ? value.toLocaleString('de-DE') + ' EH' : '-';
@@ -2593,10 +2824,47 @@ class AppointmentsView {
         });
 
         // Event Listeners für bedingte Felder im Modal
-        this.form.querySelector('#appointment-category').addEventListener('change', (e) => this.toggleConditionalFields(e.target.value));
+        this.form.querySelector('#appointment-category').addEventListener('change', (e) => {
+            const newCategory = e.target.value;
+            const isNew = !this.form.querySelector('#appointment-id').value;
+            this.toggleConditionalFields(newCategory, isNew);
+            this._updateStatusDropdown(newCategory);
+
+            // NEU: Infoabend-Datum automatisch setzen, wenn auf ET umgeschaltet wird.
+            if (newCategory === 'ET') {
+                const nextInfoDate = findNextInfoDateAfter(new Date());
+                this.form.querySelector('#appointment-infoabend-date').value = nextInfoDate.toISOString().split('T')[0];
+            }
+        });
         this.form.querySelector('#appointment-cancellation').addEventListener('change', (e) => {
             this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !e.target.checked);
         });
+    }
+
+    _updateStatusDropdown(category, currentStatus = null) {
+        const statusSelect = this.form.querySelector('#appointment-status');
+        const oldValue = currentStatus || statusSelect.value;
+        statusSelect.innerHTML = '';
+
+        const terminMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'termine');
+        const allStatuses = terminMeta.columns.find(c => c.name === 'Status').data.options.map(o => o.name);
+      //GROssbuchstaben! Also Weiterer ET, Weiterer BT, Offen, Verschoben usw.
+        const baseStati = ['Ausgemacht', 'Gehalten', 'Verschoben', 'Offen'];
+        let allowedStati = [...baseStati];
+
+        if (category === 'BT') {
+            allowedStati.push('Weiterer BT');
+        } else if (category === 'ET') {
+            allowedStati.push('Weiterer ET', 'Info Eingeladen', 'Info Bestätigt', 'Info Anwesend', 'Wird Mitarbeiter');
+        }
+        
+        const finalStati = allStatuses.filter(s => allowedStati.includes(s) || s === 'Storno');
+
+        finalStati.forEach(stat => statusSelect.add(new Option(stat, stat)));
+
+        if (finalStati.includes(oldValue)) {
+            statusSelect.value = oldValue;
+        }
     }
 
     _handleSort(columnKey) {
@@ -2610,21 +2878,21 @@ class AppointmentsView {
     }
 
     _getStatusColorClass(termin) {
-        if (termin.Status === 'Storno' || termin.Absage === true) {
+        if (termin.Absage === true || termin.Status === 'Storno') {
             return 'border-skt-red-accent';
         }
         switch (termin.Status) {
-            case 'Gehalten': return 'border-skt-green-accent';
-            case 'Ausgemacht':
-            case 'weiterer BT':
-            case 'weiterer ET': return 'border-skt-grey-medium';
+            case 'Ausgemacht': return 'border-skt-green-accent'; // Grün
             case 'Verschoben':
-            case 'offen': return 'border-skt-orange-accent';
-            case 'Info Eingeladen': return 'border-skt-yellow-accent';
-            case 'Info Bestätigt': return 'border-skt-blue-accent';
-            case 'Info Anwesend': return 'border-accent-purple';
-            case 'Wird Mitarbeiter': return 'border-skt-gold-accent';
-            default: return 'border-gray-300';
+            case 'offen': return 'border-skt-red-accent'; // Rot
+            case 'weiterer BT':
+            case 'weiterer ET': return 'border-skt-blue-accent'; // Blau
+            case 'Wird Mitarbeiter': return 'border-skt-gold-accent'; // Gold
+            case 'Info Eingeladen': return 'border-skt-yellow-accent'; // Gelb
+            case 'Info Bestätigt':
+            case 'Info Anwesend': return 'border-accent-purple'; // Lila
+            case 'Gehalten': return 'border-skt-grey-medium'; // Neutrales Grau für erledigt
+            default: return 'border-gray-300'; // Standard
         }
     }
 
@@ -2787,6 +3055,7 @@ class AppointmentsView {
 
     toggleConditionalFields(category) {
         this.form.querySelector('#appointment-prognose-container').classList.toggle('hidden', !['BT', 'ST'].includes(category));
+        this.form.querySelector('#appointment-infoabend-container').classList.toggle('hidden', category !== 'ET');
     }
 
     openModal(termin = null) {
@@ -2799,11 +3068,10 @@ class AppointmentsView {
             const idInput = this.modal.querySelector('#appointment-id');
             const userSelect = this.modal.querySelector('#appointment-user');
             const categorySelect = this.modal.querySelector('#appointment-category');
-            const statusSelect = this.modal.querySelector('#appointment-status');
             appointmentsLog('Modal elements found.');
 
             // Dropdowns befüllen
-            const allRelevantUsers = [SKT_APP.loggedInUserData, ...this.downline].filter(Boolean);
+            const allRelevantUsers = [SKT_APP.authenticatedUserData, ...this.downline].filter(Boolean);
             userSelect.innerHTML = '';
             allRelevantUsers.forEach(u => userSelect.add(new Option(u.Name, u._id)));
             appointmentsLog('User dropdown populated.');
@@ -2821,16 +3089,9 @@ class AppointmentsView {
             if (!categoryColumn || !categoryColumn.data || !categoryColumn.data.options) throw new Error("Could not find 'Kategorie' options in metadata.");
             const categories = categoryColumn.data.options.map(o => o.name);
 
-            const statusColumn = terminMeta.columns.find(c => c.name === 'Status');
-            if (!statusColumn || !statusColumn.data || !statusColumn.data.options) throw new Error("Could not find 'Status' options in metadata.");
-            const statuses = statusColumn.data.options.map(o => o.name);
-            appointmentsLog('Categories and statuses extracted from metadata.');
-
             categorySelect.innerHTML = '';
-            statusSelect.innerHTML = '';
             categories.forEach(cat => categorySelect.add(new Option(cat, cat)));
-            statuses.forEach(stat => statusSelect.add(new Option(stat, stat)));
-            appointmentsLog('Category and status dropdowns populated.');
+            appointmentsLog('Category dropdown populated.');
 
             if (termin) { // Edit mode
                 appointmentsLog('Entering edit mode for termin:', termin);
@@ -2841,13 +3102,16 @@ class AppointmentsView {
                 
                 this.form.querySelector('#appointment-date').value = termin.Datum ? termin.Datum.split('T')[0] : '';
                 categorySelect.value = termin.Kategorie || '';
-                statusSelect.value = termin.Status || '';
                 this.form.querySelector('#appointment-partner').value = termin.Terminpartner || '';
                 this.form.querySelector('#appointment-prognose').value = termin.Umsatzprognose || '';
                 this.form.querySelector('#appointment-referrals').value = termin.Empfehlungen || '';
                 this.form.querySelector('#appointment-note').value = termin.Hinweis || '';
                 this.form.querySelector('#appointment-cancellation').checked = termin.Absage || false;
                 this.form.querySelector('#appointment-cancellation-reason').value = termin.Absagegrund || '';
+                this.form.querySelector('#appointment-infoabend-date').value = termin.Infoabend ? termin.Infoabend.split('T')[0] : '';
+
+                this._updateStatusDropdown(termin.Kategorie, termin.Status);
+                this.toggleConditionalFields(termin.Kategorie, false);
 
             } else { // Add mode
                 appointmentsLog('Entering add mode.');
@@ -2855,9 +3119,20 @@ class AppointmentsView {
                 idInput.value = '';
                 userSelect.value = this.currentUserId;
                 this.form.querySelector('#appointment-date').value = new Date().toISOString().split('T')[0];
+
+                // NEU: Standard-Kategorie basierend auf dem aktiven Tab setzen
+                if (this.currentTab === 'umsatz') {
+                    categorySelect.value = 'AT';
+                } else if (this.currentTab === 'recruiting' || this.currentTab === 'netzwerk') {
+                    categorySelect.value = 'ET';
+                    // Wert im Hintergrund setzen, auch wenn das Feld nicht sichtbar ist
+                    const nextInfoDate = findNextInfoDateAfter(new Date());
+                    this.form.querySelector('#appointment-infoabend-date').value = nextInfoDate.toISOString().split('T')[0];
+                }
+                this._updateStatusDropdown(categorySelect.value);
+                this.toggleConditionalFields(categorySelect.value, true);
             }
 
-            this.toggleConditionalFields(categorySelect.value);
             this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !this.form.querySelector('#appointment-cancellation').checked);
             
             this.modal.classList.add('visible');
@@ -2912,6 +3187,7 @@ class AppointmentsView {
             const empfehlungenRaw = this.form.querySelector('#appointment-referrals').value;
             const hinweis = this.form.querySelector('#appointment-note').value;
             const absagegrund = this.form.querySelector('#appointment-cancellation-reason').value;
+            const infoabend = this.form.querySelector('#appointment-infoabend-date').value;
 
             const rowData = {
                 [SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID]: [mitarbeiterId],
@@ -2924,6 +3200,7 @@ class AppointmentsView {
                 [SKT_APP.COLUMN_MAPS.termine.Hinweis]: hinweis,
                 [SKT_APP.COLUMN_MAPS.termine.Absage]: isCancellation,
                 [SKT_APP.COLUMN_MAPS.termine.Absagegrund]: isCancellation ? absagegrund : '',
+                [SKT_APP.COLUMN_MAPS.termine.Infoabend]: kategorie === 'ET' ? infoabend : null,
             };
 
             appointmentsLog('Constructed rowData object for API:', JSON.parse(JSON.stringify(rowData)));
@@ -2992,6 +3269,1359 @@ async function loadAndInitAppointmentsView() {
     console.error("Fehler beim Laden der Termin-Ansicht:", error);
     container.innerHTML = `<div class="text-center p-8 bg-red-50 rounded-lg border border-red-200"><i class="fas fa-exclamation-triangle fa-3x text-red-400 mb-4"></i><h3 class="text-xl font-bold text-skt-blue">Fehler beim Laden</h3><p class="text-red-600 mt-2">${error.message}</p><p class="text-gray-500 mt-4">Bitte stelle sicher, dass die Datei 'appointments.html' im selben Verzeichnis wie 'index.html' liegt.</p></div>`;
   }
+}
+
+// --- Potential View Logic ---
+const potentialLog = (message, ...data) => console.log(`%c[Potential] %c${message}`, 'color: #27ae60; font-weight: bold;', 'color: black;', ...data);
+
+class PotentialView {
+    constructor() {
+        this.listContainer = null;
+        this.modal = null;
+        this.form = null;
+        this.scheduleModal = null;
+        this.scheduleForm = null;
+        this.searchInput = null;
+        this.scopeFilter = null;
+
+        this.initialized = false;
+        this.currentUserId = null;
+        this.allPotentials = [];
+        this.downline = [];
+        this.filterText = '';
+    }
+
+    _getDomElements() {
+        this.listContainer = document.getElementById('potential-list-container');
+        this.modal = document.getElementById('potential-modal');
+        this.form = document.getElementById('potential-form');
+        this.scheduleModal = document.getElementById('schedule-modal');
+        this.scheduleForm = document.getElementById('schedule-form');
+        this.searchInput = document.getElementById('potential-search-filter');
+        this.scopeFilter = document.getElementById('potential-scope-filter');
+        return this.listContainer && this.modal && this.form && this.scheduleModal && this.scheduleForm && this.searchInput && this.scopeFilter;
+    }
+
+    async init(userId) {
+        potentialLog(`Modul wird initialisiert für User-ID: ${userId}`);
+        this.currentUserId = userId;
+        this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
+
+        if (!this._getDomElements()) {
+            potentialLog('!!! FEHLER: Benötigte DOM-Elemente für die Potential-Ansicht wurden nicht gefunden.');
+            return;
+        }
+
+        // NEU: Gib die verfügbaren Spaltennamen aus, um bei der Fehlersuche zu helfen.
+        console.log('Verfügbare Spalten in der "Termine" Tabelle:', SKT_APP.COLUMN_MAPS.termine);
+
+        this.downline.sort((a, b) => a.Name.localeCompare(b.Name));
+        this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.authenticatedUserData));
+
+        if (!this.initialized) {
+            potentialLog('Erstmalige Initialisierung: Event-Listener werden eingerichtet.');
+            this.setupEventListeners();
+            this.initialized = true;
+        }
+
+        await this.fetchAndRender();
+    }
+
+    async fetchAndRender() {
+        this.listContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        try {
+            const scope = this.scopeFilter.value;
+            let userIds = new Set();
+            switch (scope) {
+                case 'personal':
+                    userIds.add(this.currentUserId);
+                    break;
+                case 'group':
+                    userIds.add(this.currentUserId);
+                    SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
+                    break;
+                case 'structure':
+                    userIds.add(this.currentUserId);
+                    this.downline.forEach(u => userIds.add(u._id));
+                    break;
+            }
+
+            const userNames = Array.from(userIds).map(id => SKT_APP.findRowById('mitarbeiter', id)?.Name).filter(Boolean);
+            if (userNames.length === 0) { this.allPotentials = []; this.render(); return; }
+            const userNamesSql = userNames.map(name => `'${SKT_APP.escapeSql(name)}'`).join(',');
+
+            const query = `SELECT * FROM \`Termine\` WHERE \`Datum\` IS NULL AND \`Mitarbeiter_ID\` IN (${userNamesSql})`;
+            potentialLog('Sende SQL-Abfrage für Potentiale...');
+            const potentialsRaw = await SKT_APP.seaTableSqlQuery(query, true);
+            this.allPotentials = SKT_APP.mapSqlResults(potentialsRaw, 'Termine');
+            potentialLog(`${this.allPotentials.length} Potentiale geladen.`);
+            this.render();
+        } catch (error) {
+            potentialLog('!!! FEHLER in fetchAndRender !!!', error);
+            this.listContainer.innerHTML = `<div class="text-center py-16"><i class="fas fa-exclamation-triangle fa-4x text-red-400 mb-4"></i><h3 class="text-xl font-semibold text-skt-blue">Ein Fehler ist aufgetreten</h3><p class="text-gray-500 mt-2">${error.message}</p></div>`;
+        }
+    }
+
+    render() {
+        this.listContainer.innerHTML = '';
+        let filteredPotentials = this.allPotentials.filter(p => {
+            if (this.filterText) {
+                const searchText = this.filterText.toLowerCase();
+                const partner = (p.Terminpartner || '').toLowerCase();
+                const mitarbeiter = (p.Mitarbeiter_ID?.[0]?.display_value || '').toLowerCase();
+                return partner.includes(searchText) || mitarbeiter.includes(searchText);
+            }
+            return true;
+        });
+
+        if (filteredPotentials.length === 0) {
+            this.listContainer.innerHTML = `<div class="text-center py-16"><i class="fas fa-user-slash fa-4x text-skt-grey-medium mb-4"></i><h3 class="text-xl font-semibold text-skt-blue">Keine Potentiale gefunden</h3><p class="text-gray-500 mt-2">Lege neue Kontakte an, um sie hier zu bearbeiten.</p></div>`;
+            return;
+        }
+
+        const table = document.createElement('table');
+        table.className = 'appointments-table';
+        table.innerHTML = `<thead><tr><th>Terminpartner</th><th>Mitarbeiter</th><th>Kontakt</th><th>Kontaktiert</th><th>Aktion</th></tr></thead>`;
+        const tbody = document.createElement('tbody');
+
+        filteredPotentials.forEach(p => {
+            const tr = document.createElement('tr');
+            tr.className = 'cursor-pointer';
+            tr.dataset.id = p._id;
+            const mitarbeiterName = p.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
+            const kontaktiertStatus = p.Kontaktiert || '-';
+            tr.innerHTML = `
+                <td><p class="font-bold">${p.Terminpartner || '-'}</p></td>
+                <td>${mitarbeiterName}</td>
+                <td>
+                    <p>${p.Telefonnummer || '-'}</p>
+                    <p class="text-xs text-gray-500">${p.Email || '-'}</p>
+                </td>
+                <td><span class="px-2 py-1 text-xs font-semibold rounded-full bg-skt-grey-medium text-skt-blue-light">${kontaktiertStatus}</span></td>
+                <td><button class="text-skt-blue hover:underline">Bearbeiten</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        this.listContainer.appendChild(table);
+
+        this.listContainer.querySelectorAll('tbody tr').forEach(tr => {
+            tr.addEventListener('click', () => {
+                const potential = this.allPotentials.find(p => p._id === tr.dataset.id);
+                if (potential) this.openModal(potential);
+            });
+        });
+    }
+
+    setupEventListeners() {
+        document.getElementById('add-potential-btn').addEventListener('click', () => this.openModal());
+        document.getElementById('download-template-btn').addEventListener('click', () => this.downloadExcelTemplate());
+        
+        const importBtn = document.getElementById('import-excel-btn');
+        const fileInput = document.getElementById('potential-import-input');
+        importBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => this.handleFileImport(e));
+
+        document.getElementById('import-excel-btn').addEventListener('click', () => {
+            document.getElementById('potential-import-input').click();
+        });
+        
+        this.scopeFilter.addEventListener('change', () => this.fetchAndRender());
+
+        this.searchInput.addEventListener('input', _.debounce(e => {
+            this.filterText = e.target.value;
+            this.render();
+        }, 300));
+
+        // Main Modal
+        this.form.addEventListener('submit', e => this.handleFormSubmit(e));
+        document.getElementById('close-potential-modal-btn').addEventListener('click', () => this.closeModal());
+        document.getElementById('cancel-potential-btn').addEventListener('click', () => this.closeModal());
+        document.getElementById('schedule-appointment-btn').addEventListener('click', () => {
+            const potentialId = this.form.querySelector('#potential-id').value;
+            const potential = this.allPotentials.find(p => p._id === potentialId);
+            if (potential) this.openScheduleModal(potential);
+        });
+
+        // Schedule Modal
+        this.scheduleForm.addEventListener('submit', e => this.handleScheduleSubmit(e));
+        document.getElementById('close-schedule-modal-btn').addEventListener('click', () => this.closeScheduleModal());
+        document.getElementById('cancel-schedule-btn').addEventListener('click', () => this.closeScheduleModal());
+    }
+
+    openModal(potential = null) {
+        this.form.reset();
+        const title = this.modal.querySelector('#potential-modal-title');
+        const idInput = this.form.querySelector('#potential-id');
+        const userSelect = this.form.querySelector('#potential-user');
+
+        const allRelevantUsers = [SKT_APP.authenticatedUserData, ...this.downline].filter(Boolean);
+        userSelect.innerHTML = '';
+        allRelevantUsers.forEach(u => userSelect.add(new Option(u.Name, u._id)));
+
+        if (potential) {
+            title.textContent = 'Kontakt bearbeiten';
+            idInput.value = potential._id;
+            this.form.querySelector('#potential-partner').value = potential.Terminpartner || '';
+            const user = allRelevantUsers.find(u => u.Name === potential.Mitarbeiter_ID?.[0]?.display_value);
+            if (user) userSelect.value = user._id;
+            this.form.querySelector('#potential-phone').value = potential.Telefonnummer || '';
+            this.form.querySelector('#potential-email').value = potential.Email || '';
+            this.form.querySelector('#potential-rating-kunde').value = potential.Rating_Kunde || '';
+            this.form.querySelector('#potential-rating-ma').value = potential.Rating_MA || '';
+            this.form.querySelector('#potential-rating-nt').value = potential.Rating_NT || '';
+            this.form.querySelector('#potential-kontaktiert').value = potential.Kontaktiert || '';
+            this.form.querySelector('#potential-note').value = potential.Hinweis || '';
+        } else {
+            title.textContent = 'Neuen Kontakt anlegen';
+            idInput.value = '';
+            userSelect.value = this.currentUserId;
+        }
+        this.modal.classList.add('visible');
+    }
+
+    closeModal() {
+        this.modal.classList.remove('visible');
+    }
+
+    async handleFormSubmit(e) {
+        e.preventDefault();
+        const saveBtn = this.form.querySelector('#save-potential-btn');
+        saveBtn.disabled = true;
+        saveBtn.querySelector('.loader-small').classList.remove('hidden');
+        saveBtn.querySelector('#save-potential-btn-text').textContent = '';
+
+        // KORREKTUR: Logik vereinheitlicht, um die wiederhergestellte Update-Funktion zu nutzen.
+        const rowId = this.form.querySelector('#potential-id').value;
+
+        const rowData = {
+            [SKT_APP.COLUMN_MAPS.termine.Terminpartner]: this.form.querySelector('#potential-partner').value,
+            [SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID]: [this.form.querySelector('#potential-user').value],
+            [SKT_APP.COLUMN_MAPS.termine.Telefonnummer]: this.form.querySelector('#potential-phone').value || '',
+            [SKT_APP.COLUMN_MAPS.termine.Email]: this.form.querySelector('#potential-email').value || '',
+            [SKT_APP.COLUMN_MAPS.termine.Rating_Kunde]: parseFloat(this.form.querySelector('#potential-rating-kunde').value) || null,
+            [SKT_APP.COLUMN_MAPS.termine.Rating_MA]: parseFloat(this.form.querySelector('#potential-rating-ma').value) || null,
+            [SKT_APP.COLUMN_MAPS.termine.Rating_NT]: parseFloat(this.form.querySelector('#potential-rating-nt').value) || null,
+            [SKT_APP.COLUMN_MAPS.termine.Kontaktiert]: this.form.querySelector('#potential-kontaktiert').value || null,
+            [SKT_APP.COLUMN_MAPS.termine.Hinweis]: this.form.querySelector('#potential-note').value || '',
+            [SKT_APP.COLUMN_MAPS.termine.Datum]: null, // Wichtig für Potentiale
+        };
+
+        const success = rowId
+            ? await SKT_APP.seaTableUpdateRow('Termine', rowId, rowData)
+            : await SKT_APP.seaTableAddRow('Termine', rowData);
+
+        if (success) {
+            this.closeModal();
+            await this.fetchAndRender();
+        } else {
+            alert('Fehler beim Speichern des Kontakts.');
+        }
+
+        saveBtn.disabled = false;
+        saveBtn.querySelector('.loader-small').classList.add('hidden');
+        saveBtn.querySelector('#save-potential-btn-text').textContent = 'Speichern';
+    }
+
+    openScheduleModal(potential) {
+        this.scheduleForm.reset();
+        this.scheduleForm.querySelector('#schedule-potential-id').value = potential._id;
+
+        const categorySelect = this.scheduleForm.querySelector('#schedule-category');
+        const statusSelect = this.scheduleForm.querySelector('#schedule-status');
+        categorySelect.innerHTML = '';
+        statusSelect.innerHTML = '';
+
+        const terminMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'termine');
+        const categoryColumn = terminMeta.columns.find(c => c.name === 'Kategorie');
+        const statusColumn = terminMeta.columns.find(c => c.name === 'Status');
+
+        categoryColumn.data.options.forEach(o => categorySelect.add(new Option(o.name, o.name)));
+        statusColumn.data.options.forEach(o => statusSelect.add(new Option(o.name, o.name)));
+
+        this.scheduleModal.classList.add('visible');
+    }
+
+    closeScheduleModal() {
+        this.scheduleModal.classList.remove('visible');
+    }
+
+    async handleScheduleSubmit(e) {
+        e.preventDefault();
+        const rowId = this.scheduleForm.querySelector('#schedule-potential-id').value;
+        const datum = this.scheduleForm.querySelector('#schedule-date').value;
+        const kategorie = this.scheduleForm.querySelector('#schedule-category').value;
+        const status = this.scheduleForm.querySelector('#schedule-status').value;
+
+        // Neuer Ansatz: Direkte SQL-Abfrage für das Update.
+        // Das ist oft robuster für spezifische Updates, wenn die API sich unerwartet verhält.
+        const sql = `UPDATE \`Termine\` SET \`Datum\` = '${datum}', \`Kategorie\` = '${kategorie}', \`Status\` = '${status}' WHERE \`_id\` = '${rowId}'`;
+        
+        let success = false;
+        try {
+            potentialLog(`[SCHEDULE] Versuche Termin zu speichern für rowId: ${rowId}`);
+            potentialLog(`[SCHEDULE] Sende folgende SQL-Abfrage:`, sql);
+
+            const result = await SKT_APP.seaTableSqlQuery(sql, false);
+            
+            // seaTableSqlQuery gibt bei erfolgreichem UPDATE ein leeres Array zurück.
+            // Bei einem Fehler gibt es `null` zurück.
+            if (result !== null) {
+                potentialLog(`[SCHEDULE] SQL Update erfolgreich.`);
+                success = true;
+            } else {
+                throw new Error("SQL Update API call returned null.");
+            }
+
+        } catch (error) {
+            console.error("[Potential Schedule] FAILED to update row via SQL.", error);
+        }
+
+        if (success) {
+            // WICHTIG: Die gecachten Daten müssen manuell aktualisiert werden,
+            // da wir nicht die ganze Tabelle neu laden.
+            const terminIndex = db.termine.findIndex(t => t._id === rowId);
+            if (terminIndex > -1) {
+                db.termine[terminIndex].Datum = datum;
+                db.termine[terminIndex].Kategorie = kategorie;
+                db.termine[terminIndex].Status = status;
+                console.log('[CACHE-UPDATE] Termin im lokalen Cache aktualisiert.');
+            }
+
+            this.closeScheduleModal();
+            this.closeModal();
+            await this.fetchAndRender();
+        } else {
+            alert('Fehler beim Speichern des Termins. Details in der Konsole.');
+        }
+    }
+
+    downloadExcelTemplate() {
+        potentialLog('Excel-Vorlage wird heruntergeladen...');
+        
+        // Diese Header müssen den Spaltennamen in SeaTable entsprechen,
+        // die später beim Import verwendet werden. Für die Vorlage verwenden wir benutzerfreundliche Namen.
+        const headers = [
+            "Terminpartner",
+            "Telefonnummer",
+            "Email",
+            "Rating_Kunde",
+            "Rating_MA",
+            "Rating_NT",
+            "Hinweis",
+            "Kontaktiert"
+        ];
+
+        // CSV-Inhalt erstellen. Wichtig: UTF-8 BOM für korrekte Darstellung von Umlauten in Excel.
+        const csvContent = "\uFEFF" + headers.join(';') + "\n";
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "potential_vorlage.csv";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    async handleFileImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        potentialLog(`Importiere Datei: ${file.name}`);
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const text = e.target.result;
+            const rows = text.split('\n').slice(1); // Header überspringen
+            const potentialsToCreate = [];
+            const headers = text.split('\n')[0].trim().replace(/\r/g, "").split(';');
+
+            const columnMapping = {
+                "Terminpartner": "Terminpartner",
+                "Telefonnummer": "Telefonnummer",
+                "Email": "Email",
+                "Rating_Kunde": "Rating_Kunde",
+                "Rating_MA": "Rating_MA",
+                "Rating_NT": "Rating_NT",
+                "Hinweis": "Hinweis",
+                "Kontaktiert": "Status" // CSV "Kontaktiert" auf DB "Status" mappen
+            };
+
+            for (const row of rows) {
+                if (row.trim() === '') continue;
+                const values = row.trim().split(';');
+                const potential = {};
+                headers.forEach((header, index) => {
+                    const dbColumn = columnMapping[header];
+                    if (dbColumn) {
+                        potential[dbColumn] = values[index] || null;
+                    }
+                });
+                potentialsToCreate.push(potential);
+            }
+
+            if (potentialsToCreate.length > 0) {
+                potentialLog(`Gefunden: ${potentialsToCreate.length} Potentiale zum Importieren.`);
+                const success = await this.bulkAddPotentials(potentialsToCreate);
+                if (success) {
+                    alert(`${potentialsToCreate.length} Kontakte erfolgreich importiert!`);
+                    await this.fetchAndRender();
+                } else {
+                    alert('Fehler beim Importieren der Kontakte.');
+                }
+            }
+        };
+        reader.readAsText(file, 'UTF-8');
+        event.target.value = ''; // File-Input zurücksetzen
+    }
+
+    async bulkAddPotentials(potentials) {
+        potentialLog('Füge Potentiale einzeln hinzu, um Verknüpfungen zu setzen...');
+        let successCount = 0;
+        for (const potential of potentials) {
+            const rowData = {
+                [SKT_APP.COLUMN_MAPS.termine.Terminpartner]: potential.Terminpartner,
+                [SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID]: [this.currentUserId],
+                [SKT_APP.COLUMN_MAPS.termine.Telefonnummer]: potential.Telefonnummer,
+                [SKT_APP.COLUMN_MAPS.termine.Email]: potential.Email,
+                [SKT_APP.COLUMN_MAPS.termine.Rating_Kunde]: parseFloat(potential.Rating_Kunde) || null,
+                [SKT_APP.COLUMN_MAPS.termine.Rating_MA]: parseFloat(potential.Rating_MA) || null,
+                [SKT_APP.COLUMN_MAPS.termine.Rating_NT]: parseFloat(potential.Rating_NT) || null,
+                [SKT_APP.COLUMN_MAPS.termine.Status]: potential.Status,
+                [SKT_APP.COLUMN_MAPS.termine.Hinweis]: potential.Hinweis,
+                [SKT_APP.COLUMN_MAPS.termine.Datum]: null,
+            };
+            const success = await SKT_APP.seaTableAddRow('Termine', rowData);
+            if (success) successCount++;
+        }
+        potentialLog(`${successCount} von ${potentials.length} Potentialen erfolgreich importiert.`);
+        return successCount > 0; // Gibt true zurück, wenn mindestens einer erfolgreich war
+    }
+}
+
+async function loadAndInitPotentialView() {
+    const container = dom.potentialView;
+    console.log('%c[Loader] %cLoading/Re-loading potential view...', 'color: orange; font-weight: bold;', 'color: black;');
+    try {
+        const response = await fetch("./potential.html");
+        if (!response.ok) throw new Error(`Die Datei 'potential.html' konnte nicht gefunden werden.`);
+        container.innerHTML = await response.text();
+
+        if (!potentialViewInstance) {
+            potentialViewInstance = new PotentialView();
+        }
+        await potentialViewInstance.init(authenticatedUserData._id);
+    } catch (error) {
+        console.error("Fehler beim Laden der Potential-Ansicht:", error);
+        container.innerHTML = `<div class="text-center p-8 bg-red-50 rounded-lg border border-red-200"><h3 class="text-xl font-bold text-skt-blue">Fehler beim Laden</h3><p class="text-red-600 mt-2">${error.message}</p></div>`;
+    }
+}
+
+const umsatzLog = (message, ...data) => console.log(`%c[Umsatz] %c${message}`, 'color: #f97316; font-weight: bold;', 'color: black;', ...data);
+
+class UmsatzView {
+    constructor() {
+        this.listContainer = null;
+        this.modal = null;
+        this.form = null;
+        this.scopeFilter = null;
+        this.searchInput = null;
+        this.startDateInput = null;
+        this.endDateInput = null;
+
+        this.initialized = false;
+        this.currentUserId = null;
+        this.allUmsaetze = [];
+        this.downline = [];
+        this.sortColumn = 'Datum';
+        this.sortDirection = 'desc';
+        this.filterText = '';
+        this.lastSavedUmsatz = null;
+    }
+
+    _getDomElements() {
+        this.listContainer = document.getElementById('umsatz-list-container');
+        this.modal = document.getElementById('umsatz-modal');
+        this.form = document.getElementById('umsatz-form');
+        this.scopeFilter = document.getElementById('umsatz-scope-filter');
+        this.searchInput = document.getElementById('umsatz-search-filter');
+        this.startDateInput = document.getElementById('umsatz-start-date');
+        this.endDateInput = document.getElementById('umsatz-end-date');
+        return this.listContainer && this.modal && this.form && this.scopeFilter && this.searchInput && this.startDateInput && this.endDateInput;
+    }
+
+    async init(userId) {
+        umsatzLog(`Modul wird initialisiert für User-ID: ${userId}`);
+        this.currentUserId = userId;
+
+        umsatzLog('Geladene Metadaten:', SKT_APP.METADATA);
+
+
+        if (!this._getDomElements()) {
+            umsatzLog('!!! FEHLER: Benötigte DOM-Elemente für die Umsatz-Ansicht wurden nicht gefunden.');
+            return;
+        }
+
+        const { startDate, endDate } = SKT_APP.getMonthlyCycleDates();
+        this.startDateInput.value = startDate.toISOString().split('T')[0];
+        this.endDateInput.value = endDate.toISOString().split('T')[0];
+
+        this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
+        this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.authenticatedUserData));
+
+        if (!this.initialized) {
+            this.setupEventListeners();
+            this.initialized = true;
+        }
+        await this.fetchAndRender();
+    }
+
+    async fetchAndRender() {
+        this.listContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        try {
+            const scope = this.scopeFilter.value;
+            let userIds = new Set([this.currentUserId]);
+            if (scope === 'group') SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
+            else if (scope === 'structure') this.downline.forEach(u => userIds.add(u._id));
+
+            const startDateIso = this.startDateInput.value;
+            const endDateIso = this.endDateInput.value;
+
+            const userNamesSql = Array.from(userIds).map(id => `'${SKT_APP.findRowById('mitarbeiter', id)?.Name}'`).filter(Boolean).join(',');
+            const query = `SELECT * FROM \`Umsatz\` WHERE \`Mitarbeiter_ID\` IN (${userNamesSql}) AND \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' ORDER BY \`Datum\` DESC`;
+            
+            const umsaetzeRaw = await SKT_APP.seaTableSqlQuery(query, true);
+            if (umsaetzeRaw && umsaetzeRaw.length > 0) umsatzLog('Roh-Daten für einen Umsatz:', umsaetzeRaw[0]);
+            this.allUmsaetze = SKT_APP.mapSqlResults(umsaetzeRaw, 'Umsatz');
+            if (this.allUmsaetze && this.allUmsaetze.length > 0) umsatzLog('Gemappte Daten für einen Umsatz:', this.allUmsaetze[0]);
+            this.render();
+        } catch (error) {
+            umsatzLog('!!! FEHLER in fetchAndRender !!!', error);
+        }
+    }
+
+    render() {
+        let filteredData = this.allUmsaetze.filter(u => {
+            if (this.filterText) {
+                const searchText = this.filterText.toLowerCase();
+                return (u.Kunde || '').toLowerCase().includes(searchText) ||
+                       (u.Mitarbeiter_ID?.[0]?.display_value || '').toLowerCase().includes(searchText);
+            }
+            return true;
+        });
+
+        filteredData.sort((a, b) => {
+            let valA = a[this.sortColumn];
+            let valB = b[this.sortColumn];
+            if (this.sortColumn === 'Mitarbeiter_ID' || this.sortColumn === 'Gesellschaft_ID' || this.sortColumn === 'Produkt_ID') {
+                valA = valA?.[0]?.display_value || '';
+                valB = valB?.[0]?.display_value || '';
+            }
+            const comparison = new Intl.Collator('de').compare(valA, valB);
+            return this.sortDirection === 'asc' ? comparison : -comparison;
+        });
+
+        this.listContainer.innerHTML = '';
+        if (filteredData.length === 0) {
+            this.listContainer.innerHTML = `<p class="text-center text-gray-500">Keine Umsätze gefunden.</p>`;
+            return;
+        }
+
+        const table = document.createElement('table');
+        table.className = 'appointments-table';
+        const headers = [
+            { key: 'Kunde', label: 'Kunde' }, { key: 'Mitarbeiter_ID', label: 'Mitarbeiter' },
+            { key: 'EH', label: 'EH' }, { key: 'Gesellschaft_ID', label: 'Gesellschaft' },
+            { key: 'Produkt_ID', label: 'Produkt' }
+        ];
+        table.innerHTML = `<thead><tr>${headers.map(h => `<th data-sort-key="${h.key}">${h.label} <i class="fas fa-sort sort-icon"></i></th>`).join('')}</tr></thead>`;
+        const tbody = document.createElement('tbody');
+        filteredData.forEach(u => {
+            const tr = document.createElement('tr');
+            tr.className = 'cursor-pointer';
+            tr.dataset.id = u._id;
+            tr.innerHTML = `
+                <td>${u.Kunde || '-'}</td>
+                <td>${u.Mitarbeiter_ID?.[0]?.display_value || '-'}</td>
+                <td>${u.EH || '-'}</td>
+                <td>${u.Gesellschaft_ID?.[0]?.display_value || '-'}</td>
+                <td>${u.Produkt_ID?.[0]?.display_value || '-'}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        this.listContainer.appendChild(table);
+
+        table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort(e.currentTarget.dataset.sortKey)));
+        table.querySelectorAll('tbody tr').forEach(tr => tr.addEventListener('click', e => this.openModal(this.allUmsaetze.find(u => u._id === e.currentTarget.dataset.id))));
+    }
+
+    _handleSort(key) {
+        if (this.sortColumn === key) this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+        else { this.sortColumn = key; this.sortDirection = 'desc'; }
+        this.render();
+    }
+
+    setupEventListeners() {
+        document.getElementById('add-umsatz-btn').addEventListener('click', () => this.openModal());
+        this.scopeFilter.addEventListener('change', () => this.fetchAndRender());
+        this.searchInput.addEventListener('input', _.debounce(e => { this.filterText = e.target.value; this.render(); }, 300));
+        const debouncedFetch = _.debounce(() => this.fetchAndRender(), 300);
+        this.startDateInput.addEventListener('change', debouncedFetch);
+        this.endDateInput.addEventListener('change', debouncedFetch);
+        this.form.addEventListener('submit', e => this.handleFormSubmit(e));
+        document.getElementById('close-umsatz-modal-btn').addEventListener('click', () => this.modal.classList.remove('visible'));
+        document.getElementById('cancel-umsatz-btn').addEventListener('click', () => this.modal.classList.remove('visible'));
+        document.getElementById('delete-umsatz-btn').addEventListener('click', () => this.handleDelete());
+    }
+
+    openModal(umsatz = null) {
+        this.form.reset();
+        const idInput = this.form.querySelector('#umsatz-id');
+        const boFields = this.form.querySelector('#umsatz-bo-fields');
+        const deleteBtn = this.form.querySelector('#delete-umsatz-btn');
+
+        this.form.querySelector('#save-umsatz-btn').disabled = false;
+        this.form.querySelector('#save-umsatz-btn').textContent = 'Speichern';
+
+        const populateSelect = (selectId, data, displayField, selectedValue) => {
+            umsatzLog(`Befülle Dropdown ${selectId} mit ${data.length} Einträgen. Display-Feld: '${displayField}'`);
+            const select = this.form.querySelector(selectId);
+            select.innerHTML = '<option value="">-- Bitte wählen --</option>';
+            data.forEach(item => {
+                const text = item[displayField];
+                if (text === undefined) {
+                    console.warn(`Display-Feld '${displayField}' nicht im Objekt gefunden für Dropdown ${selectId}.`, item);
+                }
+                select.add(new Option(text || '', item._id));
+            });
+            if (selectedValue) {
+                umsatzLog(`Setze Wert für ${selectId} auf: ${selectedValue}`);
+                select.value = selectedValue;
+            }
+        };
+
+        const allUsers = [SKT_APP.authenticatedUserData, ...this.downline].filter(Boolean);
+        allUsers.sort((a, b) => a.Name.localeCompare(b.Name));
+
+        // KORREKTUR: Robuste Bestimmung des Anzeige-Spalten-KEYS, um direkt auf Rohdaten zugreifen zu können.
+        const getDisplayColumnKey = (tableName) => {
+            const tableMeta = SKT_APP.METADATA.tables.find(t => t.name.toLowerCase() === tableName.toLowerCase());
+            if (!tableMeta) {
+                console.warn(`Metadaten für Tabelle '${tableName}' nicht gefunden. Fallback auf '0000'.`);
+                return '0000';
+            }
+
+            // Spezifische Logik für bekannte Tabellen, da die "Display"-Spalte nicht konsistent ist.
+            let targetColumnName;
+            if (tableName.toLowerCase() === 'produkte') {
+                targetColumnName = 'Produkt'; // In der Produkte-Tabelle heißt die Spalte "Produkt"
+            } else if (tableName.toLowerCase() === 'gesellschaften') {
+                targetColumnName = 'Gesellschaft'; // In der Gesellschaften-Tabelle heißt die Spalte "Gesellschaft"
+            } else {
+                targetColumnName = 'Name'; // In Gesellschaften und anderen heißt sie "Name"
+            }
+
+            const displayColumn = tableMeta.columns.find(c => c.name === targetColumnName);
+            if (displayColumn) {
+                return displayColumn.key;
+            }
+
+            // Fallback: Wenn der spezifische Name nicht gefunden wird, nimm die primäre Spalte.
+            const primaryColumn = tableMeta.columns.find(c => c.is_primary);
+            if (primaryColumn) {
+                console.warn(`Spezifische Spalte '${targetColumnName}' nicht in '${tableName}' gefunden. Fallback auf primäre Spalte '${primaryColumn.name}'.`);
+                return primaryColumn.key;
+            }
+            
+            console.warn(`Keine passende Spalte in '${tableName}' gefunden. Fallback auf '0000'.`);
+            return '0000';
+        };
+
+        const gesellschaftenDisplayKey = getDisplayColumnKey('Gesellschaften');
+        const produkteDisplayKey = getDisplayColumnKey('Produkte');
+
+        if (umsatz) {
+            this.lastSavedUmsatz = null; // Clear pre-fill cache when editing
+            idInput.value = umsatz._id;
+            this.form.querySelector('#umsatz-kunde').value = umsatz.Kunde || '';
+            this.form.querySelector('#umsatz-eh').value = umsatz.EH || '';
+            this.form.querySelector('#umsatz-hinweis-bo').value = umsatz.Hinweis_BO || '';
+            this.form.querySelector('#umsatz-status-ok').checked = umsatz.Status_OK || false;
+            
+            populateSelect('#umsatz-mitarbeiter', allUsers, 'Name', umsatz?.Mitarbeiter_ID?.[0]?.row_id);
+            populateSelect('#umsatz-gesellschaft', db.gesellschaften, gesellschaftenDisplayKey, umsatz?.Gesellschaft_ID?.[0]?.row_id);
+            populateSelect('#umsatz-produkt', db.produkte, produkteDisplayKey, umsatz?.Produkt_ID?.[0]?.row_id);
+
+            boFields.classList.remove('hidden');
+            deleteBtn.classList.remove('hidden');
+        } else {
+            idInput.value = '';
+            boFields.classList.add('hidden');
+            deleteBtn.classList.add('hidden');
+
+            if (this.lastSavedUmsatz) {
+                umsatzLog('Fülle Formular mit zuletzt gespeicherten Daten.', this.lastSavedUmsatz);
+                this.form.querySelector('#umsatz-kunde').value = this.lastSavedUmsatz.Kunde;
+                this.form.querySelector('#umsatz-eh').value = ''; // EH bleibt leer
+                populateSelect('#umsatz-mitarbeiter', allUsers, 'Name', this.lastSavedUmsatz.Mitarbeiter_ID);
+                populateSelect('#umsatz-gesellschaft', db.gesellschaften, gesellschaftenDisplayKey, this.lastSavedUmsatz.Gesellschaft_ID);
+                populateSelect('#umsatz-produkt', db.produkte, produkteDisplayKey, this.lastSavedUmsatz.Produkt_ID);
+            } else {
+                populateSelect('#umsatz-mitarbeiter', allUsers, 'Name', this.currentUserId);
+                populateSelect('#umsatz-gesellschaft', db.gesellschaften, gesellschaftenDisplayKey, null);
+                populateSelect('#umsatz-produkt', db.produkte, produkteDisplayKey, null);
+            }
+        }
+        this.modal.classList.add('visible');
+    }
+
+    async handleFormSubmit(e) {
+        e.preventDefault();
+        const saveBtn = this.form.querySelector('#save-umsatz-btn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Speichern...';
+
+        const rowId = this.form.querySelector('#umsatz-id').value;
+        const isNew = !rowId;
+
+        const formData = {
+            Kunde: this.form.querySelector('#umsatz-kunde').value,
+            EH: parseFloat(this.form.querySelector('#umsatz-eh').value) || null,
+            Mitarbeiter_ID: this.form.querySelector('#umsatz-mitarbeiter').value,
+            Gesellschaft_ID: this.form.querySelector('#umsatz-gesellschaft').value,
+            Produkt_ID: this.form.querySelector('#umsatz-produkt').value,
+            Hinweis_BO: this.form.querySelector('#umsatz-hinweis-bo').value,
+            Status_OK: this.form.querySelector('#umsatz-status-ok').checked,
+        };
+
+        const rowData = {
+            [COLUMN_MAPS.umsatz.Kunde]: formData.Kunde,
+            [COLUMN_MAPS.umsatz.EH]: formData.EH,
+            [COLUMN_MAPS.umsatz.Mitarbeiter_ID]: formData.Mitarbeiter_ID ? [formData.Mitarbeiter_ID] : [],
+            [COLUMN_MAPS.umsatz.Gesellschaft_ID]: formData.Gesellschaft_ID ? [formData.Gesellschaft_ID] : [],
+            [COLUMN_MAPS.umsatz.Produkt_ID]: formData.Produkt_ID ? [formData.Produkt_ID] : [],
+            [COLUMN_MAPS.umsatz.Hinweis_BO]: formData.Hinweis_BO,
+            [COLUMN_MAPS.umsatz.Status_OK]: formData.Status_OK,
+        };
+
+        if (isNew) rowData[COLUMN_MAPS.umsatz.Datum] = new Date().toISOString().split('T')[0];
+
+        const success = isNew 
+            ? await seaTableAddUmsatzRow('Umsatz', rowData)
+            : await seaTableUpdateUmsatzRow('Umsatz', rowId, rowData);
+
+        if (success) {
+            saveBtn.textContent = 'Gespeichert!';
+            saveBtn.classList.remove('hover:bg-green-700');
+            saveBtn.classList.add('bg-skt-green-accent');
+
+            if (isNew) {
+                this.lastSavedUmsatz = formData;
+            } else {
+                this.lastSavedUmsatz = null;
+            }
+
+            await this.fetchAndRender();
+            setTimeout(() => {
+                this.modal.classList.remove('visible');
+                saveBtn.textContent = 'Speichern';
+                saveBtn.disabled = false;
+            }, 1500);
+        } else {
+            alert('Fehler beim Speichern.');
+            saveBtn.textContent = 'Speichern';
+            saveBtn.disabled = false;
+        }
+    }
+
+    async handleDelete() {
+        const rowId = this.form.querySelector('#umsatz-id').value;
+        if (confirm('Möchten Sie diesen Umsatz wirklich löschen?')) {
+            const success = await seaTableDeleteRow('Umsatz', rowId);
+            if (success) {
+                this.modal.classList.remove('visible');
+                await this.fetchAndRender();
+            } else {
+                alert('Fehler beim Löschen.');
+            }
+        }
+    }
+}
+
+async function loadAndInitUmsatzView() {
+    const container = dom.umsatzView;
+    try {
+        const response = await fetch("./umsatz.html");
+        if (!response.ok) throw new Error(`Die Datei 'umsatz.html' konnte nicht gefunden werden.`);
+        container.innerHTML = await response.text();
+        if (!umsatzViewInstance) umsatzViewInstance = new UmsatzView();
+        await umsatzViewInstance.init(authenticatedUserData._id);
+    } catch (error) {
+        console.error("Fehler beim Laden der Umsatz-Ansicht:", error);
+    }
+}
+
+const auswertungLog = (message, ...data) => console.log(`%c[Auswertung] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
+
+class AuswertungView {
+    constructor() {
+        this.initialized = false;
+        this.currentUserId = null;
+        this.downline = [];
+        this.currentTab = 'rangliste';
+        this.currentAktivitaetenTimespan = 'woche';
+        this.sortConfig = {
+            rangliste: { column: 'eh', direction: 'desc' },
+            aktivitaeten: { column: 'atGehalten', direction: 'desc' },
+            fkRennliste: { column: 'eh', direction: 'desc' },
+            infoabend: { column: 'Terminpartner', direction: 'asc' }
+        };
+    }
+
+    _getDomElements() {
+        this.ranglisteTab = document.getElementById('rangliste-tab');
+        this.aktivitaetenTab = document.getElementById('aktivitaeten-tab');
+        this.fkRennlisteTab = document.getElementById('fk-rennliste-tab');
+        this.naechstesInfoTab = document.getElementById('naechstes-info-tab');
+        this.ranglisteView = document.getElementById('rangliste-view');
+        this.aktivitaetenView = document.getElementById('aktivitaeten-view');
+        this.aktivitaetenListContainer = document.getElementById('aktivitaeten-list-container');
+        this.aktivitaetenRoleFilter = document.getElementById('aktivitaeten-role-filter');
+        this.aktivitaetenDateRangeHint = document.getElementById('aktivitaeten-date-range-hint');
+        this.fkRennlisteView = document.getElementById('fk-rennliste-view');
+        this.naechstesInfoView = document.getElementById('naechstes-info-view');
+        this.infoabendDateSelect = document.getElementById('infoabend-date-select');
+        this.infoabendScopeFilter = document.getElementById('infoabend-scope-filter');
+        this.infoabendShowCancelled = document.getElementById('infoabend-show-cancelled');
+        this.infoabendListContainer = document.getElementById('infoabend-list-container');
+        this.funnelChartContainer = document.getElementById('funnel-chart-container');
+
+        return this.ranglisteTab && this.aktivitaetenTab && this.fkRennlisteTab && this.naechstesInfoTab && this.ranglisteView && this.aktivitaetenView && this.fkRennlisteView && this.naechstesInfoView;
+    }
+
+    _getHierarchyForGroup(groupName) {
+        // Handle special, combined groups first
+        if (groupName === 'Trainee & GA') return 0; // Lowest hierarchy, always at the bottom
+
+        // Find the corresponding career plan entry.
+        // This is robust against trailing spaces.
+        const trimmedGroupName = groupName.trim();
+        const plan = db.karriereplan.find(p => p.Stufe === trimmedGroupName);
+
+        if (plan && typeof plan.Hierarchie === 'number') {
+            return plan.Hierarchie;
+        }
+
+        // Fallback for gendered names like "Landesdirektor:in" if "Landesdirektor" is in the plan
+        const baseName = trimmedGroupName.split(':')[0];
+        if (baseName !== trimmedGroupName) {
+            const basePlan = db.karriereplan.find(p => p.Stufe === baseName);
+            if (basePlan && typeof basePlan.Hierarchie === 'number') {
+                return basePlan.Hierarchie;
+            }
+        }
+        return -1; // Ranks without hierarchy value will be at the very bottom
+    }
+
+    async init(userId) {
+        auswertungLog(`Modul wird initialisiert für User-ID: ${userId}`);
+        this.currentUserId = userId;
+        this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
+
+        if (!this._getDomElements()) {
+            auswertungLog('!!! FEHLER: Benötigte DOM-Elemente wurden nicht gefunden.');
+            return;
+        }
+
+        if (!this.initialized) {
+            this.setupEventListeners();
+            this.initialized = true;
+        }
+
+        this.updateTabs();
+        await this.renderCurrentView();
+    }
+
+    setupEventListeners() {
+        document.querySelectorAll('.auswertung-tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                this.currentTab = e.currentTarget.dataset.view;
+                this.updateTabs();
+                this.renderCurrentView();
+            });
+        });
+
+        document.querySelectorAll('.aktivitaeten-timespan-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.currentAktivitaetenTimespan = e.currentTarget.dataset.timespan;
+                document.querySelectorAll('.aktivitaeten-timespan-btn').forEach(b => b.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+                this.renderAktivitaeten();
+            });
+        });
+
+        this.aktivitaetenRoleFilter.addEventListener('change', () => this.renderAktivitaeten());
+
+        this.infoabendDateSelect.addEventListener('change', () => this.renderNaechstesInfo());
+        this.infoabendScopeFilter.addEventListener('change', () => this.renderNaechstesInfo());
+        this.infoabendShowCancelled.addEventListener('change', () => this.renderNaechstesInfo());
+    }
+
+    _handleSort(viewType, key) {
+        const config = this.sortConfig[viewType];
+        if (config.column === key) {
+            config.direction = config.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            config.column = key;
+            config.direction = 'asc';
+        }
+        this.renderCurrentView();
+    }
+
+    updateTabs() {
+        document.querySelectorAll('.auswertung-tab').forEach(tab => {
+            const isActive = tab.dataset.view === this.currentTab;
+            tab.className = `auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg ${isActive ? 'border-skt-blue text-skt-blue' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`;
+        });
+        document.querySelectorAll('.auswertung-view-content').forEach(view => {
+            view.classList.toggle('hidden', view.id !== `${this.currentTab}-view`);
+        });
+    }
+
+    async renderCurrentView() {
+        switch (this.currentTab) {
+            case 'rangliste':
+                await this.renderRangliste();
+                break;
+            case 'aktivitaeten':
+                await this.renderAktivitaeten();
+                break;
+            case 'fk-rennliste':
+                await this.renderFkRennliste();
+                break;
+            case 'naechstes-info':
+                await this.renderNaechstesInfo(true); // true to repopulate dates
+                break;
+        }
+    }
+
+    async renderRangliste() {
+        this.ranglisteView.innerHTML = '<div class="loader mx-auto"></div>';
+        const { startDate, endDate } = getMonthlyCycleDates();
+        const startDateIso = startDate.toISOString().split('T')[0];
+        const endDateIso = endDate.toISOString().split('T')[0];
+
+        const query = `SELECT Mitarbeiter_ID, SUM(EH) as TotalEH FROM Umsatz WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}' GROUP BY Mitarbeiter_ID HAVING SUM(EH) >= 1`;
+        const activeUsersRaw = await seaTableSqlQuery(query, true);
+        const activeUsersData = mapSqlResults(activeUsersRaw || [], 'Umsatz');
+
+        const enrichedUsers = activeUsersData.map(u => {
+            const mitarbeiterName = u.Mitarbeiter_ID?.[0]?.display_value;
+            if (!mitarbeiterName) {
+                return null; // Ungültigen Datensatz überspringen
+            }
+            const mitarbeiter = db.mitarbeiter.find(m => m.Name === mitarbeiterName);
+            const werber = mitarbeiter ? db.mitarbeiter.find(m => m._id === mitarbeiter.Werber) : null;
+            return {
+                name: mitarbeiter?.Name || 'Unbekannt',
+                rang: mitarbeiter?.Karrierestufe || 'N/A',
+                eh: u.TotalEH,
+            };
+        }).filter(Boolean); // Entfernt alle null-Einträge
+
+        // ANPASSUNG: Logik zur Gruppierung von Trainee/GA Rängen
+        const getRankGroup = (rank) => {
+            const rankStr = String(rank || '').trim();
+            const lowerRank = rankStr.toLowerCase();
+            if (lowerRank.includes('trainee') || (lowerRank.includes('ga') && lowerRank.length < 5)) {
+                return 'Trainee & GA';
+            }
+            return rankStr;
+        };
+
+        const groupedByRank = _.groupBy(enrichedUsers, user => getRankGroup(user.rang || 'N/A'));
+
+        const allGroupNames = Object.keys(groupedByRank);
+        // NEUE SORTIERUNG basierend auf Hierarchie
+        allGroupNames.sort((a, b) => {
+            const hierarchyA = this._getHierarchyForGroup(a);
+            const hierarchyB = this._getHierarchyForGroup(b);
+            if (hierarchyB !== hierarchyA) {
+                return hierarchyB - hierarchyA; // Descending by hierarchy
+            }
+            return a.localeCompare(b); // Alphabetical for same-level ranks
+        });
+        const displayGroups = allGroupNames;
+        
+        const sortConfig = this.sortConfig.rangliste;
+        const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+
+        this.ranglisteView.innerHTML = '';
+        // ANPASSUNG: Iteriere über die sortierten Anzeigegruppen
+        for (const groupName of displayGroups) {
+            if (groupedByRank[groupName]) {
+                const usersInRank = groupedByRank[groupName];
+                usersInRank.sort((a, b) => {
+                    let valA = a[sortConfig.column];
+                    let valB = b[sortConfig.column];
+                    let comparison = 0;
+                    if (typeof valA === 'number' && typeof valB === 'number') {
+                        comparison = valA - valB;
+                    } else {
+                        comparison = collator.compare(String(valA), String(valB));
+                    }
+                    return sortConfig.direction === 'asc' ? comparison : -comparison;
+                });
+
+                const groupEl = document.createElement('div');
+                groupEl.innerHTML = `<h3 class="text-xl font-bold text-skt-blue mb-3">${groupName}</h3>`;
+                const table = document.createElement('table');
+                table.className = 'appointments-table';
+                // ANPASSUNG: "Rangstufe" entfernt
+                const headers = [
+                    { key: 'name', label: 'Name' },
+                    { key: 'eh', label: 'Einheiten' },
+                ];
+                table.innerHTML = `<thead><tr>${headers.map(h => {
+                    const icon = sortConfig.column === h.key ? (sortConfig.direction === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>') : '<i class="fas fa-sort sort-icon"></i>';
+                    return `<th data-sort-key="${h.key}">${h.label} ${icon}</th>`;
+                }).join('')}</tr></thead>`;
+
+                const tbody = document.createElement('tbody');
+                usersInRank.forEach(user => {
+                    // ANPASSUNG: Spaltenstruktur angepasst
+                    tbody.innerHTML += `<tr><td>${user.name}</td><td>${user.eh.toFixed(2)}</td></tr>`;
+                });
+                table.appendChild(tbody);
+                table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('rangliste', e.currentTarget.dataset.sortKey)));
+                groupEl.appendChild(table);
+                this.ranglisteView.appendChild(groupEl);
+            }
+        }
+    }
+
+    async renderAktivitaeten() {
+        this.aktivitaetenListContainer.innerHTML = '<div class="loader mx-auto"></div>';
+
+        const { startDate, endDate } = this.currentAktivitaetenTimespan === 'woche'
+            ? getWeeklyCycleDates()
+            : getMonthlyCycleDates();
+
+        this.aktivitaetenDateRangeHint.textContent = `Zeitraum: ${startDate.toLocaleDateString('de-DE')} - ${endDate.toLocaleDateString('de-DE')}`;
+
+        const startDateIso = startDate.toISOString().split('T')[0];
+        const endDateIso = endDate.toISOString().split('T')[0];
+
+        const query = `SELECT Mitarbeiter_ID, Kategorie, Status FROM Termine WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+        const termineRaw = await seaTableSqlQuery(query, true);
+        const termineData = mapSqlResults(termineRaw || [], 'Termine');
+
+        const AT_STATUS_GEHALTEN = ["Gehalten"];
+        const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
+        const ET_STATUS_GEHALTEN = ["Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+        const ET_STATUS_AUSGEMACHT = ["Ausgemacht", ...ET_STATUS_GEHALTEN];
+
+        const statsByMitarbeiter = {};
+
+        termineData.forEach(t => {
+            const mitarbeiterId = t.Mitarbeiter_ID?.[0]?.row_id;
+            if (!mitarbeiterId) return;
+
+            if (!statsByMitarbeiter[mitarbeiterId]) {
+                statsByMitarbeiter[mitarbeiterId] = { atAusgemacht: 0, atGehalten: 0, etAusgemacht: 0, etGehalten: 0 };
+            }
+
+            if (t.Kategorie === 'AT') {
+                if (AT_STATUS_AUSGEMACHT.includes(t.Status)) statsByMitarbeiter[mitarbeiterId].atAusgemacht++;
+                if (AT_STATUS_GEHALTEN.includes(t.Status)) statsByMitarbeiter[mitarbeiterId].atGehalten++;
+            } else if (t.Kategorie === 'ET') {
+                if (ET_STATUS_AUSGEMACHT.includes(t.Status)) statsByMitarbeiter[mitarbeiterId].etAusgemacht++;
+                if (ET_STATUS_GEHALTEN.includes(t.Status)) statsByMitarbeiter[mitarbeiterId].etGehalten++;
+            }
+        });
+
+        const enrichedUsers = Object.keys(statsByMitarbeiter).map(mitarbeiterId => {
+            const mitarbeiter = db.mitarbeiter.find(m => m._id === mitarbeiterId);
+            if (!mitarbeiter) return null;
+            return { name: mitarbeiter.Name, rang: mitarbeiter.Karrierestufe || 'N/A', ...statsByMitarbeiter[mitarbeiterId] };
+        }).filter(Boolean);
+
+        const filterValue = this.aktivitaetenRoleFilter.value;
+        const isTraineeOrGA = (rank) => {
+            const rankStr = String(rank || '').trim().toLowerCase();
+            return rankStr.includes('trainee') || (rankStr.includes('ga') && rankStr.length < 5);
+        };
+
+        const filteredUsers = enrichedUsers.filter(user => {
+            if (filterValue === 'all') return true;
+            if (filterValue === 'trainee') return isTraineeOrGA(user.rang);
+            if (filterValue === 'leader') return !isTraineeOrGA(user.rang);
+            return true; // Fallback to show all
+        });
+
+        const sortConfig = this.sortConfig.aktivitaeten;
+        const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+
+        // Sort all users directly, removing the grouping logic
+        filteredUsers.sort((a, b) => {
+            let valA = a[sortConfig.column];
+            let valB = b[sortConfig.column];
+            let comparison = 0;
+
+            if (typeof valA === 'number' && typeof valB === 'number') {
+                comparison = (valA || 0) - (valB || 0);
+            } else {
+                comparison = collator.compare(String(valA || ''), String(valB || ''));
+            }
+            return sortConfig.direction === 'asc' ? comparison : -comparison;
+        });
+
+        this.aktivitaetenListContainer.innerHTML = '';
+
+        if (filteredUsers.length === 0) {
+            this.aktivitaetenListContainer.innerHTML = `<p class="text-center text-gray-500 py-8">Keine Aktivitäten im ausgewählten Zeitraum gefunden.</p>`;
+            return;
+        }
+
+        // Create a single table for the filtered users
+        const table = document.createElement('table');
+        table.className = 'appointments-table';
+
+        // Add 'rang' to headers to retain the information
+        const headers = [
+            { key: 'name', label: 'Name' },
+            { key: 'rang', label: 'Rang' },
+            { key: 'atAusgemacht', label: 'AT Ausgem.' },
+            { key: 'atGehalten', label: 'AT Gehalt.' },
+            { key: 'etAusgemacht', label: 'ET Ausgem.' },
+            { key: 'etGehalten', label: 'ET Gehalt.' },
+        ];
+
+        table.innerHTML = `<thead><tr>${headers.map(h => {
+            const icon = sortConfig.column === h.key ? (sortConfig.direction === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>') : '<i class="fas fa-sort sort-icon"></i>';
+            return `<th data-sort-key="${h.key}">${h.label} ${icon}</th>`;
+        }).join('')}</tr></thead>`;
+
+        const tbody = document.createElement('tbody');
+        filteredUsers.forEach(user => {
+            tbody.innerHTML += `<tr><td>${user.name}</td><td>${user.rang}</td><td>${user.atAusgemacht}</td><td>${user.atGehalten}</td><td>${user.etAusgemacht}</td><td>${user.etGehalten}</td></tr>`;
+        });
+        table.appendChild(tbody);
+        table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('aktivitaeten', e.currentTarget.dataset.sortKey)));
+
+        this.aktivitaetenListContainer.appendChild(table);
+    }
+
+    async renderFkRennliste() {
+        this.fkRennlisteView.innerHTML = '<div class="loader mx-auto"></div>';
+        const leaders = db.mitarbeiter.filter(m => isUserLeader(m));
+        const { startDate, endDate } = getMonthlyCycleDates();
+        const startDateIso = startDate.toISOString().split('T')[0];
+        const endDateIso = endDate.toISOString().split('T')[0];
+
+        // 1. Lade alle EH-Daten für den Zeitraum
+        const ehQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`ehIst\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' GROUP BY \`Mitarbeiter_ID\``;
+        const ehResultRaw = await seaTableSqlQuery(ehQuery, false);
+        const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
+
+        // 2. Lade alle relevanten Termindaten für den Zeitraum
+        const termineQuery = `SELECT Mitarbeiter_ID, Kategorie, Status FROM Termine WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+        const termineResultsRaw = await seaTableSqlQuery(termineQuery, true);
+        const termineResults = mapSqlResults(termineResultsRaw || [], "Termine");
+
+        const AT_STATUS_GEHALTEN = ["Gehalten"];
+        const ET_STATUS_GEHALTEN = ["Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+
+        // 3. Gruppiere Daten nach Mitarbeiter für schnellen Zugriff
+        const ehByMitarbeiter = _.keyBy(ehResults.map(e => ({ id: e.Mitarbeiter_ID?.[0]?.row_id, eh: e.ehIst })), 'id');
+        const termineByMitarbeiter = _.groupBy(termineResults, t => t.Mitarbeiter_ID?.[0]?.row_id);
+
+        // 4. Berechne die Strukturdaten für jede Führungskraft
+        const structureDataList = leaders.map(leader => {
+            const structureMembers = [leader, ...getAllSubordinatesRecursive(leader._id)];
+            
+            let eh = 0;
+            let at = 0;
+            let et = 0;
+
+            for (const member of structureMembers) {
+                eh += ehByMitarbeiter[member._id]?.eh || 0;
+
+                const memberTermine = termineByMitarbeiter[member._id] || [];
+                memberTermine.forEach(t => {
+                    if (t.Kategorie === "AT" && AT_STATUS_GEHALTEN.includes(t.Status)) at++;
+                    else if (t.Kategorie === "ET" && ET_STATUS_GEHALTEN.includes(t.Status)) et++;
+                });
+            }
+            
+            return {
+                name: leader.Name,
+                rang: leader.Karrierestufe,
+                eh: eh,
+                at: at,
+                et: et
+            };
+        });
+
+        const sortConfig = this.sortConfig.fkRennliste;
+        const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+        structureDataList.sort((a, b) => {
+            let valA = a[sortConfig.column];
+            let valB = b[sortConfig.column];
+            let comparison = 0;
+            if (typeof valA === 'number' && typeof valB === 'number') {
+                comparison = valA - valB;
+            } else {
+                comparison = collator.compare(String(valA || ''), String(valB || '')); // Fehlerbehebung: Fallback für undefined
+            }
+            return sortConfig.direction === 'asc' ? comparison : -comparison;
+        });
+
+        const table = document.createElement('table');
+        table.className = 'appointments-table';
+        // ANPASSUNG: Spalten für Name und Rang hinzugefügt
+        const headers = [
+            { key: 'name', label: 'Führungskraft' }, { key: 'rang', label: 'Rangstufe' },
+            { key: 'eh', label: 'Gesamt EH' }, { key: 'at', label: 'Gesamt ATs' },
+            { key: 'et', label: 'Gesamt ETs' }
+        ];
+        table.innerHTML = `<thead><tr>${headers.map(h => {
+            const icon = sortConfig.column === h.key ? (sortConfig.direction === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>') : '<i class="fas fa-sort sort-icon"></i>';
+            return `<th data-sort-key="${h.key}">${h.label} ${icon}</th>`;
+        }).join('')}</tr></thead>`;
+        const tbody = document.createElement('tbody');
+        structureDataList.forEach(s => {
+            // ANPASSUNG: Neue Spalten in der Tabelle ausgeben
+            tbody.innerHTML += `<tr><td>${s.name}</td><td>${s.rang}</td><td>${s.eh.toFixed(2)}</td><td>${s.at}</td><td>${s.et}</td></tr>`;
+        });
+        table.appendChild(tbody);
+        table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('fkRennliste', e.currentTarget.dataset.sortKey)));
+        this.fkRennlisteView.innerHTML = '';
+        this.fkRennlisteView.appendChild(table);
+    }
+
+    async renderNaechstesInfo(repopulateDates = false) {
+        if (repopulateDates) {
+            this.infoabendDateSelect.innerHTML = '';
+            let currentDate = new Date();
+            for (let i = 0; i < 5; i++) {
+                const infoDate = findNextInfoDateAfter(currentDate);
+                const dateString = infoDate.toISOString().split('T')[0];
+                this.infoabendDateSelect.add(new Option(infoDate.toLocaleDateString('de-DE'), dateString));
+                currentDate = new Date(infoDate.getTime() + 24 * 60 * 60 * 1000);
+            }
+        }
+
+        this.infoabendListContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        const selectedDate = this.infoabendDateSelect.value;
+        const scope = this.infoabendScopeFilter.value;
+        const showCancelled = this.infoabendShowCancelled.checked;
+
+        let userIds = new Set([this.currentUserId]);
+        if (scope === 'group') getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
+        else if (scope === 'structure') this.downline.forEach(u => userIds.add(u._id));
+
+        const allETs = db.termine.filter(t => t.Kategorie === 'ET');
+        
+        let filteredTermine = allETs.filter(t => {
+            const userMatch = userIds.has(t.Mitarbeiter_ID);
+            const dateMatch = t.Infoabend && t.Infoabend.startsWith(selectedDate);
+            const cancelledMatch = showCancelled || (t.Status !== 'Storno' && !t.Absage);
+            return userMatch && dateMatch && cancelledMatch;
+        });
+
+        this.renderInfoabendTable(filteredTermine);
+        this.renderFunnelChart(allETs.filter(t => t.Infoabend && t.Infoabend.startsWith(selectedDate)));
+    }
+
+    renderInfoabendTable(termine) {
+        this.infoabendListContainer.innerHTML = '';
+        if (termine.length === 0) {
+            this.infoabendListContainer.innerHTML = '<p class="text-center text-gray-500">Keine Bewerber für diesen Infoabend gefunden.</p>';
+            return;
+        }
+
+        const sortConfig = this.sortConfig.infoabend;
+        const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+        termine.sort((a, b) => {
+            let valA, valB;
+            if (sortConfig.column === 'Mitarbeiter') {
+                valA = db.mitarbeiter.find(m => m._id === a.Mitarbeiter_ID)?.Name || '';
+                valB = db.mitarbeiter.find(m => m._id === b.Mitarbeiter_ID)?.Name || '';
+            } else {
+                valA = a[sortConfig.column];
+                valB = b[sortConfig.column];
+            }
+            let comparison = collator.compare(String(valA), String(valB));
+            return sortConfig.direction === 'asc' ? comparison : -comparison;
+        });
+
+        const table = document.createElement('table');
+        table.className = 'appointments-table';
+        const headers = [
+            { key: 'Terminpartner', label: 'Bewerber' }, { key: 'Status', label: 'Status' },
+            { key: 'Mitarbeiter', label: 'Mitarbeiter' }, { key: 'Hinweis', label: 'Hinweis' }
+        ];
+        table.innerHTML = `<thead><tr>${headers.map(h => {
+            const icon = sortConfig.column === h.key ? (sortConfig.direction === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>') : '<i class="fas fa-sort sort-icon"></i>';
+            return `<th data-sort-key="${h.key}">${h.label} ${icon}</th>`;
+        }).join('')}</tr></thead>`;
+
+        const tbody = document.createElement('tbody');
+        termine.forEach(t => {
+            const mitarbeiter = db.mitarbeiter.find(m => m._id === t.Mitarbeiter_ID);
+            tbody.innerHTML += `<tr><td>${t.Terminpartner}</td><td>${t.Status}</td><td>${mitarbeiter?.Name || '-'}</td><td>${t.Hinweis || '-'}</td></tr>`;
+        });
+        table.appendChild(tbody);
+        table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('infoabend', e.currentTarget.dataset.sortKey)));
+        this.infoabendListContainer.appendChild(table);
+    }
+
+    renderFunnelChart(termine) {
+        const stats = {
+            'Ausgemacht': termine.length,
+            'Gehalten': termine.filter(t => t.Status === 'Gehalten').length,
+            'Eingeladen': termine.filter(t => t.Status === 'Info Eingeladen').length,
+            'Bestätigt': termine.filter(t => t.Status === 'Info Bestätigt').length,
+            'Anwesend': termine.filter(t => t.Status === 'Info Anwesend').length,
+            'Wird Mitarbeiter': termine.filter(t => t.Status === 'Wird Mitarbeiter').length,
+        };
+
+        const funnelSteps = [
+            { label: 'ET Ausgemacht', value: stats.Ausgemacht },
+            { label: 'ET Gehalten', value: stats.Gehalten },
+            { label: 'Info Eingeladen', value: stats.Eingeladen },
+            { label: 'Info Bestätigt', value: stats.Bestätigt },
+            { label: 'Info Anwesend', value: stats.Anwesend },
+            { label: 'Wird Mitarbeiter', value: stats['Wird Mitarbeiter'] }
+        ];
+
+        this.funnelChartContainer.innerHTML = '';
+        const maxValue = Math.max(...funnelSteps.map(s => s.value), 1);
+
+        funnelSteps.forEach(step => {
+            const percentage = (step.value / maxValue) * 100;
+            const stepEl = document.createElement('div');
+            stepEl.className = 'funnel-step';
+            stepEl.style.width = `${percentage}%`;
+            stepEl.innerHTML = `<span class="funnel-label">${step.label}</span><span class="funnel-value">${step.value}</span>`;
+            this.funnelChartContainer.appendChild(stepEl);
+        });
+    }
+}
+
+async function loadAndInitAuswertungView() {
+    const container = dom.auswertungView;
+    try {
+        const response = await fetch("./auswertung.html");
+        if (!response.ok) throw new Error(`Die Datei 'auswertung.html' konnte nicht gefunden werden.`);
+        container.innerHTML = await response.text();
+        if (!auswertungViewInstance) auswertungViewInstance = new AuswertungView();
+        await auswertungViewInstance.init(authenticatedUserData._id);
+    } catch (error) {
+        console.error("Fehler beim Laden der Auswertungs-Ansicht:", error);
+    }
 }
 
 // --- INITIALISIERUNG & EVENT LISTENERS ---
@@ -3167,6 +4797,7 @@ function setupEventListeners() {
     dom.monthlyPlanningTitle.textContent = "Deine Monatsplanung";
     updateMonthlyPlanningView(personalData);
     updateLeadershipView();
+    calculateAndRenderPQQForCurrentView();
   });
   dom.teamViewBtn.addEventListener("click", () => {
     currentPlanningView = "team";
@@ -3176,6 +4807,7 @@ function setupEventListeners() {
     dom.monthlyPlanningTitle.textContent = "Gruppen-Übersicht";
     updateMonthlyPlanningView(teamData);
     updateLeadershipView();
+    calculateAndRenderPQQForCurrentView();
   });
   dom.strukturViewBtn.addEventListener("click", () => {
     currentPlanningView = "struktur";
@@ -3185,6 +4817,7 @@ function setupEventListeners() {
     dom.monthlyPlanningTitle.textContent = "Struktur-Übersicht";
     updateMonthlyPlanningView(structureData);
     updateLeadershipView();
+    calculateAndRenderPQQForCurrentView();
   });
 
   dom.gridViewBtn.addEventListener("click", () => {
@@ -3222,6 +4855,20 @@ function setupEventListeners() {
     switchView("appointments");
   });
 
+  dom.potentialHeaderBtn.addEventListener("click", () => {
+    // NEU
+    switchView("potential");
+  });
+
+  dom.umsatzHeaderBtn.addEventListener("click", () => {
+    // NEU
+    switchView("umsatz");
+  });
+
+  dom.auswertungHeaderBtn.addEventListener("click", () => {
+    switchView("auswertung");
+  });
+
   // --- Modal Controls ---
   dom.closeHinweisModalBtn.addEventListener("click", () => {
     dom.hinweisModal.classList.remove("visible");
@@ -3244,20 +4891,52 @@ function setupEventListeners() {
   });
   dom.cancelEditUserBtn.addEventListener("click", closeEditUserModal);
   dom.cancelEditUserBtn2.addEventListener("click", closeEditUserModal);
+
+  dom.addNewUserBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    closeSettingsMenu();
+    openAddUserModal();
+  });
+  dom.addUserForm.addEventListener("submit", (e) => { e.preventDefault(); saveNewUser(); });
+  dom.cancelAddUserBtn.addEventListener("click", closeAddUserModal);
+  dom.cancelAddUserBtn2.addEventListener("click", closeAddUserModal);
+
+  dom.planningBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    closeSettingsMenu();
+    openPlanningModal();
+  });
+  dom.planningForm.addEventListener("submit", (e) => { e.preventDefault(); savePlanningData(); });
+  dom.cancelPlanningBtn.addEventListener("click", closePlanningModal);
+  document.getElementById('cancel-planning-btn-2').addEventListener('click', closePlanningModal);
+
+  dom.pqqView.addEventListener('click', () => {
+      dom.pqqDetailsContainer.classList.toggle('collapsed');
+      dom.pqqView.classList.toggle('expanded');
+  });
 }
 
 function switchView(viewName) {
   currentView = viewName;
   dom.mainDashboardView.classList.toggle(
     "hidden",
-    viewName === "einarbeitung" || viewName === "appointments"
+    viewName !== "dashboard"
   );
   dom.einarbeitungView.classList.toggle("hidden", viewName !== "einarbeitung");
   dom.appointmentsView.classList.toggle("hidden", viewName !== "appointments");
+  dom.potentialView.classList.toggle("hidden", viewName !== "potential");
+  dom.umsatzView.classList.toggle("hidden", viewName !== "umsatz");
+  dom.auswertungView.classList.toggle("hidden", viewName !== "auswertung");
   updateBackButtonVisibility();
 
   if (viewName === "appointments") {
     loadAndInitAppointmentsView();
+  } else if (viewName === "potential") {
+    loadAndInitPotentialView();
+  } else if (viewName === "umsatz") {
+    loadAndInitUmsatzView();
+  } else if (viewName === "auswertung") {
+    loadAndInitAuswertungView();
   }
 }
 
@@ -3468,6 +5147,77 @@ async function checkAndApplyAutomaticPromotion(mitarbeiterId, totalEh) {
   }
 }
 
+async function applyAutomaticPromotionToDatabase(mitarbeiterId) {
+    const user = findRowById("mitarbeiter", mitarbeiterId);
+    if (!user || !user.Karrierestufe) {
+        return false;
+    }
+
+    // 1. Lade die aktuellen Gesamt-EH des Mitarbeiters direkt aus der Datenbank.
+    const totalEhQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`totalEh\` FROM \`Umsatz\` GROUP BY \`Mitarbeiter_ID\``;
+    const totalEhResultsRaw = await seaTableSqlQuery(totalEhQuery, false);
+    const totalEhResults = mapSqlResults(totalEhResultsRaw || [], "Umsatz");
+    const userEhData = totalEhResults.find(
+        (te) =>
+          te.Mitarbeiter_ID &&
+          Array.isArray(te.Mitarbeiter_ID) &&
+          te.Mitarbeiter_ID[0] &&
+          te.Mitarbeiter_ID[0].row_id === mitarbeiterId
+      ) || {};
+    const totalEh = userEhData.totalEh || 0;
+
+    const recruitedEmployees = db.mitarbeiter.filter(m => m.Werber === mitarbeiterId).length;
+
+    const currentStage = db.karriereplan.find(p => p.Stufe === user.Karrierestufe);
+    if (!currentStage) {
+        console.warn(`[PROMOTION_DB] Aktuelle Karrierestufe '${user.Karrierestufe}' für ${user.Name} nicht im Karriereplan gefunden.`);
+        return false;
+    }
+
+    // 2. Finde die höchste erreichbare Stufe, für die die Kriterien erfüllt sind.
+    const promotableStages = db.karriereplan
+        .filter(p => p.Hierarchie > currentStage.Hierarchie && p.AutomatischeBefoerderung)
+        .sort((a, b) => b.Hierarchie - a.Hierarchie); // Absteigend sortieren, um die höchste zuerst zu prüfen.
+
+    for (const nextStage of promotableStages) {
+        if (totalEh >= nextStage.Kriterium_EH && recruitedEmployees >= nextStage.Kriterium_MA) {
+            console.log(`[PROMOTION_DB] Mitarbeiter ${user.Name} erfüllt die Kriterien für ${nextStage.Stufe}.`);
+
+            // 3. Finde den Spaltennamen für "Karrierestufe" dynamisch.
+            const karrierestufeKey = COLUMN_MAPS.mitarbeiter.Karrierestufe;
+            const tableMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'mitarbeiter');
+            const karrierestufeCol = tableMeta.columns.find(c => c.key === karrierestufeKey);
+            if (!karrierestufeCol) {
+                console.error(`[PROMOTION_DB] Metadaten für Spalte 'Karrierestufe' nicht gefunden.`);
+                return false;
+            }
+            const karrierestufeColName = karrierestufeCol.name;
+
+            // 4. Aktualisiere das Verknüpfungsfeld über die dedizierte Link-Update-Funktion,
+            // da ein direkter SQL-Update für Link-Spalten den "type mismatch"-Fehler verursacht.
+            console.log(`[PROMOTION_DB] Aktualisiere Verknüpfung für ${karrierestufeColName} zu ${nextStage.Stufe} (${nextStage._id})`);
+            const success = await updateSingleLink(
+                'Mitarbeiter',          // baseTableName
+                mitarbeiterId,          // baseRowId
+                karrierestufeColName,   // linkColumnName
+                [nextStage._id]         // otherRowIds
+            );
+
+            if (success) {
+                console.log(`[PROMOTION_DB] ${user.Name} erfolgreich zu ${nextStage.Stufe} befördert.`);
+                localStorage.removeItem(CACHE_PREFIX + 'mitarbeiter'); // Cache leeren
+                await loadAllData(); // Alle Daten neu laden
+                await fetchAndRenderDashboard(mitarbeiterId); // Dashboard neu rendern
+                return true; // Signalisiert, dass eine Beförderung stattgefunden hat.
+            } else {
+                console.error(`[PROMOTION_DB] API-Update zur Beförderung von ${user.Name} ist fehlgeschlagen.`);
+                return false;
+            }
+        }
+    }
+    return false; // Keine Beförderung durchgeführt.
+}
+
 async function handleAIAssistantClick() {
   dom.hinweisModalTitle.textContent = "KI-Assistent";
   dom.hinweisModalContent.innerHTML = '<div class="loader mx-auto"></div>';
@@ -3532,43 +5282,281 @@ async function handleAIAssistantClick() {
   }
 }
 
+function _renderSinglePQQGauge(indicatorEl, valueDisplayEl, value) {
+    if (!indicatorEl || !valueDisplayEl) {
+        console.warn('[PQQ_RENDER] Gauge-Elemente nicht gefunden.');
+        return;
+    }
+    const pqqClamped = Math.max(60, Math.min(value, 140));
+    const indicatorPosition = ((pqqClamped - 60) / (140 - 60)) * 100;
+    indicatorEl.style.left = `${indicatorPosition}%`;
+    valueDisplayEl.style.left = `${indicatorPosition}%`;
+    valueDisplayEl.textContent = `${value.toFixed(0)}%`;
+}
+
+async function calculateAndRenderPQQ(mitarbeiterId) {
+    const pqqLog = (message, ...data) => console.log(`%c[PQQ_CALC] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
+    pqqLog('Starte PQQ-Berechnung...');
+
+    // 1. Get previous month's dates
+    const { startDate, endDate } = getPreviousMonthlyCycleDates();
+    const startDateIso = startDate.toISOString().split('T')[0];
+    const endDateIso = endDate.toISOString().split('T')[0];
+    const prevMonthName = startDate.toLocaleString("de-DE", { month: "long" });
+    const prevYear = startDate.getFullYear();
+    pqqLog(`Berechnungszeitraum: ${startDateIso} bis ${endDateIso}`);
+
+    // 2. Get planning data from cache
+    const plan = db.monatsplanung.find(p => 
+        p.Mitarbeiter_ID === mitarbeiterId &&
+        p.Monat === prevMonthName &&
+        p.Jahr === prevYear
+    );
+
+    if (!plan) {
+        pqqLog('Keine Plandaten für den Vormonat gefunden. PQQ-Ansicht wird ausgeblendet.');
+        dom.pqqView.classList.add('hidden');
+        return;
+    }
+    dom.pqqView.classList.remove('hidden');
+
+    const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
+    const ursprungszielET = plan?.Ursprungsziel_ET || 0;
+    pqqLog(`Plandaten gefunden: EH-Ziel=${ursprungszielEH}, ET-Ziel=${ursprungszielET}`);
+
+    // 3. Get actual data for previous month via SQL
+    const mitarbeiterName = findRowById('mitarbeiter', mitarbeiterId)?.Name;
+    if (!mitarbeiterName) return;
+    const mitarbeiterNameSql = `'${escapeSql(mitarbeiterName)}'`;
+
+    const ehQuery = `SELECT SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID = ${mitarbeiterNameSql} AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+    const etQuery = `SELECT Status FROM Termine WHERE Mitarbeiter_ID = ${mitarbeiterNameSql} AND Kategorie = 'ET' AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+
+    const [ehResultRaw, etResultRaw] = await Promise.all([
+        seaTableSqlQuery(ehQuery, true),
+        seaTableSqlQuery(etQuery, true)
+    ]);
+
+    const totalEH = ehResultRaw?.[0]?.totalEH || 0;
+    const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+    const totalETAusgemacht = etResultRaw.filter(t => ET_STATUS_AUSGEMACHT.includes(t.Status)).length;
+    pqqLog(`Ist-Werte ermittelt: Total EH=${totalEH}, Total ET Ausgemacht=${totalETAusgemacht}`);
+
+    // 4. Calculate PQQ parts
+    let ehQuote = 0;
+    if (totalEH > 0) {
+        ehQuote = ursprungszielEH / totalEH;
+    } else if (ursprungszielEH === 0) { // Ziel 0, Ist 0 -> 100% Zielerreichung
+        ehQuote = 1;
+    }
+
+    let etQuote = 0;
+    if (totalETAusgemacht > 0) {
+        etQuote = ursprungszielET / totalETAusgemacht;
+    } else if (ursprungszielET === 0) { // Ziel 0, Ist 0 -> 100% Zielerreichung
+        etQuote = 1;
+    }
+
+    const pqq = ((ehQuote + etQuote) / 2) * 100;
+    pqqLog(`Einzelquoten berechnet: EH-Quote=${(ehQuote * 100).toFixed(2)}%, ET-Quote=${(etQuote * 100).toFixed(2)}%`);
+    pqqLog(`Gesamt-PQQ berechnet: ${pqq.toFixed(2)}%`);
+
+    // 5. Render gauges
+    _renderSinglePQQGauge(dom.pqqIndicator, dom.pqqValueDisplay, pqq);
+    _renderSinglePQQGauge(dom.pqqEhIndicator, dom.pqqEhValueDisplay, ehQuote * 100);
+    _renderSinglePQQGauge(dom.pqqEtIndicator, dom.pqqEtValueDisplay, etQuote * 100);
+    pqqLog('Alle Gauges gerendert.');
+}
+
+// NEU: Berechnet und rendert die PQQ basierend auf der aktuellen Ansicht (Persönlich, Gruppe, Struktur)
+async function calculateAndRenderPQQForCurrentView() {
+    const pqqLog = (message, ...data) => console.log(`%c[PQQ_VIEW] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
+    pqqLog('Starte PQQ-Berechnung für aktuelle Ansicht...');
+
+    // --- Caching Logic ---
+    const { startDate: prevMonthStartDate } = getPreviousMonthlyCycleDates();
+    const cachePeriodKey = `${prevMonthStartDate.getFullYear()}-${prevMonthStartDate.getMonth()}`;
+    let scopeKey;
+    if (isSuperuserView) {
+        scopeKey = 'superuser';
+    } else {
+        scopeKey = `${currentlyViewedUserData._id}-${currentPlanningView}`;
+    }
+    const cacheKey = `pqq-${cachePeriodKey}-${scopeKey}`;
+    const maxAgeMinutes = 30 * 24 * 60; // Cache für 30 Tage
+
+    const cachedPQQ = loadFromCache(cacheKey, maxAgeMinutes);
+    if (cachedPQQ) {
+        pqqLog(`PQQ-Daten aus dem Cache geladen für Key: ${cacheKey}`);
+        dom.pqqView.classList.remove('hidden');
+        _renderSinglePQQGauge(dom.pqqIndicator, dom.pqqValueDisplay, cachedPQQ.pqq);
+        _renderSinglePQQGauge(dom.pqqEhIndicator, dom.pqqEhValueDisplay, cachedPQQ.ehQuote * 100);
+        _renderSinglePQQGauge(dom.pqqEtIndicator, dom.pqqEtValueDisplay, cachedPQQ.etQuote * 100);
+        pqqLog('Alle Gauges aus dem Cache gerendert.');
+        return; // Berechnung hier beenden, da Daten aus dem Cache kamen
+    }
+    pqqLog(`Keine gültigen PQQ-Daten im Cache gefunden für Key: ${cacheKey}. Führe Neuberechnung durch.`);
+
+    let userIds = [];
+    const currentUser = currentlyViewedUserData;
+    const isLeader = currentUser && currentUser.Karrierestufe ? !currentUser.Karrierestufe.toLowerCase().includes("trainee") : false;
+
+    // 1. Bestimme die relevanten Mitarbeiter-IDs basierend auf der aktuellen Ansicht
+    if (isSuperuserView) {
+        userIds = db.mitarbeiter.filter(m => m.Name && !m.Name.toLowerCase().startsWith("geschäftsstelle")).map(m => m._id);
+        pqqLog(`Superuser-Ansicht. Berechne PQQ für ${userIds.length} Mitarbeiter.`);
+    } else if (!isLeader) {
+        userIds = [currentUser._id];
+        pqqLog(`Trainee-Ansicht. Berechne PQQ für: ${currentUser.Name}`);
+    } else {
+        switch (currentPlanningView) {
+            case 'personal':
+                userIds = [currentUser._id];
+                pqqLog(`Führungskraft-Ansicht (Persönlich). Berechne PQQ für: ${currentUser.Name}`);
+                break;
+            case 'team':
+                const teamMembers = getSubordinates(currentUser._id, 'gruppe');
+                userIds = [currentUser._id, ...teamMembers.map(u => u._id)];
+                pqqLog(`Führungskraft-Ansicht (Gruppe). Berechne PQQ für ${userIds.length} Mitarbeiter.`);
+                break;
+            case 'struktur':
+                const structureMembers = getAllSubordinatesRecursive(currentUser._id);
+                userIds = [currentUser._id, ...structureMembers.map(u => u._id)];
+                pqqLog(`Führungskraft-Ansicht (Struktur). Berechne PQQ für ${userIds.length} Mitarbeiter.`);
+                break;
+            default:
+                userIds = [currentUser._id];
+                pqqLog(`Unbekannte Ansicht, Fallback auf Persönlich für: ${currentUser.Name}`);
+        }
+    }
+
+    if (userIds.length === 0) {
+        pqqLog('Keine Mitarbeiter-IDs für die Berechnung gefunden. Blende PQQ aus.');
+        dom.pqqView.classList.add('hidden');
+        return;
+    }
+
+    // 2. Hole Plandaten für den Vormonat
+    const { startDate, endDate } = getPreviousMonthlyCycleDates();
+    const startDateIso = startDate.toISOString().split('T')[0];
+    const endDateIso = endDate.toISOString().split('T')[0];
+    const prevMonthName = startDate.toLocaleString("de-DE", { month: "long" });
+    const prevYear = startDate.getFullYear();
+    pqqLog(`PQQ-Zeitraum: ${startDateIso} bis ${endDateIso} (${prevMonthName} ${prevYear})`);
+    pqqLog('Suche Plandaten in `db.monatsplanung` (insgesamt ' + db.monatsplanung.length + ' Einträge).');
+
+    const relevantPlans = db.monatsplanung.filter(p =>
+        userIds.includes(p.Mitarbeiter_ID) &&
+        p.Monat === prevMonthName &&
+        p.Jahr === prevYear
+    );
+
+    if (relevantPlans.length === 0) {
+        pqqLog('FEHLER: Keine Plandaten für den Vormonat in der ausgewählten Ansicht gefunden. PQQ-Ansicht wird ausgeblendet.');
+        const usersWithPlans = new Set(db.monatsplanung.filter(p => p.Monat === prevMonthName && p.Jahr === prevYear).map(p => p.Mitarbeiter_ID));
+        const usersWithoutPlans = userIds.filter(id => !usersWithPlans.has(id));
+        pqqLog('Mitarbeiter in der Ansicht, für die kein Plan gefunden wurde:', usersWithoutPlans.map(id => findRowById('mitarbeiter', id)?.Name || `ID: ${id}`));
+        dom.pqqView.classList.add('hidden');
+        return;
+    }
+
+    dom.pqqView.classList.remove('hidden');
+    const totalUrsprungszielEH = relevantPlans.reduce((sum, p) => sum + (p.Ursprungsziel_EH || 0), 0);
+    const totalUrsprungszielET = relevantPlans.reduce((sum, p) => sum + (p.Ursprungsziel_ET || 0), 0);
+    pqqLog(`Plandaten gefunden (${relevantPlans.length} Einträge): Gesamt-EH-Ziel=${totalUrsprungszielEH}, Gesamt-ET-Ziel=${totalUrsprungszielET}`);
+
+    // 3. Hole Ist-Daten für den Vormonat
+    const mitarbeiterNames = userIds.map(id => findRowById('mitarbeiter', id)?.Name).filter(Boolean);
+    if (mitarbeiterNames.length === 0) {
+        pqqLog('Keine gültigen Mitarbeiter für die SQL-Abfrage gefunden.');
+        dom.pqqView.classList.add('hidden');
+        return;
+    }
+    const mitarbeiterNamesSql = mitarbeiterNames.map(name => `'${escapeSql(name)}'`).join(',');
+
+    const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+    const etStatusSql = ET_STATUS_AUSGEMACHT.map(s => `'${escapeSql(s)}'`).join(',');
+
+    const ehQuery = `SELECT SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID IN (${mitarbeiterNamesSql}) AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+    const etQuery = `SELECT _id FROM Termine WHERE Mitarbeiter_ID IN (${mitarbeiterNamesSql}) AND Kategorie = 'ET' AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}' AND Status IN (${etStatusSql})`;
+
+    // NEU: Zusätzliches Logging für SQL-Abfragen und Kriterien
+    pqqLog('Sende SQL-Abfrage für IST-EH:', ehQuery);
+    pqqLog('Sende SQL-Abfrage für IST-ET (direkt gefiltert):', etQuery);
+
+    const [ehResultRaw, etResultRaw] = await Promise.all([
+        seaTableSqlQuery(ehQuery, true),
+        seaTableSqlQuery(etQuery, true)
+    ]);
+
+    const totalEH = ehResultRaw?.[0]?.totalEH || 0;
+    const totalETAusgemacht = etResultRaw ? etResultRaw.length : 0;
+    pqqLog(`Ist-Werte ermittelt: Total EH=${totalEH}, Total ET Ausgemacht=${totalETAusgemacht}`);
+
+    // 4. Berechne PQQ-Teile
+    let ehQuote = 0;
+    if (totalEH > 0) {
+        ehQuote = totalUrsprungszielEH / totalEH;
+    } else if (totalUrsprungszielEH === 0) {
+        ehQuote = 1;
+    }
+
+    let etQuote = 0;
+    if (totalETAusgemacht > 0) {
+        etQuote = totalUrsprungszielET / totalETAusgemacht;
+    } else if (totalUrsprungszielET === 0) {
+        etQuote = 1;
+    }
+
+    const pqq = ((ehQuote + etQuote) / 2) * 100;
+    pqqLog(`Einzelquoten berechnet: EH-Quote=${(ehQuote * 100).toFixed(2)}%, ET-Quote=${(etQuote * 100).toFixed(2)}%`);
+    pqqLog(`Gesamt-PQQ berechnet: ${pqq.toFixed(2)}%`);
+
+    // NEU: PQQ-Daten im Cache speichern
+    const pqqDataToCache = {
+        pqq: pqq,
+        ehQuote: ehQuote,
+        etQuote: etQuote
+    };
+    saveToCache(cacheKey, pqqDataToCache);
+    pqqLog('PQQ-Daten im Cache gespeichert.', pqqDataToCache);
+
+    // 5. Rendere die Gauges
+    _renderSinglePQQGauge(dom.pqqIndicator, dom.pqqValueDisplay, pqq);
+    _renderSinglePQQGauge(dom.pqqEhIndicator, dom.pqqEhValueDisplay, ehQuote * 100);
+    _renderSinglePQQGauge(dom.pqqEtIndicator, dom.pqqEtValueDisplay, etQuote * 100);
+    pqqLog('Alle Gauges gerendert.');
+}
+
 // --- User Data Editing Modal ---
 function openEditUserModal() {
-  const user = currentlyViewedUserData;
-  document.getElementById("edit-name").value = user.Name || "";
-  document.getElementById("edit-pwd").value = user.PWD || "";
-  document.getElementById("edit-eh-quote").value = user.EHproATQuote || 0;
+    const user = currentlyViewedUserData;
+    // Populate standard fields
+    document.getElementById('edit-name').value = user.Name || '';
+    document.getElementById('edit-pwd').value = user.PWD || '';
+    document.getElementById('edit-eh-quote').value = user.EHproATQuote || 0;
+    document.getElementById('edit-start-date').value = user.Startdatum?.split('T')[0] || '';
+    document.getElementById('edit-birthday').value = user.Geburtstag?.split('T')[0] || '';
+    document.getElementById('edit-promotion-date').value = user.Befoerderungsdatum?.split('T')[0] || '';
 
-  const statusSelect = document.getElementById("edit-status");
-  const positionSelect = document.getElementById("edit-position");
-  clearChildren(statusSelect);
-  clearChildren(positionSelect);
+    // Handle ausscheiden logic
+    const ausgeschiedenCheckbox = document.getElementById('edit-ausgeschieden');
+    const ausscheideFieldsContainer = document.getElementById('ausscheide-fields-container');
+    
+    // KORREKTUR: Explizite Prüfung auf `true`, da der Wert aus der DB ein Boolean ist.
+    ausgeschiedenCheckbox.checked = user.Status === 'Ausgeschieden' || user.Ausgeschieden === true;
+    document.getElementById('edit-ausscheidetag').value = user.Ausscheidetag?.split('T')[0] || '';
+    document.getElementById('edit-ausscheidegrund').value = user.Ausscheidegrund || '';
 
-  const mitarbeiterMeta = METADATA.tables.find(
-    (t) => t.name.toLowerCase() === "mitarbeiter"
-  );
-  const statusCol = mitarbeiterMeta.columns.find(
-    (c) => c.key === COLUMN_MAPS.mitarbeiter.Status
-  );
+    ausscheideFieldsContainer.classList.toggle('hidden', !ausgeschiedenCheckbox.checked);
 
-  statusCol.data.options.forEach((opt) => {
-    const optionEl = document.createElement("option");
-    optionEl.value = opt.name;
-    optionEl.textContent = opt.name;
-    if (user.Status === opt.name) optionEl.selected = true;
-    statusSelect.appendChild(optionEl);
-  });
+    // Add event listener to toggle visibility
+    ausgeschiedenCheckbox.addEventListener('change', (e) => {
+        ausscheideFieldsContainer.classList.toggle('hidden', !e.target.checked);
+    });
 
-  db.karriereplan.forEach((plan) => {
-    const optionEl = document.createElement("option");
-    optionEl.value = plan.Stufe;
-    optionEl.textContent = plan.Stufe;
-    if (user.Karrierestufe === plan.Stufe) optionEl.selected = true;
-    positionSelect.appendChild(optionEl);
-  });
-
-  dom.editUserModal.classList.add("visible");
-  document.body.classList.add("modal-open");
+    dom.editUserModal.classList.add('visible');
+    document.body.classList.add('modal-open');
 }
 
 function closeEditUserModal() {
@@ -3577,46 +5565,329 @@ function closeEditUserModal() {
 }
 
 async function saveUserData() {
-  const user = currentlyViewedUserData;
-  const updatedRowData = {};
-
-  updatedRowData[COLUMN_MAPS.mitarbeiter.Name] =
-    document.getElementById("edit-name").value;
-  updatedRowData[COLUMN_MAPS.mitarbeiter.PWD] =
-    document.getElementById("edit-pwd").value;
-  updatedRowData[COLUMN_MAPS.mitarbeiter.EHproATQuote] =
-    parseFloat(document.getElementById("edit-eh-quote").value) || 0;
-  updatedRowData[COLUMN_MAPS.mitarbeiter.Status] =
-    document.getElementById("edit-status").value;
-
-  const selectedPositionName = document.getElementById("edit-position").value;
-  const selectedPositionRow = db.karriereplan.find(
-    (p) => p.Stufe === selectedPositionName
-  );
-  if (selectedPositionRow) {
-    updatedRowData[COLUMN_MAPS.mitarbeiter.Karrierestufe] = [
-      selectedPositionRow._id,
-    ];
-  }
-
   dom.saveUserBtn.textContent = "Speichern...";
   dom.saveUserBtn.disabled = true;
+  const user = currentlyViewedUserData;
 
-  const success = await seaTableUpdateRow(
-    "Mitarbeiter",
-    user._id,
-    updatedRowData
-  );
+  const isAusgeschieden = document.getElementById('edit-ausgeschieden').checked;
+  const ausscheidetag = document.getElementById('edit-ausscheidetag').value;
+  const ausscheidegrund = document.getElementById('edit-ausscheidegrund').value;
 
-  if (success) {
+  if (isAusgeschieden && (!ausscheidetag || !ausscheidegrund)) {
+      alert('Wenn ein Mitarbeiter ausgeschieden ist, müssen Ausscheidedatum und -grund angegeben werden.');
+      dom.saveUserBtn.textContent = "Speichern";
+      dom.saveUserBtn.disabled = false;
+      return;
+  }
+
+  const dataToUpdate = {
+      Name: document.getElementById('edit-name').value,
+      PWD: document.getElementById('edit-pwd').value,
+      EHproATQuote: parseFloat(document.getElementById('edit-eh-quote').value) || 0,
+      Startdatum: document.getElementById('edit-start-date').value || null,
+      Geburtstag: document.getElementById('edit-birthday').value || null,
+      Befoerderungsdatum: document.getElementById('edit-promotion-date').value || null,
+      Ausgeschieden: isAusgeschieden,
+      Ausscheidetag: isAusgeschieden ? ausscheidetag : null,
+      Ausscheidegrund: isAusgeschieden ? ausscheidegrund : null,
+  };
+
+  const mitarbeiterTableMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'mitarbeiter');
+  const setClauses = [];
+
+  for (const keyName in dataToUpdate) {
+      const value = dataToUpdate[keyName];
+      const colKey = COLUMN_MAPS.mitarbeiter[keyName];
+      if (!colKey) continue;
+      const colMeta = mitarbeiterTableMeta.columns.find(c => c.key === colKey);
+      if (!colMeta) continue;
+
+      const colName = colMeta.name;
+      let formattedValue;
+      if (value === null || value === undefined) formattedValue = "NULL";
+      else if (colMeta.type === 'number') formattedValue = parseFloat(value) || 0;
+      else if (colMeta.type === 'checkbox') formattedValue = value ? "true" : "false";
+      else formattedValue = `'${escapeSql(String(value))}'`;
+      
+      setClauses.push(`\`${colName}\` = ${formattedValue}`);
+  }
+
+  // NEU: Status explizit und separat behandeln, um Fehler zu isolieren und zu loggen.
+  const statusColName = 'Status'; // Annahme: Spaltenname ist 'Status'
+  if (COLUMN_MAPS.mitarbeiter[statusColName]) {
+      const statusValue = isAusgeschieden ? 'Ausgeschieden' : 'Aktiv';
+      console.log(`[SAVE-USER] Status-Update: Setze '${statusColName}' auf '${statusValue}'.`);
+      setClauses.push(`\`${statusColName}\` = '${escapeSql(statusValue)}'`);
+  } else {
+      console.error(`[SAVE-USER] Fehler: Die Spalte '${statusColName}' wurde in den COLUMN_MAPS nicht gefunden. Status wird nicht aktualisiert.`);
+  }
+
+  const sql = `UPDATE \`Mitarbeiter\` SET ${setClauses.join(', ')} WHERE \`_id\` = '${user._id}'`;
+  console.log(`[SAVE-USER] Führe SQL-Update aus: ${sql}`);
+  const result = await seaTableSqlQuery(sql, false);
+
+  if (result !== null) {
     closeEditUserModal();
     setStatus("Daten werden neu geladen...");
+    localStorage.removeItem(CACHE_PREFIX + 'mitarbeiter');
     await loadAllData();
     await fetchAndRenderDashboard(user._id);
   }
 
   dom.saveUserBtn.textContent = "Speichern";
   dom.saveUserBtn.disabled = false;
+}
+
+async function addUserToDatabase(tableName, rowData) {
+    console.log("[ADD-USER-DB] Starting add user to database process.");
+    if (!seaTableAccessToken || !apiGatewayUrl) return false;
+
+    const linkColumns = {
+        Werber: COLUMN_MAPS.mitarbeiter.Werber,
+        Karrierestufe: COLUMN_MAPS.mitarbeiter.Karrierestufe,
+        Buero: COLUMN_MAPS.mitarbeiter.Buero
+    };
+    const linkData = {};
+    const rowDataForCreation = { ...rowData };
+    for (const name in linkColumns) {
+        const colKey = linkColumns[name];
+        if (Object.prototype.hasOwnProperty.call(rowDataForCreation, colKey)) {
+            linkData[name] = rowDataForCreation[colKey]?.[0] || null;
+            delete rowDataForCreation[colKey];
+        }
+    }
+
+    const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
+    const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
+    const rowDataWithNames = {};
+    for (const key in rowDataForCreation) {
+        const name = reversedMap[key];
+        if (name) rowDataWithNames[name] = (rowDataForCreation[key] === undefined || rowDataForCreation[key] === '') ? null : rowDataForCreation[key];
+    }
+
+    let newRowId = null;
+    try {
+        const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+        const body = { table_name: tableName, rows: [rowDataWithNames] };
+        const response = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${seaTableAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        const result = await response.json();
+        if (!response.ok || !result.row_ids || result.row_ids.length === 0) throw new Error(`Create failed: ${result.error_message || 'No row ID returned'}`);
+        newRowId = result.row_ids[0]?._id;
+        if (!newRowId) throw new Error("Could not get new row ID");
+    } catch (error) {
+        console.error("[ADD-USER-DB] Step 1 FAILED:", error);
+        return false;
+    }
+
+    for (const colName in linkData) {
+        if (linkData[colName] && !(await updateSingleLink(tableName, newRowId, colName, [linkData[colName]]))) return false;
+    }
+    return true;
+}
+
+// --- Add New User Modal ---
+function openAddUserModal() {
+    dom.addUserForm.reset();
+    const werberSelect = document.getElementById('add-werber');
+    const bueroSelect = document.getElementById('add-buero');
+    clearChildren(werberSelect);
+    clearChildren(bueroSelect);
+
+    const usersForWerber = [...db.mitarbeiter].sort((a, b) => a.Name.localeCompare(b.Name));
+    usersForWerber.forEach(user => {
+        werberSelect.add(new Option(user.Name, user._id));
+    });
+
+    if (db.bürostandorte) {
+        const bueros = [...db.bürostandorte].sort((a, b) => (a.Büro || '').localeCompare(b.Büro || ''));
+        bueros.forEach(buero => {
+            // Annahme: Die Anzeigespalte in der "Bürostandorte"-Tabelle heißt "Büro".
+            bueroSelect.add(new Option(buero.Büro, buero._id));
+        });
+    }
+
+    dom.addUserModal.classList.add('visible');
+    document.body.classList.add('modal-open');
+}
+
+function closeAddUserModal() {
+    dom.addUserModal.classList.remove('visible');
+    document.body.classList.remove('modal-open');
+}
+
+async function saveNewUser() {
+    const saveBtn = dom.saveNewUserBtn;
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Wird angelegt...';
+
+    const traineeI = db.karriereplan.find(p => p.Stufe === 'Trainee I');
+    if (!traineeI) {
+        alert('Karrierestufe "Trainee I" nicht gefunden. Nutzer kann nicht angelegt werden.');
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Nutzer anlegen';
+        return;
+    }
+
+    if (!COLUMN_MAPS.mitarbeiter.Buero) {
+        alert('Spalte "Buero" konnte in der Datenbank nicht gefunden werden. Bitte Konfiguration prüfen.');
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Nutzer anlegen';
+        return;
+    }
+
+    const startDate = findNextInfoDateAfter(new Date());
+
+    const rowData = {
+        [COLUMN_MAPS.mitarbeiter.Name]: document.getElementById('add-name').value,
+        [COLUMN_MAPS.mitarbeiter.PWD]: document.getElementById('add-pwd').value,
+        [COLUMN_MAPS.mitarbeiter.Geburtstag]: document.getElementById('add-birthday').value || null,
+        [COLUMN_MAPS.mitarbeiter.Startdatum]: startDate.toISOString().split('T')[0],
+        [COLUMN_MAPS.mitarbeiter.Werber]: [document.getElementById('add-werber').value],
+        [COLUMN_MAPS.mitarbeiter.Buero]: [document.getElementById('add-buero').value],
+        [COLUMN_MAPS.mitarbeiter.Karrierestufe]: [traineeI._id],
+        [COLUMN_MAPS.mitarbeiter.Status]: 'Aktiv',
+    };
+
+    const success = await addUserToDatabase('Mitarbeiter', rowData);
+
+    if (success) {
+        saveBtn.textContent = 'Angelegt!';
+        localStorage.removeItem(CACHE_PREFIX + 'mitarbeiter');
+        await loadAllData();
+        // Optional: Dropdown im Login-Screen aktualisieren
+        // ...
+        setTimeout(() => {
+            closeAddUserModal();
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Nutzer anlegen';
+        }, 1500);
+    } else {
+        alert('Fehler beim Anlegen des Nutzers.');
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Nutzer anlegen';
+    }
+}
+
+// --- Planning Modal Logic ---
+function openPlanningModal() {
+    const userSelect = document.getElementById('planning-user-select');
+    const ehInput = document.getElementById('planning-eh-goal');
+    const etInput = document.getElementById('planning-et-goal');
+
+    dom.planningForm.reset();
+    clearChildren(userSelect);
+
+    const structureUsers = [authenticatedUserData, ...getAllSubordinatesRecursive(authenticatedUserData._id)];
+    structureUsers.sort((a, b) => a.Name.localeCompare(b.Name));
+
+    structureUsers.forEach(user => {
+        userSelect.add(new Option(user.Name, user._id));
+    });
+
+    userSelect.addEventListener('change', (e) => {
+        loadPlanningDataForUser(e.target.value);
+    });
+
+    // Initial load for the first user in the list
+    if (structureUsers.length > 0) {
+        loadPlanningDataForUser(structureUsers[0]._id);
+    }
+
+    const { startDate } = getMonthlyCycleDates();
+    const monthName = startDate.toLocaleString("de-DE", { month: "long" });
+    const year = startDate.getFullYear();
+    document.getElementById('planning-modal-title').textContent = `Planung für ${monthName} ${year}`;
+
+    dom.planningModal.classList.add('visible');
+    document.body.classList.add('modal-open');
+}
+
+function loadPlanningDataForUser(userId) {
+    const ehInput = document.getElementById('planning-eh-goal');
+    const etInput = document.getElementById('planning-et-goal');
+    const { startDate } = getMonthlyCycleDates();
+    const monthName = startDate.toLocaleString("de-DE", { month: "long" });
+    const year = startDate.getFullYear();
+
+    const existingPlan = db.monatsplanung.find(p =>
+        p.Mitarbeiter_ID === userId &&
+        p.Monat === monthName &&
+        p.Jahr === year
+    );
+
+    if (existingPlan) {
+        ehInput.value = existingPlan.EH_Ziel || 0;
+        etInput.value = existingPlan.ET_Ziel || 0;
+    } else {
+        ehInput.value = 0;
+        etInput.value = 0;
+    }
+}
+
+function closePlanningModal() {
+    dom.planningModal.classList.remove('visible');
+    document.body.classList.remove('modal-open');
+}
+
+async function savePlanningData() {
+    dom.savePlanningBtn.disabled = true;
+    dom.savePlanningBtn.textContent = 'Speichern...';
+
+    const userId = document.getElementById('planning-user-select').value;
+    const ehGoal = parseFloat(document.getElementById('planning-eh-goal').value) || 0;
+    const etGoal = parseInt(document.getElementById('planning-et-goal').value) || 0;
+
+    const { startDate } = getMonthlyCycleDates();
+    const monthName = startDate.toLocaleString("de-DE", { month: "long" });
+    const year = startDate.getFullYear();
+
+    const existingPlan = db.monatsplanung.find(p =>
+        p.Mitarbeiter_ID === userId &&
+        p.Monat === monthName &&
+        p.Jahr === year
+    );
+
+    let success = false;
+    if (existingPlan) {
+        // Update existing plan
+        const sql = `UPDATE \`Monatsplanung\` SET \`EH_Ziel\` = ${ehGoal}, \`ET_Ziel\` = ${etGoal} WHERE \`_id\` = '${existingPlan._id}'`;
+        const result = await seaTableSqlQuery(sql, false);
+        success = result !== null;
+    } else {
+        // Create new plan
+        const rowData = {
+            [COLUMN_MAPS.monatsplanung.Monat]: monthName,
+            [COLUMN_MAPS.monatsplanung.Jahr]: year,
+            [COLUMN_MAPS.monatsplanung.EH_Ziel]: ehGoal,
+            [COLUMN_MAPS.monatsplanung.ET_Ziel]: etGoal,
+            [COLUMN_MAPS.monatsplanung.Mitarbeiter_ID]: [userId],
+        };
+        success = await addPlanningRowToDatabase('Monatsplanung', rowData);
+    }
+
+    if (success) {
+        localStorage.removeItem(CACHE_PREFIX + 'monatsplanung');
+        await loadAllData();
+        await fetchAndRenderDashboard(currentlyViewedUserData._id);
+        closePlanningModal();
+    } else {
+        alert('Fehler beim Speichern der Plandaten.');
+    }
+
+    dom.savePlanningBtn.disabled = false;
+    dom.savePlanningBtn.textContent = 'Speichern';
+}
+
+async function addPlanningRowToDatabase(tableName, rowData) {
+    const rowDataForCreation = { ...rowData };
+    const mitarbeiterId = rowDataForCreation[COLUMN_MAPS.monatsplanung.Mitarbeiter_ID][0];
+    delete rowDataForCreation[COLUMN_MAPS.monatsplanung.Mitarbeiter_ID];
+
+    const newRowId = await seaTableAddRow(tableName, rowDataForCreation);
+    if (!newRowId) return false;
+
+    const success = await updateSingleLink(tableName, newRowId, 'Mitarbeiter_ID', [mitarbeiterId]);
+    return success;
 }
 
 // --- START ---
