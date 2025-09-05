@@ -956,6 +956,63 @@ function setStatus(msg, isError = false) {
 function clearChildren(el) {
   while (el.firstChild) el.removeChild(el.firstChild);
 }
+
+async function getPrimaryKeyColumnName(tableName, forceRefresh = false) {
+    const log = (message, ...data) => console.log(`%c[PK-Finder] %c${message}`, 'color: #007bff; font-weight: bold;', 'color: black;', ...data);
+    log(`Suche Primärschlüssel für Tabelle: '${tableName}'. Force-Refresh: ${forceRefresh}`);
+
+    if (forceRefresh) {
+        log(`[CACHE-REFRESH] Metadaten-Cache wird aktualisiert...`);
+        localStorage.removeItem(CACHE_PREFIX + 'column_maps');
+        COLUMN_MAPS = await fetchColumnMaps();
+        if (Object.keys(COLUMN_MAPS).length > 0) {
+            saveToCache("column_maps", { maps: COLUMN_MAPS, meta: METADATA.tables });
+            log(`[CACHE-REFRESH] Neue Metadaten geladen und gespeichert.`);
+        } else {
+            log(`[CACHE-REFRESH] !!! FEHLER: Neue Metadaten konnten nicht geladen werden.`);
+            return null;
+        }
+    }
+
+    if (!METADATA || !METADATA.tables) {
+        log("!!! FEHLER: Metadaten sind nicht verfügbar.");
+        return null;
+    }
+
+    log(`Verfügbare Tabellen in Metadaten:`, METADATA.tables.map(t => t.name));
+
+    const tableMeta = METADATA.tables.find(t => t.name.toLowerCase() === tableName.toLowerCase());
+
+    if (!tableMeta) {
+        if (!forceRefresh) {
+            log(`Tabelle '${tableName}' nicht in Metadaten gefunden. Versuche es mit Cache-Refresh...`);
+            return await getPrimaryKeyColumnName(tableName, true);
+        } else {
+            log(`!!! FEHLER: Tabelle '${tableName}' auch nach Refresh nicht in Metadaten gefunden.`);
+            return null;
+        }
+    }
+    
+    log(`Metadaten für Tabelle '${tableName}' gefunden:`, tableMeta);
+
+    // KORREKTUR: Suche die Spalte, die explizit als Primärschlüssel markiert ist.
+    const primaryKeyColumn = tableMeta.columns.find(c => c.is_primary === true);
+
+    if (primaryKeyColumn) {
+        log(`Primärschlüssel via 'is_primary' gefunden: '${primaryKeyColumn.name}'`);
+        return primaryKeyColumn.name;
+    }
+
+    // Fallback für den Fall, dass 'is_primary' nicht gesetzt ist: Nimm die erste Spalte.
+    const firstColumn = tableMeta.columns[0];
+    if (firstColumn) {
+        log(`WARNUNG: Kein Primärschlüssel mit 'is_primary=true' gefunden. Fallback auf die erste Spalte: '${firstColumn.name}'.`);
+        return firstColumn.name;
+    }
+    
+    log(`!!! FEHLER: Kein Primärschlüssel in Tabelle '${tableName}' gefunden.`);
+    return null;
+}
 function findRowById(tableName, id) {
   return db[tableName.toLowerCase()].find((row) => row._id === id);
 }
@@ -1218,14 +1275,18 @@ async function fetchDashboardDataWithSql(mitarbeiterId) {
 
 function isUserLeader(user) {
   if (!user || !user.Karrierestufe) return false;
-  const pos = user.Karrierestufe.toLowerCase();
 
-  // Eine Führungskraft ist jeder, dessen Karrierestufe NICHT "Trainee" enthält.
-  // JGST wird nun als Führungskraft gewertet.
-  const isTrainee = pos.includes("trainee");
+  const stage = db.karriereplan.find(p => p.Stufe === user.Karrierestufe);
+  
+  // Wenn die Stufe nicht im Karriereplan gefunden wird oder keine Hierarchie hat, ist es keine Führungskraft.
+  if (!stage || typeof stage.Hierarchie !== 'number') {
+      return false;
+  }
 
-  // Eine Führungskraft ist jeder, der NICHT eine dieser Stufen hat.
-  return !isTrainee;
+  // Eine Führungskraft ist jeder mit Hierarchie-Level von JGST (Level 3) oder höher.
+  // Trainees, GAs und T-Stufen haben niedrigere Level und werden hier korrekt ausgeschlossen.
+  const JUNIOR_GST_HIERARCHIE_LEVEL = 3; 
+  return stage.Hierarchie >= JUNIOR_GST_HIERARCHIE_LEVEL;
 }
 
 function buildHierarchy() {
@@ -2091,8 +2152,10 @@ function fetchNextInfoDate() {
 }
 
 function updateBackButtonVisibility() {
-  const shouldShow =
-    viewHistory.length > 1 || isSuperuserView || currentView === "einarbeitung";
+  // Der Zurück-Button wird angezeigt, wenn ein anderer User als der eingeloggte
+  // angezeigt wird, oder wenn die Superuser-Gesamtansicht aktiv ist.
+  const isViewingAnotherUser = authenticatedUserData?._id !== currentlyViewedUserData?._id;
+  const shouldShow = isViewingAnotherUser || isSuperuserView;
   dom.backButton.classList.toggle("hidden", !shouldShow);
 }
 
@@ -2236,7 +2299,8 @@ async function fetchAndRenderOnboarding(mitarbeiterId) {
     dom.einarbeitungTitle.textContent = "Einarbeitung: Gruppen-Übersicht";
     dom.traineeOnboardingView.classList.add("hidden");
     dom.leaderOnboardingView.classList.remove("hidden");
-    const teamMembers = getSubordinates(mitarbeiterId, "gruppe");
+    let teamMembers = getSubordinates(mitarbeiterId, "gruppe");
+    teamMembers = teamMembers.filter(member => member && member.Startdatum);
     await renderLeaderOnboardingView(teamMembers);
   }
 }
@@ -2308,16 +2372,25 @@ async function getOnboardingProgressForTrainee(traineeId) {
 
   const allSteps = db.einarbeitungsschritte;
 
-  if (allSteps.length === 0)
+  // NEU: Bestimme, welche Schritte für den aktuellen Betrachter sichtbar sind.
+  // Führungskräfte sehen alle Schritte, Trainees sehen keine "versteckten" Schritte.
+  const viewerIsLeader = isUserLeader(authenticatedUserData);
+  const isOwnView = authenticatedUserData._id === traineeId;
+  const isEditable = viewerIsLeader && !isOwnView;
+  const visibleSteps = !isEditable
+    ? allSteps.filter((step) => step.Kategorie !== "Versteckt")
+    : allSteps;
+
+  if (visibleSteps.length === 0)
     return { percentage: 0, sollPercentage: 0, totalSteps: 0 };
 
   const completedStepIds = new Set(
     userEinarbeitung.map((e) => e["Schritt_ID"])
   );
-  const completedSteps = allSteps.filter((s) =>
+  const completedSteps = visibleSteps.filter((s) =>
     completedStepIds.has(s._id)
   ).length;
-  const percentage = (completedSteps / allSteps.length) * 100;
+  const percentage = visibleSteps.length > 0 ? (completedSteps / visibleSteps.length) * 100 : 0;
 
   const userStartDate = user.Startdatum;
   let sollPercentage = 0;
@@ -2325,11 +2398,11 @@ async function getOnboardingProgressForTrainee(traineeId) {
     const startDate = new Date(userStartDate);
     const overallStartDate = new Date(startDate);
     overallStartDate.setDate(
-      startDate.getDate() + allSteps[0]["Tage nach Start"]
+      startDate.getDate() + visibleSteps[0]["Tage nach Start"]
     );
     const overallEndDate = new Date(startDate);
     overallEndDate.setDate(
-      startDate.getDate() + allSteps[allSteps.length - 1]["Tage nach Start"]
+      startDate.getDate() + visibleSteps[visibleSteps.length - 1]["Tage nach Start"]
     );
     const today = getCurrentDate();
     const totalPlanDuration =
@@ -2345,7 +2418,7 @@ async function getOnboardingProgressForTrainee(traineeId) {
     }
   }
 
-  return { percentage, sollPercentage, totalSteps: allSteps.length };
+  return { percentage, sollPercentage, totalSteps: visibleSteps.length };
 }
 
 async function showTraineeDetailView(traineeId) {
@@ -2377,12 +2450,12 @@ async function renderTraineeOnboardingView(
     return;
   }
 
-  const viewerIsTrainee = (authenticatedUserData.Karrierestufe || "")
-    .toLowerCase()
-    .includes("trainee");
-
+  const viewerIsLeader = isUserLeader(authenticatedUserData);
+  const isOwnView = authenticatedUserData._id === mitarbeiterId;
+  const isEditable = viewerIsLeader && !isOwnView;
+  
   let allSteps = db.einarbeitungsschritte;
-  if (viewerIsTrainee) {
+  if (!isEditable) { // Trainees sehen keine versteckten Schritte
     allSteps = allSteps.filter((step) => step.Kategorie !== "Versteckt");
   }
   allSteps.sort((a, b) => a.Tag - b.Tag);
@@ -2436,13 +2509,17 @@ async function renderTraineeOnboardingView(
     dom.grundseminarStepsContainer,
     dom.grundseminarProgress,
     dom.grundseminarDateMarkers,
-    grundseminarSteps
+    grundseminarSteps,
+    isEditable,
+    mitarbeiterId
   );
   renderTimelineSection(
     dom.aufbauseminarStepsContainer,
     dom.aufbauseminarProgress,
     dom.aufbauseminarDateMarkers,
-    aufbauseminarSteps
+    aufbauseminarSteps,
+    isEditable,
+    mitarbeiterId
   );
 }
 
@@ -2450,7 +2527,9 @@ function renderTimelineSection(
   container,
   progressElement,
   dateMarkerContainer,
-  steps
+  steps,
+  isEditable = false,
+  traineeId = null
 ) {
   clearChildren(container);
 
@@ -2471,6 +2550,20 @@ function renderTimelineSection(
       ? step.Kategorie.toLowerCase().trim()
       : "other";
     const isMajor = stepType === "meilenstein" || stepType === "seminar";
+
+    let checkboxHtml = '';
+    if (isEditable) {
+        checkboxHtml = `
+            <label class="toggle-switch onboarding-toggle ml-auto">
+                <input type="checkbox" 
+                       class="sr-only peer onboarding-step-toggle" 
+                       data-step-id="${step._id}" 
+                       data-trainee-id="${traineeId}"
+                       ${step.completed ? 'checked' : ''}>
+                <div class="toggle-slider"></div>
+            </label>
+        `;
+    }
 
     let statusClass = step.completed
       ? "completed"
@@ -2526,6 +2619,7 @@ function renderTimelineSection(
                                 <p class="timeline-title">${step.Schritt}</p>
                                 <p class="timeline-duedate">Fällig bis: ${formattedDate}</p>
                             </div>
+                            ${checkboxHtml}
                         </div>
                     </div>
                 `;
@@ -2540,6 +2634,142 @@ function renderTimelineSection(
 
     container.appendChild(stepEl);
   });
+
+  if (isEditable) {
+      container.querySelectorAll('.onboarding-step-toggle').forEach(toggle => {
+          toggle.addEventListener('change', handleOnboardingStepToggle);
+      });
+  }
+}
+
+async function handleOnboardingStepToggle(event) {
+    const checkbox = event.currentTarget;
+    const stepId = checkbox.dataset.stepId;
+    const traineeId = checkbox.dataset.traineeId;
+    const isCompleted = checkbox.checked;
+
+    checkbox.disabled = true;
+
+    let success = false;
+    if (isCompleted) {
+        success = await addOnboardingEntry(traineeId, stepId);
+    } else {
+        success = await removeOnboardingEntry(traineeId, stepId);
+    }
+
+    if (success) {
+        localStorage.removeItem(CACHE_PREFIX + 'einarbeitung');
+        await loadAllData(); 
+        await renderTraineeOnboardingView(traineeId);
+    } else {
+        alert('Fehler beim Aktualisieren des Schritts.');
+        checkbox.checked = !isCompleted;
+    }
+
+    checkbox.disabled = false;
+}
+
+async function addOnboardingEntry(traineeId, stepId) {
+    const log = (message, ...data) => console.log(`%c[AddOnboarding] %c${message}`, 'color: #28a745; font-weight: bold;', 'color: black;', ...data);
+    log(`Starte Prozess für Trainee: ${traineeId}, Schritt: ${stepId}`);
+
+    const trainee = findRowById('mitarbeiter', traineeId);
+    const step = findRowById('einarbeitungsschritte', stepId);
+
+    if (!trainee || !step) {
+        log("!!! FEHLER: Trainee oder Schritt in der DB nicht gefunden.", { trainee, step });
+        return false;
+    }
+    log("Trainee und Schritt gefunden:", { traineeName: trainee.Name, stepName: step.Schritt });
+
+    const primaryKeyColName = await getPrimaryKeyColumnName('Einarbeitung');
+    if (!primaryKeyColName) {
+        log("!!! FEHLER: Primärschlüssel für Tabelle 'Einarbeitung' konnte nicht ermittelt werden.");
+        return false;
+    }
+    
+    // KORREKTUR: Prüfe den Typ des Primärschlüssels, bevor ein Wert gesetzt wird.
+    const tableMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'einarbeitung');
+    const primaryKeyColMeta = tableMeta.columns.find(c => c.name === primaryKeyColName);
+
+    // Per User-Request: Spalte 'Wann_erledigt' verwenden.
+    const wannErledigtKey = COLUMN_MAPS.einarbeitung.Wann_erledigt;
+    if (!wannErledigtKey) {
+        log(`!!! FEHLER: Spalte 'Wann_erledigt' nicht in den COLUMN_MAPS für 'Einarbeitung' gefunden. Verfügbare Spalten:`, Object.keys(COLUMN_MAPS.einarbeitung));
+        if (COLUMN_MAPS.einarbeitung.Datum) {
+            log("Fallback auf Spalte 'Datum' wird verwendet.");
+        } else {
+            return false;
+        }
+    }
+
+    const rowData = {
+        [COLUMN_MAPS.einarbeitung.Mitarbeiter_ID]: [traineeId],
+        [COLUMN_MAPS.einarbeitung.Schritt_ID]: [stepId],
+        [wannErledigtKey || COLUMN_MAPS.einarbeitung.Datum]: new Date().toISOString().split('T')[0],
+    };
+
+    // Nur wenn der Primärschlüssel ein beschreibbares Textfeld ist, wird ein Wert generiert.
+    // Ist es eine Formel oder ein anderer Typ, überlassen wir das Setzen des Werts SeaTable.
+    if (primaryKeyColMeta && primaryKeyColMeta.type === 'text') {
+        const primaryKeyColKey = COLUMN_MAPS.einarbeitung[primaryKeyColName];
+        if (!primaryKeyColKey) {
+            log(`!!! FEHLER: Spalten-Key für Primärschlüssel '${primaryKeyColName}' nicht gefunden.`);
+            return false;
+        }
+        log(`Primärschlüssel '${primaryKeyColName}' (Key: ${primaryKeyColKey}) ist Text. Wert wird generiert.`);
+        const entryName = `${trainee.Name} - ${step.Schritt}`;
+        rowData[primaryKeyColKey] = entryName;
+    } else {
+        log(`Primärschlüssel '${primaryKeyColName}' ist nicht vom Typ 'text' (Typ: ${primaryKeyColMeta?.type}). Wert wird nicht explizit gesetzt.`);
+    }
+
+    log("Row-Data für API-Aufruf vorbereitet:", JSON.parse(JSON.stringify(rowData)));
+    return await genericAddRowWithLinks('Einarbeitung', rowData, ['Mitarbeiter_ID', 'Schritt_ID']);
+}
+
+async function removeOnboardingEntry(traineeId, stepId) {
+    const entryToDelete = db.einarbeitung.find(e => 
+        e.Mitarbeiter_ID === traineeId && 
+        e.Schritt_ID === stepId
+    );
+
+    if (entryToDelete) {
+        return await seaTableDeleteRow('Einarbeitung', entryToDelete._id);
+    }
+    console.warn('Could not find onboarding entry to delete.');
+    return false;
+}
+
+async function genericAddRowWithLinks(tableName, rowDataWithKeys, linkColumnNames) {
+    if (!seaTableAccessToken || !apiGatewayUrl) return false;
+
+    const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
+    const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
+    const linkData = {};
+    const rowDataForCreation = { ...rowDataWithKeys };
+
+    linkColumnNames.forEach(colName => {
+        const colKey = tableMap[colName];
+        if (Object.prototype.hasOwnProperty.call(rowDataForCreation, colKey)) {
+            linkData[colName] = rowDataForCreation[colKey]?.[0] || null;
+            delete rowDataForCreation[colKey];
+        }
+    });
+
+    const rowDataWithNames = {};
+    for (const key in rowDataForCreation) {
+        const name = reversedMap[key];
+        if (name) rowDataWithNames[name] = (rowDataForCreation[key] === undefined || rowDataForCreation[key] === '') ? null : rowDataForCreation[key];
+    }
+
+    const newRowId = await genericSeaTableAddRow(tableName, rowDataWithNames);
+    if (!newRowId) return false;
+
+    for (const colName in linkData) {
+        if (linkData[colName] && !(await updateSingleLink(tableName, newRowId, colName, [linkData[colName]]))) return false;
+    }
+    return true;
 }
 
 // --- Appointments View Logic (integriert in main.js) ---
@@ -4805,33 +5035,12 @@ function setupEventListeners() {
 
   // --- Main Navigation ---
   dom.backButton.addEventListener("click", async () => {
-    if (isSuperuserView) {
-      isSuperuserView = false;
-      const userId = localStorage.getItem("loggedInUserId");
-      await fetchAndRenderDashboard(userId);
-      return;
-    }
-    if (currentView === "einarbeitung" || currentView === "appointments") {
-      if (
-        currentOnboardingSubView === "trainee-detail" &&
-        isUserLeader(authenticatedUserData)
-      ) {
-        const teamMembers = getSubordinates(authenticatedUserData._id, "gruppe");
-        await renderLeaderOnboardingView(teamMembers);
-        currentOnboardingSubView = "leader-list";
-        dom.einarbeitungTitle.textContent = "Einarbeitung: Gruppen-Übersicht";
-        dom.leaderOnboardingView.classList.remove("hidden");
-        dom.traineeOnboardingView.classList.add("hidden");
-      } else {
-        switchView("dashboard");
-      }
-      updateBackButtonVisibility();
-      return;
-    }
-    if (viewHistory.length > 1) {
-      viewHistory.pop();
-      const previousUserId = viewHistory[viewHistory.length - 1];
-      await fetchAndRenderDashboard(previousUserId);
+    // Die einzige Funktion des Zurück-Buttons ist es, zum Dashboard des
+    // eingeloggten Benutzers zurückzukehren.
+    if (authenticatedUserData?._id) {
+        isSuperuserView = false; // Stellt sicher, dass die Superuser-Ansicht beendet wird.
+        viewHistory = [authenticatedUserData._id]; // Setzt die Ansichts-Historie zurück.
+        await fetchAndRenderDashboard(authenticatedUserData._id);
     }
   });
 

@@ -560,6 +560,11 @@ details[open] > summary::before { transform: rotate(180deg); }
     transform: translateX(20px);
 }
 
+/* NEU: Eigener Stil für den Einarbeitungs-Toggle */
+.onboarding-toggle.toggle-switch .peer:checked + .toggle-slider {
+    background-color: var(--color-accent-green);
+}
+
 /* Mitarbeiter Statistik Chart */
 .stats-bar-container {
     display: flex;
