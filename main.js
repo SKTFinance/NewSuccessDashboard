@@ -2236,7 +2236,8 @@ async function fetchAndRenderOnboarding(mitarbeiterId) {
     dom.einarbeitungTitle.textContent = "Einarbeitung: Gruppen-Übersicht";
     dom.traineeOnboardingView.classList.add("hidden");
     dom.leaderOnboardingView.classList.remove("hidden");
-    const teamMembers = getSubordinates(mitarbeiterId, "gruppe");
+    let teamMembers = getSubordinates(mitarbeiterId, "gruppe");
+    teamMembers = teamMembers.filter(member => member && member.Startdatum);
     await renderLeaderOnboardingView(teamMembers);
   }
 }
