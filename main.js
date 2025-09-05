@@ -5317,7 +5317,7 @@ async function handleAIAssistantClick() {
     "Du bist ein erfahrener und motivierender Vertriebscoach. Deine Antworten sind immer positiv, konstruktiv und auf den Punkt gebracht.";
 
   try {
-    const apiKey = "";
+    const apiKey = "AIzaSyAUnqTaKJ1B7mvltFTWvHcz4szfA1YDFek";
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
     const payload = {
