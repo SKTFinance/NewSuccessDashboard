@@ -2551,6 +2551,7 @@ class AppointmentsView {
         // Der Konstruktor ist absichtlich schlank. DOM-Elemente werden in init() geholt.
         this.listContainer = null;
         this.umsatzTab = null;
+        this.immoTab = null; // NEU
         this.netzwerkTab = null;
         this.statsChartTitle = null;
         this.statsPieChartContainer = null;
@@ -2585,6 +2586,7 @@ class AppointmentsView {
     _getDomElements() {
         this.listContainer = document.getElementById('appointments-list-container');
         this.umsatzTab = document.getElementById('umsatz-tab');
+        this.immoTab = document.getElementById('immo-tab');
         this.netzwerkTab = document.getElementById('netzwerk-tab');
         this.statsChartTitle = document.getElementById('stats-chart-title');
         this.statsPieChartContainer = document.getElementById('stats-pie-chart-container');
@@ -2603,7 +2605,7 @@ class AppointmentsView {
         this.searchInput = document.getElementById('appointments-search-filter');
         this.showCancelledCheckbox = document.getElementById('appointments-show-cancelled');
 
-        return this.listContainer && this.umsatzTab && this.recruitingTab && this.netzwerkTab && this.statsPieChartContainer && this.toggleStatsBtn && this.statsContent && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.scopeFilter && this.modal && this.form && this.searchInput && this.showCancelledCheckbox;
+        return this.listContainer && this.umsatzTab && this.recruitingTab && this.immoTab && this.netzwerkTab && this.statsPieChartContainer && this.toggleStatsBtn && this.statsContent && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.scopeFilter && this.modal && this.form && this.searchInput && this.showCancelledCheckbox;
     }
 
     async init(userId) {
@@ -2699,9 +2701,10 @@ class AppointmentsView {
         let filteredAppointments = this.allAppointments.filter(t => {
             const isUmsatzTermin = ['AT', 'BT', 'ST'].includes(t.Kategorie);
             const isRecruitingTermin = t.Kategorie === 'ET';
+            const isImmoTermin = t.Kategorie === 'Immo';
             const isNetzwerkTermin = t.Kategorie === 'NT';
 
-            const tabMatch = (this.currentTab === 'umsatz' && isUmsatzTermin) || (this.currentTab === 'recruiting' && isRecruitingTermin) || (this.currentTab === 'netzwerk' && isNetzwerkTermin);
+            const tabMatch = (this.currentTab === 'umsatz' && isUmsatzTermin) || (this.currentTab === 'recruiting' && isRecruitingTermin) || (this.currentTab === 'immo' && isImmoTermin) || (this.currentTab === 'netzwerk' && isNetzwerkTermin);
             if (!tabMatch) return false;
 
             // KORREKTUR: Prüfe auf Status 'Storno' ODER das Absage-Flag
@@ -2847,6 +2850,7 @@ class AppointmentsView {
 
         this.umsatzTab.addEventListener('click', () => { this.currentTab = 'umsatz'; this.updateTabs(); this.render(); });
         this.recruitingTab.addEventListener('click', () => { this.currentTab = 'recruiting'; this.updateTabs(); this.render(); });
+        this.immoTab.addEventListener('click', () => { this.currentTab = 'immo'; this.updateTabs(); this.render(); });
         this.netzwerkTab.addEventListener('click', () => { this.currentTab = 'netzwerk'; this.updateTabs(); this.render(); });
 
         document.getElementById('add-appointment-btn').addEventListener('click', () => this.openModal());
@@ -2902,6 +2906,8 @@ class AppointmentsView {
             allowedStati.push('Weiterer BT');
         } else if (category === 'ET') {
             allowedStati.push('Weiterer ET', 'Info Eingeladen', 'Info Bestätigt', 'Info Anwesend', 'Wird Mitarbeiter');
+        } else if (category === 'Immo') {
+            allowedStati.push('AV Termin', 'Besichtigung', 'Kredittermin');
         }
         
         const finalStati = allStatuses.filter(s => allowedStati.includes(s) || s === 'Storno');
@@ -2924,6 +2930,9 @@ class AppointmentsView {
     }
 
     _getStatusColorClass(termin) {
+        if (termin.Kategorie === 'Immo') {
+            return 'border-immo-accent';
+        }
         if (termin.Absage === true || termin.Status === 'Storno') {
             return 'border-skt-red-accent';
         }
@@ -2946,6 +2955,7 @@ class AppointmentsView {
         const tabs = [
             { el: this.umsatzTab, name: 'umsatz' },
             { el: this.recruitingTab, name: 'recruiting' },
+            { el: this.immoTab, name: 'immo' },
             { el: this.netzwerkTab, name: 'netzwerk' }
         ];
         const activeClass = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue';
@@ -3174,6 +3184,8 @@ class AppointmentsView {
                     // Wert im Hintergrund setzen, auch wenn das Feld nicht sichtbar ist
                     const nextInfoDate = findNextInfoDateAfter(getCurrentDate());
                     this.form.querySelector('#appointment-infoabend-date').value = nextInfoDate.toISOString().split('T')[0];
+                } else if (this.currentTab === 'immo') {
+                    categorySelect.value = 'Immo';
                 }
                 this._updateStatusDropdown(categorySelect.value);
                 this.toggleConditionalFields(categorySelect.value, true);
