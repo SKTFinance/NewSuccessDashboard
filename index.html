@@ -81,26 +81,39 @@
                     <button id="appointments-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Termine verwalten">
                         <i class="fas fa-calendar-alt"></i>
                     </button>
-                    <!-- NEU: Potential-Button im Header -->
-                    <button id="potential-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Potentialbearbeitung">
-                        <i class="fas fa-users"></i>
-                    </button>
                     <!-- NEU: Umsatz-Button im Header -->
                     <button id="umsatz-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Umsätze">
                         <i class="fas fa-chart-line"></i>
                     </button>
-                    <!-- NEU: Auswertung-Button im Header -->
-                    <button id="auswertung-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Auswertungen">
+                    <!-- Folgende Buttons werden auf kleinen Bildschirmen in einem Menü zusammengefasst -->
+                    <button id="pg-tagebuch-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="PG-Tagebuch">
+                        <i class="fas fa-comments"></i>
+                    </button>
+                    <button id="potential-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Potentialbearbeitung">
+                        <i class="fas fa-users"></i>
+                    </button>
+                    <button id="auswertung-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Auswertungen">
                         <i class="fas fa-trophy"></i>
                     </button>
-                    <!-- NEU: Strukturbaum-Button im Header -->
-                    <button id="strukturbaum-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Strukturbaum">
+                    <button id="strukturbaum-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Strukturbaum">
                         <i class="fas fa-sitemap"></i>
                     </button>
-                    <!-- NEU: KI Assistent Button -->
-                    <button id="ai-assistant-btn" class="bg-accent-purple text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-purple-700 transition-colors h-10 w-10 flex items-center justify-center" title="KI-Assistent">
+                    <button id="ai-assistant-btn" class="hidden sm:flex bg-accent-purple text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-purple-700 transition-colors h-10 w-10 items-center justify-center" title="KI-Assistent">
                         <i class="fas fa-robot"></i>
                     </button>
+                    <!-- NEU: "Mehr"-Menü für kleine Bildschirme -->
+                    <div class="relative sm:hidden">
+                        <button id="more-tools-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Weitere Werkzeuge">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <div id="more-tools-menu" class="dropdown-menu hidden">
+                             <a href="#" id="pg-tagebuch-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-comments w-5 mr-2"></i>PG-Tagebuch</a>
+                             <a href="#" id="potential-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-users w-5 mr-2"></i>Potential</a>
+                             <a href="#" id="auswertung-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-trophy w-5 mr-2"></i>Auswertung</a>
+                             <a href="#" id="strukturbaum-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sitemap w-5 mr-2"></i>Strukturbaum</a>
+                             <a href="#" id="ai-assistant-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-robot w-5 mr-2"></i>KI-Assistent</a>
+                        </div>
+                    </div>
                     <div class="relative">
                         <button id="settings-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Einstellungen">
                             <i class="fas fa-cog"></i>
@@ -388,6 +401,11 @@
         <!-- Container für die Strukturbaum-Ansicht -->
         <main id="strukturbaum-view" class="hidden w-full max-w-7xl mx-auto flex-grow px-4 md:px-8 pt-6 pb-6">
             <!-- Inhalt von strukturbaum.html wird hier geladen -->
+        </main>
+
+        <!-- Container für die PG-Tagebuch-Ansicht -->
+        <main id="pg-tagebuch-view" class="hidden w-full max-w-7xl mx-auto flex-grow px-4 md:px-8 pt-6 pb-6">
+            <!-- Inhalt von pg-tagebuch.html wird hier geladen -->
         </main>
     </div>
 

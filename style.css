@@ -882,3 +882,18 @@ details[open] > summary::before { transform: rotate(180deg); }
 .zoom-btn:hover {
     background-color: #e9e9e9;
 }
+
+/* NEU: Stile für PG-Tagebuch */
+#pg-list-container .p-3.bg-skt-blue .text-sm {
+    color: #cbd5e1; /* helleres Grau für Datum im aktiven Zustand */
+}
+
+#pg-list-container {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-skt-grey-medium) var(--color-skt-grey-light);
+}
+#pg-list-container::-webkit-scrollbar { width: 8px; }
+#pg-list-container::-webkit-scrollbar-track { background: var(--color-skt-grey-light); }
+#pg-list-container::-webkit-scrollbar-thumb { background-color: var(--color-skt-grey-medium); border-radius: 10px; border: 2px solid var(--color-skt-grey-light); }
+
+#pg-editor-container textarea { min-height: 200px; }

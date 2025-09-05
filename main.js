@@ -23,6 +23,7 @@ let db = {
   einarbeitung: [],
   gesellschaften: [],
   produkte: [],
+  "pg": [],
   bürostandorte: [],
 };
 
@@ -44,6 +45,7 @@ let potentialViewInstance = null;
 let umsatzViewInstance = null;
 let auswertungViewInstance = null;
 let strukturbaumViewInstance = null;
+let pgTagebuchViewInstance = null;
 let HIERARCHY_CACHE = null;
 let currentOnboardingSubView = "leader-list";
 
@@ -127,6 +129,7 @@ const dom = {
   potentialHeaderBtn: document.getElementById("potential-header-btn"),
   umsatzHeaderBtn: document.getElementById("umsatz-header-btn"),
   auswertungHeaderBtn: document.getElementById("auswertung-header-btn"),
+  pgTagebuchHeaderBtn: document.getElementById('pg-tagebuch-header-btn'),
   strukturbaumHeaderBtn: document.getElementById("strukturbaum-header-btn"),
   auswertungView: document.getElementById("auswertung-view"),
   umsatzView: document.getElementById("umsatz-view"),
@@ -135,6 +138,7 @@ const dom = {
   einarbeitungTitle: document.getElementById("einarbeitung-title"),
   traineeOnboardingView: document.getElementById("trainee-onboarding-view"),
   leaderOnboardingView: document.getElementById("leader-onboarding-view"),
+  pgTagebuchView: document.getElementById('pg-tagebuch-view'),
   strukturbaumView: document.getElementById("strukturbaum-view"),
   grundseminarStepsContainer: document.getElementById(
     "grundseminar-steps-container"
@@ -195,6 +199,9 @@ const dom = {
   timeTravelBanner: document.getElementById('time-travel-banner'),
   timeTravelDateDisplay: document.getElementById('time-travel-date-display'),
   resetTimeTravelBtn: document.getElementById('reset-time-travel-btn'),
+  // NEU: "Mehr"-Menü
+  moreToolsBtn: document.getElementById('more-tools-btn'),
+  moreToolsMenu: document.getElementById('more-tools-menu'),
 };
 
 // --- SEATABLE API FUNKTIONEN ---
@@ -592,7 +599,7 @@ async function seaTableAddRow(tableName, rowData) {
 async function updateSingleLink(baseTableName, baseRowId, linkColumnName, otherRowIds) {
     if (!seaTableAccessToken || !apiGatewayUrl) return false;
     try {
-        const baseTableMeta = METADATA.tables.find(t => t.name === baseTableName);
+        const baseTableMeta = METADATA.tables.find(t => t.name.toLowerCase() === baseTableName.toLowerCase());
         if (!baseTableMeta) throw new Error(`Could not find metadata for table '${baseTableName}'`);
 
         const linkColumnMeta = baseTableMeta.columns.find(c => c.name === linkColumnName);
@@ -610,7 +617,7 @@ async function updateSingleLink(baseTableName, baseRowId, linkColumnName, otherR
             }
         };
         
-        umsatzLog(`[UPDATE-LINK] Updating link for ${linkColumnName}. Payload:`, body);
+        pgLog(`[UPDATE-LINK] Updating link for ${linkColumnName}. Payload:`, body);
         const response = await fetch(url, { method: 'PUT', headers: { Authorization: `Bearer ${seaTableAccessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         if (!response.ok) {
             throw new Error(`Link update for ${linkColumnName} failed: ${response.status} ${await response.text()}`);
@@ -877,6 +884,7 @@ async function loadAllData() {
     "Einarbeitung",
     "Gesellschaften",
     "Produkte",
+    "PG",
     "Bürostandorte",
   ];
 
@@ -4929,6 +4937,19 @@ function setupEventListeners() {
       );
     }
   }
+  // NEU: Funktion für "Mehr"-Menü
+  function closeMoreToolsMenu() {
+    if (dom.moreToolsMenu.classList.contains("visible")) {
+      dom.moreToolsMenu.classList.remove("visible");
+      dom.moreToolsMenu.addEventListener(
+        "transitionend",
+        () => {
+          dom.moreToolsMenu.classList.add("hidden");
+        },
+        { once: true }
+      );
+    }
+  }
 
   dom.settingsBtn.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -4937,6 +4958,7 @@ function setupEventListeners() {
     } else {
       dom.superuserBtn.classList.add("hidden");
     }
+    closeMoreToolsMenu(); // Schließt das andere Menü, falls offen
 
     if (dom.settingsMenu.classList.contains("hidden")) {
       dom.settingsMenu.classList.remove("hidden");
@@ -4946,12 +4968,28 @@ function setupEventListeners() {
     }
   });
 
+  // NEU: Event Listener für "Mehr"-Menü
+  dom.moreToolsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeSettingsMenu(); // Schließt das andere Menü, falls offen
+    if (dom.moreToolsMenu.classList.contains("hidden")) {
+      dom.moreToolsMenu.classList.remove("hidden");
+      setTimeout(() => dom.moreToolsMenu.classList.add("visible"), 10);
+    } else {
+      closeMoreToolsMenu();
+    }
+  });
+
   document.addEventListener("click", (e) => {
     if (
       !dom.settingsMenu.contains(e.target) &&
       !dom.settingsBtn.contains(e.target)
     ) {
       closeSettingsMenu();
+    }
+    // NEU: "Mehr"-Menü schließen bei Klick daneben
+    if (!dom.moreToolsMenu.contains(e.target) && !dom.moreToolsBtn.contains(e.target)) {
+      closeMoreToolsMenu();
     }
   });
 
@@ -5016,6 +5054,23 @@ function setupEventListeners() {
     }
   });
 
+  // NEU: Event Listeners für die "Mehr"-Menüpunkte
+  const setupMenuItem = (menuItemId, buttonId) => {
+      const menuItem = document.getElementById(menuItemId);
+      const button = document.getElementById(buttonId);
+      if (menuItem && button) {
+          menuItem.addEventListener('click', (e) => {
+              e.preventDefault();
+              closeMoreToolsMenu();
+              button.click();
+          });
+      }
+  };
+  setupMenuItem('pg-tagebuch-menu-item', 'pg-tagebuch-header-btn');
+  setupMenuItem('potential-menu-item', 'potential-header-btn');
+  setupMenuItem('auswertung-menu-item', 'auswertung-header-btn');
+  setupMenuItem('strukturbaum-menu-item', 'strukturbaum-header-btn');
+  setupMenuItem('ai-assistant-menu-item', 'ai-assistant-btn');
   dom.superuserBtn.addEventListener("click", async (e) => {
     e.preventDefault();
     closeSettingsMenu();
@@ -5111,6 +5166,10 @@ function setupEventListeners() {
     switchView("appointments");
   });
 
+  dom.pgTagebuchHeaderBtn.addEventListener('click', () => {
+    switchView('pg-tagebuch');
+  });
+
   dom.potentialHeaderBtn.addEventListener("click", () => {
     // NEU
     switchView("potential");
@@ -5183,33 +5242,6 @@ function setupEventListeners() {
   dom.timeTravelForm.addEventListener('submit', (e) => { e.preventDefault(); handleTimeTravelSubmit(); });
   dom.resetTimeTravelBtn.addEventListener('click', resetTimeTravel);
 
-}
-
-function switchView(viewName) {
-  currentView = viewName;
-  dom.mainDashboardView.classList.toggle(
-    "hidden",
-    viewName !== "dashboard"
-  );
-  dom.einarbeitungView.classList.toggle("hidden", viewName !== "einarbeitung");
-  dom.appointmentsView.classList.toggle("hidden", viewName !== "appointments");
-  dom.potentialView.classList.toggle("hidden", viewName !== "potential");
-  dom.umsatzView.classList.toggle("hidden", viewName !== "umsatz");
-  dom.auswertungView.classList.toggle("hidden", viewName !== "auswertung");
-  dom.strukturbaumView.classList.toggle("hidden", viewName !== "strukturbaum");
-  updateBackButtonVisibility();
-
-  if (viewName === "appointments") {
-    loadAndInitAppointmentsView();
-  } else if (viewName === "potential") {
-    loadAndInitPotentialView();
-  } else if (viewName === "umsatz") {
-    loadAndInitUmsatzView();
-  } else if (viewName === "auswertung") {
-    loadAndInitAuswertungView();
-  } else if (viewName === "strukturbaum") {
-    loadAndInitStrukturbaumView();
-  }
 }
 
 let isInitializing = false;
@@ -6134,6 +6166,383 @@ async function loadAndInitStrukturbaumView() {
     }
 }
 
+// --- PG-Tagebuch View Logic ---
+const pgLog = (message, ...data) => console.log(`%c[PG-Tagebuch] %c${message}`, 'color: #3498db; font-weight: bold;', 'color: black;', ...data);
+
+class PGTagebuchView {
+    constructor() {
+        this.initialized = false;
+        this.currentUserId = null;
+        this.allPgs = [];
+        this.currentPgId = null;
+        this.timerStartTime = null;
+        this.filterText = '';
+    }
+
+    _getDomElements() {
+        this.listContainer = document.getElementById('pg-list-container');
+        this.editorContainer = document.getElementById('pg-editor-container');
+        this.welcomeView = document.getElementById('pg-welcome-view');
+        this.editorView = document.getElementById('pg-editor-view');
+        this.form = document.getElementById('pg-form');
+        this.newEntryBtn = document.getElementById('pg-new-entry-btn');
+        this.searchInput = document.getElementById('pg-search-input');
+        this.searchContainer = document.getElementById('pg-search-container');
+        return this.listContainer && this.editorContainer && this.form && this.newEntryBtn && this.searchInput && this.searchContainer;
+    }
+
+    async init(userId) {
+        pgLog(`Modul wird initialisiert für User-ID: ${userId}`);
+        this.currentUserId = userId;
+
+        if (!this._getDomElements()) {
+            pgLog('!!! FEHLER: Benötigte DOM-Elemente wurden nicht gefunden.');
+            return;
+        }
+
+        if (!this.initialized) {
+            this.setupEventListeners();
+            this.initialized = true;
+        }
+
+        await this.fetchAndRender();
+    }
+
+    async fetchAndRender() {
+        this.listContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        const currentUserIsLeader = SKT_APP.isUserLeader(SKT_APP.authenticatedUserData);
+        const currentUserId = this.currentUserId;
+        const mySubordinateIds = new Set(SKT_APP.getAllSubordinatesRecursive(this.currentUserId).map(u => u._id));
+
+        this.allPgs = db['pg'].filter(pg => {
+            if (currentUserIsLeader) {
+                // KORREKTUR: Die geladenen Daten enthalten IDs, keine Namen.
+                return pg.Leiter === currentUserId || mySubordinateIds.has(pg.Mitarbeiter);
+            } else {
+                // KORREKTUR: Vergleich mit ID statt Name.
+                return pg.Mitarbeiter === currentUserId;
+            }
+        });
+
+        this.allPgs.sort((a, b) => new Date(b.Datum) - new Date(a.Datum));
+        pgLog(`${this.allPgs.length} PGs geladen.`);
+        this.renderList();
+        this.renderEditor(null); // Startansicht anzeigen
+    }
+
+    renderList() {
+        this.listContainer.innerHTML = '';
+
+        if (this.allPgs.length === 0) {
+            this.searchContainer.classList.add('hidden');
+            this.listContainer.innerHTML = '<p class="text-center text-gray-500">Keine Gespräche gefunden.</p>';
+            return;
+        }
+        this.searchContainer.classList.remove('hidden');
+
+        let pgsToRender = this.allPgs;
+        if (this.filterText) {
+            const searchText = this.filterText.toLowerCase();
+            pgsToRender = this.allPgs.filter(pg => {
+                const title = (pg.Titel || '').toLowerCase();
+                const leiterName = (SKT_APP.findRowById('mitarbeiter', pg.Leiter)?.Name || '').toLowerCase();
+                const mitarbeiterName = (SKT_APP.findRowById('mitarbeiter', pg.Mitarbeiter)?.Name || '').toLowerCase();
+                return title.includes(searchText) || leiterName.includes(searchText) || mitarbeiterName.includes(searchText);
+            });
+        }
+
+        if (pgsToRender.length === 0) {
+            this.listContainer.innerHTML = '<p class="text-center text-gray-500">Keine passenden Gespräche gefunden.</p>';
+            return;
+        }
+
+        pgsToRender.forEach(pg => {
+            const otherPersonId = pg.Leiter === this.currentUserId ? pg.Mitarbeiter : pg.Leiter;
+            const otherPerson = SKT_APP.findRowById('mitarbeiter', otherPersonId);
+            const otherPersonName = otherPerson ? otherPerson.Name : 'Unbekannt';
+
+            const item = document.createElement('div');
+            item.className = `p-3 rounded-lg cursor-pointer transition-colors duration-200 ${pg._id === this.currentPgId ? 'bg-skt-blue text-white' : 'hover:bg-skt-grey-light'}`;
+            item.dataset.id = pg._id;
+            item.innerHTML = `
+                <p class="font-semibold truncate">${pg.Titel || 'Unbenanntes Gespräch'}</p>
+                <p class="text-sm ${pg._id === this.currentPgId ? 'text-gray-300' : 'text-gray-500'}">
+                    ${otherPersonName} • ${new Date(pg.Datum).toLocaleDateString('de-DE')}
+                </p>
+            `;
+            item.addEventListener('click', () => this.renderEditor(pg._id));
+            this.listContainer.appendChild(item);
+        });
+    }
+
+    renderEditor(pgId) {
+        this.currentPgId = pgId;
+        // Warnhinweis standardmäßig ausblenden
+        document.getElementById('pg-warning-message').classList.add('hidden');
+
+        this.renderList(); // Liste neu rendern, um die Auswahl zu markieren
+
+        this.welcomeView.classList.toggle('hidden', pgId !== null);
+        this.editorView.classList.toggle('hidden', pgId === null);
+        if (pgId === null) {
+            this.timerStartTime = null;
+            return;
+        }
+
+        const pg = this.allPgs.find(p => p._id === pgId);
+        if (!pg) { // This can happen if a new entry is being created
+            if (!pgId.startsWith('new-')) pgLog(`PG mit ID ${pgId} nicht gefunden.`);
+            this.welcomeView.classList.remove('hidden');
+            this.editorView.classList.add('hidden');
+            return;
+        }
+
+        this.timerStartTime = Date.now(); // Timer starten
+
+        this.form.querySelector('#pg-id').value = pg._id;
+        const durationInSeconds = pg.Dauer || 0;
+        this.form.querySelector('#pg-duration-hidden').value = formatMinutesToDuration(Math.round(durationInSeconds / 60));
+        this.form.querySelector('#pg-titel').value = pg.Titel || '';
+        this.form.querySelector('#pg-text').value = pg.Text || '';
+        this.form.querySelector('#pg-aufgaben').value = pg.Aufgaben || '';
+
+        // Leiter-Feld (fest) befüllen
+        const leiterNameP = this.form.querySelector('#pg-leiter-name');
+        const leiter = SKT_APP.findRowById('mitarbeiter', pg.Leiter);
+        leiterNameP.textContent = leiter ? leiter.Name : 'Unbekannt';
+
+        // Mitarbeiter-Dropdown mit der eigenen Struktur befüllen
+        const mitarbeiterSelect = this.form.querySelector('#pg-mitarbeiter');
+        const subordinates = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
+        const allSelectableUsers = [SKT_APP.authenticatedUserData, ...subordinates].sort((a, b) => a.Name.localeCompare(b.Name));
+        
+        mitarbeiterSelect.innerHTML = '';
+        allSelectableUsers.forEach(u => {
+            mitarbeiterSelect.add(new Option(u.Name, u._id));
+        });
+
+        mitarbeiterSelect.value = pg.Mitarbeiter;
+
+        this.form.querySelector('#pg-delete-btn').classList.remove('hidden');
+    }
+
+    openNewEntryForm() {
+        this.currentPgId = `new-${Date.now()}`; // Temporäre ID für die Auswahl
+        this.timerStartTime = Date.now(); // Timer starten
+        this.renderList();
+
+        this.welcomeView.classList.add('hidden');
+        this.editorView.classList.remove('hidden');
+        this.form.reset();
+        this.form.querySelector('#pg-id').value = '';
+        this.form.querySelector('#pg-duration-hidden').value = '0:00';
+
+        // Leiter-Feld (fest) befüllen
+        const leiterNameP = this.form.querySelector('#pg-leiter-name');
+        leiterNameP.textContent = SKT_APP.authenticatedUserData.Name;
+
+        // Mitarbeiter-Dropdown mit der eigenen Struktur befüllen und vorauswählen
+        const mitarbeiterSelect = this.form.querySelector('#pg-mitarbeiter');
+        const subordinates = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
+        const allSelectableUsers = [SKT_APP.authenticatedUserData, ...subordinates].sort((a, b) => a.Name.localeCompare(b.Name));
+        
+        mitarbeiterSelect.innerHTML = '';
+        allSelectableUsers.forEach(u => {
+            mitarbeiterSelect.add(new Option(u.Name, u._id));
+        });
+
+        // Den aktuell im Dashboard angesehenen Mitarbeiter vorauswählen
+        mitarbeiterSelect.value = SKT_APP.currentlyViewedUserData._id;
+
+        // Warnhinweis anzeigen, wenn man ein Gespräch mit sich selbst anlegt
+        const warningMessage = document.getElementById('pg-warning-message');
+        if (SKT_APP.currentlyViewedUserData._id === this.currentUserId) {
+            warningMessage.classList.remove('hidden');
+        } else {
+            warningMessage.classList.add('hidden');
+        }
+
+        this.form.querySelector('#pg-text').value = `Ziel: Ursachen verstehen, gemeinsam Lösungen entwickeln, Entwicklung starten.\nAblauf:\n1. Offene Bestandsaufnahme (10 Min)\no Wie zufrieden bist du mit deiner letzten Woche?\no Was hat gut funktioniert, was nicht?\n2. Ursachenanalyse (15 Min)\no Quoten, Termine, Aktivitäten durchsprechen.\no Gemeinsame Bewertung: Was sind die größten Hebel?\n3. Zielklärung & Motivation (10 Min)\no Welches Hauptziel für nächste Woche ist realistisch und motivierend?\n4. Lösungsentwicklung (15 Min)\no 2–3 konkrete Maßnahmen festlegen.\no Rollenspiel oder Praxisbeispiele einbauen.\n5. Unterstützung sichern (5 Min)\no Was kann ich tun, um dir zu helfen?\no abfragen wann man den GP erreichen kann\n6. Motivation & Verabschiedung (5 Min)\no Positiver Ausblick, Termin fürs nächste Gespräch setzen.`;
+        this.form.querySelector('#pg-aufgaben').value = `Prio 1 ToDos:\n-\n-\n-\n\nSonstige ToDos:\n-\n-\n-\n-\n-`;
+        this.form.querySelector('#pg-delete-btn').classList.add('hidden');
+    }
+
+    setupEventListeners() {
+        this.newEntryBtn.addEventListener('click', () => this.openNewEntryForm());
+        this.form.addEventListener('submit', (e) => this.handleFormSubmit(e));
+        this.form.querySelector('#pg-delete-btn').addEventListener('click', () => this.handleDelete());
+
+        this.searchInput.addEventListener('input', _.debounce(() => {
+            this.filterText = this.searchInput.value;
+            this.renderList();
+        }, 300));
+
+        // Event Listener für den Warnhinweis
+        const mitarbeiterSelect = this.form.querySelector('#pg-mitarbeiter');
+        const warningMessage = document.getElementById('pg-warning-message');
+        mitarbeiterSelect.addEventListener('change', () => {
+            if (mitarbeiterSelect.value === this.currentUserId) {
+                warningMessage.classList.remove('hidden');
+            } else {
+                warningMessage.classList.add('hidden');
+            }
+        });
+    }
+
+    async handleFormSubmit(e) {
+        e.preventDefault();
+        const saveBtn = this.form.querySelector('#pg-save-btn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Speichern...';
+
+        const rowId = this.form.querySelector('#pg-id').value;
+        const isNew = !rowId;
+
+        let oldDurationString = this.form.querySelector('#pg-duration-hidden').value;
+        let totalMinutes = parseDurationToMinutes(oldDurationString);
+
+        if (this.timerStartTime) {
+            const elapsedMs = Date.now() - this.timerStartTime;
+            const elapsedMinutes = Math.round(elapsedMs / 60000);
+            totalMinutes += elapsedMinutes;
+        }
+
+        const existingPg = isNew ? null : this.allPgs.find(p => p._id === rowId);
+        const dateValue = existingPg ? new Date(existingPg.Datum).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+
+        const rowData = { // KORREKTUR: Spalten-Keys statt Property-Namen verwenden
+            [COLUMN_MAPS.pg.Leiter]: [this.currentUserId],
+            [COLUMN_MAPS.pg.Mitarbeiter]: [this.form.querySelector('#pg-mitarbeiter').value],
+            [COLUMN_MAPS.pg.Datum]: dateValue,
+            [COLUMN_MAPS.pg.Titel]: this.form.querySelector('#pg-titel').value,
+            [COLUMN_MAPS.pg.Text]: this.form.querySelector('#pg-text').value,
+            [COLUMN_MAPS.pg.Aufgaben]: this.form.querySelector('#pg-aufgaben').value,
+            [COLUMN_MAPS.pg.Dauer]: totalMinutes * 60 // KORREKTUR: Dauer in Sekunden speichern
+        };
+
+        pgLog('Daten werden gespeichert:', JSON.parse(JSON.stringify(rowData)));
+
+        const success = await addOrUpdatePgEntry(isNew ? null : rowId, rowData); // rowData enthält jetzt Keys
+
+        if (success) {
+            localStorage.removeItem(CACHE_PREFIX + 'pg');
+            await loadAllData();
+            await this.fetchAndRender();
+        } else {
+            alert('Fehler beim Speichern des Gesprächs.');
+        }
+
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Speichern';
+    }
+
+    async handleDelete() {
+        const rowId = this.form.querySelector('#pg-id').value;
+        if (rowId && confirm('Möchten Sie dieses Gespräch wirklich löschen?')) {
+            const success = await seaTableDeleteRow('PG', rowId);
+            if (success) {
+                localStorage.removeItem(CACHE_PREFIX + 'pg');
+                await loadAllData();
+                await this.fetchAndRender();
+            } else {
+                alert('Fehler beim Löschen.');
+            }
+        }
+    }
+}
+
+async function loadAndInitPGTagebuchView() {
+    const container = dom.pgTagebuchView;
+    try {
+        const response = await fetch("./pg-tagebuch.html");
+        if (!response.ok) throw new Error(`Die Datei 'pg-tagebuch.html' konnte nicht gefunden werden.`);
+        container.innerHTML = await response.text();
+        if (!pgTagebuchViewInstance) pgTagebuchViewInstance = new PGTagebuchView();
+        await pgTagebuchViewInstance.init(authenticatedUserData._id);
+    } catch (error) {
+        console.error("Fehler beim Laden der PG-Tagebuch-Ansicht:", error);
+    }
+}
+
+async function addOrUpdatePgEntry(rowId, rowDataWithKeys) {
+    const tableName = 'PG';
+    const linkColumnNames = ['Leiter', 'Mitarbeiter'];
+
+    if (rowId) { // Update-Logik
+        pgLog(`[UPDATE-PG] Aktualisiere PG-Eintrag mit ID: ${rowId}`);
+        const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
+        const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
+        let allUpdatesSucceeded = true;
+ 
+        for (const key in rowDataWithKeys) {
+            if (!Object.prototype.hasOwnProperty.call(rowDataWithKeys, key)) continue;
+ 
+            const value = rowDataWithKeys[key];
+            const colName = reversedMap[key];
+ 
+            pgLog(`  [UPDATE-LOOP] Processing key: ${key}, colName: ${colName}, value:`, value);
+ 
+            if (!colName || colName === '_id') {
+                pgLog(`  [UPDATE-LOOP] Skipping key: ${key}`);
+                continue;
+            }
+ 
+            if (linkColumnNames.includes(colName)) {
+                pgLog(`  [UPDATE-LOOP] Treating '${colName}' as a LINK column.`);
+                const linkRowId = value && value[0] ? value[0] : null;
+                pgLog(`  [UPDATE-LOOP] Calling updateSingleLink with linkRowId: ${linkRowId}`);
+                const success = await updateSingleLink(tableName, rowId, colName, linkRowId ? [linkRowId] : []);
+                pgLog(`  [UPDATE-LOOP] updateSingleLink result: ${success}`);
+                if (!success) {
+                    pgLog(`  [UPDATE-LOOP] !!! Link update for '${colName}' FAILED.`);
+                    allUpdatesSucceeded = false;
+                    break;
+                }
+            } else {
+                pgLog(`  [UPDATE-LOOP] Treating '${colName}' as a regular column.`);
+                const colMeta = METADATA.tables.find(t => t.name.toLowerCase() === tableName.toLowerCase())?.columns.find(c => c.key === key);
+                let formattedValue;
+                if (value === null || value === undefined || value === '') { formattedValue = "NULL"; }
+                else if (colMeta && (colMeta.type === 'number' || colMeta.type === 'duration')) { const numValue = parseFloat(value); formattedValue = isNaN(numValue) ? "NULL" : numValue; }
+                else if (typeof value === 'boolean') { formattedValue = value ? "true" : "false"; }
+                else { formattedValue = `'${escapeSql(String(value))}'`; }
+ 
+                const sql = `UPDATE \`${tableName}\` SET \`${colName}\` = ${formattedValue} WHERE \`_id\` = '${rowId}'`;
+                pgLog(`  [UPDATE-LOOP] Executing SQL: ${sql}`);
+                const result = await seaTableSqlQuery(sql, false);
+                pgLog(`  [UPDATE-LOOP] SQL query result:`, result);
+                if (result === null) {
+                    pgLog(`  [UPDATE-LOOP] !!! SQL update for '${colName}' FAILED.`);
+                    allUpdatesSucceeded = false;
+                    break;
+                }
+            }
+        }
+        pgLog(`[UPDATE-PG] Finished update loop. Overall success: ${allUpdatesSucceeded}`);
+        return allUpdatesSucceeded;
+
+    } else { // Add-Logik, die Verknüpfungen korrekt behandelt
+        pgLog(`[ADD-PG] Erstelle neuen PG-Eintrag.`);
+        // Wir verwenden die generische Funktion, die zuerst die Zeile erstellt und dann die Links setzt.
+        return await genericAddRowWithLinks(tableName, rowDataWithKeys, linkColumnNames);
+    }
+}
+
+function parseDurationToMinutes(durationString) {
+    if (!durationString || !durationString.includes(':')) return 0;
+    const parts = durationString.split(':');
+    const hours = parseInt(parts[0], 10) || 0;
+    const minutes = parseInt(parts[1], 10) || 0;
+    return (hours * 60) + minutes;
+}
+
+function formatMinutesToDuration(totalMinutes) {
+    if (isNaN(totalMinutes) || totalMinutes < 0) return '0:00';
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours}:${minutes.toString().padStart(2, '0')}`;
+}
+
 // --- User Data Editing Modal ---
 function openEditUserModal() {
     const user = currentlyViewedUserData;
@@ -6571,6 +6980,33 @@ function resetTimeTravel() {
 
 // --- START ---
 document.addEventListener("DOMContentLoaded", initializeDashboard);
+
+function switchView(viewName) {
+  currentView = viewName;
+  dom.mainDashboardView.classList.toggle("hidden", viewName !== "dashboard");
+  dom.einarbeitungView.classList.toggle("hidden", viewName !== "einarbeitung");
+  dom.appointmentsView.classList.toggle("hidden", viewName !== "appointments");
+  dom.potentialView.classList.toggle("hidden", viewName !== "potential");
+  dom.umsatzView.classList.toggle("hidden", viewName !== "umsatz");
+  dom.auswertungView.classList.toggle("hidden", viewName !== "auswertung");
+  dom.strukturbaumView.classList.toggle("hidden", viewName !== "strukturbaum");
+  dom.pgTagebuchView.classList.toggle('hidden', viewName !== 'pg-tagebuch');
+  updateBackButtonVisibility();
+
+  if (viewName === "appointments") {
+    loadAndInitAppointmentsView();
+  } else if (viewName === "potential") {
+    loadAndInitPotentialView();
+  } else if (viewName === "umsatz") {
+    loadAndInitUmsatzView();
+  } else if (viewName === "auswertung") {
+    loadAndInitAuswertungView();
+  } else if (viewName === "strukturbaum") {
+    loadAndInitStrukturbaumView();
+  } else if (viewName === 'pg-tagebuch') {
+    loadAndInitPGTagebuchView();
+  }
+}
 
 // Mache Kernfunktionen global verfügbar für andere Module/Dateien
 window.SKT_APP = {

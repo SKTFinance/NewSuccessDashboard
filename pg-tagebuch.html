@@ -1,0 +1,72 @@
+<!-- Ansicht für das PG-Tagebuch -->
+<div id="pg-tagebuch-module-root" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg h-full flex flex-col">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+        <h2 class="text-3xl font-bold text-skt-blue">PG-Tagebuch</h2>
+        <button id="pg-new-entry-btn" class="bg-skt-green-accent text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-green-700 transition-colors flex items-center justify-center mt-4 sm:mt-0">
+            <i class="fas fa-plus mr-2"></i>Neues Gespräch
+        </button>
+    </div>
+
+    <div class="flex-grow flex flex-col md:flex-row gap-8 overflow-hidden">
+        <!-- Linke Spalte: Liste der Gespräche -->
+        <div class="w-full md:w-1/3 lg:w-1/4 border-r border-gray-200 pr-4 flex flex-col">
+            <div id="pg-search-container" class="mb-4 sticky top-0 bg-white pt-1 pb-2 z-10">
+                <label for="pg-search-input" class="sr-only">Gespräche suchen</label>
+                <input type="text" id="pg-search-input" placeholder="Suchen..." class="modern-input">
+            </div>
+            <div id="pg-list-container" class="flex-grow overflow-y-auto">
+                <div class="loader mx-auto"></div>
+            </div>
+        </div>
+
+        <!-- Rechte Spalte: Editor -->
+        <div id="pg-editor-container" class="w-full md:w-2/3 lg:w-3/4 flex flex-col overflow-y-auto">
+            <!-- Inhalt wird per JS generiert -->
+            <div id="pg-welcome-view" class="flex flex-col items-center justify-center h-full text-center text-gray-500">
+                <i class="fas fa-comments fa-4x mb-4 text-skt-grey-medium"></i>
+                <h3 class="text-xl font-semibold text-skt-blue">Willkommen im PG-Tagebuch</h3>
+                <p>Wähle ein Gespräch aus der Liste oder erstelle ein neues.</p>
+            </div>
+
+            <div id="pg-editor-view" class="hidden flex-grow">
+                <form id="pg-form" class="flex flex-col h-full space-y-4">
+                    <input type="hidden" id="pg-id">
+                    <input type="hidden" id="pg-duration-hidden">
+
+                    <!-- Leiter (fest) und Mitarbeiter (Dropdown) -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Leiter</label>
+                            <p id="pg-leiter-name" class="mt-1 block w-full px-3 py-2 bg-gray-100 border border-gray-300 rounded-md shadow-sm cursor-not-allowed text-gray-500"></p>
+                        </div>
+                        <div>
+                            <label for="pg-mitarbeiter" class="block text-sm font-medium text-gray-700">Mitarbeiter</label>
+                            <select id="pg-mitarbeiter" required class="modern-select mt-1"></select>
+                        </div>
+                    </div>
+                    <div id="pg-warning-message" class="hidden p-3 bg-yellow-100 border-l-4 border-yellow-400 text-yellow-700">
+                        <p class="font-bold">Hinweis</p><p>Du bist dabei, ein Gespräch mit dir selbst anzulegen. Dies ist für persönliche Notizen gedacht.</p>
+                    </div>
+                    <div>
+                        <label for="pg-titel" class="block text-sm font-medium text-gray-700">Titel</label>
+                        <input type="text" id="pg-titel" required class="modern-input mt-1" placeholder="z.B. Wochengespräch KW 34">
+                    </div>
+                    <div class="flex-grow flex flex-col space-y-6">
+                        <div class="flex flex-col flex-grow">
+                            <label for="pg-text" class="block text-sm font-medium text-gray-700">Gesprächsnotizen</label>
+                            <textarea id="pg-text" class="modern-input mt-1 flex-grow w-full" style="min-height: 400px;" placeholder="Notizen zum Gespräch..."></textarea>
+                        </div>
+                        <div class="flex flex-col">
+                            <label for="pg-aufgaben" class="block text-sm font-medium text-gray-700">Aufgaben & To-Dos</label>
+                            <textarea id="pg-aufgaben" class="modern-input mt-1 w-full" style="min-height: 200px;" placeholder="Aufgaben für die nächste Woche..."></textarea>
+                        </div>
+                    </div>
+                    <div class="pt-4 flex justify-end space-x-3">
+                        <button type="button" id="pg-delete-btn" class="bg-red-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-red-700 transition-colors hidden"><i class="fas fa-trash-alt mr-2"></i>Löschen</button>
+                        <button type="submit" id="pg-save-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors">Speichern</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
