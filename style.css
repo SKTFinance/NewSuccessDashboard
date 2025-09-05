@@ -739,12 +739,7 @@ details[open] > summary::before { transform: rotate(180deg); }
 }
 
 /* KORREKTUR: Verschachtelte ULs absolut positionieren, um horizontales Verschieben zu verhindern */
-.strukturbaum li > ul {
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-}
+/* Die absolute Positionierung wurde entfernt, damit Kind-Elemente die Breite des Baumes beeinflussen und Geschwister-Knoten verschieben können. */
 .strukturbaum li {
     display: inline-block;
     text-align: center;
