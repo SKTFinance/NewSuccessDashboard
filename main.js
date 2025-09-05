@@ -38,6 +38,7 @@ let currentLeadershipViewMode = "list";
 let isSuperuserView = false;
 let isMoneyView = false;
 let currentView = "dashboard";
+let timeTravelDate = null; // NEU
 let appointmentsViewInstance = null;
 let potentialViewInstance = null;
 let umsatzViewInstance = null;
@@ -105,7 +106,6 @@ const dom = {
   ],
   settingsBtn: document.getElementById("settings-btn"),
   settingsMenu: document.getElementById("settings-menu"),
-  logoutBtn: document.getElementById("logout-btn"),
   clearCacheBtn: document.getElementById("clear-cache-btn"),
   superuserBtn: document.getElementById("superuser-btn"),
   backButton: document.getElementById("back-button"),
@@ -185,6 +185,16 @@ const dom = {
   pqqEtIndicator: document.getElementById('pqq-et-indicator'),
   pqqEtValueDisplay: document.getElementById('pqq-et-value-display'),
   nextInfoDate: document.getElementById("next-info-date"),
+  // NEU: Zeitreise
+  timeTravelBtn: document.getElementById('time-travel-btn'),
+  timeTravelModal: document.getElementById('time-travel-modal'),
+  timeTravelForm: document.getElementById('time-travel-form'),
+  cancelTimeTravelBtn: document.getElementById('cancel-time-travel-btn'),
+  cancelTimeTravelBtn2: document.getElementById('cancel-time-travel-btn-2'),
+  startTimeTravelBtn: document.getElementById('start-time-travel-btn'),
+  timeTravelBanner: document.getElementById('time-travel-banner'),
+  timeTravelDateDisplay: document.getElementById('time-travel-date-display'),
+  resetTimeTravelBtn: document.getElementById('reset-time-travel-btn'),
 };
 
 // --- SEATABLE API FUNKTIONEN ---
@@ -717,6 +727,26 @@ async function seaTableAddUmsatzRow(tableName, rowData) {
     return allLinksSuccess;
 }
 // --- DATA NORMALIZATION & MAPPING ---
+
+// NEU: Generische Funktion zum Hinzufügen einer Zeile, die von `addPlanningRowToDatabase` verwendet wird.
+async function genericSeaTableAddRow(tableName, rowDataWithNames) {
+    try {
+        const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+        const body = { table_name: tableName, rows: [rowDataWithNames] };
+        const response = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${seaTableAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        const result = await response.json();
+        if (!response.ok || !result.row_ids || result.row_ids.length === 0) {
+            throw new Error(`Create failed: ${result.error_message || 'No row ID returned'}`);
+        }
+        const newRowId = result.row_ids[0]?._id;
+        if (!newRowId) throw new Error("Could not get new row ID");
+        return newRowId;
+    } catch (error) {
+        console.error(`[GENERIC-ADD-ROW] Failed to add row to ${tableName}:`, error);
+        return null;
+    }
+}
+
 function normalizeAllData() {
   const tableNames = Object.keys(db).filter((name) => COLUMN_MAPS[name]);
 
@@ -910,6 +940,11 @@ function loadFromCache(key, maxAgeMinutes = 60) {
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
+function getCurrentDate() {
+    // Gibt entweder das Zeitreise-Datum oder das aktuelle Datum zurück
+    return timeTravelDate ? new Date(timeTravelDate) : new Date();
+}
+
 function setStatus(msg, isError = false) {
   dom.statusText.textContent = msg;
   dom.statusMessage.style.color = isError ? "var(--color-accent-red)" : "";
@@ -942,7 +977,7 @@ function _findCycleStartForMonth(year, month) {
 }
 
 function getMonthlyCycleDates() {
-  const today = new Date();
+  const today = getCurrentDate();
   today.setHours(0, 0, 0, 0);
 
   let currentMonth = today.getMonth();
@@ -987,7 +1022,7 @@ function getPreviousMonthlyCycleDates() {
     return { startDate, endDate };
 }
 function getWeeklyCycleDates() {
-    const today = new Date();
+    const today = getCurrentDate();
     today.setHours(0, 0, 0, 0);
     const dayOfWeek = today.getDay(); // Sunday = 0, ..., Thursday = 4, ...
 
@@ -1599,7 +1634,7 @@ function updateMonthlyPlanningView(data) {
 
     // Prognose- und Soll-Logik für Geld-Ansicht
     const { startDate, endDate } = getMonthlyCycleDates();
-    const today = new Date();
+    const today = getCurrentDate();
     const totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
     const daysPassedInCycle = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24));
     const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
@@ -1624,7 +1659,7 @@ function updateMonthlyPlanningView(data) {
 
     // Prognose- und Soll-Logik wiederhergestellt
     const { startDate, endDate } = getMonthlyCycleDates();
-    const today = new Date();
+    const today = getCurrentDate();
     const totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
     const daysPassedInCycle = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24));
     const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
@@ -2051,7 +2086,7 @@ function findNextInfoDateAfter(startDate) {
 }
 
 function fetchNextInfoDate() {
-    const nextInfoDateObj = findNextInfoDateAfter(new Date());
+    const nextInfoDateObj = findNextInfoDateAfter(getCurrentDate());
     return nextInfoDateObj.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
@@ -2148,6 +2183,15 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
   dom.dashboardSections.classList.remove("hidden");
   setTimeout(() => dom.dashboardSections.classList.remove("opacity-0"), 50);
   updateBackButtonVisibility();
+
+  // NEU: Zeitreise-Banner anzeigen
+  if (timeTravelDate) {
+      dom.timeTravelBanner.classList.remove('hidden');
+      const displayDate = new Date(timeTravelDate);
+      dom.timeTravelDateDisplay.textContent = displayDate.toLocaleString('de-DE', { month: 'long', year: 'numeric' });
+  } else {
+      dom.timeTravelBanner.classList.add('hidden');
+  }
 }
 
 async function renderSuperuserView() {
@@ -2287,7 +2331,7 @@ async function getOnboardingProgressForTrainee(traineeId) {
     overallEndDate.setDate(
       startDate.getDate() + allSteps[allSteps.length - 1]["Tage nach Start"]
     );
-    const today = new Date();
+    const today = getCurrentDate();
     const totalPlanDuration =
       overallEndDate.getTime() - overallStartDate.getTime();
     const elapsedPlanDuration = today.getTime() - overallStartDate.getTime();
@@ -2418,7 +2462,7 @@ function renderTimelineSection(
     return;
   }
 
-  const today = new Date();
+  const today = getCurrentDate();
   today.setHours(0, 0, 0, 0);
 
   steps.forEach((step, index) => {
@@ -2507,6 +2551,7 @@ class AppointmentsView {
         // Der Konstruktor ist absichtlich schlank. DOM-Elemente werden in init() geholt.
         this.listContainer = null;
         this.umsatzTab = null;
+        this.immoTab = null; // NEU
         this.netzwerkTab = null;
         this.statsChartTitle = null;
         this.statsPieChartContainer = null;
@@ -2541,6 +2586,7 @@ class AppointmentsView {
     _getDomElements() {
         this.listContainer = document.getElementById('appointments-list-container');
         this.umsatzTab = document.getElementById('umsatz-tab');
+        this.immoTab = document.getElementById('immo-tab');
         this.netzwerkTab = document.getElementById('netzwerk-tab');
         this.statsChartTitle = document.getElementById('stats-chart-title');
         this.statsPieChartContainer = document.getElementById('stats-pie-chart-container');
@@ -2559,7 +2605,7 @@ class AppointmentsView {
         this.searchInput = document.getElementById('appointments-search-filter');
         this.showCancelledCheckbox = document.getElementById('appointments-show-cancelled');
 
-        return this.listContainer && this.umsatzTab && this.recruitingTab && this.netzwerkTab && this.statsPieChartContainer && this.toggleStatsBtn && this.statsContent && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.scopeFilter && this.modal && this.form && this.searchInput && this.showCancelledCheckbox;
+        return this.listContainer && this.umsatzTab && this.recruitingTab && this.immoTab && this.netzwerkTab && this.statsPieChartContainer && this.toggleStatsBtn && this.statsContent && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.scopeFilter && this.modal && this.form && this.searchInput && this.showCancelledCheckbox;
     }
 
     async init(userId) {
@@ -2655,9 +2701,10 @@ class AppointmentsView {
         let filteredAppointments = this.allAppointments.filter(t => {
             const isUmsatzTermin = ['AT', 'BT', 'ST'].includes(t.Kategorie);
             const isRecruitingTermin = t.Kategorie === 'ET';
+            const isImmoTermin = t.Kategorie === 'Immo';
             const isNetzwerkTermin = t.Kategorie === 'NT';
 
-            const tabMatch = (this.currentTab === 'umsatz' && isUmsatzTermin) || (this.currentTab === 'recruiting' && isRecruitingTermin) || (this.currentTab === 'netzwerk' && isNetzwerkTermin);
+            const tabMatch = (this.currentTab === 'umsatz' && isUmsatzTermin) || (this.currentTab === 'recruiting' && isRecruitingTermin) || (this.currentTab === 'immo' && isImmoTermin) || (this.currentTab === 'netzwerk' && isNetzwerkTermin);
             if (!tabMatch) return false;
 
             // KORREKTUR: Prüfe auf Status 'Storno' ODER das Absage-Flag
@@ -2803,6 +2850,7 @@ class AppointmentsView {
 
         this.umsatzTab.addEventListener('click', () => { this.currentTab = 'umsatz'; this.updateTabs(); this.render(); });
         this.recruitingTab.addEventListener('click', () => { this.currentTab = 'recruiting'; this.updateTabs(); this.render(); });
+        this.immoTab.addEventListener('click', () => { this.currentTab = 'immo'; this.updateTabs(); this.render(); });
         this.netzwerkTab.addEventListener('click', () => { this.currentTab = 'netzwerk'; this.updateTabs(); this.render(); });
 
         document.getElementById('add-appointment-btn').addEventListener('click', () => this.openModal());
@@ -2834,7 +2882,7 @@ class AppointmentsView {
 
             // NEU: Infoabend-Datum automatisch setzen, wenn auf ET umgeschaltet wird.
             if (newCategory === 'ET') {
-                const nextInfoDate = findNextInfoDateAfter(new Date());
+                const nextInfoDate = findNextInfoDateAfter(getCurrentDate());
                 this.form.querySelector('#appointment-infoabend-date').value = nextInfoDate.toISOString().split('T')[0];
             }
         });
@@ -2858,6 +2906,8 @@ class AppointmentsView {
             allowedStati.push('Weiterer BT');
         } else if (category === 'ET') {
             allowedStati.push('Weiterer ET', 'Info Eingeladen', 'Info Bestätigt', 'Info Anwesend', 'Wird Mitarbeiter');
+        } else if (category === 'Immo') {
+            allowedStati.push('AV Termin', 'Besichtigung', 'Kredittermin');
         }
         
         const finalStati = allStatuses.filter(s => allowedStati.includes(s) || s === 'Storno');
@@ -2880,6 +2930,9 @@ class AppointmentsView {
     }
 
     _getStatusColorClass(termin) {
+        if (termin.Kategorie === 'Immo') {
+            return 'border-immo-accent';
+        }
         if (termin.Absage === true || termin.Status === 'Storno') {
             return 'border-skt-red-accent';
         }
@@ -2902,6 +2955,7 @@ class AppointmentsView {
         const tabs = [
             { el: this.umsatzTab, name: 'umsatz' },
             { el: this.recruitingTab, name: 'recruiting' },
+            { el: this.immoTab, name: 'immo' },
             { el: this.netzwerkTab, name: 'netzwerk' }
         ];
         const activeClass = 'whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue';
@@ -3128,8 +3182,10 @@ class AppointmentsView {
                 } else if (this.currentTab === 'recruiting' || this.currentTab === 'netzwerk') {
                     categorySelect.value = 'ET';
                     // Wert im Hintergrund setzen, auch wenn das Feld nicht sichtbar ist
-                    const nextInfoDate = findNextInfoDateAfter(new Date());
+                    const nextInfoDate = findNextInfoDateAfter(getCurrentDate());
                     this.form.querySelector('#appointment-infoabend-date').value = nextInfoDate.toISOString().split('T')[0];
+                } else if (this.currentTab === 'immo') {
+                    categorySelect.value = 'Immo';
                 }
                 this._updateStatusDropdown(categorySelect.value);
                 this.toggleConditionalFields(categorySelect.value, true);
@@ -4708,21 +4764,9 @@ function setupEventListeners() {
   });
 
   // --- Menu Actions ---
-  dom.logoutBtn.addEventListener("click", () => {
-    closeSettingsMenu();
-    localStorage.clear(); // Löscht alles, inkl. Cache und Login-Status
-    location.reload();
-  });
-
   dom.clearCacheBtn.addEventListener("click", () => {
     closeSettingsMenu();
     localStorage.clear(); // Löscht alles, inkl. Cache und Login-Status
-    location.reload();
-  });
-
-  dom.clearCacheBtn.addEventListener("click", () => {
-    closeSettingsMenu();
-    localStorage.clear();
     location.reload();
   });
 
@@ -4922,6 +4966,14 @@ function setupEventListeners() {
       dom.pqqDetailsContainer.classList.toggle('collapsed');
       dom.pqqView.classList.toggle('expanded');
   });
+
+  // NEU: Zeitreise Event Listeners
+  dom.timeTravelBtn.addEventListener('click', (e) => { e.preventDefault(); closeSettingsMenu(); openTimeTravelModal(); });
+  dom.cancelTimeTravelBtn.addEventListener('click', closeTimeTravelModal);
+  dom.cancelTimeTravelBtn2.addEventListener('click', closeTimeTravelModal);
+  dom.timeTravelForm.addEventListener('submit', (e) => { e.preventDefault(); handleTimeTravelSubmit(); });
+  dom.resetTimeTravelBtn.addEventListener('click', resetTimeTravel);
+
 }
 
 function switchView(viewName) {
@@ -4958,6 +5010,12 @@ async function initializeDashboard() {
     return;
   }
   isInitializing = true;
+
+  // NEU: Zeitreise-Datum aus dem Speicher laden
+  const storedTimeTravelDate = localStorage.getItem('timeTravelDate');
+  if (storedTimeTravelDate) {
+      timeTravelDate = new Date(storedTimeTravelDate);
+  }
 
   const dataLoaded = await loadAllData();
 
@@ -6109,44 +6167,52 @@ async function saveNewUser() {
 
 // --- Planning Modal Logic ---
 function openPlanningModal() {
-    const userSelect = document.getElementById('planning-user-select');
-    const ehInput = document.getElementById('planning-eh-goal');
-    const etInput = document.getElementById('planning-et-goal');
-
     dom.planningForm.reset();
+    const userSelect = document.getElementById('planning-user-select');
+    const monthSelect = document.getElementById('planning-month-select');
+    const yearInput = document.getElementById('planning-year-input');
+
     clearChildren(userSelect);
+    clearChildren(monthSelect);
 
     const structureUsers = [authenticatedUserData, ...getAllSubordinatesRecursive(authenticatedUserData._id)];
     structureUsers.sort((a, b) => a.Name.localeCompare(b.Name));
-
     structureUsers.forEach(user => {
         userSelect.add(new Option(user.Name, user._id));
     });
 
-    userSelect.addEventListener('change', (e) => {
-        loadPlanningDataForUser(e.target.value);
+    // NEU: Standardmäßig den aktuell angesehenen Mitarbeiter auswählen
+    if (userSelect.querySelector(`[value="${currentlyViewedUserData._id}"]`)) userSelect.value = currentlyViewedUserData._id;
+
+    const months = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+    months.forEach((month) => {
+        monthSelect.add(new Option(month, month));
     });
+
+    const today = getCurrentDate();
+    monthSelect.value = months[today.getMonth()];
+    yearInput.value = today.getFullYear();
+
+    userSelect.addEventListener('change', loadPlanningDataForSelection);
+    monthSelect.addEventListener('change', loadPlanningDataForSelection);
+    yearInput.addEventListener('change', loadPlanningDataForSelection);
 
     // Initial load for the first user in the list
     if (structureUsers.length > 0) {
-        loadPlanningDataForUser(structureUsers[0]._id);
+        loadPlanningDataForSelection();
     }
-
-    const { startDate } = getMonthlyCycleDates();
-    const monthName = startDate.toLocaleString("de-DE", { month: "long" });
-    const year = startDate.getFullYear();
-    document.getElementById('planning-modal-title').textContent = `Planung für ${monthName} ${year}`;
 
     dom.planningModal.classList.add('visible');
     document.body.classList.add('modal-open');
 }
 
-function loadPlanningDataForUser(userId) {
+function loadPlanningDataForSelection() {
+    const userId = document.getElementById('planning-user-select').value;
+    const monthName = document.getElementById('planning-month-select').value;
+    const year = parseInt(document.getElementById('planning-year-input').value);
     const ehInput = document.getElementById('planning-eh-goal');
     const etInput = document.getElementById('planning-et-goal');
-    const { startDate } = getMonthlyCycleDates();
-    const monthName = startDate.toLocaleString("de-DE", { month: "long" });
-    const year = startDate.getFullYear();
+    const infoabendInput = document.getElementById('planning-infoabend-date'); // NEU
 
     const existingPlan = db.monatsplanung.find(p =>
         p.Mitarbeiter_ID === userId &&
@@ -6154,18 +6220,24 @@ function loadPlanningDataForUser(userId) {
         p.Jahr === year
     );
 
-    if (existingPlan) {
-        ehInput.value = existingPlan.EH_Ziel || 0;
-        etInput.value = existingPlan.ET_Ziel || 0;
-    } else {
-        ehInput.value = 0;
-        etInput.value = 0;
-    }
+    ehInput.value = existingPlan?.EH_Ziel || 0;
+    etInput.value = existingPlan?.ET_Ziel || 0;
+
+    // NEU: Immer das nächste Infoabend-Datum berechnen und im (deaktivierten) Feld anzeigen.
+    const nextInfoDate = findNextInfoDateAfter(getCurrentDate());
+    infoabendInput.value = nextInfoDate.toISOString().split('T')[0];
 }
 
 function closePlanningModal() {
     dom.planningModal.classList.remove('visible');
     document.body.classList.remove('modal-open');
+    // Remove event listeners to prevent memory leaks and multiple triggers
+    const userSelect = document.getElementById('planning-user-select');
+    const monthSelect = document.getElementById('planning-month-select');
+    const yearInput = document.getElementById('planning-year-input');
+    userSelect.removeEventListener('change', loadPlanningDataForSelection);
+    monthSelect.removeEventListener('change', loadPlanningDataForSelection);
+    yearInput.removeEventListener('change', loadPlanningDataForSelection);
 }
 
 async function savePlanningData() {
@@ -6175,11 +6247,10 @@ async function savePlanningData() {
     const userId = document.getElementById('planning-user-select').value;
     const ehGoal = parseFloat(document.getElementById('planning-eh-goal').value) || 0;
     const etGoal = parseInt(document.getElementById('planning-et-goal').value) || 0;
-
-    const { startDate } = getMonthlyCycleDates();
-    const monthName = startDate.toLocaleString("de-DE", { month: "long" });
-    const year = startDate.getFullYear();
-
+    const monthName = document.getElementById('planning-month-select').value;
+    const year = parseInt(document.getElementById('planning-year-input').value);
+    const nextInfoDateIso = document.getElementById('planning-infoabend-date').value;
+    
     const existingPlan = db.monatsplanung.find(p =>
         p.Mitarbeiter_ID === userId &&
         p.Monat === monthName &&
@@ -6189,7 +6260,8 @@ async function savePlanningData() {
     let success = false;
     if (existingPlan) {
         // Update existing plan
-        const sql = `UPDATE \`Monatsplanung\` SET \`EH_Ziel\` = ${ehGoal}, \`ET_Ziel\` = ${etGoal} WHERE \`_id\` = '${existingPlan._id}'`;
+        // NEU: Informationsabend-Feld hinzugefügt
+        const sql = `UPDATE \`Monatsplanung\` SET \`EH_Ziel\` = ${ehGoal}, \`ET_Ziel\` = ${etGoal}, \`Informationsabend\` = '${nextInfoDateIso}' WHERE \`_id\` = '${existingPlan._id}'`;
         const result = await seaTableSqlQuery(sql, false);
         success = result !== null;
     } else {
@@ -6200,6 +6272,8 @@ async function savePlanningData() {
             [COLUMN_MAPS.monatsplanung.EH_Ziel]: ehGoal,
             [COLUMN_MAPS.monatsplanung.ET_Ziel]: etGoal,
             [COLUMN_MAPS.monatsplanung.Mitarbeiter_ID]: [userId],
+            // NEU: Informationsabend-Feld hinzugefügt
+            [COLUMN_MAPS.monatsplanung.Informationsabend]: nextInfoDateIso,
         };
         success = await addPlanningRowToDatabase('Monatsplanung', rowData);
     }
@@ -6218,16 +6292,73 @@ async function savePlanningData() {
 }
 
 async function addPlanningRowToDatabase(tableName, rowData) {
+    const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
+    const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
+
     const rowDataForCreation = { ...rowData };
     const mitarbeiterId = rowDataForCreation[COLUMN_MAPS.monatsplanung.Mitarbeiter_ID][0];
     delete rowDataForCreation[COLUMN_MAPS.monatsplanung.Mitarbeiter_ID];
 
-    const newRowId = await seaTableAddRow(tableName, rowDataForCreation);
+    const rowDataWithNames = {};
+    for (const key in rowDataForCreation) {
+        const name = reversedMap[key];
+        if (name) rowDataWithNames[name] = (rowDataForCreation[key] === undefined || rowDataForCreation[key] === '') ? null : rowDataForCreation[key];
+    }
+
+    const newRowId = await genericSeaTableAddRow(tableName, rowDataWithNames);
     if (!newRowId) return false;
 
     const success = await updateSingleLink(tableName, newRowId, 'Mitarbeiter_ID', [mitarbeiterId]);
     return success;
 }
+
+// --- NEU: Zeitreise-Funktionen ---
+function openTimeTravelModal() {
+    const monthSelect = document.getElementById('time-travel-month-select');
+    const yearSelect = document.getElementById('time-travel-year-select');
+    clearChildren(monthSelect);
+    clearChildren(yearSelect);
+
+    const months = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+    months.forEach((month, index) => {
+        monthSelect.add(new Option(month, index));
+    });
+
+    const currentYear = new Date().getFullYear();
+    for (let i = currentYear; i >= 2020; i--) {
+        yearSelect.add(new Option(i, i));
+    }
+
+    const displayDate = getCurrentDate();
+    monthSelect.value = displayDate.getMonth();
+    yearSelect.value = displayDate.getFullYear();
+
+    dom.timeTravelModal.classList.add('visible');
+    document.body.classList.add('modal-open');
+}
+
+function closeTimeTravelModal() {
+    dom.timeTravelModal.classList.remove('visible');
+    document.body.classList.remove('modal-open');
+}
+
+function handleTimeTravelSubmit() {
+    const month = document.getElementById('time-travel-month-select').value;
+    const year = document.getElementById('time-travel-year-select').value;
+
+    // Setze das Datum auf den 15. des Monats, um Zeitzonenprobleme zu vermeiden
+    const newDate = new Date(year, month, 15);
+    localStorage.setItem('timeTravelDate', newDate.toISOString());
+    
+    closeTimeTravelModal();
+    location.reload();
+}
+
+function resetTimeTravel() {
+    localStorage.removeItem('timeTravelDate');
+    location.reload();
+}
+
 
 // --- START ---
 document.addEventListener("DOMContentLoaded", initializeDashboard);

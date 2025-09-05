@@ -100,14 +100,18 @@
                              <a href="#" id="money-view-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-euro-sign w-5 mr-2"></i>Geld-Ansicht</a>
                              <a href="#" id="edit-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-edit w-5 mr-2"></i>Personendaten</a>
                              <a href="#" id="planning-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-tasks w-5 mr-2"></i>Planung</a>
-                             <a href="#" id="add-new-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-plus w-5 mr-2"></i>Neuer Nutzer</a>
-                             <a href="#" id="clear-cache-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sync-alt w-5 mr-2"></i>Cache leeren</a>
-                             <a href="#" id="logout-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-right-from-bracket w-5 mr-2"></i>Logout</a>
+                             <a href="#" id="add-new-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-plus w-5 mr-2"></i>Neuer Nutzer</a>                             <a href="#" id="time-travel-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-clock-rotate-left w-5 mr-2"></i>Zeitreise</a>
+                             <a href="#" id="clear-cache-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-right-from-bracket w-5 mr-2"></i>Logout</a>
                         </div>
                     </div>
                 </div>
             </div>
         </header>
+
+        <!-- NEU: Zeitreise-Banner -->
+        <div id="time-travel-banner" class="hidden bg-accent-purple text-white p-3 text-center font-semibold shadow-md z-40">
+            <p>Zeitreise aktiv: <span id="time-travel-date-display"></span> <button id="reset-time-travel-btn" class="ml-4 font-bold underline hover:text-yellow-300">Zurück in die Gegenwart</button></p>
+        </div>
 
         <!-- Hauptansicht für Dashboard -->
         <main id="main-dashboard-view" class="flex flex-col w-full max-w-7xl mx-auto flex-grow px-6 md:px-8 pt-2 md:pt-4 pb-6 space-y-6 overflow-hidden">
@@ -491,23 +495,62 @@
     <div id="planning-modal" class="modal-overlay">
         <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative">
              <button id="cancel-planning-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
-             <h3 id="planning-modal-title" class="text-2xl font-bold text-skt-blue mb-6">Monatsplanung bearbeiten</h3>
+             <h3 id="planning-modal-title" class="text-2xl font-bold text-skt-blue mb-6">Monatsplanung hinzufügen/bearbeiten</h3>
              <form id="planning-form" class="space-y-4">
                  <div>
                      <label for="planning-user-select" class="block text-sm font-medium text-gray-700">Mitarbeiter</label>
-                     <select id="planning-user-select" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></select>
+                     <select id="planning-user-select" required class="modern-select"></select>
+                 </div>
+                 <div class="grid grid-cols-2 gap-4">
+                     <div>
+                         <label for="planning-month-select" class="block text-sm font-medium text-gray-700">Monat</label>
+                         <select id="planning-month-select" required class="modern-select"></select>
+                     </div>
+                     <div>
+                         <label for="planning-year-input" class="block text-sm font-medium text-gray-700">Jahr</label>
+                         <input type="number" id="planning-year-input" required class="modern-input">
+                     </div>
                  </div>
                  <div>
                      <label for="planning-eh-goal" class="block text-sm font-medium text-gray-700">EH Ziel</label>
-                     <input type="number" id="planning-eh-goal" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                     <input type="number" id="planning-eh-goal" required class="modern-input">
                  </div>
                  <div>
                      <label for="planning-et-goal" class="block text-sm font-medium text-gray-700">ET Ziel</label>
-                     <input type="number" id="planning-et-goal" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                     <input type="number" id="planning-et-goal" required class="modern-input">
+                 </div>
+                 <div>
+                     <label for="planning-infoabend-date" class="block text-sm font-medium text-gray-700">Zugehöriger Infoabend</label>
+                     <input type="date" id="planning-infoabend-date" disabled class="modern-input bg-gray-100 cursor-not-allowed">
+                     <p class="mt-1 text-xs text-gray-500">Dieses Datum wird automatisch auf den nächsten Infoabend gesetzt.</p>
                  </div>
                  <div class="pt-4 flex justify-end space-x-3">
                      <button type="button" id="cancel-planning-btn-2" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button>
-                     <button type="submit" id="save-planning-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors">Speichern</button>
+                     <button type="submit" id="save-planning-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors">Planung speichern</button>
+                 </div>
+             </form>
+        </div>
+    </div>
+    <!-- NEU: Modal für die Zeitreise -->
+    <div id="time-travel-modal" class="modal-overlay">
+        <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative">
+             <button id="cancel-time-travel-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
+             <h3 class="text-2xl font-bold text-skt-blue mb-6">Zeitreise</h3>
+             <p class="text-gray-600 mb-6">Wähle ein Datum in der Vergangenheit, um das Dashboard so anzuzeigen, als wärst du in diesem Monat.</p>
+             <form id="time-travel-form" class="space-y-4">
+                 <div class="grid grid-cols-2 gap-4">
+                     <div>
+                         <label for="time-travel-month-select" class="block text-sm font-medium text-gray-700">Monat</label>
+                         <select id="time-travel-month-select" required class="modern-select"></select>
+                     </div>
+                     <div>
+                         <label for="time-travel-year-select" class="block text-sm font-medium text-gray-700">Jahr</label>
+                         <select id="time-travel-year-select" required class="modern-select"></select>
+                     </div>
+                 </div>
+                 <div class="pt-4 flex justify-end space-x-3">
+                     <button type="button" id="cancel-time-travel-btn-2" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button>
+                     <button type="submit" id="start-time-travel-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors">Reise starten</button>
                  </div>
              </form>
         </div>

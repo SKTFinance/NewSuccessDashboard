@@ -17,6 +17,7 @@
     --color-accent-gold: #d4af37;
     --color-accent-gold-light: #fff3cd; 
     --color-accent-purple: #8e44ad;
+    --color-accent-immo: #14b8a6; /* Teal for Immo */
 }
 
 .bg-skt-blue { background-color: var(--color-skt-blue); }
@@ -50,6 +51,7 @@
 .border-accent-gold { border-color: var(--color-accent-gold); }
 .border-skt-gold-accent { border-color: var(--color-accent-gold); }
 .bg-accent-gold-light { background-color: var(--color-accent-gold-light); }
+.border-immo-accent { border-color: var(--color-accent-immo); }
 .border-skt-blue-accent { border-color: var(--color-skt-blue-main); }
 
 body {
@@ -739,12 +741,7 @@ details[open] > summary::before { transform: rotate(180deg); }
 }
 
 /* KORREKTUR: Verschachtelte ULs absolut positionieren, um horizontales Verschieben zu verhindern */
-.strukturbaum li > ul {
-    position: absolute;
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-}
+/* Die absolute Positionierung wurde entfernt, damit Kind-Elemente die Breite des Baumes beeinflussen und Geschwister-Knoten verschieben können. */
 .strukturbaum li {
     display: inline-block;
     text-align: center;
