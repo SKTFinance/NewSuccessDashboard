@@ -309,8 +309,10 @@ details[open] > summary::before { transform: rotate(180deg); }
 
 .timeline-header {
     display: flex;
+    flex-wrap: wrap; /* Allow wrapping on small screens */
     align-items: center;
-    gap: 1rem;
+    justify-content: space-between; /* Pushes icon/info and toggle apart */
+    gap: 0.5rem 1rem; /* row-gap column-gap */
 }
 .timeline-icon-inline {
     width: 40px;
@@ -376,6 +378,10 @@ details[open] > summary::before { transform: rotate(180deg); }
     font-weight: 600;
     color: var(--color-skt-blue);
     word-break: break-word;
+}
+.timeline-info {
+    flex: 1 1 auto; /* Allow it to grow and shrink */
+    min-width: 150px; /* Prevent it from becoming too small */
 }
 .timeline-info .timeline-duedate {
     font-size: 0.875rem;
@@ -897,3 +903,12 @@ details[open] > summary::before { transform: rotate(180deg); }
 #pg-list-container::-webkit-scrollbar-thumb { background-color: var(--color-skt-grey-medium); border-radius: 10px; border: 2px solid var(--color-skt-grey-light); }
 
 #pg-editor-container textarea { min-height: 200px; }
+
+/* Utility to hide scrollbars but keep scrolling */
+.hide-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.hide-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}

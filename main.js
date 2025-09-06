@@ -2571,7 +2571,7 @@ function renderTimelineSection(
     let checkboxHtml = '';
     if (isEditable) {
         checkboxHtml = `
-            <label class="toggle-switch onboarding-toggle ml-auto">
+            <label class="toggle-switch onboarding-toggle">
                 <input type="checkbox" 
                        class="sr-only peer onboarding-step-toggle" 
                        data-step-id="${step._id}" 
@@ -3005,6 +3005,9 @@ class AppointmentsView {
         }
 
         // 3. Build table
+        const tableWrapper = document.createElement('div');
+        tableWrapper.className = 'overflow-x-auto';
+
         const table = document.createElement('table');
         table.className = 'appointments-table';
 
@@ -3062,7 +3065,8 @@ class AppointmentsView {
         });
         table.appendChild(tbody);
 
-        this.listContainer.appendChild(table);
+        tableWrapper.appendChild(table);
+        this.listContainer.appendChild(tableWrapper);
 
         this.listContainer.querySelectorAll('thead th').forEach(th => {
             th.addEventListener('click', () => this._handleSort(th.dataset.sortKey));
@@ -3683,6 +3687,9 @@ class PotentialView {
             return;
         }
 
+        const tableWrapper = document.createElement('div');
+        tableWrapper.className = 'overflow-x-auto';
+
         const table = document.createElement('table');
         table.className = 'appointments-table';
         table.innerHTML = `<thead><tr><th>Terminpartner</th><th>Mitarbeiter</th><th>Kontakt</th><th>Kontaktiert</th><th>Aktion</th></tr></thead>`;
@@ -3707,7 +3714,8 @@ class PotentialView {
             tbody.appendChild(tr);
         });
         table.appendChild(tbody);
-        this.listContainer.appendChild(table);
+        tableWrapper.appendChild(table);
+        this.listContainer.appendChild(tableWrapper);
 
         this.listContainer.querySelectorAll('tbody tr').forEach(tr => {
             tr.addEventListener('click', () => {
@@ -4153,6 +4161,9 @@ class UmsatzView {
             return;
         }
 
+        const tableWrapper = document.createElement('div');
+        tableWrapper.className = 'overflow-x-auto';
+
         const table = document.createElement('table');
         table.className = 'appointments-table';
         const headers = [
@@ -4176,7 +4187,8 @@ class UmsatzView {
             tbody.appendChild(tr);
         });
         table.appendChild(tbody);
-        this.listContainer.appendChild(table);
+        tableWrapper.appendChild(table);
+        this.listContainer.appendChild(tableWrapper);
 
         table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort(e.currentTarget.dataset.sortKey)));
         table.querySelectorAll('tbody tr').forEach(tr => tr.addEventListener('click', e => this.openModal(this.allUmsaetze.find(u => u._id === e.currentTarget.dataset.id))));
@@ -4609,6 +4621,9 @@ class AuswertungView {
 
                 const groupEl = document.createElement('div');
                 groupEl.innerHTML = `<h3 class="text-xl font-bold text-skt-blue mb-3">${groupName}</h3>`;
+                const tableWrapper = document.createElement('div');
+                tableWrapper.className = 'overflow-x-auto';
+
                 const table = document.createElement('table');
                 table.className = 'appointments-table';
                 // ANPASSUNG: "Rangstufe" entfernt
@@ -4628,7 +4643,8 @@ class AuswertungView {
                 });
                 table.appendChild(tbody);
                 table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('rangliste', e.currentTarget.dataset.sortKey)));
-                groupEl.appendChild(table);
+                tableWrapper.appendChild(table);
+                groupEl.appendChild(tableWrapper);
                 this.ranglisteView.appendChild(groupEl);
             }
         }
@@ -4718,6 +4734,9 @@ class AuswertungView {
         }
 
         // Create a single table for the filtered users
+        const tableWrapper = document.createElement('div');
+        tableWrapper.className = 'overflow-x-auto';
+
         const table = document.createElement('table');
         table.className = 'appointments-table';
 
@@ -4742,8 +4761,9 @@ class AuswertungView {
         });
         table.appendChild(tbody);
         table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('aktivitaeten', e.currentTarget.dataset.sortKey)));
-
-        this.aktivitaetenListContainer.appendChild(table);
+        
+        tableWrapper.appendChild(table);
+        this.aktivitaetenListContainer.appendChild(tableWrapper);
     }
 
     async renderFkRennliste() {
@@ -4811,6 +4831,9 @@ class AuswertungView {
             return sortConfig.direction === 'asc' ? comparison : -comparison;
         });
 
+        const tableWrapper = document.createElement('div');
+        tableWrapper.className = 'overflow-x-auto';
+
         const table = document.createElement('table');
         table.className = 'appointments-table';
         // ANPASSUNG: Spalten für Name und Rang hinzugefügt
@@ -4830,8 +4853,9 @@ class AuswertungView {
         });
         table.appendChild(tbody);
         table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('fkRennliste', e.currentTarget.dataset.sortKey)));
+        tableWrapper.appendChild(table);
         this.fkRennlisteView.innerHTML = '';
-        this.fkRennlisteView.appendChild(table);
+        this.fkRennlisteView.appendChild(tableWrapper);
     }
 
     async renderNaechstesInfo(repopulateDates = false) {
@@ -4890,6 +4914,9 @@ class AuswertungView {
             return sortConfig.direction === 'asc' ? comparison : -comparison;
         });
 
+        const tableWrapper = document.createElement('div');
+        tableWrapper.className = 'overflow-x-auto';
+
         const table = document.createElement('table');
         table.className = 'appointments-table';
         const headers = [
@@ -4908,7 +4935,8 @@ class AuswertungView {
         });
         table.appendChild(tbody);
         table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('infoabend', e.currentTarget.dataset.sortKey)));
-        this.infoabendListContainer.appendChild(table);
+        tableWrapper.appendChild(table);
+        this.infoabendListContainer.appendChild(tableWrapper);
     }
 
     renderFunnelChart(termine) {
