@@ -659,7 +659,7 @@ details[open] > summary::before { transform: rotate(180deg); }
 
 /* NEU: Collapsible Stats Section */
 .stats-content-collapsible {
-    max-height: 300px; /* Genug Platz für Inhalt */
+    max-height: 1500px; /* Erhöht, um auch längere Heatmaps/Kalender aufzunehmen */
     opacity: 1;
     overflow: hidden;
     transition: max-height 0.4s ease-in-out, opacity 0.3s ease-in-out, padding-top 0.4s ease-in-out, margin-top 0.4s ease-in-out;

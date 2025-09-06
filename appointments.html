@@ -4,35 +4,63 @@
         <h2 id="appointments-title" class="text-3xl font-bold text-skt-blue">Terminübersicht</h2>
     </div>
 
-    <!-- KPIs und Statistiken -->
-    <div id="stats-container" class="bg-skt-grey-light p-6 rounded-xl shadow-inner border border-gray-200 mb-8">
+    <!-- NEU: Kombinierte Analyse-Ansichten -->
+    <div id="analysis-container" class="bg-skt-grey-light p-6 rounded-xl shadow-inner border border-gray-200 mb-8">
         <div class="flex justify-between items-center">
-            <h3 class="text-xl font-bold text-skt-blue">Statistik</h3>
-            <button id="toggle-stats-visibility-btn" class="collapsed text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-300 transition-colors">
+            <h3 class="text-xl font-bold text-skt-blue">Analyse & Übersicht</h3>
+            <button id="toggle-analysis-visibility-btn" class="collapsed text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-300 transition-colors">
                 <i class="fas fa-chevron-up transition-transform duration-300"></i>
             </button>
         </div>
-        <div id="stats-content" class="stats-content-collapsible collapsed grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
-            <!-- Linke Spalte: Kreisdiagramm -->
-            <div id="pie-chart-section">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
-                    <h3 id="stats-chart-title" class="text-lg font-bold text-skt-blue">Termine nach...</h3>
-                    <div id="stats-chart-toggle" class="view-toggle flex space-x-2 mt-2 sm:mt-0">
-                        <button id="stats-by-employee-btn" class="active">Mitarbeiter</button>
-                        <button id="stats-by-status-btn">Status</button>
+        <div id="analysis-content" class="stats-content-collapsible collapsed pt-4">
+            <!-- Tabs für die Ansichten -->
+            <div class="border-b border-gray-200 mb-4">
+                <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+                    <button id="analysis-stats-tab" class="analysis-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-base border-skt-blue text-skt-blue">Statistik</button>
+                    <button id="analysis-heatmap-tab" class="analysis-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-base border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Heatmap</button>
+                    <button id="analysis-calendar-tab" class="analysis-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-base border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Kalender</button>
+                </nav>
+            </div>
+
+            <!-- Container für die Statistik-Ansicht -->
+            <div id="stats-view-pane" class="analysis-pane">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div id="pie-chart-section">
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
+                            <h3 id="stats-chart-title" class="text-lg font-bold text-skt-blue">Termine nach...</h3>
+                            <div id="stats-chart-toggle" class="view-toggle flex space-x-2 mt-2 sm:mt-0">
+                                <button id="stats-by-employee-btn" class="active">Mitarbeiter</button>
+                                <button id="stats-by-status-btn">Status</button>
+                            </div>
+                        </div>
+                        <div class="flex flex-col md:flex-row items-center gap-4">
+                            <div id="stats-pie-chart-container" class="w-full md:w-1/2 flex justify-center items-center shrink-0"></div>
+                            <div id="stats-pie-chart-legend" class="w-full md:w-1/2 self-start"></div>
+                        </div>
+                    </div>
+                    <div id="prognosis-section">
+                        <h3 class="text-lg font-bold text-skt-blue mb-4">Umsatzprognose (offene BTs)</h3>
+                        <div id="prognosis-details-container" class="max-h-[180px] overflow-y-auto pr-2"></div>
                     </div>
                 </div>
-                <div class="flex flex-col md:flex-row items-center gap-4">
-                    <div id="stats-pie-chart-container" class="w-full md:w-1/2 flex justify-center items-center shrink-0"></div>
-                    <div id="stats-pie-chart-legend" class="w-full md:w-1/2 self-start"></div>
-                </div>
             </div>
-            <!-- Rechte Spalte: Umsatzprognose Details -->
-            <div id="prognosis-section">
-                <h3 class="text-lg font-bold text-skt-blue mb-4">Umsatzprognose (offene BTs)</h3>
-                <div id="prognosis-details-container" class="max-h-[180px] overflow-y-auto pr-2">
-                    <!-- Inhalt wird per JS generiert -->
+
+            <!-- Container für die Heatmap-Ansicht -->
+            <div id="heatmap-view-pane" class="analysis-pane hidden">
+                <p class="text-sm text-gray-500 mb-2">Tages-Intensität basierend auf der Anzahl der Termine im aktuellen Umsatzmonat.</p>
+                <div id="heatmap-header" class="grid grid-cols-7 text-center font-semibold text-skt-blue-light text-xs sm:text-sm mb-1"><div>Mo</div><div>Di</div><div>Mi</div><div>Do</div><div>Fr</div><div>Sa</div><div>So</div></div>
+                <div id="heatmap-grid" class="grid grid-cols-7 gap-1"></div>
+            </div>
+
+            <!-- Container für die Kalender-Ansicht -->
+            <div id="calendar-view-pane" class="analysis-pane hidden">
+                <div class="flex justify-between items-center mb-2">
+                    <button id="calendar-prev-week-btn" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-300 transition-colors" title="Vorherige Woche"><i class="fas fa-chevron-left"></i></button>
+                    <h4 id="calendar-week-display" class="font-semibold text-skt-blue text-sm sm:text-base"></h4>
+                    <button id="calendar-next-week-btn" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-300 transition-colors" title="Nächste Woche"><i class="fas fa-chevron-right"></i></button>
                 </div>
+                <div id="calendar-header-grid" class="grid grid-cols-7 text-center font-semibold text-skt-blue-light border-b text-xs sm:text-sm"><div>Mo</div><div>Di</div><div>Mi</div><div>Do</div><div>Fr</div><div>Sa</div><div>So</div></div>
+                <div id="calendar-days-grid" class="grid grid-cols-7 grid-rows-1 gap-px bg-gray-200 border-l border-r border-b border-gray-200"></div>
             </div>
         </div>
     </div>
@@ -94,8 +122,7 @@
         <form id="appointment-form" class="space-y-4">
             <input type="hidden" id="appointment-id">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><label for="appointment-user" class="block text-sm font-medium text-gray-700 mb-1">Mitarbeiter</label><select id="appointment-user" required class="modern-select"></select></div>
-                <div><label for="appointment-date" class="block text-sm font-medium text-gray-700 mb-1">Datum</label><input type="date" id="appointment-date" required class="modern-input"></div>
+                <div><label for="appointment-user" class="block text-sm font-medium text-gray-700 mb-1">Mitarbeiter</label><select id="appointment-user" required class="modern-select"></select></div><div><label for="appointment-date" class="block text-sm font-medium text-gray-700 mb-1">Datum & Uhrzeit</label><input type="datetime-local" id="appointment-date" required class="modern-input"></div>
                 <div><label for="appointment-category" class="block text-sm font-medium text-gray-700 mb-1">Kategorie</label><select id="appointment-category" required class="modern-select"></select></div>
                 <div><label for="appointment-status" class="block text-sm font-medium text-gray-700 mb-1">Status</label><select id="appointment-status" required class="modern-select"></select></div>
             </div>

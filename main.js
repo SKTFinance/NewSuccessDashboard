@@ -444,8 +444,12 @@ async function seaTableUpdateRow(tableName, rowId, rowData) {
       } else {
         const colMeta = tableMeta.columns.find(c => c.key === key);
         let formattedValue;
-        if (value === null || value === undefined || value === '') formattedValue = "NULL";
-        else if (colMeta && colMeta.type === 'number') { const numValue = parseFloat(value); formattedValue = isNaN(numValue) ? "NULL" : numValue; }
+        if (value === null || value === undefined || value === '') {
+            formattedValue = "NULL";
+        } else if (colMeta && colMeta.type === 'date') {
+            const formattedDate = String(value).replace('T', ' ');
+            formattedValue = `'${escapeSql(formattedDate)}'`;
+        } else if (colMeta && colMeta.type === 'number') { const numValue = parseFloat(value); formattedValue = isNaN(numValue) ? "NULL" : numValue; }
         else if (typeof value === "boolean") formattedValue = value ? "true" : "false";
         else formattedValue = `'${escapeSql(String(value))}'`;
 
@@ -2805,8 +2809,6 @@ class AppointmentsView {
         this.statsPieChartLegend = null;
         this.statsByEmployeeBtn = null;
         this.statsByStatusBtn = null;
-        this.toggleStatsBtn = null;
-        this.statsContent = null;
         this.prognosisDetailsContainer = null;
         this.recruitingTab = null;
         this.startDateInput = null;
@@ -2816,6 +2818,10 @@ class AppointmentsView {
         this.form = null;
         this.searchInput = null;
         this.showCancelledCheckbox = null;
+        // NEU: Gekapselte Analyse-Ansicht
+        this.calendarWeekStartDate = null;
+        this.toggleAnalysisBtn = null;
+        this.analysisContent = null;
 
         this.initialized = false;
         this.currentUserId = null;
@@ -2840,8 +2846,6 @@ class AppointmentsView {
         this.statsPieChartLegend = document.getElementById('stats-pie-chart-legend');
         this.statsByEmployeeBtn = document.getElementById('stats-by-employee-btn');
         this.statsByStatusBtn = document.getElementById('stats-by-status-btn');
-        this.toggleStatsBtn = document.getElementById('toggle-stats-visibility-btn');
-        this.statsContent = document.getElementById('stats-content');
         this.prognosisDetailsContainer = document.getElementById('prognosis-details-container');
         this.recruitingTab = document.getElementById('recruiting-tab');
         this.startDateInput = document.getElementById('appointments-start-date');
@@ -2851,8 +2855,22 @@ class AppointmentsView {
         this.form = document.getElementById('appointment-form');
         this.searchInput = document.getElementById('appointments-search-filter');
         this.showCancelledCheckbox = document.getElementById('appointments-show-cancelled');
+        // NEU: Gekapselte Analyse-Ansicht
+        this.toggleAnalysisBtn = document.getElementById('toggle-analysis-visibility-btn');
+        this.analysisContent = document.getElementById('analysis-content');
+        this.statsViewPane = document.getElementById('stats-view-pane');
+        this.heatmapViewPane = document.getElementById('heatmap-view-pane');
+        this.calendarViewPane = document.getElementById('calendar-view-pane');
+        this.statsTab = document.getElementById('analysis-stats-tab');
+        this.heatmapTab = document.getElementById('analysis-heatmap-tab');
+        this.calendarTab = document.getElementById('analysis-calendar-tab');
+        this.heatmapGrid = document.getElementById('heatmap-grid');
+        this.calendarDaysGrid = document.getElementById('calendar-days-grid');
+        this.calendarPrevWeekBtn = document.getElementById('calendar-prev-week-btn');
+        this.calendarNextWeekBtn = document.getElementById('calendar-next-week-btn');
+        this.calendarWeekDisplay = document.getElementById('calendar-week-display');
 
-        return this.listContainer && this.umsatzTab && this.recruitingTab && this.immoTab && this.netzwerkTab && this.statsPieChartContainer && this.toggleStatsBtn && this.statsContent && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.scopeFilter && this.modal && this.form && this.searchInput && this.showCancelledCheckbox;
+        return this.listContainer && this.umsatzTab && this.recruitingTab && this.immoTab && this.netzwerkTab && this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.scopeFilter && this.modal && this.form && this.searchInput && this.showCancelledCheckbox && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.calendarViewPane && this.statsTab && this.heatmapTab && this.calendarTab && this.heatmapGrid && this.calendarDaysGrid && this.calendarPrevWeekBtn && this.calendarNextWeekBtn && this.calendarWeekDisplay;
     }
 
     async init(userId) {
@@ -2863,6 +2881,14 @@ class AppointmentsView {
             appointmentsLog('!!! FEHLER: Benötigte DOM-Elemente für die Termin-Ansicht wurden nicht gefunden.');
             return;
         }
+
+        // NEU: Kalender auf die aktuelle Woche initialisieren
+        const today = getCurrentDate();
+        const startOfWeek = new Date(today);
+        const day = startOfWeek.getDay();
+        const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+        this.calendarWeekStartDate = new Date(startOfWeek.setDate(diff));
+        this.calendarWeekStartDate.setHours(0, 0, 0, 0);
 
         const { startDate, endDate } = SKT_APP.getMonthlyCycleDates();
         this.startDateInput.value = startDate.toISOString().split('T')[0];
@@ -2998,6 +3024,8 @@ class AppointmentsView {
         // NEU: KPIs und Statistiken rendern, bevor die Tabelle gebaut wird
         this._renderStatsChart();
         this._renderPrognosisDetails();
+        this._renderHeatmap();
+        this._renderCalendar();
 
         if (filteredAppointments.length === 0) {
             this.listContainer.innerHTML = `<div class="text-center py-16"><i class="fas fa-calendar-times fa-4x text-skt-grey-medium mb-4"></i><h3 class="text-xl font-semibold text-skt-blue">Keine Termine gefunden</h3><p class="text-gray-500 mt-2">Für die aktuelle Auswahl gibt es keine Termine.</p></div>`;
@@ -3054,7 +3082,8 @@ class AppointmentsView {
                 if (col.key === 'Mitarbeiter_ID') {
                     value = termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
                 } else if (col.key === 'Datum' || col.key === 'Infoabend') {
-                    value = value ? new Date(value).toLocaleDateString('de-DE') : '-';
+                    // NEU: Uhrzeit hinzufügen
+                    value = value ? new Date(value).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' Uhr' : '-';
                 } else if (col.key === 'Umsatzprognose') {
                     value = value ? value.toLocaleString('de-DE') + ' EH' : '-';
                 }
@@ -3107,7 +3136,21 @@ class AppointmentsView {
         this.modal.addEventListener('click', (e) => { if (e.target === this.modal) this.closeModal(); });
         this.form.addEventListener('submit', (e) => this.handleFormSubmit(e));
 
-        this.toggleStatsBtn.addEventListener('click', () => this._toggleStatsVisibility());
+        // NEU: Event Listener für den neuen Analyse-Container und die Tabs
+        this.toggleAnalysisBtn.addEventListener('click', () => this._toggleCollapsible(this.analysisContent, this.toggleAnalysisBtn));
+        this.statsTab.addEventListener('click', () => this._switchAnalysisTab('stats'));
+        this.heatmapTab.addEventListener('click', () => this._switchAnalysisTab('heatmap'));
+        this.calendarTab.addEventListener('click', () => this._switchAnalysisTab('calendar'));
+
+        // NEU: Event Listeners für Kalender-Navigation
+        this.calendarPrevWeekBtn.addEventListener('click', () => {
+            this.calendarWeekStartDate.setDate(this.calendarWeekStartDate.getDate() - 7);
+            this._renderCalendar();
+        });
+        this.calendarNextWeekBtn.addEventListener('click', () => {
+            this.calendarWeekStartDate.setDate(this.calendarWeekStartDate.getDate() + 7);
+            this._renderCalendar();
+        });
 
         // NEU: Event Listeners für Statistik-Umschalter
         this.statsByEmployeeBtn.addEventListener('click', () => {
@@ -3404,7 +3447,8 @@ class AppointmentsView {
                 const user = allRelevantUsers.find(u => u.Name === termin.Mitarbeiter_ID?.[0]?.display_value);
                 if (user) userSelect.value = user._id;
                 
-                this.form.querySelector('#appointment-date').value = termin.Datum ? termin.Datum.split('T')[0] : '';
+                // KORREKTUR: `datetime-local` erwartet das Format YYYY-MM-DDTHH:mm
+                this.form.querySelector('#appointment-date').value = termin.Datum ? new Date(termin.Datum).toISOString().slice(0, 16) : '';
                 categorySelect.value = termin.Kategorie || '';
                 this.form.querySelector('#appointment-partner').value = termin.Terminpartner || '';
                 this.form.querySelector('#appointment-prognose').value = termin.Umsatzprognose || '';
@@ -3422,7 +3466,8 @@ class AppointmentsView {
                 title.textContent = 'Termin anlegen';
                 idInput.value = '';
                 userSelect.value = this.currentUserId;
-                this.form.querySelector('#appointment-date').value = new Date().toISOString().split('T')[0];
+                // KORREKTUR: `datetime-local` erwartet das Format YYYY-MM-DDTHH:mm
+                this.form.querySelector('#appointment-date').value = new Date().toISOString().slice(0, 16);
 
                 // NEU: Standard-Kategorie basierend auf dem aktiven Tab setzen
                 if (this.currentTab === 'umsatz') {
@@ -3544,6 +3589,155 @@ class AppointmentsView {
             saveBtnText.classList.remove('hidden');
             saveBtnLoader.classList.add('hidden');
         }
+    }
+
+    // NEU: Generische Funktion zum Ein-/Ausklappen von Sektionen
+    _toggleCollapsible(contentElement, buttonElement) {
+        contentElement.classList.toggle('collapsed');
+        buttonElement.classList.toggle('collapsed');
+    }
+
+    // NEU: Methode zum Umschalten der Analyse-Tabs
+    _switchAnalysisTab(tabName) {
+        // Panes
+        this.statsViewPane.classList.toggle('hidden', tabName !== 'stats');
+        this.heatmapViewPane.classList.toggle('hidden', tabName !== 'heatmap');
+        this.calendarViewPane.classList.toggle('hidden', tabName !== 'calendar');
+
+        // Tabs
+        const activeClass = 'border-skt-blue text-skt-blue';
+        const inactiveClass = 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
+        
+        this.statsTab.className = `analysis-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-base ${tabName === 'stats' ? activeClass : inactiveClass}`;
+        this.heatmapTab.className = `analysis-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-base ${tabName === 'heatmap' ? activeClass : inactiveClass}`;
+        this.calendarTab.className = `analysis-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-base ${tabName === 'calendar' ? activeClass : inactiveClass}`;
+    }
+
+    // NEU: Methode zum Rendern der Heatmap
+    _renderHeatmap() {
+        if (!this.heatmapGrid) return;
+        this.heatmapGrid.innerHTML = '';
+
+        const { startDate, endDate } = SKT_APP.getMonthlyCycleDates();
+        const appointmentsByDay = _.groupBy(this.allAppointments, t => t.Datum ? t.Datum.split('T')[0] : null);
+        
+        const counts = Object.values(appointmentsByDay).map(arr => arr.length).filter(c => c > 0);
+        const minAppointments = Math.min(...counts, 1);
+        const maxAppointments = Math.max(...counts, 1);
+        const range = maxAppointments - minAppointments;
+
+        // Leere Zellen für die Tage vor dem Zyklusstart hinzufügen, um an Montag auszurichten
+        const firstDayOfWeek = (startDate.getDay() === 0) ? 6 : startDate.getDay() - 1; // 0=Monday, 6=Sunday
+        for (let i = 0; i < firstDayOfWeek; i++) {
+            const emptyCell = document.createElement('div');
+            emptyCell.className = 'bg-skt-grey-light rounded'; // Unsichtbare Füllzelle
+            this.heatmapGrid.appendChild(emptyCell);
+        }
+
+        let currentDate = new Date(startDate);
+        while (currentDate <= endDate) {
+            const dateString = currentDate.toISOString().split('T')[0];
+            const count = appointmentsByDay[dateString]?.length || 0;
+            
+            const cell = document.createElement('div');
+            cell.className = `h-12 w-full rounded flex items-center justify-center text-xs font-bold transition-colors`;
+            
+            // NEU: Farbverlauf Logik
+            if (count === 0) {
+                cell.classList.add('bg-gray-100', 'text-gray-400'); // Farblos für Tage ohne Termine
+            } else {
+                cell.classList.add('cursor-pointer');
+                
+                // Farbverlauf von Rot (wenige Termine) zu Grün (viele Termine) in den Thementönen
+                const startH = 9, startS = 85, startL = 60; // Gedämpftes Rot, basierend auf --color-accent-red
+                const endH = 145, endS = 60, endL = 42;     // Gedämpftes Grün, basierend auf --color-accent-green
+                const ratio = range > 0 ? (count - minAppointments) / range : 1; // Skaliert von min bis max
+                const h = startH + (endH - startH) * ratio;
+                const s = startS + (endS - startS) * ratio;
+                const l = startL + (endL - startL) * ratio;
+
+                cell.style.backgroundColor = `hsl(${h}, ${s}%, ${l}%)`;
+                cell.style.color = 'white';
+                cell.addEventListener('click', (e) => { e.stopPropagation(); this._showAppointmentsForDay(dateString); });
+            }
+
+            cell.dataset.tooltip = `${currentDate.toLocaleDateString('de-DE')}: ${count} Termin(e)`;
+            cell.textContent = String(currentDate.getDate()).padStart(2, '0');
+            this.heatmapGrid.appendChild(cell);
+
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+    }
+
+    // NEU: Methode zum Rendern des Kalenders
+    _renderCalendar() {
+        if (!this.calendarDaysGrid) return;
+        this.calendarDaysGrid.innerHTML = '';
+        const appointmentsByDay = _.groupBy(this.allAppointments, t => t.Datum ? t.Datum.split('T')[0] : null);
+
+        // Wochenanzeige aktualisieren
+        const weekStart = new Date(this.calendarWeekStartDate);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        this.calendarWeekDisplay.textContent = 
+            `${weekStart.toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit'})} - ${weekEnd.toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit', year:'numeric'})}`;
+
+        for (let i = 0; i < 7; i++) { // Immer 7 Tage für eine Woche
+            const day = new Date(this.calendarWeekStartDate);
+            day.setDate(this.calendarWeekStartDate.getDate() + i);
+            const dateString = day.toISOString().split('T')[0];
+            
+            const cell = document.createElement('div');
+            cell.className = `p-1 border-t border-r border-gray-200 min-h-[120px] text-left align-top bg-white`;
+            
+            cell.innerHTML = `<div class="font-bold text-xs mb-1">${day.getDate()}</div>`;
+
+            const appointmentsForDay = (appointmentsByDay[dateString] || []).sort((a, b) => new Date(a.Datum) - new Date(b.Datum));
+            if (appointmentsForDay.length > 0) {
+                const appointmentsContainer = document.createElement('div');
+                appointmentsContainer.className = 'space-y-1';
+                appointmentsForDay.forEach(termin => {
+                    const terminEl = document.createElement('div');
+                    terminEl.dataset.id = termin._id;
+                    const statusColorClass = this._getStatusColorClass(termin).replace('border-l-4', '').replace('border-', 'bg-');
+                    terminEl.className = `text-xs p-1 rounded text-white truncate cursor-pointer ${statusColorClass}`;
+                    terminEl.textContent = `${new Date(termin.Datum).toLocaleTimeString('de-DE', {hour: '2-digit', minute: '2-digit'})} ${termin.Terminpartner}`;
+                    terminEl.dataset.tooltip = `${termin.Terminpartner} (${termin.Status})`;
+                    terminEl.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const clickedTermin = this.allAppointments.find(t => t._id === e.currentTarget.dataset.id);
+                        if (clickedTermin) this.openModal(clickedTermin);
+                    });
+                    appointmentsContainer.appendChild(terminEl);
+                });
+                cell.appendChild(appointmentsContainer);
+            }
+            this.calendarDaysGrid.appendChild(cell);
+        }
+    }
+
+    _showAppointmentsForDay(dateString) {
+        const appointmentsForDay = this.allAppointments.filter(t => t.Datum && t.Datum.startsWith(dateString));
+        if (appointmentsForDay.length === 0) return;
+
+        const formattedDate = new Date(dateString).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        dom.hinweisModalTitle.textContent = `Termine am ${formattedDate}`;
+
+        const contentHtml = appointmentsForDay.map(termin => {
+            const mitarbeiterName = termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
+            return `
+                <div class="p-2 border-b border-gray-200 last:border-b-0">
+                    <p class="font-semibold text-skt-blue">${termin.Terminpartner}</p>
+                    <p class="text-sm text-gray-600">Mitarbeiter: ${mitarbeiterName}</p>
+                    <p class="text-xs text-gray-500">Kategorie: ${termin.Kategorie}</p>
+                </div>
+            `;
+        }).join('');
+
+        dom.hinweisModalContent.innerHTML = `<div class="space-y-1">${contentHtml}</div>`;
+        dom.hinweisModal.classList.add('visible');
+        document.body.classList.add('modal-open');
+        document.documentElement.classList.add('modal-open');
     }
 }
 
@@ -7119,6 +7313,7 @@ window.SKT_APP = {
   findRowById,
   getMonthlyCycleDates,
   escapeSql,
+  getCurrentDate,
   getSubordinates,
   getAllSubordinatesRecursive,
   isUserLeader,
