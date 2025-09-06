@@ -26,6 +26,7 @@ let db = {
   "pg": [],
   bürostandorte: [],
 };
+let totalEhResults = []; // NEU: Globale Variable für die vorgeladenen Gesamtumsätze
 
 let personalData = {};
 let teamData = {};
@@ -888,19 +889,25 @@ async function loadAllData() {
     "Bürostandorte",
   ];
 
+  console.log('%c[DATENLADEN] %cStarte das Laden der Stammdaten...', 'color: #17a2b8; font-weight: bold;', 'color: black;');
+  console.time('[DATENLADEN] Gesamtladezeit Stammdaten');
+
   for (const tableName of tablesToLoad) {
     const key = tableName.toLowerCase();
     let cachedData = loadFromCache(key, 60); // Cache für 60 Minuten
 
     if (cachedData) {
-      // console.log(`Lade '${tableName}' aus dem Cache.`);
+      console.log(`%c[DATENLADEN] %cLade '${tableName}' aus dem Cache.`, 'color: #17a2b8; font-weight: bold;', 'color: black;');
       db[key] = cachedData;
     } else {
-      // console.log(`Lade '${tableName}' von der API.`);
+      console.time(`[DATENLADEN] API-Ladezeit für '${tableName}'`);
+      console.log(`%c[DATENLADEN] %cLade '${tableName}' von der API...`, 'color: #17a2b8; font-weight: bold;', 'color: black;');
       const apiData = await seaTableQuery(tableName);
+      console.timeEnd(`[DATENLADEN] API-Ladezeit für '${tableName}'`);
       if (apiData && apiData.length > 0) {
         db[key] = apiData;
         saveToCache(key, apiData);
+        console.log(`%c[DATENLADEN] %c'${tableName}' geladen und gecached (${apiData.length} Zeilen).`, 'color: #17a2b8; font-weight: bold;', 'color: black;');
       } else {
         // Wenn die API-Abfrage (trotz Retries) fehlschlägt, ist das kritisch.
         if (tableName === "Mitarbeiter") {
@@ -914,6 +921,7 @@ async function loadAllData() {
       }
     }
   }
+  console.timeEnd('[DATENLADEN] Gesamtladezeit Stammdaten');
 
   normalizeAllData();
   // console.log("Stammdaten geladen und zwischengespeichert.");
@@ -1186,14 +1194,15 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
       return terminDate >= startDate && terminDate <= endDate;
   });
 
-  // Nur Umsatzdaten werden für die KPIs immer frisch per SQL geladen.
+  // Die Abfrage für den aktuellen Monat ist schnell genug und wird immer frisch geladen.
   const ehQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`ehIst\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' GROUP BY \`Mitarbeiter_ID\``;
-  const totalEhQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`totalEh\` FROM \`Umsatz\` GROUP BY \`Mitarbeiter_ID\``;
-
-  // WICHTIG: convertLinks wird auf `false` gesetzt, um die stabilen Row-IDs statt der Namen zu erhalten.
-  const [ehResultRaw, totalEhResultRaw] = await Promise.all([seaTableSqlQuery(ehQuery, false), seaTableSqlQuery(totalEhQuery, false)]);
+  console.log(`%c[DATENLADEN] %cLade Monats-EH (schnelle Abfrage)...`, 'color: #17a2b8; font-weight: bold;', 'color: gray;');
+  console.time('[DATENLADEN] Dauer für Monats-EH Abfrage');
+  const ehResultRaw = await seaTableSqlQuery(ehQuery, false);
+  console.timeEnd('[DATENLADEN] Dauer für Monats-EH Abfrage');
+  
   const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
-  const totalEhResults = mapSqlResults(totalEhResultRaw || [], "Umsatz");
+  // const totalEhResults = mapSqlResults(totalEhResultRaw || [], "Umsatz"); // ALT: Wurde hier geladen
 
   const AT_STATUS_GEHALTEN = ["Gehalten"];
   const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
@@ -2862,13 +2871,10 @@ class AppointmentsView {
         this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
         this.downline.sort((a, b) => a.Name.localeCompare(b.Name));
         this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.authenticatedUserData));
-        
-        if (!this.initialized) {
-            appointmentsLog('Erstmalige Initialisierung: Event-Listener werden eingerichtet.');
-            this.setupEventListeners();
-            this.initialized = true;
-        }
 
+        // Die Event-Listener müssen bei jeder Initialisierung neu gesetzt werden,
+        // da der HTML-Inhalt der Ansicht dynamisch neu geladen wird.
+        this.setupEventListeners();
         const user = SKT_APP.findRowById('mitarbeiter', this.currentUserId);
         if (user) {
             const titleElement = document.getElementById('appointments-title'); // Titel wird jetzt dynamischer
@@ -3595,7 +3601,12 @@ class PotentialView {
         this.scheduleForm = document.getElementById('schedule-form');
         this.searchInput = document.getElementById('potential-search-filter');
         this.scopeFilter = document.getElementById('potential-scope-filter');
-        return this.listContainer && this.modal && this.form && this.scheduleModal && this.scheduleForm && this.searchInput && this.scopeFilter;
+        // NEU: Zusätzliche Elemente für Robustheit
+        this.addBtn = document.getElementById('add-potential-btn');
+        this.downloadBtn = document.getElementById('download-template-btn');
+        this.importBtn = document.getElementById('import-excel-btn');
+        this.fileInput = document.getElementById('potential-import-input');
+        return this.listContainer && this.modal && this.form && this.scheduleModal && this.scheduleForm && this.searchInput && this.scopeFilter && this.addBtn && this.downloadBtn && this.importBtn && this.fileInput;
     }
 
     async init(userId) {
@@ -3614,12 +3625,9 @@ class PotentialView {
         this.downline.sort((a, b) => a.Name.localeCompare(b.Name));
         this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.authenticatedUserData));
 
-        if (!this.initialized) {
-            potentialLog('Erstmalige Initialisierung: Event-Listener werden eingerichtet.');
-            this.setupEventListeners();
-            this.initialized = true;
-        }
-
+        // Die Event-Listener müssen bei jeder Initialisierung neu gesetzt werden,
+        // da der HTML-Inhalt der Ansicht dynamisch neu geladen wird.
+        this.setupEventListeners();
         await this.fetchAndRender();
     }
 
@@ -3710,17 +3718,11 @@ class PotentialView {
     }
 
     setupEventListeners() {
-        document.getElementById('add-potential-btn').addEventListener('click', () => this.openModal());
-        document.getElementById('download-template-btn').addEventListener('click', () => this.downloadExcelTemplate());
+        this.addBtn.addEventListener('click', () => this.openModal());
+        this.downloadBtn.addEventListener('click', () => this.downloadExcelTemplate());
         
-        const importBtn = document.getElementById('import-excel-btn');
-        const fileInput = document.getElementById('potential-import-input');
-        importBtn.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', (e) => this.handleFileImport(e));
-
-        document.getElementById('import-excel-btn').addEventListener('click', () => {
-            document.getElementById('potential-import-input').click();
-        });
+        this.importBtn.addEventListener('click', () => this.fileInput.click());
+        this.fileInput.addEventListener('change', (e) => this.handleFileImport(e));
         
         this.scopeFilter.addEventListener('change', () => this.fetchAndRender());
 
@@ -3924,48 +3926,74 @@ class PotentialView {
         const file = event.target.files[0];
         if (!file) return;
 
-        potentialLog(`Importiere Datei: ${file.name}`);
+        // NEU: Ladebildschirm anzeigen
+        this.listContainer.innerHTML = `
+            <div class="text-center py-16">
+                <div class="loader mx-auto"></div>
+                <h3 class="text-xl font-semibold text-skt-blue mt-4">Importiere Daten...</h3>
+                <p class="text-gray-500 mt-2">Dies kann einen Moment dauern. Bitte schließe das Fenster nicht.</p>
+            </div>`;
+
+        potentialLog(`Importiere Datei: ${file.name}`, file);
         const reader = new FileReader();
         reader.onload = async (e) => {
-            const text = e.target.result;
-            const rows = text.split('\n').slice(1); // Header überspringen
-            const potentialsToCreate = [];
-            const headers = text.split('\n')[0].trim().replace(/\r/g, "").split(';');
+            try {
+                const text = e.target.result;
+                potentialLog('Dateiinhalt:', text);
+                const rows = text.split('\n').slice(1); // Header überspringen
+                const potentialsToCreate = [];
+                const headers = text.split('\n')[0].trim().replace(/\r/g, "").split(';');
+                potentialLog('Gelesene Header:', headers);
 
-            const columnMapping = {
-                "Terminpartner": "Terminpartner",
-                "Telefonnummer": "Telefonnummer",
-                "Email": "Email",
-                "Rating_Kunde": "Rating_Kunde",
-                "Rating_MA": "Rating_MA",
-                "Rating_NT": "Rating_NT",
-                "Hinweis": "Hinweis",
-                "Kontaktiert": "Status" // CSV "Kontaktiert" auf DB "Status" mappen
-            };
+                const columnMapping = {
+                    "Terminpartner": "Terminpartner",
+                    "Telefonnummer": "Telefonnummer",
+                    "Email": "Email",
+                    "Rating_Kunde": "Rating_Kunde",
+                    "Rating_MA": "Rating_MA",
+                    "Rating_NT": "Rating_NT",
+                    "Hinweis": "Hinweis",
+                    // "Kontaktiert": "Status" // Falsches Mapping, das zu Fehlern führt. Wird entfernt.
+                };
 
-            for (const row of rows) {
-                if (row.trim() === '') continue;
-                const values = row.trim().split(';');
-                const potential = {};
-                headers.forEach((header, index) => {
-                    const dbColumn = columnMapping[header];
-                    if (dbColumn) {
-                        potential[dbColumn] = values[index] || null;
-                    }
-                });
-                potentialsToCreate.push(potential);
-            }
-
-            if (potentialsToCreate.length > 0) {
-                potentialLog(`Gefunden: ${potentialsToCreate.length} Potentiale zum Importieren.`);
-                const success = await this.bulkAddPotentials(potentialsToCreate);
-                if (success) {
-                    alert(`${potentialsToCreate.length} Kontakte erfolgreich importiert!`);
-                    await this.fetchAndRender();
-                } else {
-                    alert('Fehler beim Importieren der Kontakte.');
+                for (const [i, row] of rows.entries()) {
+                    if (row.trim() === '') continue;
+                    const values = row.trim().split(';');
+                    const potential = {};
+                    headers.forEach((header, index) => {
+                        const dbColumn = columnMapping[header];
+                        if (dbColumn) {
+                            potential[dbColumn] = values[index]?.trim() || null;
+                        }
+                    });
+                    potentialLog(`Geparstes Potential aus Zeile ${i + 2}:`, JSON.parse(JSON.stringify(potential)));
+                    potentialsToCreate.push(potential);
                 }
+
+                if (potentialsToCreate.length > 0) {
+                    potentialLog(`Gefunden: ${potentialsToCreate.length} Potentiale zum Importieren.`);
+                    const successCount = await this.bulkAddPotentials(potentialsToCreate);
+                    if (successCount > 0) {
+                        alert(`${successCount} von ${potentialsToCreate.length} Kontakten erfolgreich importiert!`);
+                        await this.fetchAndRender();
+                    } else {
+                        alert('Fehler beim Importieren der Kontakte. Es wurden keine Kontakte importiert.');
+                        await this.fetchAndRender();
+                    }
+                } else {
+                    alert('Keine gültigen Kontakte in der Datei gefunden.');
+                    await this.fetchAndRender();
+                }
+            } catch (error) {
+                potentialLog('!!! FEHLER beim Verarbeiten der Datei !!!', error);
+                alert('Ein Fehler ist beim Lesen der Datei aufgetreten. Bitte stelle sicher, dass sie korrekt formatiert ist.');
+                await this.fetchAndRender();
             }
+        };
+        reader.onerror = async () => {
+            potentialLog('!!! FEHLER beim Lesen der Datei !!!', reader.error);
+            alert('Die Datei konnte nicht gelesen werden.');
+            await this.fetchAndRender();
         };
         reader.readAsText(file, 'UTF-8');
         event.target.value = ''; // File-Input zurücksetzen
@@ -3974,7 +4002,7 @@ class PotentialView {
     async bulkAddPotentials(potentials) {
         potentialLog('Füge Potentiale einzeln hinzu, um Verknüpfungen zu setzen...');
         let successCount = 0;
-        for (const potential of potentials) {
+        for (const [i, potential] of potentials.entries()) {
             const rowData = {
                 [SKT_APP.COLUMN_MAPS.termine.Terminpartner]: potential.Terminpartner,
                 [SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID]: [this.currentUserId],
@@ -3983,15 +4011,18 @@ class PotentialView {
                 [SKT_APP.COLUMN_MAPS.termine.Rating_Kunde]: parseFloat(potential.Rating_Kunde) || null,
                 [SKT_APP.COLUMN_MAPS.termine.Rating_MA]: parseFloat(potential.Rating_MA) || null,
                 [SKT_APP.COLUMN_MAPS.termine.Rating_NT]: parseFloat(potential.Rating_NT) || null,
-                [SKT_APP.COLUMN_MAPS.termine.Status]: potential.Status,
+                // [SKT_APP.COLUMN_MAPS.termine.Status]: potential.Status, // Falsches Feld, wird entfernt.
+                [SKT_APP.COLUMN_MAPS.termine.Kontaktiert]: null, // Wird wie gewünscht standardmäßig leer gelassen.
                 [SKT_APP.COLUMN_MAPS.termine.Hinweis]: potential.Hinweis,
                 [SKT_APP.COLUMN_MAPS.termine.Datum]: null,
             };
+            potentialLog(`[Import Zeile ${i + 1}] Sende folgende Daten an die API:`, JSON.parse(JSON.stringify(rowData)));
             const success = await SKT_APP.seaTableAddRow('Termine', rowData);
-            if (success) successCount++;
+            potentialLog(`[Import Zeile ${i + 1}] API-Aufruf erfolgreich: ${success}`);
+            if (success) successCount++; // seaTableAddRow gibt true/false zurück
         }
         potentialLog(`${successCount} von ${potentials.length} Potentialen erfolgreich importiert.`);
-        return successCount > 0; // Gibt true zurück, wenn mindestens einer erfolgreich war
+        return successCount;
     }
 }
 
@@ -4065,10 +4096,9 @@ class UmsatzView {
         this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
         this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.authenticatedUserData));
 
-        if (!this.initialized) {
-            this.setupEventListeners();
-            this.initialized = true;
-        }
+        // Die Event-Listener müssen bei jeder Initialisierung neu gesetzt werden,
+        // da der HTML-Inhalt der Ansicht dynamisch neu geladen wird.
+        this.setupEventListeners();
         await this.fetchAndRender();
     }
 
@@ -4308,6 +4338,10 @@ class UmsatzView {
             : await seaTableUpdateUmsatzRow('Umsatz', rowId, rowData);
 
         if (success) {
+            // Cache für Gesamt-EH leeren, da sich die Daten geändert haben.
+            localStorage.removeItem(CACHE_PREFIX + 'total-eh-results');
+            umsatzLog('Cache für Gesamt-EH geleert.');
+
             saveBtn.textContent = 'Gespeichert!';
             saveBtn.classList.remove('hover:bg-green-700');
             saveBtn.classList.add('bg-skt-green-accent');
@@ -4336,6 +4370,10 @@ class UmsatzView {
         if (confirm('Möchten Sie diesen Umsatz wirklich löschen?')) {
             const success = await seaTableDeleteRow('Umsatz', rowId);
             if (success) {
+                // Cache für Gesamt-EH leeren, da sich die Daten geändert haben.
+                localStorage.removeItem(CACHE_PREFIX + 'total-eh-results');
+                umsatzLog('Cache für Gesamt-EH geleert.');
+
                 this.modal.classList.remove('visible');
                 await this.fetchAndRender();
             } else {
@@ -4430,11 +4468,9 @@ class AuswertungView {
             return;
         }
 
-        if (!this.initialized) {
-            this.setupEventListeners();
-            this.initialized = true;
-        }
-
+        // Die Event-Listener müssen bei jeder Initialisierung neu gesetzt werden,
+        // da der HTML-Inhalt der Ansicht dynamisch neu geladen wird.
+        this.setupEventListeners();
         this.updateTabs();
         await this.renderCurrentView();
     }
@@ -5244,6 +5280,37 @@ function setupEventListeners() {
 
 }
 
+async function loadAndCacheTotalEh() {
+    const totalEhCacheKey = 'total-eh-results';
+    let totalEhResultRaw = loadFromCache(totalEhCacheKey, 240); // Cache für 4 Stunden
+
+    if (totalEhResultRaw) {
+        console.log('%c[DATENLADEN] %cGesamt-EH aus dem Cache geladen.', 'color: #17a2b8; font-weight: bold;', 'color: black;');
+        totalEhResults = mapSqlResults(totalEhResultRaw, "Umsatz");
+        return true;
+    }
+
+    const totalEhQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`totalEh\` FROM \`Umsatz\` GROUP BY \`Mitarbeiter_ID\``;
+    console.log(`%c[DATENLADEN] %cGesamt-EH wird von der API geladen (langsame Abfrage)...`, 'color: #17a2b8; font-weight: bold;', 'color: red;');
+    console.time('[DATENLADEN] Dauer für Gesamt-EH Abfrage');
+    
+    totalEhResultRaw = await seaTableSqlQuery(totalEhQuery, false);
+    
+    console.timeEnd('[DATENLADEN] Dauer für Gesamt-EH Abfrage');
+
+    if (totalEhResultRaw) {
+        saveToCache(totalEhCacheKey, totalEhResultRaw);
+        console.log('%c[DATENLADEN] %cGesamt-EH geladen und im Cache gespeichert.', 'color: #17a2b8; font-weight: bold;', 'color: black;');
+        totalEhResults = mapSqlResults(totalEhResultRaw, "Umsatz");
+        return true;
+    } else {
+        console.error('[DATENLADEN] Die Abfrage für Gesamt-EH ist fehlgeschlagen und hat null zurückgegeben.');
+        setStatus("Kritischer Fehler: Die Gesamtumsätze konnten nicht geladen werden. Bitte versuchen Sie es später erneut.", true);
+        return false; // Signal failure
+    }
+
+}
+
 let isInitializing = false;
 async function initializeDashboard() {
   if (isInitializing) {
@@ -5264,6 +5331,15 @@ async function initializeDashboard() {
     setStatus("Initialisierung fehlgeschlagen. Bitte Seite neu laden.", true);
     isInitializing = false;
     return;
+  }
+
+  // NEU: Lade die Gesamt-EH-Daten, BEVOR das Dashboard gerendert wird.
+  setStatus("Lade Gesamtumsätze (dies kann einen Moment dauern)...");
+  const totalEhLoaded = await loadAndCacheTotalEh();
+  if (!totalEhLoaded) {
+      // loadAndCacheTotalEh setzt bereits die Fehlermeldung
+      isInitializing = false;
+      return;
   }
 
   const usersForLogin = db.mitarbeiter.filter((m) => m.Name && m.Status !== 'Ausgeschieden');
@@ -6200,11 +6276,9 @@ class PGTagebuchView {
             return;
         }
 
-        if (!this.initialized) {
-            this.setupEventListeners();
-            this.initialized = true;
-        }
-
+        // Die Event-Listener müssen bei jeder Initialisierung neu gesetzt werden,
+        // da der HTML-Inhalt der Ansicht dynamisch neu geladen wird.
+        this.setupEventListeners();
         await this.fetchAndRender();
     }
 
