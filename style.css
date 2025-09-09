@@ -571,13 +571,12 @@ details[open] > summary::before { transform: rotate(180deg); }
     padding-right: 2.5rem;
 }
 
-/* Spezifischer Fix für Datums- und Zeitfelder, die auf Mobilgeräten überlaufen */
-input[type="date"],
-input[type="datetime-local"] {
-    /* Diese Kombination zwingt Safari/iOS, die Breite korrekt zu respektieren */
-    min-width: 0;
-    -webkit-appearance: none; /* Entfernt das Standard-iOS-Styling */
-    appearance: none;
+/* NEUE METHODE (ROBUST): Wrapper für Inputs, die auf iOS überlaufen.
+   Der Wrapper zwingt das Kind-Element (das Input-Feld), sich an die Grenzen zu halten. */
+.input-wrapper {
+    overflow: hidden;
+    border-radius: 0.5rem; /* Muss mit dem Radius des Inputs übereinstimmen */
+    border: 1px solid #d1d5db; /* Simuliert den Input-Rand, damit es konsistent aussieht */
 }
 
 /* Spezifischer Stil für den Filter-Button, um das Pfeil-Icon beizubehalten */
