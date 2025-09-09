@@ -578,6 +578,12 @@ details[open] > summary::before { transform: rotate(180deg); }
     border-radius: 0.5rem; /* Muss mit dem Radius des Inputs übereinstimmen */
     border: 1px solid #d1d5db; /* Simuliert den Input-Rand, damit es konsistent aussieht */
 }
+/* KORREKTUR: Entfernt den Rand des eigentlichen Inputs, wenn er sich in einem Wrapper befindet,
+   um doppelte Ränder zu vermeiden und die Zentrierung zu gewährleisten. */
+.input-wrapper > .modern-input {
+    border: none;
+    box-shadow: none;
+}
 
 /* Spezifischer Stil für den Filter-Button, um das Pfeil-Icon beizubehalten */
 #stats-category-filter-btn {
