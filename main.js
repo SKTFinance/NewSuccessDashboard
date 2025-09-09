@@ -3490,6 +3490,7 @@ class AppointmentsView {
 
             const dayCard = document.createElement('div');
             dayCard.className = `day-card flex-shrink-0 w-56 h-full bg-white rounded-xl p-3 flex flex-col border-2 ${isToday ? 'border-skt-green-accent' : 'border-gray-200'}`;
+            dayCard.className = `day-card flex-shrink-0 w-72 h-full bg-white rounded-xl p-3 flex flex-col border-2 ${isToday ? 'border-skt-green-accent' : 'border-gray-200'}`;
             if (isToday) dayCard.classList.add('is-today');
 
             let appointmentsHtml = '';
