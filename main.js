@@ -2562,6 +2562,28 @@ function renderTimelineSection(
     return;
   }
 
+  const sectionStartDate = steps[0].dueDate;
+  const sectionEndDate = steps[steps.length - 1].dueDate;
+  const todayForProgress = new Date(); // Use a separate 'today' for progress calculation to not affect the step loop
+
+  const totalDuration = sectionEndDate.getTime() - sectionStartDate.getTime();
+  const elapsedDuration = todayForProgress.getTime() - sectionStartDate.getTime();
+  
+  let timeProgressPercent = 0;
+  if (totalDuration > 0) {
+      timeProgressPercent = Math.max(0, Math.min(100, (elapsedDuration / totalDuration) * 100));
+  } else if (todayForProgress >= sectionStartDate) {
+      timeProgressPercent = 100;
+  }
+
+  if (progressElement) {
+    progressElement.style.height = `${timeProgressPercent}%`;
+  }
+
+  if (dateMarkerContainer) {
+    renderDateMarkers(dateMarkerContainer, sectionStartDate, sectionEndDate);
+  }
+
   const today = getCurrentDate();
   today.setHours(0, 0, 0, 0);
 
@@ -2574,15 +2596,11 @@ function renderTimelineSection(
 
     let checkboxHtml = '';
     if (isEditable) {
+        // Die Standard-Checkbox wird durch eine benutzerdefinierte, gestylte Checkbox ersetzt.
         checkboxHtml = `
-            <label class="toggle-switch onboarding-toggle">
-                <input type="checkbox" 
-                       class="sr-only peer onboarding-step-toggle" 
-                       data-step-id="${step._id}" 
-                       data-trainee-id="${traineeId}"
-                       ${step.completed ? 'checked' : ''}>
-                <div class="toggle-slider"></div>
-            </label>
+            <div class="onboarding-step-toggle custom-checkbox ${step.completed ? 'checked' : ''}" data-step-id="${step._id}" data-trainee-id="${traineeId}" title="Status ändern">
+                <div class="custom-checkbox-tick"></div>
+            </div>
         `;
     }
 
@@ -2592,8 +2610,7 @@ function renderTimelineSection(
       ? "due"
       : "future";
     const isOverdue =
-      !step.completed &&
-      today.getTime() - step.dueDate.getTime() > 3 * 24 * 60 * 60 * 1000;
+      !step.completed && today > step.dueDate;
 
     let iconClass = "fa-question";
     switch (stepType) {
@@ -2617,7 +2634,7 @@ function renderTimelineSection(
         break;
     }
 
-    stepEl.className = `timeline-item ${statusClass} ${stepType} ${
+    stepEl.className = `timeline-item ${statusClass} ${stepType.replace(/\s/g, '')} ${
       isMajor ? "timeline-item-major" : "timeline-item-minor"
     }`;
     stepEl.style.animationDelay = `${index * 0.1}s`;
@@ -2629,9 +2646,7 @@ function renderTimelineSection(
     });
 
     stepEl.innerHTML = `
-                    <div class="timeline-content ${
-                      isOverdue ? "overdue-task" : ""
-                    }">
+                    <div class="timeline-content">
                         <div class="timeline-header">
                             <div class="timeline-icon-inline">
                                 <i class="fas ${iconClass}"></i>
@@ -2645,49 +2660,94 @@ function renderTimelineSection(
                     </div>
                 `;
 
-    stepEl.querySelector(".timeline-content").addEventListener("click", () => {
-      dom.hinweisModalContent.textContent =
-        step.Hinweis || "Kein Hinweis verfügbar.";
-      dom.hinweisModal.classList.add("visible");
-      document.body.classList.add("modal-open");
-      document.documentElement.classList.add("modal-open");
+    // Klick-Listener aufteilen: Klick auf Checkbox ändert Status, Klick auf Rest öffnet Modal.
+    const contentArea = stepEl.querySelector(".timeline-content");
+    contentArea.addEventListener("click", (e) => {
+        // Verhindert, dass das Modal aufgeht, wenn auf die Checkbox geklickt wird.
+        if (e.target.closest('.onboarding-step-toggle')) {
+            return;
+        }
+        dom.hinweisModalContent.textContent = step.Hinweis || "Kein Hinweis verfügbar.";
+        dom.hinweisModal.classList.add("visible");
+        document.body.classList.add("modal-open");
+        document.documentElement.classList.add("modal-open");
     });
 
     container.appendChild(stepEl);
   });
 
   if (isEditable) {
-      container.querySelectorAll('.onboarding-step-toggle').forEach(toggle => {
-          toggle.addEventListener('change', handleOnboardingStepToggle);
-      });
+    container.querySelectorAll('.onboarding-step-toggle').forEach(toggle => {
+        toggle.addEventListener('click', handleOnboardingStepToggle);
+    });
   }
 }
 
-async function handleOnboardingStepToggle(event) {
-    const checkbox = event.currentTarget;
-    const stepId = checkbox.dataset.stepId;
-    const traineeId = checkbox.dataset.traineeId;
-    const isCompleted = checkbox.checked;
+function renderDateMarkers(container, startDate, endDate) {
+    clearChildren(container);
+    const totalDuration = endDate.getTime() - startDate.getTime();
+    if (totalDuration <= 0) return;
 
-    checkbox.disabled = true;
+    const today = new Date();
+    const elapsedDuration = today.getTime() - startDate.getTime();
+    const timeProgressPercent = Math.max(0, Math.min(100, (elapsedDuration / totalDuration) * 100));
+
+    // Start- und Enddatum Marker
+    const createMarker = (date, topPercent) => {
+        const marker = document.createElement('div');
+        marker.className = 'timeline-date-marker';
+        marker.style.top = `${topPercent}%`;
+        marker.textContent = date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+        container.appendChild(marker);
+    };
+
+    createMarker(startDate, 0);
+    createMarker(endDate, 100);
+
+    // "Heute" Marker
+    if (today >= startDate && today <= endDate) {
+        const todayMarker = document.createElement('div');
+        todayMarker.className = 'timeline-date-marker font-bold text-skt-red-accent';
+        todayMarker.style.top = `${timeProgressPercent}%`;
+        todayMarker.textContent = 'Heute';
+        container.appendChild(todayMarker);
+    }
+}
+
+async function handleOnboardingStepToggle(event) {
+    const checkboxElement = event.currentTarget;
+    const stepId = checkboxElement.dataset.stepId;
+    const traineeId = checkboxElement.dataset.traineeId;
+    const isCompleted = !checkboxElement.classList.contains('checked'); // Der neue Status ist das Gegenteil vom aktuellen
+
+    // UI sofort aktualisieren und Interaktion sperren
+    checkboxElement.style.pointerEvents = 'none';
+    checkboxElement.style.opacity = '0.5';
 
     let success = false;
     if (isCompleted) {
         success = await addOnboardingEntry(traineeId, stepId);
     } else {
-        success = await removeOnboardingEntry(traineeId, stepId);
+        // KORREKTUR: Die ID des zu löschenden Eintrags muss zuerst gefunden werden.
+        const entryToDelete = db.einarbeitung.find(e => e.Mitarbeiter_ID === traineeId && e.Schritt_ID === stepId);
+        if (entryToDelete) {
+            success = await removeOnboardingEntry(traineeId, stepId);
+        } else {
+            success = true; // Wenn kein Eintrag zum Löschen da ist, betrachten wir es als "erfolgreich".
+        }
     }
 
     if (success) {
         localStorage.removeItem(CACHE_PREFIX + 'einarbeitung');
-        await loadAllData(); 
+        db.einarbeitung = await seaTableQuery('Einarbeitung'); // Nur Einarbeitungsdaten neu laden
+        normalizeAllData();
         await renderTraineeOnboardingView(traineeId);
     } else {
         alert('Fehler beim Aktualisieren des Schritts.');
-        checkbox.checked = !isCompleted;
+        // UI-Änderung bei Fehler rückgängig machen
+        checkboxElement.style.pointerEvents = 'auto';
+        checkboxElement.style.opacity = '1';
     }
-
-    checkbox.disabled = false;
 }
 
 async function addOnboardingEntry(traineeId, stepId) {

@@ -250,6 +250,38 @@ details[open] > summary::before { transform: rotate(180deg); }
     animation: spin 1s linear infinite; 
 }
 
+/* NEU: Stile für die benutzerdefinierte Checkbox */
+.custom-checkbox {
+    width: 24px;
+    height: 24px;
+    border: 2px solid #cbd5e1; /* Entspricht border-gray-300 */
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    flex-shrink: 0;
+}
+.custom-checkbox:hover {
+    border-color: var(--color-skt-blue);
+}
+.custom-checkbox.checked {
+    background-color: var(--color-accent-green);
+    border-color: var(--color-accent-green);
+}
+.custom-checkbox-tick {
+    width: 6px;
+    height: 12px;
+    border: solid white;
+    border-width: 0 3px 3px 0;
+    transform: rotate(45deg) translateY(-1px) scale(0); /* Startet unsichtbar */
+    transition: transform 0.2s ease-in-out;
+}
+.custom-checkbox.checked .custom-checkbox-tick {
+    transform: rotate(45deg) translateY(-1px) scale(1); /* Wird sichtbar */
+}
+
 .timeline-item {
     opacity: 0;
     animation: slideIn 0.5s ease-out forwards;
@@ -303,7 +335,7 @@ details[open] > summary::before { transform: rotate(180deg); }
     border-color: #cbd5e1;
 }
 .timeline-item.completed.seminar .timeline-content,
-.timeline-item.completed.other .timeline-content {
+.timeline-item.completed.seminar .timeline-content {
     background-color: #f0fdf4;
 }
 
@@ -333,21 +365,25 @@ details[open] > summary::before { transform: rotate(180deg); }
     margin-right: -1.5rem;
 }
 .timeline-item.completed.seminar .timeline-icon-inline,
-.timeline-item.completed.other .timeline-icon-inline { 
+.timeline-item.completed.seminar .timeline-icon-inline { 
     background-color: var(--color-accent-green); 
 }
 
-/* NEUE STILE FÜR SPEZIFISCHE ERLEDIGTE AUFGABEN */
-.timeline-item.completed.gespraech .timeline-icon-inline { background-color: var(--color-accent-purple); }
-.timeline-item.completed.gespraech .timeline-content { background-color: #f3e8f7; }
+/* UPDATE: Stile für spezifische erledigte Aufgaben */
+.timeline-item.completed.seminar .timeline-content { background-color: #f0fdf4; } /* Grün */
+.timeline-item.completed.persönlichesgespräch .timeline-icon-inline { background-color: var(--color-accent-purple); }
+.timeline-item.completed.persönlichesgespräch .timeline-content { background-color: #f3e8f7; } /* Violett */
 .timeline-item.completed.meilenstein .timeline-icon-inline { background-color: var(--color-accent-gold); }
-.timeline-item.completed.meilenstein .timeline-content { background-color: #fef9e7; }
+.timeline-item.completed.meilenstein .timeline-content { background-color: #fef9e7; } /* Gold */
 .timeline-item.completed.hausuebung .timeline-icon-inline { background-color: var(--color-skt-blue-main); }
-.timeline-item.completed.hausuebung .timeline-content { background-color: #e0f2fe; }
+.timeline-item.completed.hausuebung .timeline-content { background-color: #e0f2fe; } /* Blau */
+.timeline-item.completed.versteckt .timeline-icon-inline { background-color: var(--color-accent-orange); }
+.timeline-item.completed.versteckt .timeline-content { background-color: #fff7ed; } /* Orange */
 
 .timeline-item.due.seminar .timeline-icon-inline { background-color: var(--color-accent-green); }
 .timeline-item.due.meilenstein .timeline-icon-inline { background-color: var(--color-accent-gold); }
-.timeline-item.due.gespraech .timeline-icon-inline { background-color: var(--color-accent-purple); }
+.timeline-item.due.persönlichesgespräch .timeline-icon-inline { background-color: var(--color-accent-purple); }
+.timeline-item.due.versteckt .timeline-icon-inline { background-color: var(--color-accent-orange); }
 .timeline-item.due.hausuebung .timeline-icon-inline { background-color: var(--color-skt-blue-main); }
 
 /* NEU: Goldener Rahmen für Meilensteine */
@@ -364,14 +400,10 @@ details[open] > summary::before { transform: rotate(180deg); }
      opacity: 0.6;
      transition: all 0.3s ease-in-out;
 }
-
-/* NEU: Stil für überfällige Aufgaben */
-.overdue-task {
+/* UPDATE: Stil für überfällige (due) Aufgaben */
+.timeline-item.due .timeline-content, .overdue-task {
     background-color: #ffefef !important; /* Helles Rot */
     border-color: var(--color-accent-red) !important;
-}
-.overdue-task .timeline-title {
-    color: var(--color-accent-red) !important;
 }
 
 .timeline-info .timeline-title {
