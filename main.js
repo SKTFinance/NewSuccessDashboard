@@ -2853,6 +2853,25 @@ async function genericAddRowWithLinks(tableName, rowDataWithKeys, linkColumnName
     return true;
 }
 
+function getWeekDates(date = new Date()) {
+    const current = new Date(date);
+    current.setHours(0, 0, 0, 0);
+    const day = current.getDay();
+    const diff = current.getDate() - day + (day === 0 ? -6 : 1); // Monday is the first day of the week
+    const startDate = new Date(current.setDate(diff));
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
+    endDate.setHours(23, 59, 59, 999);
+    return { startDate, endDate };
+}
+
+function getMonthDates(date = new Date()) {
+    const current = new Date(date);
+    const startDate = new Date(current.getFullYear(), current.getMonth(), 1);
+    const endDate = new Date(current.getFullYear(), current.getMonth() + 1, 0, 23, 59, 59, 999);
+    return { startDate, endDate };
+}
+
 // --- Appointments View Logic (integriert in main.js) ---
 
 const appointmentsLog = (message, ...data) => console.log(`%c[Appointments] %c${message}`, 'color: #4f46e5; font-weight: bold;', 'color: black;', ...data);
@@ -2868,17 +2887,38 @@ class AppointmentsView {
         this.statsPieChartContainer = null;
         this.statsPieChartLegend = null;
         this.statsByEmployeeBtn = null;
+        // NEU: DOM-Elemente für die neue Statistik-Sektion
+        this.statsScopeFilter = null;
+        this.statsCategoryFilterBtn = null;
+        this.statsCategoryFilterPanel = null;
+        this.statsMonthTimeline = null;
+        this.statsPeriodDisplay = null; // Beibehalten für die Wochenanzeige
+        this.statsNavPrevBtn = null;    // Beibehalten für die Navigation
+        this.statsNavNextBtn = null;    // Beibehalten für die Navigation
+        this.statsViewCalendarBtn = null;
+        this.statsViewTableBtn = null;
+        this.statsCalendarView = null;
+        this.statsTableView = null;
         this.statsByStatusBtn = null;
+        this.outstandingAppointmentsSection = null;
+        this.statsTableSortConfig = {
+            column: 'Datum',
+            direction: 'desc'
+        };
+        this.outstandingAppointmentsList = null;
         this.prognosisDetailsContainer = null;
         this.recruitingTab = null;
         this.startDateInput = null;
         this.endDateInput = null;
         this.scopeFilter = null;
         this.modal = null;
+        this.statsCurrentDate = null; // Datum zur Steuerung der Ansicht
         this.form = null;
         this.searchInput = null;
         this.showCancelledCheckbox = null;
         // NEU: Gekapselte Analyse-Ansicht
+        this.detailsContainer = null;
+        this.toggleDetailsCheckbox = null;
         this.calendarWeekStartDate = null;
         this.toggleAnalysisBtn = null;
         this.analysisContent = null;
@@ -2905,7 +2945,21 @@ class AppointmentsView {
         this.statsPieChartContainer = document.getElementById('stats-pie-chart-container');
         this.statsPieChartLegend = document.getElementById('stats-pie-chart-legend');
         this.statsByEmployeeBtn = document.getElementById('stats-by-employee-btn');
+        // NEU: DOM-Elemente für die neue Statistik-Sektion holen
+        this.statsScopeFilter = document.getElementById('stats-scope-filter');
+        this.statsCategoryFilterBtn = document.getElementById('stats-category-filter-btn');
+        this.statsCategoryFilterPanel = document.getElementById('stats-category-filter-panel');
+        this.statsMonthTimeline = document.getElementById('stats-month-timeline');
+        this.statsPeriodDisplay = document.getElementById('stats-period-display'); // Beibehalten
+        this.statsNavPrevBtn = document.getElementById('stats-nav-prev-btn');       // Beibehalten
+        this.statsNavNextBtn = document.getElementById('stats-nav-next-btn');       // Beibehalten
+        this.statsViewCalendarBtn = document.getElementById('stats-view-calendar-btn');
+        this.statsViewTableBtn = document.getElementById('stats-view-table-btn');
+        this.statsCalendarView = document.getElementById('stats-calendar-view');
+        this.statsTableView = document.getElementById('stats-table-view');
         this.statsByStatusBtn = document.getElementById('stats-by-status-btn');
+        this.outstandingAppointmentsSection = document.getElementById('outstanding-appointments-section');
+        this.outstandingAppointmentsList = document.getElementById('outstanding-appointments-list');
         this.prognosisDetailsContainer = document.getElementById('prognosis-details-container');
         this.recruitingTab = document.getElementById('recruiting-tab');
         this.startDateInput = document.getElementById('appointments-start-date');
@@ -2916,6 +2970,8 @@ class AppointmentsView {
         this.searchInput = document.getElementById('appointments-search-filter');
         this.showCancelledCheckbox = document.getElementById('appointments-show-cancelled');
         // NEU: Gekapselte Analyse-Ansicht
+        this.detailsContainer = document.getElementById('appointments-details-container');
+        this.toggleDetailsCheckbox = document.getElementById('toggle-details-checkbox');
         this.toggleAnalysisBtn = document.getElementById('toggle-analysis-visibility-btn');
         this.analysisContent = document.getElementById('analysis-content');
         this.statsViewPane = document.getElementById('stats-view-pane');
@@ -2930,7 +2986,7 @@ class AppointmentsView {
         this.calendarNextWeekBtn = document.getElementById('calendar-next-week-btn');
         this.calendarWeekDisplay = document.getElementById('calendar-week-display');
 
-        return this.listContainer && this.umsatzTab && this.recruitingTab && this.immoTab && this.netzwerkTab && this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.scopeFilter && this.modal && this.form && this.searchInput && this.showCancelledCheckbox && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.calendarViewPane && this.statsTab && this.heatmapTab && this.calendarTab && this.heatmapGrid && this.calendarDaysGrid && this.calendarPrevWeekBtn && this.calendarNextWeekBtn && this.calendarWeekDisplay;
+        return this.listContainer && this.umsatzTab && this.recruitingTab && this.immoTab && this.netzwerkTab && this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.scopeFilter && this.modal && this.form && this.searchInput && this.showCancelledCheckbox && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.calendarViewPane && this.statsTab && this.heatmapTab && this.calendarTab && this.heatmapGrid && this.calendarDaysGrid && this.calendarPrevWeekBtn && this.calendarNextWeekBtn && this.calendarWeekDisplay && this.statsScopeFilter && this.statsCategoryFilterBtn && this.statsCategoryFilterPanel && this.statsMonthTimeline && this.statsPeriodDisplay && this.statsNavPrevBtn && this.statsNavNextBtn && this.outstandingAppointmentsSection && this.outstandingAppointmentsList && this.statsViewCalendarBtn && this.statsViewTableBtn && this.statsCalendarView && this.statsTableView && this.detailsContainer && this.toggleDetailsCheckbox;
     }
 
     async init(userId) {
@@ -2942,6 +2998,9 @@ class AppointmentsView {
             return;
         }
 
+        // NEU: Startdatum für die Statistik-Ansicht initialisieren
+        this.statsCurrentDate = getCurrentDate();
+        this.statsCurrentDate.setHours(0, 0, 0, 0);
         // NEU: Kalender auf die aktuelle Woche initialisieren
         const today = getCurrentDate();
         const startOfWeek = new Date(today);
@@ -2957,6 +3016,8 @@ class AppointmentsView {
         this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
         this.downline.sort((a, b) => a.Name.localeCompare(b.Name));
         this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.authenticatedUserData));
+        this.statsScopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.authenticatedUserData));
+        this._populateCategoryFilter();
 
         // Die Event-Listener müssen bei jeder Initialisierung neu gesetzt werden,
         // da der HTML-Inhalt der Ansicht dynamisch neu geladen wird.
@@ -3027,6 +3088,8 @@ class AppointmentsView {
         appointmentsLog('--- START: render ---');
         this.listContainer.innerHTML = '';
 
+        this._renderAppointmentStats(); // NEU: Aufruf der Statistik-Render-Funktion
+        this._renderOutstandingAppointments();
         // 1. Filter data
         let filteredAppointments = this.allAppointments.filter(t => {
             const isUmsatzTermin = ['AT', 'BT', 'ST'].includes(t.Kategorie);
@@ -3174,7 +3237,49 @@ class AppointmentsView {
         const debouncedFetch = _.debounce(() => this.fetchAndRender(), 300);
         this.startDateInput.addEventListener('change', debouncedFetch);
         this.endDateInput.addEventListener('change', debouncedFetch);
-        this.scopeFilter.addEventListener('change', () => this.fetchAndRender());
+        // NEU: Überarbeitete Event Listener für die Timeline-Navigation mit Einrasten
+        this.statsNavPrevBtn.addEventListener('click', () => {
+            const currentCenterCard = this._getCenterCard();
+            const prevCard = currentCenterCard?.previousElementSibling;
+            if (prevCard) prevCard.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        });
+        this.statsNavNextBtn.addEventListener('click', () => {
+            const currentCenterCard = this._getCenterCard();
+            const nextCard = currentCenterCard?.nextElementSibling;
+            if (nextCard) nextCard.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        });
+        this.statsPeriodDisplay.addEventListener('click', () => this._scrollToTodayInTimeline());
+
+        // NEU: Event Listener für den dynamischen Skalierungseffekt beim Scrollen
+        this.statsMonthTimeline.addEventListener('scroll', _.throttle(() => {
+            this._updateCardScales();
+        }, 50));
+        
+        this.statsNavPrevBtn.addEventListener('click', () => this._navigateStats(-7));
+        this.statsNavNextBtn.addEventListener('click', () => this._navigateStats(7));
+        this.statsPeriodDisplay.addEventListener('click', () => this._resetStatsToToday());
+        this.statsViewCalendarBtn.addEventListener('click', () => this._switchStatsView('calendar')); //FIXME: this is a bug
+        this.statsViewTableBtn.addEventListener('click', () => this._switchStatsView('table'));
+
+
+        // NEU: Event Listener für das Dropdown
+        this.statsCategoryFilterBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.statsCategoryFilterPanel.classList.toggle('hidden');
+        });
+        document.addEventListener('click', (e) => { if (!this.statsCategoryFilterPanel.contains(e.target)) this.statsCategoryFilterPanel.classList.add('hidden'); });
+        
+        // KORREKTUR: Beide Scope-Filter synchronisieren
+        const syncAndRender = (source) => {
+            const newValue = source.value;
+            if (this.scopeFilter.value !== newValue) this.scopeFilter.value = newValue;
+            if (this.statsScopeFilter.value !== newValue) this.statsScopeFilter.value = newValue;
+            this.fetchAndRender(); // Ruft fetchAndRender auf, was wiederum _renderAppointmentStats etc. aufruft
+        };
+
+        this.statsScopeFilter.addEventListener('change', (e) => syncAndRender(e.target));
+        this.scopeFilter.addEventListener('change', (e) => syncAndRender(e.target));
+
 
         this.searchInput.addEventListener('input', _.debounce((e) => {
             this.filterText = e.target.value;
@@ -3185,17 +3290,24 @@ class AppointmentsView {
             this.render();
         });
 
+        // NEU: Event Listener für die Detail-Ansicht-Checkbox
+        this.toggleDetailsCheckbox.addEventListener('change', (e) => {
+            this.detailsContainer.classList.toggle('hidden', !e.target.checked);
+        });
+
         this.umsatzTab.addEventListener('click', () => { this.currentTab = 'umsatz'; this.updateTabs(); this.render(); });
         this.recruitingTab.addEventListener('click', () => { this.currentTab = 'recruiting'; this.updateTabs(); this.render(); });
         this.immoTab.addEventListener('click', () => { this.currentTab = 'immo'; this.updateTabs(); this.render(); });
         this.netzwerkTab.addEventListener('click', () => { this.currentTab = 'netzwerk'; this.updateTabs(); this.render(); });
 
-        document.getElementById('add-appointment-btn').addEventListener('click', () => this.openModal());
+        document.getElementById('add-appointment-btn').addEventListener('click', () => this.openModal()); // Der untere Button
+        document.getElementById('add-appointment-btn-stats').addEventListener('click', () => this.openModal()); // Der obere Button
         document.getElementById('close-appointment-modal-btn').addEventListener('click', () => this.closeModal());
         document.getElementById('cancel-appointment-btn').addEventListener('click', () => this.closeModal());
         this.modal.addEventListener('click', (e) => { if (e.target === this.modal) this.closeModal(); });
         this.form.addEventListener('submit', (e) => this.handleFormSubmit(e));
 
+        document.getElementById('delete-appointment-btn').addEventListener('click', () => this.handleDelete());
         // NEU: Event Listener für den neuen Analyse-Container und die Tabs
         this.toggleAnalysisBtn.addEventListener('click', () => this._toggleCollapsible(this.analysisContent, this.toggleAnalysisBtn));
         this.statsTab.addEventListener('click', () => this._switchAnalysisTab('stats'));
@@ -3269,6 +3381,322 @@ class AppointmentsView {
             statusSelect.value = oldValue;
         }
     }
+
+    _navigateStats(days) {
+        const newDate = new Date(this.statsCurrentDate);
+        newDate.setDate(newDate.getDate() + days);
+        this.statsCurrentDate = newDate;
+        this._renderAppointmentStats();
+    }
+
+    _resetStatsToToday() {
+        this.statsCurrentDate = getCurrentDate();
+        this._renderAppointmentStats();
+    }
+
+    _updateCardScales() {
+        const timelineRect = this.statsMonthTimeline.getBoundingClientRect();
+        const timelineCenter = timelineRect.left + timelineRect.width / 2;
+        this.statsMonthTimeline.querySelectorAll('.day-card').forEach(card => {
+            const cardRect = card.getBoundingClientRect();
+            const cardCenter = cardRect.left + cardRect.width / 2;
+            const distance = Math.abs(timelineCenter - cardCenter);
+            const scale = Math.max(0.8, 1 - (distance / timelineRect.width) * 0.6);
+            card.style.transform = `scale(${scale})`;
+        });
+    }
+
+    _getCenterCard() {
+        const timelineRect = this.statsMonthTimeline.getBoundingClientRect();
+        const timelineCenter = timelineRect.left + timelineRect.width / 2;
+        let closestCard = null;
+        let smallestDistance = Infinity;
+        this.statsMonthTimeline.querySelectorAll('.day-card').forEach(card => {
+            const cardCenter = card.getBoundingClientRect().left + card.getBoundingClientRect().width / 2;
+            const distance = Math.abs(timelineCenter - cardCenter);
+            if (distance < smallestDistance) { smallestDistance = distance; closestCard = card; }
+        });
+        return closestCard;
+    }
+
+
+    _scrollToTodayInTimeline() {
+        const todayEl = this.statsMonthTimeline.querySelector('.is-today');
+        if (todayEl) todayEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+
+    _switchStatsView(view) {
+        this.statsCalendarView.classList.toggle('hidden', view !== 'calendar');
+        this.statsTableView.classList.toggle('hidden', view !== 'table');
+        this.statsViewCalendarBtn.classList.toggle('active', view === 'calendar');
+        this.statsViewTableBtn.classList.toggle('active', view === 'table');
+    }
+    _populateCategoryFilter() {
+        const terminMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'termine');
+        if (!terminMeta) return;
+
+        const categoryColumn = terminMeta.columns.find(c => c.name === 'Kategorie');
+        if (!categoryColumn || !categoryColumn.data || !categoryColumn.data.options) return;
+
+        this.statsCategoryFilterPanel.innerHTML = '';
+        const categories = categoryColumn.data.options.map(o => o.name);
+        
+        const relevantCategories = ['AT', 'BT', 'ST', 'ET', 'Immo', 'NT'];
+
+        const createCheckbox = (label, value, isChecked = false) => {
+            const wrapper = document.createElement('label');
+            wrapper.className = 'flex items-center space-x-3 p-2 rounded-md hover:bg-gray-100 cursor-pointer';
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'h-5 w-5 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light';
+            checkbox.value = value;
+            checkbox.checked = isChecked;
+            checkbox.addEventListener('change', () => {
+                this._renderAppointmentStats();
+            });
+            const span = document.createElement('span');
+            span.textContent = label;
+            wrapper.appendChild(checkbox);
+            wrapper.appendChild(span);
+            this.statsCategoryFilterPanel.appendChild(wrapper);        };
+
+        categories.filter(cat => relevantCategories.includes(cat)).forEach(cat => createCheckbox(cat, cat, true));
+    }
+
+    // NEU: Funktion zum Berechnen und Anzeigen der Termin-Statistiken
+    _renderAppointmentStats() {
+        const scope = this.scopeFilter.value; // KORREKTUR: Immer den Hauptfilter als Quelle der Wahrheit verwenden
+        const userIds = new Set();
+        switch (scope) {
+            case 'personal':
+                userIds.add(this.currentUserId);
+                break;
+            case 'group':
+                userIds.add(this.currentUserId);
+                SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
+                break;
+            case 'structure':
+                userIds.add(this.currentUserId);
+                this.downline.forEach(u => userIds.add(u._id));
+                break;
+        }
+
+        const today = getCurrentDate();
+        const monthName = today.toLocaleString('de-DE', { month: 'long', year: 'numeric' });
+        this.statsPeriodDisplay.textContent = monthName;
+
+        const selectedCheckboxes = this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]:checked');
+        const selectedCategories = Array.from(selectedCheckboxes).map(cb => cb.value);
+
+        if (selectedCategories.length === 0) {
+            this.statsCategoryFilterBtn.textContent = 'Keine Auswahl';
+        } else if (selectedCategories.length === this.statsCategoryFilterPanel.querySelectorAll('input').length) {
+            this.statsCategoryFilterBtn.textContent = 'Alle Kategorien';
+        } else {
+            this.statsCategoryFilterBtn.textContent = selectedCategories.join(', ');
+        }
+        // KORREKTUR: Greife auf die bereits gefilterten Termine der Ansicht zu (`this.allAppointments`),
+        // anstatt auf die globalen, ungefilterten `db.termine`. Dies ist die Kernursache des Fehlers.
+        const relevantAppointments = this.allAppointments.filter(t => {
+            const categoryMatch = selectedCategories.length === 0 ? false : selectedCategories.includes(t.Kategorie);
+            return t.Datum && categoryMatch;
+        });
+        // KORREKTUR: Um Zeitzonenprobleme endgültig zu vermeiden, wird der Termin einfach
+        // anhand des reinen Datum-Strings (YYYY-MM-DD) gruppiert, ohne ihn in ein Date-Objekt umzuwandeln.
+        // Dies stellt sicher, dass ein Termin vom 09.09. immer am 09.09. angezeigt wird, egal um welche Uhrzeit.
+        const appointmentsByDay = _.groupBy(relevantAppointments, t => {
+            return t.Datum ? t.Datum.split(/ |T/)[0] : null;
+        });
+
+        // KORREKTUR: Die gefilterten Termine müssen vor dem Rendern der Tabelle sortiert werden.
+        const sortedAppointments = this._sortStatsTableData(relevantAppointments);
+        this._renderStatsTable(sortedAppointments);
+
+        this.statsMonthTimeline.innerHTML = '';
+
+        const categoryColors = {
+            'AT': 'bg-skt-green-accent',
+            'BT': 'bg-skt-blue-accent',   // KORREKTUR: 'bg-skt-blue-accent' statt 'bg-skt-blue-main'
+            'ST': 'bg-skt-yellow-accent',// Gelb
+            'ET': 'bg-accent-gold',      // Gold
+            'Immo': 'bg-accent-immo',    // Türkis
+            'NT': 'bg-accent-purple',    // Lila
+            'default': 'bg-skt-grey-medium' // Grau
+        };
+
+        const viewStartDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const viewEndDate = new Date(today.getFullYear(), today.getMonth() + 2, 0);
+
+        // Hilfsfunktion, um ein Datum in YYYY-MM-DD umzuwandeln, ohne die Zeitzone zu ändern.
+        const toLocalISOString = (date) => {
+            const year = date.getFullYear();
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        for (let d = new Date(viewStartDate); d <= viewEndDate; d.setDate(d.getDate() + 1)) {
+            const dateString = toLocalISOString(d); // KORREKTUR: Zeitzonen-sichere Umwandlung verwenden.
+            const appointmentsForDay = (appointmentsByDay[dateString] || []).sort((a,b) => new Date(a.Datum) - new Date(b.Datum));
+            const isToday = d.toDateString() === new Date().toDateString();
+
+            const dayCard = document.createElement('div');
+            dayCard.className = `day-card flex-shrink-0 w-48 h-full bg-white rounded-xl p-3 flex flex-col border-2 ${isToday ? 'border-skt-green-accent' : 'border-gray-200'}`;
+            if (isToday) dayCard.classList.add('is-today');
+
+            let appointmentsHtml = '';
+            if (appointmentsForDay.length > 0) {
+                appointmentsHtml = appointmentsForDay.map(termin => {
+                    const color = categoryColors[termin.Kategorie] || categoryColors['default'];
+                    // KORREKTUR: Robuster Zugriff auf den Mitarbeiternamen. Die Datenquelle für `Mitarbeiter_ID`
+                    // kann entweder eine einfache ID (String) oder ein Link-Objekt sein.
+                    let mitarbeiterName = 'N/A';
+                    if (termin.Mitarbeiter_ID && Array.isArray(termin.Mitarbeiter_ID) && termin.Mitarbeiter_ID[0]?.display_value) {
+                        mitarbeiterName = termin.Mitarbeiter_ID[0].display_value;
+                    } else if (typeof termin.Mitarbeiter_ID === 'string') {
+                        mitarbeiterName = SKT_APP.findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
+                    }
+                    return `<div class="p-1.5 rounded ${color} text-white text-xs mb-1.5 cursor-pointer" data-id="${termin._id}">
+                                <p class="font-bold truncate">${termin.Terminpartner || 'Unbekannt'}</p>
+                                <p class="opacity-80">${mitarbeiterName}</p>
+                            </div>`;
+                }).join('');
+            } else {
+                appointmentsHtml = '<div class="flex-grow flex items-center justify-center text-xs text-gray-400">Keine Termine</div>';
+            }
+
+            dayCard.innerHTML = `
+                <div class="font-bold text-skt-blue mb-3">${d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}</div>
+                <div class="flex-grow overflow-y-auto space-y-2 pr-1">${appointmentsHtml}</div>
+            `;
+            dayCard.querySelectorAll('[data-id]').forEach(el => el.addEventListener('click', (e) => this.openModal(relevantAppointments.find(t => t._id === e.currentTarget.dataset.id))));
+            this.statsMonthTimeline.appendChild(dayCard);
+        }
+        this._scrollToTodayInTimeline();
+
+        setTimeout(() => {
+            this._scrollToTodayInTimeline();
+            this._updateCardScales();
+        }, 150);
+        // Stellt sicher, dass nach dem Rendern zum heutigen Tag gescrollt wird.
+        // Ein kleiner Timeout gibt dem Browser Zeit, die Elemente zu zeichnen.
+        setTimeout(() => this._scrollToTodayInTimeline(), 100);
+    }
+    
+    _renderStatsTable(appointments) {
+        const container = document.getElementById('stats-table-container');
+        container.innerHTML = '';
+
+        if (appointments.length === 0) {
+            container.innerHTML = `<div class="text-center py-8 text-gray-500">Keine Termine für die aktuelle Auswahl.</div>`;
+            return;
+        }
+
+        const table = document.createElement('table');
+        table.className = 'appointments-table';
+
+        const columns = [
+            { key: 'Datum', label: 'Datum' },
+            { key: 'Terminpartner', label: 'Terminpartner' },
+            { key: 'Kategorie', label: 'Kategorie' },
+            { key: 'Status', label: 'Status' },
+            { key: 'Mitarbeiter_ID', label: 'Mitarbeiter' },
+        ];
+
+        const thead = document.createElement('thead');
+        thead.innerHTML = `<tr>${columns.map(c => {
+            let iconHtml = '<i class="fas fa-sort sort-icon"></i>';
+            if (this.statsTableSortConfig.column === c.key) {
+                iconHtml = this.statsTableSortConfig.direction === 'asc' 
+                    ? '<i class="fas fa-sort-up sort-icon active"></i>' 
+                    : '<i class="fas fa-sort-down sort-icon active"></i>';
+            }
+            return `<th data-sort-key="${c.key}">${c.label} ${iconHtml}</th>`;
+        }).join('')}</tr>`;
+
+        thead.querySelectorAll('th').forEach(th => {
+            th.addEventListener('click', () => this._handleStatsTableSort(th.dataset.sortKey));
+        });
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        appointments.forEach(termin => {
+            const tr = document.createElement('tr');
+            tr.className = 'cursor-pointer';
+            tr.dataset.id = termin._id;
+            const statusColorClass = this._getStatusColorClass(termin);
+            tr.className = `border-l-4 ${statusColorClass} cursor-pointer`;
+
+            const mitarbeiterName = SKT_APP.findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
+            tr.innerHTML = `
+                <td>${new Date(termin.Datum).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+                <td>${termin.Terminpartner || '-'}</td>
+                <td>${termin.Kategorie || '-'}</td>
+                <td>${termin.Status || '-'}</td>
+                <td>${mitarbeiterName}</td>
+            `;
+            tr.addEventListener('click', () => this.openModal(termin));
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        container.appendChild(table);
+    }
+
+    _handleStatsTableSort(columnKey) {
+        if (this.statsTableSortConfig.column === columnKey) {
+            this.statsTableSortConfig.direction = this.statsTableSortConfig.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.statsTableSortConfig.column = columnKey;
+            this.statsTableSortConfig.direction = 'desc'; // Standardmäßig absteigend bei neuer Spalte
+        }
+        // Die Daten müssen nicht neu gefiltert, sondern nur neu gerendert werden.
+        // Wir rufen _renderAppointmentStats auf, was wiederum _renderStatsTable mit den bereits gefilterten Daten aufruft.
+        this._renderAppointmentStats();
+    }
+
+    _sortStatsTableData(appointments) {
+        const { column, direction } = this.statsTableSortConfig;
+        const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+        
+        return appointments.sort((a, b) => {
+            const valA = (column === 'Mitarbeiter_ID' ? (SKT_APP.findRowById('mitarbeiter', a.Mitarbeiter_ID)?.Name || '') : a[column]) || '';
+            const valB = (column === 'Mitarbeiter_ID' ? (SKT_APP.findRowById('mitarbeiter', b.Mitarbeiter_ID)?.Name || '') : b[column]) || '';
+            const comparison = collator.compare(String(valA), String(valB));
+            return direction === 'asc' ? comparison : -comparison;
+        });
+    }
+
+    _renderOutstandingAppointments() {
+        const today = getCurrentDate();
+        today.setHours(0, 0, 0, 0);
+
+        const outstanding = this.allAppointments.filter(t => {
+            if (!t.Datum || t.Status !== 'Ausgemacht') return false;
+            const terminDate = new Date(t.Datum);
+            return terminDate < today;
+        });
+
+        if (outstanding.length === 0) {
+            this.outstandingAppointmentsSection.classList.add('hidden');
+            return;
+        }
+
+        this.outstandingAppointmentsSection.classList.remove('hidden');
+        this.outstandingAppointmentsList.innerHTML = '';
+
+        outstanding.forEach(termin => {
+            const item = document.createElement('div');
+            item.className = 'bg-yellow-200 p-2 rounded-md flex justify-between items-center cursor-pointer hover:bg-yellow-300';
+            item.dataset.id = termin._id;
+            // KORREKTUR: Der Mitarbeitername wird aus dem verknüpften Objekt ausgelesen.
+            const mitarbeiterName = termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
+            const terminDate = new Date(termin.Datum).toLocaleDateString('de-DE');
+            item.innerHTML = `<p class="text-sm"><span class="font-bold">${termin.Terminpartner}</span> bei ${mitarbeiterName} am ${terminDate}</p><i class="fas fa-edit ml-2"></i>`;
+            item.addEventListener('click', () => this.openModal(termin));
+            this.outstandingAppointmentsList.appendChild(item);
+        });
+    }
+
 
     _handleSort(columnKey) {
         if (this.sortColumn === columnKey) {
@@ -3474,6 +3902,7 @@ class AppointmentsView {
             const title = this.modal.querySelector('#appointment-modal-title');
             const idInput = this.modal.querySelector('#appointment-id');
             const userSelect = this.modal.querySelector('#appointment-user');
+            const deleteBtn = this.modal.querySelector('#delete-appointment-btn');
             const categorySelect = this.modal.querySelector('#appointment-category');
             appointmentsLog('Modal elements found.');
 
@@ -3503,6 +3932,7 @@ class AppointmentsView {
             if (termin) { // Edit mode
                 appointmentsLog('Entering edit mode for termin:', termin);
                 title.textContent = 'Termin bearbeiten';
+                deleteBtn.classList.remove('hidden');
                 idInput.value = termin._id;
                 const user = allRelevantUsers.find(u => u.Name === termin.Mitarbeiter_ID?.[0]?.display_value);
                 if (user) userSelect.value = user._id;
@@ -3524,6 +3954,7 @@ class AppointmentsView {
             } else { // Add mode
                 appointmentsLog('Entering add mode.');
                 title.textContent = 'Termin anlegen';
+                deleteBtn.classList.add('hidden');
                 idInput.value = '';
                 userSelect.value = this.currentUserId;
                 // KORREKTUR: `datetime-local` erwartet das Format YYYY-MM-DDTHH:mm
@@ -3571,6 +4002,44 @@ class AppointmentsView {
             saveBtn.classList.remove('bg-skt-green-accent');
             saveBtn.classList.add('bg-skt-blue', 'hover:bg-skt-blue-light');
         }
+    }
+
+    handleDelete() {
+        const rowId = this.form.querySelector('#appointment-id').value;
+        if (!rowId) return;
+    
+        // NEU: Benutzerdefiniertes Bestätigungs-Modal verwenden
+        const confirmModal = document.getElementById('confirm-modal');
+        const confirmOkBtn = document.getElementById('confirm-modal-ok-btn');
+        const confirmCancelBtn = document.getElementById('confirm-modal-cancel-btn');
+        document.getElementById('confirm-modal-text').textContent = 'Möchten Sie diesen Termin wirklich endgültig löschen? Diese Aktion kann nicht rückgängig gemacht werden.';
+    
+        confirmModal.classList.add('visible');
+    
+        const handleOk = async () => {
+            const success = await SKT_APP.seaTableDeleteRow('Termine', rowId);
+            if (success) {
+                this.closeModal(); // Schließt das Bearbeitungs-Modal
+                // KORREKTUR: Entferne den gelöschten Termin aus dem lokalen Datenbestand,
+                // damit er sofort aus allen Ansichten (Kalender, Tabelle) verschwindet.
+                const indexToRemove = this.allAppointments.findIndex(t => t._id === rowId);
+                if (indexToRemove > -1) this.allAppointments.splice(indexToRemove, 1);
+                
+                await this.fetchAndRender();
+            } else {
+                alert('Fehler beim Löschen des Termins.');
+            }
+            cleanup();
+        };
+    
+        const cleanup = () => {
+            confirmModal.classList.remove('visible');
+            confirmOkBtn.removeEventListener('click', handleOk);
+            confirmCancelBtn.removeEventListener('click', cleanup);
+        };
+    
+        confirmOkBtn.addEventListener('click', handleOk, { once: true });
+        confirmCancelBtn.addEventListener('click', cleanup, { once: true });
     }
 
     async handleFormSubmit(e) {
@@ -3631,7 +4100,10 @@ class AppointmentsView {
                 saveBtn.classList.remove('bg-skt-blue', 'hover:bg-skt-blue-light');
                 saveBtn.classList.add('bg-skt-green-accent');
 
-                await this.fetchAndRender(); 
+                // KORREKTUR: fetchAndRender() ist der korrekte Weg. Es lädt die Daten für den
+                // aktuellen Filterbereich neu und füllt `this.allAppointments`, worauf
+                // jetzt auch die Statistik-Ansicht zugreift.
+                await this.fetchAndRender(); // Rendert jetzt alles mit den frischesten Daten.
 
                 setTimeout(() => this.closeModal(), 1500);
 
@@ -7369,6 +7841,7 @@ window.SKT_APP = {
   seaTableSqlQuery,
   seaTableAddRow,
   seaTableUpdateRow,
+  seaTableDeleteRow, // NEU: Funktion global verfügbar machen
   mapSqlResults,
   findRowById,
   getMonthlyCycleDates,

@@ -1,7 +1,120 @@
 <!-- Ansicht für die Terminverwaltung -->
-<div id="appointments-module-root" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
+<div id="appointments-module-root">
+    <!-- NEU: Sektion für offene Statusänderungen -->
+    <div id="outstanding-appointments-section" class="hidden mb-8">
+        <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 rounded-lg shadow-md">
+            <div class="flex">
+                <div class="py-1"><i class="fas fa-exclamation-triangle fa-lg mr-4"></i></div>
+                <div><h4 class="font-bold text-lg">Offene Statusänderungen</h4><p class="text-sm mb-3">Bei den folgenden Terminen in der Vergangenheit ist der Status noch "Ausgemacht". Bitte aktualisiere den Status.</p><div id="outstanding-appointments-list" class="space-y-2"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEU: Termin-Statistik Sektion als eigene Box -->
+    <div id="appointment-stats-section" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg mb-8">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+            <div class="flex items-center gap-4">
+                <h3 class="text-2xl font-semibold text-skt-blue">Termin-Übersicht</h3>
+                <div id="stats-view-toggle" class="view-toggle flex space-x-2">
+                    <button id="stats-view-calendar-btn" class="active" title="Kalenderansicht"><i class="fas fa-calendar-alt"></i></button>
+                    <button id="stats-view-table-btn" title="Tabellenansicht"><i class="fas fa-list"></i></button>
+                </div>
+            </div>
+            <div class="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                <div class="w-full sm:w-auto">
+                    <!-- NEU: Dropdown-Container für den Kategorie-Filter -->
+                    <div id="stats-category-filter-dropdown" class="relative">
+                        <button id="stats-category-filter-btn" class="modern-select w-full text-left">Alle Kategorien</button>
+                        <div id="stats-category-filter-panel" class="hidden absolute right-0 z-10 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 p-4">
+                            <!-- Checkboxen werden per JS gefüllt -->
+                        </div>
+                    </div>
+                </div>
+                <div class="w-full sm:w-auto">
+                    <label for="appointments-scope-filter" class="sr-only">Statistik anzeigen für</label>
+                    <select id="appointments-scope-filter" class="modern-select">
+                    <option value="personal">Meine Termine</option>
+                    <option value="group">Meine Gruppe</option>
+                    <option value="structure">Meine Struktur</option>
+                </select>
+                </div>
+            </div>
+        </div>
+        <!-- NEU: Überarbeitete Monats-Timeline -->
+        <div id="stats-calendar-view">
+            <div class="flex justify-between items-center mb-4">
+                <button id="stats-nav-prev-btn" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors" title="Vorherige Woche"><i class="fas fa-chevron-left"></i></button>
+                <h4 id="stats-period-display" class="font-semibold text-skt-blue text-lg text-center cursor-pointer" title="Zur aktuellen Woche springen"></h4>
+                <button id="stats-nav-next-btn" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors" title="Nächste Woche"><i class="fas fa-chevron-right"></i></button>
+            </div>
+            <div id="stats-month-timeline" class="flex overflow-x-auto gap-2 pb-4 hide-scrollbar" style="height: 250px;"></div>
+        </div>
+        <div id="stats-table-view" class="hidden">
+            <div id="stats-table-container" class="max-h-[300px] overflow-y-auto"></div>
+        </div>
+
+        <!-- NEU: Analyse-Container hierher verschoben -->
+        <div id="analysis-container" class="bg-skt-grey-light p-6 rounded-xl shadow-inner border border-gray-200 mt-8">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-bold text-skt-blue">Analyse & Übersicht</h3>
+                <button id="toggle-analysis-visibility-btn" class="collapsed text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-300 transition-colors">
+                    <i class="fas fa-chevron-up transition-transform duration-300"></i>
+                </button>
+            </div>
+            <div id="analysis-content" class="stats-content-collapsible collapsed pt-4">
+                <!-- Tabs für die Ansichten -->
+                <div class="border-b border-gray-200 mb-4">
+                    <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+                        <button id="analysis-stats-tab" class="analysis-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-base border-skt-blue text-skt-blue">Statistik</button>
+                        <button id="analysis-heatmap-tab" class="analysis-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-base border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Heatmap</button>
+                    </nav>
+                </div>
+    
+                <!-- Container für die Statistik-Ansicht -->
+                <div id="stats-view-pane" class="analysis-pane">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div id="pie-chart-section">
+                            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
+                                <h3 id="stats-chart-title" class="text-lg font-bold text-skt-blue">Termine nach...</h3>
+                                <div id="stats-chart-toggle" class="view-toggle flex space-x-2 mt-2 sm:mt-0">
+                                    <button id="stats-by-employee-btn" class="active">Mitarbeiter</button>
+                                    <button id="stats-by-status-btn">Status</button>
+                                </div>
+                            </div>
+                            <div class="flex flex-col md:flex-row items-center gap-4">
+                                <div id="stats-pie-chart-container" class="w-full md:w-1/2 flex justify-center items-center shrink-0"></div>
+                                <div id="stats-pie-chart-legend" class="w-full md:w-1/2 self-start"></div>
+                            </div>
+                        </div>
+                        <div id="prognosis-section">
+                            <h3 class="text-lg font-bold text-skt-blue mb-4">Umsatzprognose (offene BTs)</h3>
+                            <div id="prognosis-details-container" class="max-h-[180px] overflow-y-auto pr-2"></div>
+                        </div>
+                    </div>
+                </div>
+    
+                <!-- Container für die Heatmap-Ansicht -->
+                <div id="heatmap-view-pane" class="analysis-pane hidden">
+                    <p class="text-sm text-gray-500 mb-2">Tages-Intensität basierend auf der Anzahl der Termine im aktuellen Umsatzmonat.</p>
+                    <div id="heatmap-header" class="grid grid-cols-7 text-center font-semibold text-skt-blue-light text-xs sm:text-sm mb-1"><div>Mo</div><div>Di</div><div>Mi</div><div>Do</div><div>Fr</div><div>Sa</div><div>So</div></div>
+                    <div id="heatmap-grid" class="grid grid-cols-7 gap-1"></div>
+                </div>
+            </div>
+        </div>
+        <!-- NEU: Button zum Erstellen eines neuen Termins direkt in der Statistik-Box -->
+        <div class="mt-8 text-center"><button id="add-appointment-btn-stats" class="bg-skt-green-accent text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-green-700 transition-colors flex items-center justify-center w-full max-w-xs mx-auto"><i class="fas fa-plus mr-2"></i>Neuen Termin anlegen</button></div>
+    </div>
+
+    <!-- NEU: Checkbox zum Ein-/Ausblenden der Detail-Liste -->
+    <div class="my-6 flex items-center justify-center">
+        <input type="checkbox" id="toggle-details-checkbox" class="h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-main cursor-pointer">
+        <label for="toggle-details-checkbox" class="ml-2 text-sm font-medium text-gray-700 cursor-pointer">Detaillierte Filter & Liste anzeigen</label>
+    </div>
+
+    <!-- Hauptcontainer für die Terminliste und Analyse (standardmäßig ausgeblendet) -->
+    <div id="appointments-details-container" class="hidden bg-white rounded-2xl p-6 md:p-8 shadow-lg">
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-        <h2 id="appointments-title" class="text-3xl font-bold text-skt-blue">Terminübersicht</h2>
+        <h2 id="appointments-title" class="text-3xl font-bold text-skt-blue">Filter</h2>
     </div>
 
     <!-- NEU: Kombinierte Analyse-Ansichten -->
@@ -77,8 +190,8 @@
                 <input type="date" id="appointments-end-date" class="modern-input">
             </div>
             <div>
-                <label for="appointments-scope-filter" class="block text-sm font-medium text-gray-700 mb-1">Anzeigen für</label>
-                <select id="appointments-scope-filter" class="modern-select">
+                <label for="stats-scope-filter" class="block text-sm font-medium text-gray-700 mb-1">Anzeigen für</label>
+                <select id="stats-scope-filter" class="modern-select">
                     <option value="personal">Meine Termine</option>
                     <option value="group">Meine Gruppe</option>
                     <option value="structure">Meine Struktur</option>
@@ -113,6 +226,7 @@
     <div id="appointments-list-container" class="space-y-4">
         <div class="loader mx-auto"></div>
     </div>
+    </div>
 </div>
 <!-- Modal zum Bearbeiten/Hinzufügen von Terminen (zunächst verborgen) -->
 <div id="appointment-modal" class="modal-overlay">
@@ -143,7 +257,13 @@
                 <label for="appointment-cancellation" class="text-sm font-medium text-gray-700">Absage/Storno</label>
             </div>
             <div id="appointment-cancellation-reason-container" class="hidden"><label for="appointment-cancellation-reason" class="block text-sm font-medium text-gray-700">Absagegrund</label><textarea id="appointment-cancellation-reason" rows="2" class="modern-input"></textarea></div>
-            <div class="pt-4 flex justify-end space-x-3"><button type="button" id="cancel-appointment-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button><button type="submit" id="save-appointment-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors flex items-center justify-center" style="min-width: 110px; min-height: 42px;"><span id="save-btn-text">Speichern</span><div class="loader-small hidden"></div></button></div>
+            <div class="pt-4 flex justify-between items-center">
+                <button type="button" id="delete-appointment-btn" class="hidden bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-red-700 transition-colors flex items-center justify-center"><i class="fas fa-trash-alt mr-2"></i>Löschen</button>
+                <div class="flex space-x-3">
+                    <button type="button" id="cancel-appointment-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button>
+                    <button type="submit" id="save-appointment-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors flex items-center justify-center" style="min-width: 110px; min-height: 42px;"><span id="save-btn-text">Speichern</span><div class="loader-small hidden"></div></button>
+                </div>
+            </div>
         </form>
     </div>
 </div>
