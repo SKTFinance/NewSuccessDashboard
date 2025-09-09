@@ -3577,8 +3577,9 @@ class AppointmentsView {
             tr.dataset.id = termin._id;
             const statusColorClass = this._getStatusColorClass(termin);
             tr.className = `border-l-4 ${statusColorClass} cursor-pointer`;
-
-            const mitarbeiterName = SKT_APP.findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
+            
+            // KORREKTUR: Der Mitarbeitername wird aus dem verknüpften Objekt ausgelesen, das von der API kommt.
+            const mitarbeiterName = termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
             tr.innerHTML = `
                 <td>${new Date(termin.Datum).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
                 <td>${termin.Terminpartner || '-'}</td>

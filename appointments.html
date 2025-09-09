@@ -173,7 +173,7 @@
         <h3 id="appointment-modal-title" class="text-2xl font-bold text-skt-blue mb-6">Termin anlegen</h3>
         <form id="appointment-form" class="space-y-4">
             <input type="hidden" id="appointment-id">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div><label for="appointment-user" class="block text-sm font-medium text-gray-700 mb-1">Mitarbeiter</label><select id="appointment-user" required class="modern-select"></select></div><div><label for="appointment-date" class="block text-sm font-medium text-gray-700 mb-1">Datum & Uhrzeit</label><input type="datetime-local" id="appointment-date" required class="modern-input"></div>
                 <div><label for="appointment-category" class="block text-sm font-medium text-gray-700 mb-1">Kategorie</label><select id="appointment-category" required class="modern-select"></select></div>
                 <div><label for="appointment-status" class="block text-sm font-medium text-gray-700 mb-1">Status</label><select id="appointment-status" required class="modern-select"></select></div>
@@ -195,9 +195,9 @@
                 <label for="appointment-cancellation" class="text-sm font-medium text-gray-700">Absage/Storno</label>
             </div>
             <div id="appointment-cancellation-reason-container" class="hidden"><label for="appointment-cancellation-reason" class="block text-sm font-medium text-gray-700">Absagegrund</label><textarea id="appointment-cancellation-reason" rows="2" class="modern-input"></textarea></div>
-            <div class="pt-4 flex justify-between items-center">
+            <div class="pt-4 flex flex-col-reverse sm:flex-row sm:justify-between items-center gap-4">
                 <button type="button" id="delete-appointment-btn" class="hidden bg-red-600 text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-red-700 transition-colors flex items-center justify-center"><i class="fas fa-trash-alt mr-2"></i>Löschen</button>
-                <div class="flex space-x-3">
+                <div class="flex space-x-3 w-full sm:w-auto">
                     <button type="button" id="cancel-appointment-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button>
                     <button type="submit" id="save-appointment-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors flex items-center justify-center" style="min-width: 110px; min-height: 42px;"><span id="save-btn-text">Speichern</span><div class="loader-small hidden"></div></button>
                 </div>
