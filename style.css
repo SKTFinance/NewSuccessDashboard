@@ -574,7 +574,10 @@ details[open] > summary::before { transform: rotate(180deg); }
 /* Spezifischer Fix für Datums- und Zeitfelder, die auf Mobilgeräten überlaufen */
 input[type="date"],
 input[type="datetime-local"] {
-    min-width: 0 !important;
+    /* Diese Kombination zwingt Safari/iOS, die Breite korrekt zu respektieren */
+    min-width: 0;
+    -webkit-appearance: none; /* Entfernt das Standard-iOS-Styling */
+    appearance: none;
 }
 
 /* Spezifischer Stil für den Filter-Button, um das Pfeil-Icon beizubehalten */
