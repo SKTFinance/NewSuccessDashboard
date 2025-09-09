@@ -551,7 +551,7 @@ details[open] > summary::before { transform: rotate(180deg); }
     border-radius: 0.5rem;
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-    font-size: 1rem;
+    font-size: 0.9rem; /* Leicht verkleinert für bessere Kompatibilität auf kleinen Geräten */
     min-width: 0; /* Verhindert, dass das Input-Feld in einem Flex/Grid-Container überläuft */
     color: var(--color-skt-blue); /* Explizite Textfarbe, um Darstellungsprobleme zu vermeiden */
 }
