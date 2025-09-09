@@ -2920,9 +2920,6 @@ class AppointmentsView {
         this.detailsContainer = null;
         this.toggleDetailsCheckbox = null;
         this.calendarWeekStartDate = null;
-        this.toggleAnalysisBtn = null;
-        this.analysisContent = null;
-
         this.initialized = false;
         this.currentUserId = null;
         this.allAppointments = [];
@@ -2976,17 +2973,10 @@ class AppointmentsView {
         this.analysisContent = document.getElementById('analysis-content');
         this.statsViewPane = document.getElementById('stats-view-pane');
         this.heatmapViewPane = document.getElementById('heatmap-view-pane');
-        this.calendarViewPane = document.getElementById('calendar-view-pane');
         this.statsTab = document.getElementById('analysis-stats-tab');
         this.heatmapTab = document.getElementById('analysis-heatmap-tab');
-        this.calendarTab = document.getElementById('analysis-calendar-tab');
         this.heatmapGrid = document.getElementById('heatmap-grid');
-        this.calendarDaysGrid = document.getElementById('calendar-days-grid');
-        this.calendarPrevWeekBtn = document.getElementById('calendar-prev-week-btn');
-        this.calendarNextWeekBtn = document.getElementById('calendar-next-week-btn');
-        this.calendarWeekDisplay = document.getElementById('calendar-week-display');
-
-        return this.listContainer && this.umsatzTab && this.recruitingTab && this.immoTab && this.netzwerkTab && this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.scopeFilter && this.modal && this.form && this.searchInput && this.showCancelledCheckbox && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.calendarViewPane && this.statsTab && this.heatmapTab && this.calendarTab && this.heatmapGrid && this.calendarDaysGrid && this.calendarPrevWeekBtn && this.calendarNextWeekBtn && this.calendarWeekDisplay && this.statsScopeFilter && this.statsCategoryFilterBtn && this.statsCategoryFilterPanel && this.statsMonthTimeline && this.statsPeriodDisplay && this.statsNavPrevBtn && this.statsNavNextBtn && this.outstandingAppointmentsSection && this.outstandingAppointmentsList && this.statsViewCalendarBtn && this.statsViewTableBtn && this.statsCalendarView && this.statsTableView && this.detailsContainer && this.toggleDetailsCheckbox;
+        return this.listContainer && this.umsatzTab && this.recruitingTab && this.immoTab && this.netzwerkTab && this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.scopeFilter && this.modal && this.form && this.searchInput && this.showCancelledCheckbox && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.statsTab && this.heatmapTab && this.heatmapGrid && this.statsScopeFilter && this.statsCategoryFilterBtn && this.statsCategoryFilterPanel && this.statsMonthTimeline && this.statsPeriodDisplay && this.statsNavPrevBtn && this.statsNavNextBtn && this.outstandingAppointmentsSection && this.outstandingAppointmentsList && this.statsViewCalendarBtn && this.statsViewTableBtn && this.statsCalendarView && this.statsTableView && this.detailsContainer && this.toggleDetailsCheckbox;
     }
 
     async init(userId) {
@@ -3299,8 +3289,6 @@ class AppointmentsView {
         this.recruitingTab.addEventListener('click', () => { this.currentTab = 'recruiting'; this.updateTabs(); this.render(); });
         this.immoTab.addEventListener('click', () => { this.currentTab = 'immo'; this.updateTabs(); this.render(); });
         this.netzwerkTab.addEventListener('click', () => { this.currentTab = 'netzwerk'; this.updateTabs(); this.render(); });
-
-        document.getElementById('add-appointment-btn').addEventListener('click', () => this.openModal()); // Der untere Button
         document.getElementById('add-appointment-btn-stats').addEventListener('click', () => this.openModal()); // Der obere Button
         document.getElementById('close-appointment-modal-btn').addEventListener('click', () => this.closeModal());
         document.getElementById('cancel-appointment-btn').addEventListener('click', () => this.closeModal());
@@ -3312,46 +3300,6 @@ class AppointmentsView {
         this.toggleAnalysisBtn.addEventListener('click', () => this._toggleCollapsible(this.analysisContent, this.toggleAnalysisBtn));
         this.statsTab.addEventListener('click', () => this._switchAnalysisTab('stats'));
         this.heatmapTab.addEventListener('click', () => this._switchAnalysisTab('heatmap'));
-        this.calendarTab.addEventListener('click', () => this._switchAnalysisTab('calendar'));
-
-        // NEU: Event Listeners für Kalender-Navigation
-        this.calendarPrevWeekBtn.addEventListener('click', () => {
-            this.calendarWeekStartDate.setDate(this.calendarWeekStartDate.getDate() - 7);
-            this._renderCalendar();
-        });
-        this.calendarNextWeekBtn.addEventListener('click', () => {
-            this.calendarWeekStartDate.setDate(this.calendarWeekStartDate.getDate() + 7);
-            this._renderCalendar();
-        });
-
-        // NEU: Event Listeners für Statistik-Umschalter
-        this.statsByEmployeeBtn.addEventListener('click', () => {
-            this.statsChartMode = 'employee';
-            this._updateStatsToggleButtons();
-            this._renderStatsChart();
-        });
-        this.statsByStatusBtn.addEventListener('click', () => {
-            this.statsChartMode = 'status';
-            this._updateStatsToggleButtons();
-            this._renderStatsChart();
-        });
-
-        // Event Listeners für bedingte Felder im Modal
-        this.form.querySelector('#appointment-category').addEventListener('change', (e) => {
-            const newCategory = e.target.value;
-            const isNew = !this.form.querySelector('#appointment-id').value;
-            this.toggleConditionalFields(newCategory, isNew);
-            this._updateStatusDropdown(newCategory);
-
-            // NEU: Infoabend-Datum automatisch setzen, wenn auf ET umgeschaltet wird.
-            if (newCategory === 'ET') {
-                const nextInfoDate = findNextInfoDateAfter(getCurrentDate());
-                this.form.querySelector('#appointment-infoabend-date').value = nextInfoDate.toISOString().split('T')[0];
-            }
-        });
-        this.form.querySelector('#appointment-cancellation').addEventListener('change', (e) => {
-            this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !e.target.checked);
-        });
     }
 
     _updateStatusDropdown(category, currentStatus = null) {
@@ -3541,7 +3489,7 @@ class AppointmentsView {
             const isToday = d.toDateString() === new Date().toDateString();
 
             const dayCard = document.createElement('div');
-            dayCard.className = `day-card flex-shrink-0 w-48 h-full bg-white rounded-xl p-3 flex flex-col border-2 ${isToday ? 'border-skt-green-accent' : 'border-gray-200'}`;
+            dayCard.className = `day-card flex-shrink-0 w-56 h-full bg-white rounded-xl p-3 flex flex-col border-2 ${isToday ? 'border-skt-green-accent' : 'border-gray-200'}`;
             if (isToday) dayCard.classList.add('is-today');
 
             let appointmentsHtml = '';
@@ -3556,8 +3504,11 @@ class AppointmentsView {
                     } else if (typeof termin.Mitarbeiter_ID === 'string') {
                         mitarbeiterName = SKT_APP.findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
                     }
+                    // NEU: Uhrzeit des Termins extrahieren und formatieren
+                    const terminTime = termin.Datum ? new Date(termin.Datum).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
+
                     return `<div class="p-1.5 rounded ${color} text-white text-xs mb-1.5 cursor-pointer" data-id="${termin._id}">
-                                <p class="font-bold truncate">${termin.Terminpartner || 'Unbekannt'}</p>
+                                <div class="flex justify-between items-baseline"><p class="font-bold truncate">${termin.Terminpartner || 'Unbekannt'}</p><span class="font-normal opacity-90">${terminTime}</span></div>
                                 <p class="opacity-80">${mitarbeiterName}</p>
                             </div>`;
                 }).join('');
@@ -4131,18 +4082,12 @@ class AppointmentsView {
 
     // NEU: Methode zum Umschalten der Analyse-Tabs
     _switchAnalysisTab(tabName) {
-        // Panes
         this.statsViewPane.classList.toggle('hidden', tabName !== 'stats');
         this.heatmapViewPane.classList.toggle('hidden', tabName !== 'heatmap');
-        this.calendarViewPane.classList.toggle('hidden', tabName !== 'calendar');
-
-        // Tabs
         const activeClass = 'border-skt-blue text-skt-blue';
         const inactiveClass = 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
-        
         this.statsTab.className = `analysis-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-base ${tabName === 'stats' ? activeClass : inactiveClass}`;
         this.heatmapTab.className = `analysis-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-base ${tabName === 'heatmap' ? activeClass : inactiveClass}`;
-        this.calendarTab.className = `analysis-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-base ${tabName === 'calendar' ? activeClass : inactiveClass}`;
     }
 
     // NEU: Methode zum Rendern der Heatmap
