@@ -4885,6 +4885,7 @@ class UmsatzView {
         this.startDateInput.addEventListener('change', debouncedFetch);
         this.endDateInput.addEventListener('change', debouncedFetch);
         this.form.addEventListener('submit', e => this.handleFormSubmit(e));
+        document.getElementById('add-umsatz-row-btn').addEventListener('click', () => this.addUmsatzRow());
         document.getElementById('close-umsatz-modal-btn').addEventListener('click', () => this.modal.classList.remove('visible'));
         document.getElementById('cancel-umsatz-btn').addEventListener('click', () => this.modal.classList.remove('visible'));
         document.getElementById('delete-umsatz-btn').addEventListener('click', () => this.handleDelete());
@@ -4892,6 +4893,8 @@ class UmsatzView {
 
     openModal(umsatz = null) {
         this.form.reset();
+        const umsatzRowsContainer = document.getElementById('umsatz-rows-container');
+        umsatzRowsContainer.innerHTML = ''; // Leere alte Zeilen
         const idInput = this.form.querySelector('#umsatz-id');
         const boFields = this.form.querySelector('#umsatz-bo-fields');
         const deleteBtn = this.form.querySelector('#delete-umsatz-btn');
@@ -4899,96 +4902,84 @@ class UmsatzView {
         this.form.querySelector('#save-umsatz-btn').disabled = false;
         this.form.querySelector('#save-umsatz-btn').textContent = 'Speichern';
 
-        const populateSelect = (selectId, data, displayField, selectedValue) => {
-            umsatzLog(`Befülle Dropdown ${selectId} mit ${data.length} Einträgen. Display-Feld: '${displayField}'`);
-            const select = this.form.querySelector(selectId);
-            select.innerHTML = '<option value="">-- Bitte wählen --</option>';
-            data.forEach(item => {
-                const text = item[displayField];
-                if (text === undefined) {
-                    console.warn(`Display-Feld '${displayField}' nicht im Objekt gefunden für Dropdown ${selectId}.`, item);
-                }
-                select.add(new Option(text || '', item._id));
-            });
-            if (selectedValue) {
-                umsatzLog(`Setze Wert für ${selectId} auf: ${selectedValue}`);
-                select.value = selectedValue;
-            }
-        };
-
         const allUsers = [SKT_APP.authenticatedUserData, ...this.downline].filter(Boolean);
         allUsers.sort((a, b) => a.Name.localeCompare(b.Name));
 
-        // KORREKTUR: Robuste Bestimmung des Anzeige-Spalten-KEYS, um direkt auf Rohdaten zugreifen zu können.
-        const getDisplayColumnKey = (tableName) => {
-            const tableMeta = SKT_APP.METADATA.tables.find(t => t.name.toLowerCase() === tableName.toLowerCase());
-            if (!tableMeta) {
-                console.warn(`Metadaten für Tabelle '${tableName}' nicht gefunden. Fallback auf '0000'.`);
-                return '0000';
-            }
-
-            // Spezifische Logik für bekannte Tabellen, da die "Display"-Spalte nicht konsistent ist.
-            let targetColumnName;
-            if (tableName.toLowerCase() === 'produkte') {
-                targetColumnName = 'Produkt'; // In der Produkte-Tabelle heißt die Spalte "Produkt"
-            } else if (tableName.toLowerCase() === 'gesellschaften') {
-                targetColumnName = 'Gesellschaft'; // In der Gesellschaften-Tabelle heißt die Spalte "Gesellschaft"
-            } else {
-                targetColumnName = 'Name'; // In Gesellschaften und anderen heißt sie "Name"
-            }
-
-            const displayColumn = tableMeta.columns.find(c => c.name === targetColumnName);
-            if (displayColumn) {
-                return displayColumn.key;
-            }
-
-            // Fallback: Wenn der spezifische Name nicht gefunden wird, nimm die primäre Spalte.
-            const primaryColumn = tableMeta.columns.find(c => c.is_primary);
-            if (primaryColumn) {
-                console.warn(`Spezifische Spalte '${targetColumnName}' nicht in '${tableName}' gefunden. Fallback auf primäre Spalte '${primaryColumn.name}'.`);
-                return primaryColumn.key;
-            }
-            
-            console.warn(`Keine passende Spalte in '${tableName}' gefunden. Fallback auf '0000'.`);
-            return '0000';
-        };
-
-        const gesellschaftenDisplayKey = getDisplayColumnKey('Gesellschaften');
-        const produkteDisplayKey = getDisplayColumnKey('Produkte');
+        const mitarbeiterSelect = this.form.querySelector('#umsatz-mitarbeiter');
+        mitarbeiterSelect.innerHTML = '';
+        allUsers.forEach(u => mitarbeiterSelect.add(new Option(u.Name, u._id)));
 
         if (umsatz) {
             this.lastSavedUmsatz = null; // Clear pre-fill cache when editing
             idInput.value = umsatz._id;
             this.form.querySelector('#umsatz-kunde').value = umsatz.Kunde || '';
-            this.form.querySelector('#umsatz-eh').value = umsatz.EH || '';
             this.form.querySelector('#umsatz-hinweis-bo').value = umsatz.Hinweis_BO || '';
             this.form.querySelector('#umsatz-status-ok').checked = umsatz.Status_OK || false;
             
-            populateSelect('#umsatz-mitarbeiter', allUsers, 'Name', umsatz?.Mitarbeiter_ID?.[0]?.row_id);
-            populateSelect('#umsatz-gesellschaft', db.gesellschaften, gesellschaftenDisplayKey, umsatz?.Gesellschaft_ID?.[0]?.row_id);
-            populateSelect('#umsatz-produkt', db.produkte, produkteDisplayKey, umsatz?.Produkt_ID?.[0]?.row_id);
+            mitarbeiterSelect.value = umsatz?.Mitarbeiter_ID?.[0]?.row_id;
+
+            this.addUmsatzRow({
+                Produkt_ID: umsatz?.Produkt_ID?.[0]?.row_id,
+                Gesellschaft_ID: umsatz?.Gesellschaft_ID?.[0]?.row_id,
+                EH: umsatz.EH
+            });
 
             boFields.classList.remove('hidden');
             deleteBtn.classList.remove('hidden');
+            document.getElementById('add-umsatz-row-btn').classList.add('hidden');
         } else {
             idInput.value = '';
             boFields.classList.add('hidden');
             deleteBtn.classList.add('hidden');
+            document.getElementById('add-umsatz-row-btn').classList.remove('hidden');
 
             if (this.lastSavedUmsatz) {
                 umsatzLog('Fülle Formular mit zuletzt gespeicherten Daten.', this.lastSavedUmsatz);
                 this.form.querySelector('#umsatz-kunde').value = this.lastSavedUmsatz.Kunde;
-                this.form.querySelector('#umsatz-eh').value = ''; // EH bleibt leer
-                populateSelect('#umsatz-mitarbeiter', allUsers, 'Name', this.lastSavedUmsatz.Mitarbeiter_ID);
-                populateSelect('#umsatz-gesellschaft', db.gesellschaften, gesellschaftenDisplayKey, this.lastSavedUmsatz.Gesellschaft_ID);
-                populateSelect('#umsatz-produkt', db.produkte, produkteDisplayKey, this.lastSavedUmsatz.Produkt_ID);
+                mitarbeiterSelect.value = this.lastSavedUmsatz.Mitarbeiter_ID;
+                this.addUmsatzRow(); // Füge eine leere Zeile hinzu
             } else {
-                populateSelect('#umsatz-mitarbeiter', allUsers, 'Name', this.currentUserId);
-                populateSelect('#umsatz-gesellschaft', db.gesellschaften, gesellschaftenDisplayKey, null);
-                populateSelect('#umsatz-produkt', db.produkte, produkteDisplayKey, null);
+                mitarbeiterSelect.value = this.currentUserId;
+                this.addUmsatzRow(); // Füge eine leere Zeile hinzu
             }
         }
         this.modal.classList.add('visible');
+    }
+
+    addUmsatzRow(data = {}) {
+        const container = document.getElementById('umsatz-rows-container');
+        const row = document.createElement('div');
+        row.className = 'grid grid-cols-1 sm:grid-cols-7 gap-x-4 gap-y-2 p-3 bg-skt-grey-light rounded-lg border border-gray-200 umsatz-row';
+        
+        const getDisplayColumnKey = (tableName, colName) => {
+            const tableMeta = SKT_APP.METADATA.tables.find(t => t.name.toLowerCase() === tableName.toLowerCase());
+            const displayColumn = tableMeta?.columns.find(c => c.name === colName);
+            return displayColumn?.key || '0000';
+        };
+
+        const gesellschaftenDisplayKey = getDisplayColumnKey('Gesellschaften', 'Gesellschaft');
+        const produkteDisplayKey = getDisplayColumnKey('Produkte', 'Produkt');
+
+        row.innerHTML = `
+            <div class="sm:col-span-3"><label class="block text-xs font-medium text-gray-600">Produkt</label><select class="modern-select umsatz-produkt" required></select></div>
+            <div class="sm:col-span-3"><label class="block text-xs font-medium text-gray-600">Gesellschaft</label><select class="modern-select umsatz-gesellschaft" required></select></div>
+            <div class="sm:col-span-1"><label class="block text-xs font-medium text-gray-600">EH</label><input type="number" step="0.01" class="modern-input umsatz-eh" required></div>
+        `;
+        container.appendChild(row);
+
+        const produktSelect = row.querySelector('.umsatz-produkt');
+        const gesellschaftSelect = row.querySelector('.umsatz-gesellschaft');
+        const ehInput = row.querySelector('.umsatz-eh');
+
+        const populateSelect = (select, data, displayKey, selectedValue) => {
+            select.innerHTML = '<option value="">-- Bitte wählen --</option>';
+            data.forEach(item => select.add(new Option(item[displayKey] || '', item._id)));
+            if (selectedValue) select.value = selectedValue;
+        };
+
+        populateSelect(produktSelect, db.produkte, produkteDisplayKey, data.Produkt_ID);
+        populateSelect(gesellschaftSelect, db.gesellschaften, gesellschaftenDisplayKey, data.Gesellschaft_ID);
+        ehInput.value = data.EH || '';
     }
 
     async handleFormSubmit(e) {
@@ -4998,35 +4989,46 @@ class UmsatzView {
         saveBtn.textContent = 'Speichern...';
 
         const rowId = this.form.querySelector('#umsatz-id').value;
-        const isNew = !rowId;
+        const isEdit = !!rowId;
 
-        const formData = {
-            Kunde: this.form.querySelector('#umsatz-kunde').value,
-            EH: parseFloat(this.form.querySelector('#umsatz-eh').value) || null,
-            Mitarbeiter_ID: this.form.querySelector('#umsatz-mitarbeiter').value,
-            Gesellschaft_ID: this.form.querySelector('#umsatz-gesellschaft').value,
-            Produkt_ID: this.form.querySelector('#umsatz-produkt').value,
-            Hinweis_BO: this.form.querySelector('#umsatz-hinweis-bo').value,
-            Status_OK: this.form.querySelector('#umsatz-status-ok').checked,
-        };
+        const kunde = this.form.querySelector('#umsatz-kunde').value;
+        const mitarbeiterId = this.form.querySelector('#umsatz-mitarbeiter').value;
+        const hinweisBO = this.form.querySelector('#umsatz-hinweis-bo').value;
+        const statusOK = this.form.querySelector('#umsatz-status-ok').checked;
 
-        const rowData = {
-            [COLUMN_MAPS.umsatz.Kunde]: formData.Kunde,
-            [COLUMN_MAPS.umsatz.EH]: formData.EH,
-            [COLUMN_MAPS.umsatz.Mitarbeiter_ID]: formData.Mitarbeiter_ID ? [formData.Mitarbeiter_ID] : [],
-            [COLUMN_MAPS.umsatz.Gesellschaft_ID]: formData.Gesellschaft_ID ? [formData.Gesellschaft_ID] : [],
-            [COLUMN_MAPS.umsatz.Produkt_ID]: formData.Produkt_ID ? [formData.Produkt_ID] : [],
-            [COLUMN_MAPS.umsatz.Hinweis_BO]: formData.Hinweis_BO,
-            [COLUMN_MAPS.umsatz.Status_OK]: formData.Status_OK,
-        };
+        const umsatzRows = this.form.querySelectorAll('.umsatz-row');
+        let allSuccess = true;
 
-        if (isNew) rowData[COLUMN_MAPS.umsatz.Datum] = new Date().toISOString().split('T')[0];
+        for (const row of umsatzRows) {
+            const produktId = row.querySelector('.umsatz-produkt').value;
+            const gesellschaftId = row.querySelector('.umsatz-gesellschaft').value;
+            const eh = parseFloat(row.querySelector('.umsatz-eh').value) || null;
 
-        const success = isNew 
-            ? await seaTableAddUmsatzRow('Umsatz', rowData)
-            : await seaTableUpdateUmsatzRow('Umsatz', rowId, rowData);
+            if (!produktId || !gesellschaftId || !eh) {
+                allSuccess = false;
+                break;
+            }
 
-        if (success) {
+            const rowData = {
+                [COLUMN_MAPS.umsatz.Kunde]: kunde,
+                [COLUMN_MAPS.umsatz.EH]: eh,
+                [COLUMN_MAPS.umsatz.Mitarbeiter_ID]: [mitarbeiterId],
+                [COLUMN_MAPS.umsatz.Gesellschaft_ID]: [gesellschaftId],
+                [COLUMN_MAPS.umsatz.Produkt_ID]: [produktId],
+                [COLUMN_MAPS.umsatz.Hinweis_BO]: hinweisBO,
+                [COLUMN_MAPS.umsatz.Status_OK]: statusOK,
+            };
+
+            if (!isEdit) rowData[COLUMN_MAPS.umsatz.Datum] = new Date().toISOString().split('T')[0];
+
+            const success = isEdit
+                ? await seaTableUpdateUmsatzRow('Umsatz', rowId, rowData)
+                : await seaTableAddUmsatzRow('Umsatz', rowData);
+
+            if (!success) allSuccess = false;
+        }
+
+        if (allSuccess) {
             // Cache für Gesamt-EH leeren, da sich die Daten geändert haben.
             localStorage.removeItem(CACHE_PREFIX + 'total-eh-results');
             umsatzLog('Cache für Gesamt-EH geleert.');
@@ -5035,9 +5037,9 @@ class UmsatzView {
             saveBtn.classList.remove('hover:bg-green-700');
             saveBtn.classList.add('bg-skt-green-accent');
 
-            if (isNew) {
-                this.lastSavedUmsatz = formData;
-            } else {
+            if (!isEdit) {
+                this.lastSavedUmsatz = { Kunde: kunde, Mitarbeiter_ID: mitarbeiterId };
+            } else { // Im Edit-Modus Cache leeren
                 this.lastSavedUmsatz = null;
             }
 
@@ -5986,27 +5988,39 @@ function setupEventListeners() {
 }
 
 async function loadAndCacheTotalEh() {
-    const totalEhCacheKey = 'total-eh-results';
-    let totalEhResultRaw = loadFromCache(totalEhCacheKey, 240); // Cache für 4 Stunden
+    const totalEhCacheKey = 'total-eh-results-v2'; // Neuer Cache-Key, um alte Formate zu invalidieren
+    let cachedResults = loadFromCache(totalEhCacheKey, 240); // Cache für 4 Stunden
 
-    if (totalEhResultRaw) {
+    if (cachedResults) {
         console.log('%c[DATENLADEN] %cGesamt-EH aus dem Cache geladen.', 'color: #17a2b8; font-weight: bold;', 'color: black;');
-        totalEhResults = mapSqlResults(totalEhResultRaw, "Umsatz");
+        totalEhResults = cachedResults; // Die gecachten Daten sind bereits im richtigen Format
         return true;
     }
 
-    const totalEhQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`totalEh\` FROM \`Umsatz\` GROUP BY \`Mitarbeiter_ID\``;
-    console.log(`%c[DATENLADEN] %cGesamt-EH wird von der API geladen (langsame Abfrage)...`, 'color: #17a2b8; font-weight: bold;', 'color: red;');
-    console.time('[DATENLADEN] Dauer für Gesamt-EH Abfrage');
-    
-    totalEhResultRaw = await seaTableSqlQuery(totalEhQuery, false);
-    
-    console.timeEnd('[DATENLADEN] Dauer für Gesamt-EH Abfrage');
+    // NEUER, ROBUSTER ANSATZ:
+    // 1. Lade die gesamte Umsatz-Tabelle. seaTableQuery nutzt Paging und ist daher stabil.
+    console.log(`%c[DATENLADEN] %cGesamte Umsatz-Tabelle wird von der API geladen (langsame, aber stabile Abfrage)...`, 'color: #17a2b8; font-weight: bold;', 'color: red;');
+    console.time('[DATENLADEN] Dauer für Gesamt-Umsatz-Tabellenabfrage');
+    const allUmsatzRowsRaw = await seaTableQuery('Umsatz');
+    console.timeEnd('[DATENLADEN] Dauer für Gesamt-Umsatz-Tabellenabfrage');
 
-    if (totalEhResultRaw) {
-        saveToCache(totalEhCacheKey, totalEhResultRaw);
+    if (!allUmsatzRowsRaw) {
+        console.error('[DATENLADEN] Die Abfrage der Umsatz-Tabelle ist fehlgeschlagen.');
+        setStatus("Kritischer Fehler: Die Umsatzdaten konnten nicht geladen werden.", true);
+        return false;
+    }
+
+    // 2. Berechne die Summen lokal im Browser. Das ist sehr schnell.
+    const umsatzByMitarbeiter = _.groupBy(allUmsatzRowsRaw, row => row[COLUMN_MAPS.umsatz.Mitarbeiter_ID]?.[0]?.row_id);
+    const calculatedResults = Object.entries(umsatzByMitarbeiter).map(([mitarbeiterId, umsaetze]) => {
+        const totalEh = umsaetze.reduce((sum, u) => sum + (u[COLUMN_MAPS.umsatz.EH] || 0), 0);
+        return { Mitarbeiter_ID: [{ row_id: mitarbeiterId }], totalEh: totalEh };
+    });
+    
+    if (calculatedResults) {
+        saveToCache(totalEhCacheKey, calculatedResults);
         console.log('%c[DATENLADEN] %cGesamt-EH geladen und im Cache gespeichert.', 'color: #17a2b8; font-weight: bold;', 'color: black;');
-        totalEhResults = mapSqlResults(totalEhResultRaw, "Umsatz");
+        totalEhResults = calculatedResults;
         return true;
     } else {
         console.error('[DATENLADEN] Die Abfrage für Gesamt-EH ist fehlgeschlagen und hat null zurückgegeben.');
