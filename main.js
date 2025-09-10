@@ -1200,10 +1200,7 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
 
   // Die Abfrage für den aktuellen Monat ist schnell genug und wird immer frisch geladen.
   const ehQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`ehIst\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' GROUP BY \`Mitarbeiter_ID\``;
-  console.log(`%c[DATENLADEN] %cLade Monats-EH (schnelle Abfrage)...`, 'color: #17a2b8; font-weight: bold;', 'color: gray;');
-  console.time('[DATENLADEN] Dauer für Monats-EH Abfrage');
   const ehResultRaw = await seaTableSqlQuery(ehQuery, false);
-  console.timeEnd('[DATENLADEN] Dauer für Monats-EH Abfrage');
   
   const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
   // const totalEhResults = mapSqlResults(totalEhResultRaw || [], "Umsatz"); // ALT: Wurde hier geladen
@@ -1422,10 +1419,8 @@ function getSubordinates(leaderId, type) {
   return subordinates.filter(m => m.Status !== 'Ausgeschieden');
 }
 
-function getAllSubordinatesRecursive(leaderId) {
-  const hierarchy = buildHierarchy();
-  const subordinates = [];
-  const queue = [...(hierarchy[leaderId]?.children || [])];
+function getAllSubordinatesRecursive(leaderId, hierarchy = buildHierarchy()) {  const subordinates = [];
+  const queue = [...(hierarchy[leaderId]?.children || [])]; // Use provided hierarchy
   const visited = new Set(queue);
 
   while (queue.length > 0) {
@@ -1444,79 +1439,65 @@ function getAllSubordinatesRecursive(leaderId) {
   return subordinates.filter(m => m.Status !== 'Ausgeschieden');
 }
 
-function calculateGroupOrStructureData(
+async function calculateGroupOrStructureData(
   leaderId,
   type = "gruppe",
-  fullDataStore
+  fullDataStore // This parameter will now be ignored, but we keep it for now to avoid breaking other calls.
 ) {
   const leaderUser = findRowById("mitarbeiter", leaderId);
   if (!leaderUser) return { members: [] };
 
-  // 1. Definiere, welche Mitarbeiter angezeigt werden sollen
-  const membersForDisplay = getSubordinates(leaderId, type);
-  const memberIdsForDisplay = new Set(membersForDisplay.map((m) => m._id));
+  // NEUER ANSATZ: Wir definieren die Mitarbeiter für die Berechnung und holen ihre Daten frisch.
+  // 'gruppe' = FK + ihre direkten Trainees/GAs.
+  // 'struktur' = FK + ihre gesamte Downline (FKs und Trainees).
+  const groupSubordinates = (type === 'gruppe') ? getSubordinates(leaderId, "gruppe") : getAllSubordinatesRecursive(leaderId);
+  const membersForCalculation = [leaderUser, ...groupSubordinates];
+  const memberIdsForCalc = membersForCalculation.map(m => m._id);
 
-  // 2. Definiere, wessen Daten für die Gesamtberechnung herangezogen werden, basierend auf dem Typ
-  let membersForCalculation = [];
-  if (type === "gruppe") {
-    // Für 'Gruppe': Die Führungskraft selbst und alle unterstellten Trainees,
-    // bis zur nächsten Führungskraft in der Hierarchie.
-    membersForCalculation = [
-      leaderUser,
-      ...getSubordinates(leaderId, "gruppe"),
-    ];
-  } else {
-    // type === 'struktur'
-    // Für 'Struktur': Die Führungskraft selbst und ALLE Untergebenen (Führungskräfte und Trainees)
-    membersForCalculation = [
-      leaderUser,
-      ...getAllSubordinatesRecursive(leaderId),
-    ];
-  }
-  const memberIdsForCalc = new Set(membersForCalculation.map((m) => m._id));
+  // FRISCHE DATEN HOLEN: Anstatt auf `fullDataStore` zu vertrauen, holen wir die Daten für genau diese Mitarbeiter.
+  const dataForCalc = await fetchBulkDashboardData(memberIdsForCalc);
 
-  // 3. Filtere den vorab geladenen Datenspeicher
-  const dataForCalc = fullDataStore.filter((d) => memberIdsForCalc.has(d.id));
-
-  // 4. Berechne die Summen aus den gefilterten Daten
-  const totalEhGoal = dataForCalc.reduce((sum, d) => sum + (d.ehGoal || 0), 0);
-  const totalEhCurrent = dataForCalc.reduce(
-    (sum, d) => sum + (d.ehCurrent || 0),
-    0
-  );
-  const totalEtGoal = dataForCalc.reduce((sum, d) => sum + (d.etGoal || 0), 0);
-  const totalEtCurrent = dataForCalc.reduce(
-    (sum, d) => sum + (d.etCurrent || 0),
-    0
-  );
-  const totalAtGoal = dataForCalc.reduce((sum, d) => sum + (d.atGoal || 0), 0);
-  const totalAtCurrent = dataForCalc.reduce(
-    (sum, d) => sum + (d.atCurrent || 0),
-    0
-  );
-  const totalAtVereinbart = dataForCalc.reduce(
-    (sum, d) => sum + (d.atVereinbart || 0),
-    0
-  );
+  // Die Summen für die Gruppe berechnen.
+  const aggregatedData = dataForCalc.reduce((acc, member) => {
+      acc.ehGoal += (member.ehGoal || 0);
+      acc.ehCurrent += (member.ehCurrent || 0);
+      acc.etGoal += (member.etGoal || 0);
+      acc.etCurrent += (member.etCurrent || 0);
+      acc.atGoal += (member.atGoal || 0);
+      acc.atCurrent += (member.atCurrent || 0);
+      acc.atVereinbart += (member.atVereinbart || 0);
+      return acc;
+  }, {
+      ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0,
+      atGoal: 0, atCurrent: 0, atVereinbart: 0
+  });
 
   // Der Gesamtverdienst der Gruppe/Struktur ist der Verdienst der Führungskraft,
   // da dieser bereits die Differenzprovisionen für die jeweilige Downline enthält.
-  const leaderData = fullDataStore.find((d) => d.id === leaderId);
+  const leaderData = dataForCalc.find((d) => d.id === leaderId);
   const totalEarnings = leaderData
     ? leaderData.earnings
     : { personal: 0, group: 0, structure: 0 };
 
-  // 5. Hole die Daten für die anzuzeigenden Karten aus dem Datenspeicher
-  const memberData = fullDataStore.filter((d) => memberIdsForDisplay.has(d.id));
+  // KORREKTUR: Die `members`-Eigenschaft muss die Daten der unterstellten Mitarbeiter enthalten,
+  // damit die aufrufende Funktion (z.B. renderTeamMemberCards) darauf zugreifen kann.
+  // Für die "Gesamtansicht" (die `calculateGesamtansichtData` aufruft) wollen wir die unterstellten
+  // Trainees anzeigen, wenn eine FK-Karte aufgeklappt wird.
+  // KORREKTUR: Verwende die bereits berechneten `dataForCalc`, um die Daten der Untergebenen zu filtern.
+  const membersForDisplay = groupSubordinates;
+  const memberData = dataForCalc.filter((d) =>
+    new Set(membersForDisplay.map((m) => m._id)).has(d.id)
+  );
 
   return {
-    ehGoal: totalEhGoal,
-    ehCurrent: totalEhCurrent,
-    etGoal: totalEtGoal,
-    etCurrent: totalEtCurrent,
-    atGoal: totalAtGoal,
-    atCurrent: totalAtCurrent,
-    atVereinbart: totalAtVereinbart,
+    id: leaderId, // KORREKTUR: Füge die ID der Führungskraft zum Ergebnisobjekt hinzu.
+    ehGoal: aggregatedData.ehGoal,
+    ehCurrent: aggregatedData.ehCurrent,
+    etGoal: aggregatedData.etGoal,
+    etCurrent: aggregatedData.etCurrent,
+    atGoal: aggregatedData.atGoal,
+    atCurrent: aggregatedData.atCurrent,
+    atVereinbart: aggregatedData.atVereinbart,
     earnings: totalEarnings,
     members: memberData,
   };
@@ -1542,42 +1523,39 @@ async function calculateGesamtansichtData() {
     ...data,
     earnings: earningsMap[data.id] || { personal: 0, group: 0, structure: 0 },
   }));
-  const totalData = {
-    ehGoal: 0,
-    ehCurrent: 0,
-    etGoal: 0,
-    etCurrent: 0,
-    atGoal: 0,
-    atCurrent: 0,
-    atVereinbart: 0,
-    members: [],
-    earnings: 0,
-  };
-  // Anforderung: In der Gesamtübersicht sollen die Einheiten aller Führungskräfte summiert werden.
-  // Wir summieren hier die individuellen Plandaten jeder Führungskraft.
-  führungskräfte.forEach((leader) => {
-    const leaderData = augmentedMemberData.find((d) => d.id === leader._id);
-    if (leaderData) {
-      totalData.ehGoal += leaderData.ehGoal || 0;
-      totalData.ehCurrent += leaderData.ehCurrent || 0;
-      totalData.etGoal += leaderData.etGoal || 0;
-      totalData.etCurrent += leaderData.etCurrent || 0;
-      totalData.atGoal += leaderData.atGoal || 0;
-      totalData.atCurrent += leaderData.atCurrent || 0;
-      totalData.atVereinbart += leaderData.atVereinbart || 0;
-    }
-  });
-  totalData.members = führungskräfte.map((leader) => {
-    const gsName = `Geschäftsstelle ${leader.Name}`;
-    const gsRow = geschäftsstelleRows.find((row) => row.Name === gsName);
-    const targetId = gsRow ? gsRow._id : leader._id;
-    const displayData = augmentedMemberData.find((d) => d.id === targetId);
+
+  // KORREKTUR: Berechne die Summen für die obere Anzeige und die Daten für die einzelnen Karten.
+  // KORREKTUR: Verwende Promise.all, um sicherzustellen, dass alle Gruppenberechnungen abgeschlossen sind, bevor es weitergeht.
+  const groupDataPromises = führungskräfte.map(leader => calculateGroupOrStructureData(leader._id, 'gruppe', augmentedMemberData)); // Der 3. Parameter wird ignoriert, ist aber OK.
+  const allGroupData = await Promise.all(groupDataPromises);
+
+
+  const totalData = allGroupData.reduce((acc, group) => {
+      acc.ehGoal += group.ehGoal || 0;
+      acc.ehCurrent += group.ehCurrent || 0;
+      acc.etGoal += group.etGoal || 0;
+      acc.etCurrent += group.etCurrent || 0;
+      acc.atGoal += group.atGoal || 0;
+      acc.atCurrent += group.atCurrent || 0;
+      acc.atVereinbart += group.atVereinbart || 0;
+      acc.earnings += group.earnings?.group || 0;
+      return acc;
+  }, { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atCurrent: 0, atVereinbart: 0, earnings: 0 });
+
+  // KORREKTUR: Die `members` Eigenschaft von `totalData` sollte die Daten der Führungskräfte selbst enthalten,
+  // angereichert mit ihren jeweiligen Gruppensummen. Die `members` Eigenschaft *innerhalb* jedes
+  // Führungskraft-Objekts enthält dann die Daten ihrer unterstellten Mitarbeiter.
+  totalData.members = allGroupData.map(groupData => {
+    const leader = führungskräfte.find(fk => fk._id === groupData.id);
+    if (!leader) return null;
+
     return {
-      ...(displayData || {}),
-      leaderName: leader.Name,
-      originalPosition: leader.Karrierestufe,
+        ...groupData, // Enthält bereits ehGoal, ehCurrent, etc. für die Gruppe UND die 'members' (Untergebene)
+        id: leader._id,
+        name: leader.Name,
+        position: leader.Karrierestufe,
     };
-  });
+  }).filter(Boolean); // Entfernt null-Einträge, falls ein Leader nicht gefunden wurde.
 
   totalData.earnings = totalData.members.reduce(
     (sum, m) => sum + (m.earnings?.structure || 0),
@@ -1877,8 +1855,12 @@ function updateLeadershipView() {
   }
   dom.leadershipViewTitle.textContent = title;
 
-  dom.leadershipViewCount.textContent = `Du hast ${data.members.length} aktive Mitarbeiter in deiner Gruppe.`;
-  renderTeamMemberCards(data.members);
+  // KORREKTUR: Füge eine Sicherheitsprüfung hinzu, um den Fehler abzufangen.
+  // Stellt sicher, dass 'data' und 'data.members' existieren, bevor darauf zugegriffen wird.
+  const members = data?.members || [];
+  dom.leadershipViewCount.textContent = `Du hast ${members.length} aktive Mitarbeiter in deiner Gruppe.`;
+  renderTeamMemberCards(members);
+
 }
 
 function renderTeamMemberCards(members) {
@@ -1889,10 +1871,9 @@ function renderTeamMemberCards(members) {
     dom.teamMembersContainer.innerHTML = `<p class="text-center text-gray-500 col-span-full">Keine Mitarbeiter in dieser Ansicht.</p>`;
     return;
   }
-  const activeMembers = members.filter((m) => m.ehGoal > 0 || m.etGoal > 0);
-  const passiveMembers = members.filter(
-    (m) => m.ehGoal === 0 && m.etGoal === 0
-  );
+  // KORREKTUR: Ein Mitarbeiter ist nur aktiv, wenn sein EH-Ziel > 0 ist.
+  const activeMembers = members.filter((m) => (m.ehGoal || 0) > 0);
+  const passiveMembers = members.filter((m) => !(m.ehGoal > 0));
   const { startDate, endDate } = getMonthlyCycleDates();
   const totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
   const daysPassedInCycle = Math.max(
@@ -1926,10 +1907,13 @@ function renderTeamMemberCards(members) {
     details.className = "bg-white rounded-xl shadow-lg";
     const summary = document.createElement("summary");
     summary.className = "p-4 font-semibold text-skt-blue cursor-pointer";
-    summary.textContent = `Passive Mitarbeiter (${passiveMembers.length})`;
+    summary.textContent = `Passive Mitarbeiter (${passiveMembers.length}) anzeigen`;
     details.appendChild(summary);
+
     const container = document.createElement("div");
-    container.className = "p-4 pt-0 space-y-3";
+    // NEU: Scrollbar hinzufügen, wenn die Liste zu lang wird
+    container.className = "p-4 pt-0 space-y-3 max-h-96 overflow-y-auto";
+
     passiveMembers.forEach((member) => {
       const passiveCard = document.createElement("div");
       passiveCard.className =
@@ -2034,7 +2018,15 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
     card.appendChild(summary);
     card.appendChild(details);
     
-    summary.addEventListener('click', (e) => { if (!e.target.closest('.switch-view-btn')) { details.classList.toggle('open'); summary.classList.toggle('open'); } });
+    // KORREKTUR: Die Ausklapp-Funktion nur für Führungskräfte aktivieren.
+    // Trainees in der Gruppenansicht haben keine unterstellten Mitarbeiter, die angezeigt werden könnten.
+    const isLeader = member.position && !member.position.toLowerCase().includes('trainee');
+    if (isLeader) {
+        summary.addEventListener('click', (e) => { if (!e.target.closest('.switch-view-btn')) { details.classList.toggle('open'); summary.classList.toggle('open'); } });
+    } else {
+        summary.querySelector('.chevron-icon').classList.add('hidden'); // Pfeil ausblenden
+    }
+
     summary.querySelector('.switch-view-btn').addEventListener('click', (e) => { 
         e.stopPropagation();
         const newuserId = e.currentTarget.dataset.userid;
@@ -2043,6 +2035,16 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
             fetchAndRenderDashboard(newuserId);
         }
     });
+
+    // KORREKTUR: Logik zum Laden der Untergebenen nur für Führungskräfte hinzufügen.
+    if (isLeader) {
+        summary.addEventListener('click', async (e) => {
+            if (e.target.closest('.switch-view-btn')) return;
+            if (details.classList.contains('open') && !details.dataset.loaded) {
+                await renderSubordinatesForLeader(member.id, details);
+            }
+        });
+    }
     return card;
 }
 
@@ -2129,12 +2131,29 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
     )}%;"></div></div></div></div>`;
     card.appendChild(summary);
     card.appendChild(details);
-    summary.addEventListener("click", (e) => {
-        if (!e.target.closest(".switch-view-btn")) {
-        details.classList.toggle("open");
-        summary.classList.toggle("open");
-        }
-    });
+
+    // KORREKTUR: Die Ausklapp-Funktion nur für Führungskräfte aktivieren.
+    const isLeader = member.position && !member.position.toLowerCase().includes('trainee');
+    if (isLeader) {
+        summary.addEventListener("click", (e) => {
+            if (!e.target.closest(".switch-view-btn")) {
+                details.classList.toggle("open");
+                summary.classList.toggle("open");
+            }
+        });
+    } else {
+        summary.querySelector('.chevron-icon').classList.add('hidden'); // Pfeil ausblenden
+    }
+
+    // KORREKTUR: Logik zum Laden der Untergebenen nur für Führungskräfte hinzufügen.
+    if (isLeader) {
+        summary.addEventListener('click', async (e) => {
+            if (e.target.closest('.switch-view-btn')) return;
+            if (details.classList.contains('open') && !details.dataset.loaded) {
+                await renderSubordinatesForLeader(member.id, details);
+            }
+        });
+    }
     summary.querySelector(".switch-view-btn").addEventListener("click", (e) => {
         e.stopPropagation();
         const newuserId = e.currentTarget.dataset.userid;
@@ -2228,15 +2247,15 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
   dom.welcomeHeader.textContent = `Willkommen, ${user.Name}`;
   dom.userPosition.textContent = user.Karrierestufe;
 
-  const position = user.Karrierestufe || "";
-  const isLeader = !position.toLowerCase().includes("trainee");
+  // KORREKTUR: Verwende die robustere isUserLeader-Funktion, um zu bestimmen, ob die Führungsansicht angezeigt werden soll.
+  const isLeader = isUserLeader(user);
   if (isLeader) {
-    teamData = calculateGroupOrStructureData(
+    teamData = await calculateGroupOrStructureData(
       mitarbeiterId,
       "gruppe",
       augmentedDataStore
     );
-    structureData = calculateGroupOrStructureData(
+    structureData = await calculateGroupOrStructureData(
       mitarbeiterId,
       "struktur",
       augmentedDataStore
@@ -6137,6 +6156,57 @@ async function initializeDashboard() {
 
   setupEventListeners();
   isInitializing = false;
+}
+
+async function renderSubordinatesForLeader(leaderId, container) {
+    container.innerHTML = '<div class="loader mx-auto my-4"></div>';
+    container.dataset.loaded = "true";
+
+    const subordinates = getSubordinates(leaderId, 'gruppe');
+    if (subordinates.length === 0) {
+        container.innerHTML = '<p class="text-center text-gray-500 py-4">Diese Führungskraft hat keine direkten Mitarbeiter in der Gruppe.</p>';
+        return;
+    }
+
+    const subordinateIds = subordinates.map(s => s._id);
+    const subordinateData = await fetchBulkDashboardData(subordinateIds);
+
+    // NEU: Filtere Mitarbeiter heraus, die kein EH-Ziel haben (passive MA)
+    const activeSubordinates = subordinateData.filter(member => member.ehGoal > 0);
+
+    if (activeSubordinates.length === 0) {
+        container.innerHTML = '<p class="text-center text-gray-500 py-4">Diese Führungskraft hat keine aktiven Mitarbeiter in der Gruppe.</p>';
+        return;
+    }
+
+    const listHtml = activeSubordinates.map(member => {
+        const ehPercentage = member.ehGoal > 0 ? (member.ehCurrent / member.ehGoal * 100) : 0;
+        const etPercentage = member.etGoal > 0 ? (member.etCurrent / member.etGoal * 100) : 0;
+        const atPercentage = member.atGoal > 0 ? (member.atCurrent / member.atGoal * 100) : 0;
+
+        return `
+            <div class="p-3 border-t border-gray-200">
+                <p class="font-semibold text-skt-blue">${member.name}</p>
+                <div class="mt-2 space-y-2 text-xs">
+                    <div>
+                        <div class="flex justify-between"><span class="text-gray-600">EH</span><span>${member.ehCurrent} / ${member.ehGoal}</span></div>
+                        <div class="w-full bg-gray-200 h-2 rounded-full"><div class="bg-skt-green-accent h-2 rounded-full" style="width: ${Math.min(ehPercentage, 100)}%;"></div></div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between"><span class="text-gray-600">ET</span><span>${member.etCurrent} / ${member.etGoal}</span></div>
+                        <div class="w-full bg-gray-200 h-2 rounded-full"><div class="bg-skt-blue-accent h-2 rounded-full" style="width: ${Math.min(etPercentage, 100)}%;"></div></div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between"><span class="text-gray-600">AT</span><span>${member.atCurrent} / ${member.atGoal}</span></div>
+                        <div class="w-full bg-gray-200 h-2 rounded-full"><div class="bg-accent-gold h-2 rounded-full" style="width: ${Math.min(atPercentage, 100)}%;"></div></div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // NEU: Füge eine maximale Höhe und eine Scroll-Funktion hinzu
+    container.innerHTML = `<div class="space-y-2 max-h-80 overflow-y-auto">${listHtml}</div>`;
 }
 
 function getPrognosis(current, goal, totalDays, daysPassed) {
