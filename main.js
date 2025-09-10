@@ -2306,6 +2306,13 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
 
 async function renderSuperuserView() {
   isSuperuserView = true;
+  // KORREKTUR: Sicherheitsprüfung hierher verschoben.
+  if (!isUserLeader(authenticatedUserData)) {
+    alert("Du hast keine Berechtigung für diese Ansicht.");
+    isSuperuserView = false; // Zurücksetzen, um UI-Fehler zu vermeiden
+    return;
+  }
+
   setStatus("Lade Gesamtansicht...");
   dom.dashboardSections.classList.add("opacity-0");
 
@@ -5740,7 +5747,10 @@ function setupEventListeners() {
       dom.settingsMenu.addEventListener(
         "transitionend",
         () => {
-          dom.settingsMenu.classList.add("hidden");
+          // KORREKTUR: Prüfen, ob die Klasse noch da ist, bevor sie entfernt wird, um Race Conditions zu vermeiden.
+          if (dom.settingsMenu.classList.contains("visible") === false) {
+            dom.settingsMenu.classList.add("hidden");
+          }
         },
         { once: true }
       );
@@ -5753,7 +5763,9 @@ function setupEventListeners() {
       dom.moreToolsMenu.addEventListener(
         "transitionend",
         () => {
-          dom.moreToolsMenu.classList.add("hidden");
+          if (dom.moreToolsMenu.classList.contains("visible") === false) {
+            dom.moreToolsMenu.classList.add("hidden");
+          }
         },
         { once: true }
       );
@@ -5762,11 +5774,6 @@ function setupEventListeners() {
 
   dom.settingsBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    if (isUserLeader(authenticatedUserData)) {
-      dom.superuserBtn.classList.remove("hidden");
-    } else {
-      dom.superuserBtn.classList.add("hidden");
-    }
     closeMoreToolsMenu(); // Schließt das andere Menü, falls offen
 
     if (dom.settingsMenu.classList.contains("hidden")) {
@@ -5883,12 +5890,12 @@ function setupEventListeners() {
   dom.superuserBtn.addEventListener("click", async (e) => {
     e.preventDefault();
     closeSettingsMenu();
-    // Zusätzliche Sicherheitsprüfung: Blockiert den Zugriff, selbst wenn der Button sichtbar wäre.
+    // KORREKTUR: Die Sicherheitsprüfung findet jetzt in `renderSuperuserView` statt.
     if (!isUserLeader(authenticatedUserData)) {
       alert("Du hast keine Berechtigung für diese Ansicht.");
       return;
     }
-    await renderSuperuserView();
+    await renderSuperuserView(); // Die Funktion selbst prüft die Berechtigung.
   });
 
   dom.editUserBtn.addEventListener("click", (e) => {
@@ -6148,11 +6155,6 @@ async function initializeDashboard() {
     document.getElementById("user-select-screen").classList.add("flex");
     setStatus("");
   }
-
-  // NEU: Blende Auswertungs-Buttons für Trainees aus
-  const isLeader = isUserLeader(authenticatedUserData);
-  document.getElementById('auswertung-header-btn').classList.toggle('hidden', !isLeader);
-  document.getElementById('auswertung-menu-item').classList.toggle('hidden', !isLeader);
 
   setupEventListeners();
   isInitializing = false;
@@ -7908,9 +7910,16 @@ function switchView(viewName) {
   dom.pgTagebuchView.classList.toggle('hidden', viewName !== 'pg-tagebuch');
   updateBackButtonVisibility();
 
-  // NEU: Sicherheitsprüfung, um zu verhindern, dass Trainees die Auswertung sehen.
+  // KORREKTUR: Sicherheitsprüfung für die Umsatz-Ansicht hinzugefügt.
+  if (viewName === 'umsatz' && !isUserLeader(authenticatedUserData)) {
+      alert('Du hast keine Berechtigung für diese Ansicht.');
+      switchView('dashboard');
+      return;
+  }
+
+  // KORREKTUR: Sicherheitsprüfung wiederhergestellt.
   if (viewName === 'auswertung' && !isUserLeader(authenticatedUserData)) {
-      console.warn('Zugriff auf Auswertung für Trainee blockiert. Wechsle zum Dashboard.');
+      alert('Du hast keine Berechtigung für diese Ansicht.');
       switchView('dashboard');
       return;
   }

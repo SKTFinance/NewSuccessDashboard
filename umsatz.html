@@ -9,11 +9,11 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
             <div>
                 <label for="umsatz-start-date" class="block text-sm font-medium text-gray-700 mb-1">Von</label>
-                <input type="date" id="umsatz-start-date" class="modern-input">
+                <div class="input-wrapper"><input type="date" id="umsatz-start-date" class="modern-input w-full"></div>
             </div>
             <div>
                 <label for="umsatz-end-date" class="block text-sm font-medium text-gray-700 mb-1">Bis</label>
-                <input type="date" id="umsatz-end-date" class="modern-input">
+                <div class="input-wrapper"><input type="date" id="umsatz-end-date" class="modern-input w-full"></div>
             </div>
             <!-- Scope Filter -->
             <div>
@@ -27,7 +27,7 @@
             <!-- Suchfeld -->
             <div>
                 <label for="umsatz-search-filter" class="sr-only">Suchen</label>
-                <input type="text" id="umsatz-search-filter" placeholder="Kunde oder Mitarbeiter..." class="modern-input">
+                <div class="input-wrapper"><input type="text" id="umsatz-search-filter" placeholder="Kunde oder Mitarbeiter..." class="modern-input w-full"></div>
             </div>
         </div>
         <div class="mt-4 flex justify-end">
