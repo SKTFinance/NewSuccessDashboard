@@ -2259,7 +2259,14 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
   dom.employeeView.classList.toggle("hidden", isLeader);
   dom.leadershipView.classList.toggle("hidden", !isLeader);
   dom.planningViewToggle.classList.toggle("hidden", !isLeader);
-  dom.einarbeitungBanner.classList.toggle("hidden", isLeader);
+  // KORREKTUR: Banner nur für Trainees OHNE Einheiten anzeigen.
+  const showEinarbeitungBanner = !isLeader && (!personalData.totalCurrentEh || personalData.totalCurrentEh === 0);
+  dom.einarbeitungBanner.classList.toggle("hidden", !showEinarbeitungBanner);
+
+  // NEU: Monatsplanung für Trainees ohne EH ausblenden/blurren
+  const monthlyPlanningSection = document.getElementById('monthly-planning-view');
+  monthlyPlanningSection.classList.toggle('blurred-section-overlay', showEinarbeitungBanner);
+  
 
   dom.nextInfoDate.textContent = `Nächstes Info: ${fetchNextInfoDate()}`;
   await calculateAndRenderPQQForCurrentView();
@@ -2625,13 +2632,14 @@ function renderTimelineSection(
         `;
     }
 
+    const threeDaysAgo = new Date(today);
+    threeDaysAgo.setDate(today.getDate() - 3);
+
     let statusClass = step.completed
       ? "completed"
-      : step.dueDate <= today
+      : step.dueDate < threeDaysAgo // KORREKTUR: Erst nach 3 Tagen als "due" markieren
       ? "due"
       : "future";
-    const isOverdue =
-      !step.completed && today > step.dueDate;
 
     let iconClass = "fa-question";
     switch (stepType) {

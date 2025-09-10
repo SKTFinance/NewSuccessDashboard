@@ -186,6 +186,31 @@ details[open] > summary::before { transform: rotate(180deg); }
     border-radius: 1rem; /* Passt zum Radius des Elternelements */
 }
 
+/* NEU: Blur-Effekt für neue Mitarbeiter */
+.blurred-section-overlay {
+    position: relative;
+}
+.blurred-section-overlay::after {
+    content: 'Wird ab 1 EH freigeschaltet';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(245, 245, 245, 0.7);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-skt-blue);
+    font-weight: bold;
+    font-size: 1.25rem;
+    text-align: center;
+    z-index: 10;
+    border-radius: 1rem; /* Passt zum Radius des Elternelements */
+}
+
 
 /* --- STILE FÜR NEUESTE EINARBEITUNGS-TIMELINE --- */
 .timeline-vertical-line {
