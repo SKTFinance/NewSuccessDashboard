@@ -2603,12 +2603,21 @@ function renderTimelineSection(
             </div>
         `;
     }
+    
+    // NEUE LOGIK: Eine Aufgabe ist erst "due" (überfällig), wenn das Fälligkeitsdatum
+    // mehr als 3 Tage in der Vergangenheit liegt.
+    const threeDaysAgo = new Date(today);
+    threeDaysAgo.setDate(today.getDate() - 3);
 
     let statusClass = step.completed
       ? "completed"
       : step.dueDate <= today
       ? "due"
       : "future";
+    let statusClass = "future"; // Standardmäßig "zukünftig"
+    if (step.completed) statusClass = "completed";
+    else if (step.dueDate < threeDaysAgo) statusClass = "due";
+
     const isOverdue =
       !step.completed && today > step.dueDate;
 

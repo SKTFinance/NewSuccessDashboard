@@ -574,15 +574,16 @@ details[open] > summary::before { transform: rotate(180deg); }
 /* NEUE METHODE (ROBUST): Wrapper für Inputs, die auf iOS überlaufen.
    Der Wrapper zwingt das Kind-Element (das Input-Feld), sich an die Grenzen zu halten. */
 .input-wrapper {
-    overflow: hidden;
-    border-radius: 0.5rem; /* Muss mit dem Radius des Inputs übereinstimmen */
-    border: 1px solid #d1d5db; /* Simuliert den Input-Rand, damit es konsistent aussieht */
+    position: relative; /* Stellt einen Positionierungskontext für das Kind-Element her */
+    display: flex; /* Ermöglicht die korrekte Ausrichtung des Kind-Elements */
+    align-items: center;
 }
-/* KORREKTUR: Entfernt den Rand des eigentlichen Inputs, wenn er sich in einem Wrapper befindet,
-   um doppelte Ränder zu vermeiden und die Zentrierung zu gewährleisten. */
+/* KORREKTUR: Gibt dem Input-Feld seinen Rand zurück, aber stellt sicher, dass es nicht überläuft.
+   `box-sizing: border-box` ist der Schlüssel, damit Padding und Rand in der Gesamtbreite enthalten sind. */
 .input-wrapper > .modern-input {
-    border: none;
-    box-shadow: none;
+    border: 1px solid #d1d5db;
+    box-sizing: border-box;
+    width: 100%;
 }
 
 /* Spezifischer Stil für den Filter-Button, um das Pfeil-Icon beizubehalten */
