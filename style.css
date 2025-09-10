@@ -375,8 +375,8 @@ details[open] > summary::before { transform: rotate(180deg); }
 .timeline-item.completed.persönlichesgespräch .timeline-content { background-color: #f3e8f7; } /* Violett */
 .timeline-item.completed.meilenstein .timeline-icon-inline { background-color: var(--color-accent-gold); }
 .timeline-item.completed.meilenstein .timeline-content { background-color: #fef9e7; } /* Gold */
-.timeline-item.completed.hausuebung .timeline-icon-inline { background-color: var(--color-skt-blue-main); }
-.timeline-item.completed.hausuebung .timeline-content { background-color: #e0f2fe; } /* Blau */
+.timeline-item.completed.hausübung .timeline-icon-inline { background-color: var(--color-skt-blue-main); }
+.timeline-item.completed.hausübung .timeline-content { background-color: #e0f2fe; } /* Blau */
 .timeline-item.completed.versteckt .timeline-icon-inline { background-color: var(--color-accent-orange); }
 .timeline-item.completed.versteckt .timeline-content { background-color: #fff7ed; } /* Orange */
 
@@ -384,7 +384,7 @@ details[open] > summary::before { transform: rotate(180deg); }
 .timeline-item.due.meilenstein .timeline-icon-inline { background-color: var(--color-accent-gold); }
 .timeline-item.due.persönlichesgespräch .timeline-icon-inline { background-color: var(--color-accent-purple); }
 .timeline-item.due.versteckt .timeline-icon-inline { background-color: var(--color-accent-orange); }
-.timeline-item.due.hausuebung .timeline-icon-inline { background-color: var(--color-skt-blue-main); }
+.timeline-item.due.hausübung .timeline-icon-inline { background-color: var(--color-skt-blue-main); }
 
 /* NEU: Goldener Rahmen für Meilensteine */
 .timeline-item.due.meilenstein .timeline-content,
@@ -392,14 +392,28 @@ details[open] > summary::before { transform: rotate(180deg); }
      border: 2px solid var(--color-accent-gold);
 }
 
-/* NEU: Geblurrter Zustand für Aufbauseminar */
-.aufbauseminar-blurred {
-     filter: blur(4px);
-     pointer-events: none;
-     user-select: none;
-     opacity: 0.6;
-     transition: all 0.3s ease-in-out;
+/* NEU: Überarbeitete Stile für gesperrtes Aufbauseminar */
+.aufbauseminar-locked-wrapper {
+    position: relative; /* Stellt den Kontext für das absolute Overlay her */
 }
+.aufbauseminar-blurred-content {
+    filter: blur(4px);
+    opacity: 0.5;
+    pointer-events: none;
+    user-select: none;
+    transition: all 0.3s ease-in-out;
+}
+.aufbauseminar-locked-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    z-index: 10; /* Stellt sicher, dass das Overlay über dem geblurrten Inhalt liegt */
+}
+
 /* UPDATE: Stil für überfällige (due) Aufgaben */
 .timeline-item.due .timeline-content, .overdue-task {
     background-color: #ffefef !important; /* Helles Rot */

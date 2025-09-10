@@ -2511,6 +2511,9 @@ async function renderTraineeOnboardingView(
   let aufbauseminarSteps =
     aufbauStartIndex !== -1 ? processedSteps.slice(aufbauStartIndex) : [];
 
+  // NEU: Prüfen, ob das Grundseminar abgeschlossen ist.
+  const grundseminarCompleted = grundseminarSteps.every(step => step.completed);
+
   const progressData = await getOnboardingProgressForTrainee(mitarbeiterId);
   const progressContainer = document.getElementById(
     "onboarding-progress-container"
@@ -2539,7 +2542,7 @@ async function renderTraineeOnboardingView(
     dom.aufbauseminarProgress,
     dom.aufbauseminarDateMarkers,
     aufbauseminarSteps,
-    isEditable,
+    isEditable && grundseminarCompleted, // Bearbeitung nur möglich, wenn Grundseminar fertig ist
     mitarbeiterId
   );
 }
@@ -2553,6 +2556,24 @@ function renderTimelineSection(
   traineeId = null
 ) {
   clearChildren(container);
+
+  // NEU: Logik zum Ausbluren des Aufbauseminars
+  const isAufbauseminar = container.id.includes('aufbauseminar');
+  const grundseminarCompleted = dom.grundseminarStepsContainer.querySelectorAll('.timeline-item:not(.completed)').length === 0;
+
+  if (isAufbauseminar && !grundseminarCompleted) {
+      // KORREKTUR: Wendet den Blur-Effekt auf den Container an und platziert das Overlay daneben,
+      // anstatt es zu verschachteln.
+      const parentWrapper = container.parentElement;
+      parentWrapper.classList.add('aufbauseminar-locked-wrapper');
+      container.classList.add('aufbauseminar-blurred-content');
+      const overlay = document.createElement('div');
+      overlay.innerHTML = `<i class="fas fa-lock text-3xl text-skt-blue-light mb-2"></i><p class="font-semibold text-skt-blue">Wird nach Abschluss des Grundseminars freigeschaltet.</p>`;
+      overlay.className = 'aufbauseminar-locked-overlay';
+      parentWrapper.appendChild(overlay);
+      return;
+  }
+  container.parentElement.classList.remove('aufbauseminar-blurred');
 
   if (steps.length === 0) {
     container.innerHTML =
@@ -5058,19 +5079,37 @@ class UmsatzView {
 
     async handleDelete() {
         const rowId = this.form.querySelector('#umsatz-id').value;
-        if (confirm('Möchten Sie diesen Umsatz wirklich löschen?')) {
+        if (!rowId) return;
+
+        // KORREKTUR: Benutzerdefiniertes Modal anstelle von confirm() verwenden
+        const confirmModal = document.getElementById('confirm-modal');
+        const confirmOkBtn = document.getElementById('confirm-modal-ok-btn');
+        const confirmCancelBtn = document.getElementById('confirm-modal-cancel-btn');
+        document.getElementById('confirm-modal-text').textContent = 'Möchten Sie diesen Umsatz wirklich endgültig löschen? Diese Aktion kann nicht rückgängig gemacht werden.';
+
+        confirmModal.classList.add('visible');
+
+        const handleOk = async () => {
             const success = await seaTableDeleteRow('Umsatz', rowId);
             if (success) {
-                // Cache für Gesamt-EH leeren, da sich die Daten geändert haben.
-                localStorage.removeItem(CACHE_PREFIX + 'total-eh-results');
+                localStorage.removeItem(CACHE_PREFIX + 'total-eh-results-v2'); // KORREKTUR: Korrekten Cache-Key verwenden
                 umsatzLog('Cache für Gesamt-EH geleert.');
-
                 this.modal.classList.remove('visible');
                 await this.fetchAndRender();
             } else {
-                alert('Fehler beim Löschen.');
+                alert('Fehler beim Löschen des Umsatzes.');
             }
-        }
+            cleanup();
+        };
+
+        const cleanup = () => {
+            confirmModal.classList.remove('visible');
+            confirmOkBtn.removeEventListener('click', handleOk);
+            confirmCancelBtn.removeEventListener('click', cleanup);
+        };
+
+        confirmOkBtn.addEventListener('click', handleOk, { once: true });
+        confirmCancelBtn.addEventListener('click', cleanup, { once: true });
     }
 }
 
@@ -6082,6 +6121,11 @@ async function initializeDashboard() {
     document.getElementById("user-select-screen").classList.add("flex");
     setStatus("");
   }
+
+  // NEU: Blende Auswertungs-Buttons für Trainees aus
+  const isLeader = isUserLeader(authenticatedUserData);
+  document.getElementById('auswertung-header-btn').classList.toggle('hidden', !isLeader);
+  document.getElementById('auswertung-menu-item').classList.toggle('hidden', !isLeader);
 
   setupEventListeners();
   isInitializing = false;
@@ -7785,6 +7829,13 @@ function switchView(viewName) {
   dom.strukturbaumView.classList.toggle("hidden", viewName !== "strukturbaum");
   dom.pgTagebuchView.classList.toggle('hidden', viewName !== 'pg-tagebuch');
   updateBackButtonVisibility();
+
+  // NEU: Sicherheitsprüfung, um zu verhindern, dass Trainees die Auswertung sehen.
+  if (viewName === 'auswertung' && !isUserLeader(authenticatedUserData)) {
+      console.warn('Zugriff auf Auswertung für Trainee blockiert. Wechsle zum Dashboard.');
+      switchView('dashboard');
+      return;
+  }
 
   if (viewName === "appointments") {
     loadAndInitAppointmentsView();
