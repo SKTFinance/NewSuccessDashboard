@@ -52,6 +52,7 @@
 .border-skt-gold-accent { border-color: var(--color-accent-gold); }
 .bg-accent-gold-light { background-color: var(--color-accent-gold-light); }
 .border-immo-accent { border-color: var(--color-accent-immo); }
+.bg-accent-immo { background-color: var(--color-accent-immo); } /* KORREKTUR: Fehlende CSS-Klasse hinzugefügt */
 .border-skt-blue-accent { border-color: var(--color-skt-blue-main); }
 
 body {
@@ -88,7 +89,7 @@ html.modal-open, body.modal-open {
 .dropdown-menu {
     position: absolute;
     top: 100%;
-    left: 0; /* Standard: nach rechts ausklappen (für Mobile) */
+    right: 0; /* KORREKTUR: Menü klappt jetzt immer nach links auf */
     background-color: white;
     border-radius: 8px;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
@@ -439,7 +440,7 @@ details[open] > summary::before { transform: rotate(180deg); }
     z-index: 10; /* Stellt sicher, dass das Overlay über dem geblurrten Inhalt liegt */
 }
 
-/* UPDATE: Stil für überfällige (due) Aufgaben */
+/* UPDATE: Stil für überfällige (due) Aufgaben und gesperrtes Aufbauseminar */
 .timeline-item.due .timeline-content, .overdue-task {
     background-color: #ffefef !important; /* Helles Rot */
     border-color: var(--color-accent-red) !important;
@@ -477,6 +478,12 @@ details[open] > summary::before { transform: rotate(180deg); }
 .modal-overlay.visible {
     opacity: 1;
     visibility: visible;
+}
+/* NEU: Scrollen für langes Modal-Inhalt ermöglichen */
+#hinweis-modal-content {
+    max-height: 70vh; /* Maximale Höhe auf 70% der Bildschirmhöhe begrenzen */
+    overflow-y: auto; /* Scrollleiste anzeigen, wenn der Inhalt überläuft */
+    padding-right: 1rem; /* Etwas Platz für die Scrollleiste */
 }
 
 /* NEU: Dropdown-Menü auf größeren Bildschirmen anders ausrichten */

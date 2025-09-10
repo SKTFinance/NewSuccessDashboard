@@ -1209,11 +1209,13 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
   const ET_STATUS_GEHALTEN = [
     "Gehalten",
+    "Ausgemacht",
     "Weiterer ET",
     "Info Eingeladen",
     "Info Bestätigt",
     "Info Anwesend",
-    "Wird Mitarbeiter",
+    "Verschoben",
+    "Storno",
   ];
 
   return users.map((user) => {
@@ -1447,11 +1449,11 @@ async function calculateGroupOrStructureData(
   const leaderUser = findRowById("mitarbeiter", leaderId);
   if (!leaderUser) return { members: [] };
 
-  // NEUER ANSATZ: Wir definieren die Mitarbeiter für die Berechnung und holen ihre Daten frisch.
-  // 'gruppe' = FK + ihre direkten Trainees/GAs.
-  // 'struktur' = FK + ihre gesamte Downline (FKs und Trainees).
-  const groupSubordinates = (type === 'gruppe') ? getSubordinates(leaderId, "gruppe") : getAllSubordinatesRecursive(leaderId);
-  const membersForCalculation = [leaderUser, ...groupSubordinates];
+  // NEUER ANSATZ: Wir definieren die Mitarbeiter für die Berechnung und holen ihre Daten frisch.  
+  // 'gruppe' = FK + ihre direkten Trainees/GAs.  
+  // 'struktur' = FK + ihre gesamte Downline (FKs und Trainees).  
+  const subordinates = (type === 'gruppe') ? getSubordinates(leaderId, "gruppe") : getAllSubordinatesRecursive(leaderId);
+  const membersForCalculation = [leaderUser, ...subordinates];
   const memberIdsForCalc = membersForCalculation.map(m => m._id);
 
   // FRISCHE DATEN HOLEN: Anstatt auf `fullDataStore` zu vertrauen, holen wir die Daten für genau diese Mitarbeiter.
@@ -1482,12 +1484,67 @@ async function calculateGroupOrStructureData(
   // KORREKTUR: Die `members`-Eigenschaft muss die Daten der unterstellten Mitarbeiter enthalten,
   // damit die aufrufende Funktion (z.B. renderTeamMemberCards) darauf zugreifen kann.
   // Für die "Gesamtansicht" (die `calculateGesamtansichtData` aufruft) wollen wir die unterstellten
-  // Trainees anzeigen, wenn eine FK-Karte aufgeklappt wird.
-  // KORREKTUR: Verwende die bereits berechneten `dataForCalc`, um die Daten der Untergebenen zu filtern.
-  const membersForDisplay = groupSubordinates;
-  const memberData = dataForCalc.filter((d) =>
-    new Set(membersForDisplay.map((m) => m._id)).has(d.id)
-  );
+  let memberData;
+  const cacheKey = `subordinate-data-${leaderId}-${type}`;
+
+  if (type === 'struktur') {
+      const subordinateLeaders = subordinates.filter(isUserLeader);
+      const subordinateLeaderIds = subordinateLeaders.map(leader => leader._id);
+      
+      // OPTIMIERUNG: Anstatt für jede FK einzeln die Gruppendaten zu berechnen,
+      // holen wir alle benötigten Daten auf einmal und berechnen die Gruppen im Frontend.
+      // NEU: Wir holen auch die Daten der Unter-Untergebenen (Enkelkinder) für den Cache.
+      const allGroupMemberIds = new Set(); // IDs der FKs und ihrer direkten Teams
+      const allGrandchildIds = new Set(); // IDs der Teams der unterstellten FKs
+
+      subordinateLeaderIds.forEach(subLeaderId => {
+          allGroupMemberIds.add(subLeaderId);
+          const groupMembers = getSubordinates(subLeaderId, 'gruppe');
+          groupMembers.forEach(member => allGroupMemberIds.add(member._id));
+
+          // Sammle die IDs der Untergebenen der untergebenen FKs für den Cache
+          const grandchildren = getSubordinates(subLeaderId, 'gruppe');
+          grandchildren.forEach(gc => allGrandchildIds.add(gc._id));
+      });
+
+      const groupDataForDisplay = await fetchBulkDashboardData(Array.from(allGroupMemberIds));
+
+      memberData = subordinateLeaders.map(leader => {
+          const groupMembers = [leader, ...getSubordinates(leader._id, 'gruppe')];
+          const groupMemberIds = new Set(groupMembers.map(m => m._id));
+          
+          const groupData = groupDataForDisplay.filter(d => groupMemberIds.has(d.id));
+          
+          const aggregatedGroupData = groupData.reduce((acc, member) => {
+              acc.ehGoal += (member.ehGoal || 0); // KORREKTUR: ehGoal wurde fälschlicherweise nicht aggregiert
+              acc.ehCurrent += (member.ehCurrent || 0);
+              acc.etGoal += (member.etGoal || 0);
+              acc.etCurrent += (member.etCurrent || 0);
+              acc.atGoal += (member.atGoal || 0);
+              acc.atCurrent += (member.atCurrent || 0);
+              acc.atVereinbart += (member.atVereinbart || 0);
+              // Die 'earnings' werden pro Karte aus den Daten der jeweiligen FK geholt
+              if (member.id === leader._id) {
+                  acc.earnings = member.earnings;
+              }
+              return acc;
+          }, { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atCurrent: 0, atVereinbart: 0, earnings: { personal: 0, group: 0, structure: 0 } });
+          
+          // NEU: Füge die FK selbst zur Mitgliederliste hinzu, damit sie beim Ausklappen erscheint.
+          const leaderDataForCard = groupDataForDisplay.find(d => d.id === leader._id);
+          return { ...aggregatedGroupData, id: leader._id, name: leader.Name, position: leader.Karrierestufe, originalPosition: leader.Karrierestufe, leaderName: leader.Name, members: [leaderDataForCard, ...groupDataForDisplay.filter(d => groupMemberIds.has(d.id) && d.id !== leader._id)] };
+      });
+
+      // NEU: Lade und cache die Daten der "Enkelkinder" im Hintergrund.
+      if (allGrandchildIds.size > 0) {
+          fetchBulkDashboardData(Array.from(allGrandchildIds))
+              .then(grandchildData => saveToCache(`subordinate-data-${leaderId}-grandchildren`, grandchildData));
+      }
+  } else { // 'gruppe' (für die Gruppenansicht oder die unterste Ebene der Gesamtansicht)
+      memberData = dataForCalc.filter(d =>
+          new Set(subordinates.map(m => m._id)).has(d.id)
+      );
+  }
 
   return {
     id: leaderId, // KORREKTUR: Füge die ID der Führungskraft zum Ergebnisobjekt hinzu.
@@ -1503,6 +1560,22 @@ async function calculateGroupOrStructureData(
   };
 }
 
+async function getSubordinateDataWithCache(leaderId) {
+    const cacheKey = `subordinate-data-${leaderId}-grandchildren`;
+    const cachedData = loadFromCache(cacheKey, 60); // Cache für 60 Minuten
+    if (cachedData) {
+        return cachedData;
+    }
+
+    // Fallback: Wenn nicht im Cache, lade die Daten frisch.
+    const subordinates = getSubordinates(leaderId, 'gruppe');
+    if (subordinates.length === 0) return [];
+
+    const subordinateIds = subordinates.map(s => s._id);
+    const subordinateData = await fetchBulkDashboardData(subordinateIds);
+    return subordinateData;
+}
+
 async function calculateGesamtansichtData() {
   const führungskräfte = db.mitarbeiter.filter(
     (m) => m.Karrierestufe && !m.Karrierestufe.toLowerCase().includes("trainee") && m.Status !== 'Ausgeschieden'
@@ -1514,6 +1587,15 @@ async function calculateGesamtansichtData() {
     ...führungskräfte.map((fk) => fk._id),
     ...geschäftsstelleRows.map((gs) => gs._id),
   ]);
+
+  // NEU: Sammle IDs aller Untergebenen aller Führungskräfte für einen einzigen, großen API-Aufruf.
+  const allSubordinateIds = new Set();
+  führungskräfte.forEach(fk => {
+      const subordinates = getSubordinates(fk._id, 'gruppe');
+      subordinates.forEach(sub => allSubordinateIds.add(sub._id));
+  });
+  allSubordinateIds.forEach(id => allMemberIds.add(id)); // Füge sie zu den Haupt-IDs hinzu
+
   const { startDate, endDate } = getMonthlyCycleDates();
   const [allMemberData, earningsMap] = await Promise.all([
     fetchBulkDashboardData(Array.from(allMemberIds)),
@@ -1524,10 +1606,37 @@ async function calculateGesamtansichtData() {
     earnings: earningsMap[data.id] || { personal: 0, group: 0, structure: 0 },
   }));
 
-  // KORREKTUR: Berechne die Summen für die obere Anzeige und die Daten für die einzelnen Karten.
-  // KORREKTUR: Verwende Promise.all, um sicherzustellen, dass alle Gruppenberechnungen abgeschlossen sind, bevor es weitergeht.
-  const groupDataPromises = führungskräfte.map(leader => calculateGroupOrStructureData(leader._id, 'gruppe', augmentedMemberData)); // Der 3. Parameter wird ignoriert, ist aber OK.
-  const allGroupData = await Promise.all(groupDataPromises);
+  // NEU: Speichere die Daten der Untergebenen für jede FK im Cache für schnelles Ausklappen.
+  führungskräfte.forEach(fk => {
+      const subordinates = getSubordinates(fk._id, 'gruppe');
+      const subordinateIds = new Set(subordinates.map(s => s._id));
+      const dataForCache = augmentedMemberData.filter(d => subordinateIds.has(d.id));
+      // KORREKTUR: Der Cache-Key muss mit dem in `getSubordinateDataWithCache` übereinstimmen.
+      saveToCache(`subordinate-data-${fk._id}-grandchildren`, dataForCache);
+  });
+
+  // OPTIMIERUNG: Anstatt `calculateGroupOrStructureData` für jede FK einzeln aufzurufen,
+  // berechnen wir die Gruppendaten direkt aus dem bereits geladenen `augmentedMemberData`.
+  const allGroupData = führungskräfte.map(leader => {
+      const groupMembers = [leader, ...getSubordinates(leader._id, 'gruppe')];
+      const groupMemberIds = new Set(groupMembers.map(m => m._id));
+      
+      const groupDataForCalc = augmentedMemberData.filter(d => groupMemberIds.has(d.id));
+      
+      const aggregatedGroupData = groupDataForCalc.reduce((acc, member) => {
+          acc.ehGoal += (member.ehGoal || 0);
+          acc.ehCurrent += (member.ehCurrent || 0);
+          acc.etGoal += (member.etGoal || 0);
+          acc.etCurrent += (member.etCurrent || 0);
+          acc.atGoal += (member.atGoal || 0);
+          acc.atCurrent += (member.atCurrent || 0);
+          acc.atVereinbart += (member.atVereinbart || 0);
+          return acc;
+      }, { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atCurrent: 0, atVereinbart: 0 });
+
+      const leaderData = augmentedMemberData.find(d => d.id === leader._id);
+      return { ...aggregatedGroupData, id: leader._id, earnings: leaderData?.earnings };
+  });
 
 
   const totalData = allGroupData.reduce((acc, group) => {
@@ -2250,11 +2359,25 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
   // KORREKTUR: Verwende die robustere isUserLeader-Funktion, um zu bestimmen, ob die Führungsansicht angezeigt werden soll.
   const isLeader = isUserLeader(user);
   if (isLeader) {
-    teamData = await calculateGroupOrStructureData(
-      mitarbeiterId,
-      "gruppe",
-      augmentedDataStore
-    );
+    // OPTIMIERUNG: Berechne teamData direkt aus dem vorgeladenen Datenspeicher,
+    // anstatt eine weitere (redundante) API-Abfrage in calculateGroupOrStructureData auszulösen.
+    const groupMembers = [user, ...getSubordinates(mitarbeiterId, 'gruppe')];
+    const groupMemberIds = new Set(groupMembers.map(m => m._id));
+    const groupDataForCalc = augmentedDataStore.filter(d => groupMemberIds.has(d.id));
+
+    const aggregatedGroupData = groupDataForCalc.reduce((acc, member) => {
+        acc.ehGoal += (member.ehGoal || 0);
+        acc.ehCurrent += (member.ehCurrent || 0);
+        acc.etGoal += (member.etGoal || 0);
+        acc.etCurrent += (member.etCurrent || 0);
+        acc.atGoal += (member.atGoal || 0);
+        acc.atCurrent += (member.atCurrent || 0);
+        acc.atVereinbart += (member.atVereinbart || 0);
+        return acc;
+    }, { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atCurrent: 0, atVereinbart: 0 });
+
+    teamData = { ...aggregatedGroupData, id: mitarbeiterId, earnings: personalData.earnings, members: groupDataForCalc.filter(d => d.id !== mitarbeiterId) };
+
     structureData = await calculateGroupOrStructureData(
       mitarbeiterId,
       "struktur",
@@ -2591,19 +2714,30 @@ function renderTimelineSection(
   clearChildren(container);
 
   // NEU: Logik zum Ausbluren des Aufbauseminars
+  // KORREKTUR: Die Freischaltung erfolgt jetzt zeitbasiert, nicht mehr nach Fortschritt.
   const isAufbauseminar = container.id.includes('aufbauseminar');
-  const grundseminarCompleted = dom.grundseminarStepsContainer.querySelectorAll('.timeline-item:not(.completed)').length === 0;
+  let isLocked = false;
+  if (isAufbauseminar && steps.length > 0) {
+      const today = getCurrentDate();
+      today.setHours(0, 0, 0, 0);
+      const aufbauStartDate = new Date(steps[0].dueDate);
+      isLocked = today < aufbauStartDate;
+  }
 
-  if (isAufbauseminar && !grundseminarCompleted) {
+  if (isLocked) {
       // KORREKTUR: Wendet den Blur-Effekt auf den Container an und platziert das Overlay daneben,
       // anstatt es zu verschachteln.
-      const parentWrapper = container.parentElement;
-      parentWrapper.classList.add('aufbauseminar-locked-wrapper');
-      container.classList.add('aufbauseminar-blurred-content');
+      const parentWrapper = container.parentElement; // Das ist <div class="timeline-wrapper ...">
+      parentWrapper.classList.add('aufbauseminar-locked-wrapper'); // Fügt position:relative hinzu
+      container.classList.add('aufbauseminar-blurred-content'); // Wendet den Blur-Effekt an
       const overlay = document.createElement('div');
       overlay.innerHTML = `<i class="fas fa-lock text-3xl text-skt-blue-light mb-2"></i><p class="font-semibold text-skt-blue">Wird nach Abschluss des Grundseminars freigeschaltet.</p>`;
       overlay.className = 'aufbauseminar-locked-overlay';
-      parentWrapper.appendChild(overlay);
+      parentWrapper.insertBefore(overlay, container.nextSibling); // Fügt das Overlay als Geschwisterelement ein
+      
+      // KORREKTUR: Blende den Zeitstrahl und die Datumsmarkierungen aus, wenn der Abschnitt gesperrt ist.
+      if (progressElement) progressElement.style.height = "0%";
+      if (dateMarkerContainer) clearChildren(dateMarkerContainer);
       return;
   }
   container.parentElement.classList.remove('aufbauseminar-blurred');
@@ -3052,7 +3186,13 @@ class AppointmentsView {
         this.endDateInput.value = endDate.toISOString().split('T')[0];
 
         this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
-        this.statsScopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.authenticatedUserData));
+        const isLeader = SKT_APP.isUserLeader(SKT_APP.authenticatedUserData);
+        this.statsScopeFilter.classList.toggle('hidden', !isLeader);
+        // KORREKTUR: Wenn der Benutzer eine Führungskraft ist, wird standardmäßig "Meine Gruppe" ausgewählt.
+        if (isLeader) {
+            this.statsScopeFilter.value = 'group';
+        }
+
         this._populateCategoryFilter(); // KORREKTUR: Reihenfolge getauscht
 
         // Die Event-Listener müssen bei jeder Initialisierung neu gesetzt werden,
@@ -3127,7 +3267,7 @@ class AppointmentsView {
         this._renderOutstandingAppointments();
         // 1. Filter data
         let filteredAppointments = this.allAppointments.filter(t => {
-            const isUmsatzTermin = ['AT', 'BT', 'ST'].includes(t.Kategorie);
+            const isUmsatzTermin = ['AT', 'BT', 'ST'].includes(t.Kategorie); // KORREKTUR: ET hinzugefügt, damit sie im Umsatz-Tab erscheinen
             const isRecruitingTermin = t.Kategorie === 'ET';
             const isImmoTermin = t.Kategorie === 'Immo';
             const isNetzwerkTermin = t.Kategorie === 'NT';
@@ -3414,6 +3554,33 @@ class AppointmentsView {
             this.statsCategoryFilterPanel.appendChild(wrapper);        };
 
         categories.filter(cat => relevantCategories.includes(cat)).forEach(cat => createCheckbox(cat, cat, true));
+        
+        // KORREKTUR: Buttons für "Alle auswählen" und "Alle entfernen" mit verbessertem Design.
+        // Die Buttons werden jetzt direkt unter der Überschrift platziert.
+        const headerWrapper = document.createElement('div');
+        headerWrapper.className = 'flex justify-between items-center mb-2';
+        headerWrapper.innerHTML = `<h4 class="font-semibold text-skt-blue">Kategorien</h4>`;
+
+        const actionsWrapper = document.createElement('div');
+        actionsWrapper.className = 'flex items-center gap-2';
+        actionsWrapper.innerHTML = `
+            <button id="deselect-all-cats" class="p-1.5 h-7 w-7 flex items-center justify-center bg-red-100 text-skt-red-accent rounded-md hover:bg-red-200 transition-colors" title="Alle entfernen">
+                <i class="fas fa-times"></i>
+            </button>
+            <button id="select-all-cats" class="p-1.5 h-7 w-7 flex items-center justify-center bg-green-100 text-skt-green-accent rounded-md hover:bg-green-200 transition-colors" title="Alle auswählen">
+                <i class="fas fa-check"></i>
+            </button>
+        `;
+        headerWrapper.appendChild(actionsWrapper);
+        this.statsCategoryFilterPanel.insertBefore(headerWrapper, this.statsCategoryFilterPanel.firstChild);
+
+        // Event Listeners für die neuen Buttons
+        document.getElementById('select-all-cats').addEventListener('click', () => {
+            this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true); this._renderAppointmentStats();
+        });
+        document.getElementById('deselect-all-cats').addEventListener('click', () => {
+            this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false); this._renderAppointmentStats();
+        });
     }
 
     // NEU: Funktion zum Berechnen und Anzeigen der Termin-Statistiken
@@ -3449,13 +3616,8 @@ class AppointmentsView {
         } else {
             this.statsCategoryFilterBtn.textContent = selectedCategories.join(', ');
         }
-        // KORREKTUR: Greife auf die bereits gefilterten Termine der Ansicht zu (`this.allAppointments`),
-        // anstatt auf die globalen, ungefilterten `db.termine`. Dies ist die Kernursache des Fehlers.
-        const relevantAppointments = this.allAppointments.filter(t => {
-            const categoryMatch = selectedCategories.length === 0 ? false : selectedCategories.includes(t.Kategorie);
-            return t.Datum && categoryMatch;
-        });
-        // KORREKTUR: Um Zeitzonenprobleme endgültig zu vermeiden, wird der Termin einfach
+        const relevantAppointments = this.allAppointments.filter(t => selectedCategories.includes(t.Kategorie) && t.Datum);
+
         // anhand des reinen Datum-Strings (YYYY-MM-DD) gruppiert, ohne ihn in ein Date-Objekt umzuwandeln.
         // Dies stellt sicher, dass ein Termin vom 09.09. immer am 09.09. angezeigt wird, egal um welche Uhrzeit.
         const appointmentsByDay = _.groupBy(relevantAppointments, t => {
@@ -3471,7 +3633,7 @@ class AppointmentsView {
         const categoryColors = {
             'AT': 'bg-skt-green-accent',
             'BT': 'bg-skt-blue-accent',   // KORREKTUR: 'bg-skt-blue-accent' statt 'bg-skt-blue-main'
-            'ST': 'bg-skt-yellow-accent',// Gelb
+            'ST': 'bg-skt-red-accent', // NEU: Rot für Servicetermine
             'ET': 'bg-accent-gold',      // Gold
             'Immo': 'bg-accent-immo',    // Türkis
             'NT': 'bg-accent-purple',    // Lila
@@ -3881,7 +4043,16 @@ class AppointmentsView {
                 if (user) userSelect.value = user._id;
                 
                 // KORREKTUR: `datetime-local` erwartet das Format YYYY-MM-DDTHH:mm
-                this.form.querySelector('#appointment-date').value = termin.Datum ? new Date(termin.Datum).toISOString().slice(0, 16) : '';
+                // `toISOString()` konvertiert in UTC, was zu Zeitzonenfehlern führt.
+                // Wir müssen das Datum manuell in das korrekte lokale Format umwandeln.
+                if (termin.Datum) {
+                    const localDate = new Date(termin.Datum);
+                    // Wir ziehen den Zeitzonen-Offset ab, um die "echte" lokale Zeit zu bekommen, die dann korrekt als String formatiert wird.
+                    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+                    this.form.querySelector('#appointment-date').value = localDate.toISOString().slice(0, 16);
+                } else {
+                    this.form.querySelector('#appointment-date').value = '';
+                }
                 categorySelect.value = termin.Kategorie || '';
                 this.form.querySelector('#appointment-partner').value = termin.Terminpartner || '';
                 this.form.querySelector('#appointment-prognose').value = termin.Umsatzprognose || '';
@@ -4105,7 +4276,13 @@ class AppointmentsView {
 
         let currentDate = new Date(startDate);
         while (currentDate <= endDate) {
-            const dateString = currentDate.toISOString().split('T')[0];
+            // KORREKTUR: `toISOString()` konvertiert in UTC, was zu einem "off-by-one" Fehler führt.
+            // Wir erstellen den YYYY-MM-DD String manuell, um die lokale Zeitzone beizubehalten.
+            const year = currentDate.getFullYear();
+            const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
+            const day = currentDate.getDate().toString().padStart(2, '0');
+            const dateString = `${year}-${month}-${day}`;
+
             const count = appointmentsByDay[dateString]?.length || 0;
             
             const cell = document.createElement('div');
@@ -4221,11 +4398,31 @@ class AppointmentsView {
 
         try {
             const escapedText = SKT_APP.escapeSql(searchText);
+            
+            // KORREKTUR: Berücksichtige den ausgewählten Scope (personal, group, structure) bei der Suche.
+            const scope = this.statsScopeFilter.value;
+            let userIds = new Set();
+            switch (scope) {
+                case 'personal':
+                    userIds.add(this.currentUserId);
+                    break;
+                case 'group':
+                    userIds.add(this.currentUserId);
+                    SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
+                    break;
+                case 'structure':
+                    userIds.add(this.currentUserId);
+                    this.downline.forEach(u => userIds.add(u._id));
+                    break;
+            }
+            const userNames = Array.from(userIds).map(id => SKT_APP.findRowById('mitarbeiter', id)?.Name).filter(Boolean);
+            const userNamesSql = userNames.map(name => `'${SKT_APP.escapeSql(name)}'`).join(',');
+
             const query = `
                 SELECT * 
                 FROM \`Termine\` 
-                WHERE \`Terminpartner\` LIKE '%${escapedText}%' 
-                   OR \`Mitarbeiter_ID\` LIKE '%${escapedText}%'
+                WHERE (\`Terminpartner\` LIKE '%${escapedText}%' OR \`Mitarbeiter_ID\` LIKE '%${escapedText}%')
+                  AND \`Mitarbeiter_ID\` IN (${userNamesSql})
                 ORDER BY \`Datum\` DESC
                 LIMIT 20
             `;
@@ -4829,8 +5026,15 @@ class UmsatzView {
             return;
         }
 
-        const { startDate, endDate } = SKT_APP.getMonthlyCycleDates();
-        this.startDateInput.value = startDate.toISOString().split('T')[0];
+        // KORREKTUR: Standardmäßig die letzten 3 Umsatzmonate anzeigen.
+        // 1. Enddatum ist das Ende des aktuellen Zyklus.
+        const { endDate } = SKT_APP.getMonthlyCycleDates();
+        // 2. Startdatum ist der Beginn des Zyklus von vor 2 Monaten. 
+        // KORREKTUR: Erstelle eine Kopie des Datums, bevor `setMonth` aufgerufen wird, um eine Mutation des Originalobjekts zu verhindern.
+        const { startDate: currentCycleStart } = SKT_APP.getMonthlyCycleDates(); 
+        const startDateCopy = new Date(currentCycleStart);
+        const twoMonthsAgo = new Date(startDateCopy.setMonth(startDateCopy.getMonth() - 2));
+        this.startDateInput.value = twoMonthsAgo.toISOString().split('T')[0];
         this.endDateInput.value = endDate.toISOString().split('T')[0];
 
         this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
@@ -6162,19 +6366,22 @@ async function initializeDashboard() {
 
 async function renderSubordinatesForLeader(leaderId, container) {
     container.innerHTML = '<div class="loader mx-auto my-4"></div>';
-    container.dataset.loaded = "true";
+    
+    // KORREKTUR: Finde die Daten der Führungskraft aus der bereits gerenderten Ansicht.
+    const viewData = (currentPlanningView === 'struktur') ? structureData : teamData;
+    const leaderCardData = viewData.members.find(m => m.id === leaderId);
+    
+    // KORREKTUR: Greife auf die 'members'-Eigenschaft zu, die die FK selbst + ihre MA enthält.
+    const subordinateData = leaderCardData?.members || await getSubordinateDataWithCache(leaderId);
 
-    const subordinates = getSubordinates(leaderId, 'gruppe');
-    if (subordinates.length === 0) {
+    if (subordinateData.length === 0) {
         container.innerHTML = '<p class="text-center text-gray-500 py-4">Diese Führungskraft hat keine direkten Mitarbeiter in der Gruppe.</p>';
         return;
     }
 
-    const subordinateIds = subordinates.map(s => s._id);
-    const subordinateData = await fetchBulkDashboardData(subordinateIds);
-
-    // NEU: Filtere Mitarbeiter heraus, die kein EH-Ziel haben (passive MA)
-    const activeSubordinates = subordinateData.filter(member => member.ehGoal > 0);
+    // KORREKTUR: Filtere Mitarbeiter heraus, die kein EH-Ziel haben (passive MA), aber behalte die FK selbst immer drin.
+    const activeSubordinates = subordinateData.filter(member => member.id === leaderId || (member.ehGoal || 0) > 0);
+    container.dataset.loaded = "true";
 
     if (activeSubordinates.length === 0) {
         container.innerHTML = '<p class="text-center text-gray-500 py-4">Diese Führungskraft hat keine aktiven Mitarbeiter in der Gruppe.</p>';
