@@ -14,7 +14,7 @@
     <div id="appointment-stats-section" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg mb-8">
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
             <div class="flex items-center gap-4">
-                <h3 class="text-2xl font-semibold text-skt-blue">Termin-Übersicht</h3>
+                <h3 class="text-2xl font-semibold text-skt-blue">Terminübersicht</h3>
                 <div id="stats-view-toggle" class="view-toggle flex space-x-2">
                     <button id="stats-view-calendar-btn" class="active" title="Kalenderansicht"><i class="fas fa-calendar-alt"></i></button>
                     <button id="stats-view-table-btn" title="Tabellenansicht"><i class="fas fa-list"></i></button>
@@ -50,7 +50,32 @@
             <div id="stats-month-timeline" class="flex overflow-x-auto gap-4 pb-4 hide-scrollbar" style="height: 500px;"></div>
         </div>
         <div id="stats-table-view" class="hidden">
-            <div id="stats-table-container" class="max-h-[300px] overflow-y-auto"></div>
+            <div id="stats-table-container" class="max-h-[500px] overflow-y-auto"></div>
+        </div>
+
+        <!-- NEU: Datumsfilter hierher verschoben -->
+        <div class="mt-6 pt-6 border-t border-gray-200">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl mx-auto">
+                <div class="w-full">
+                    <label for="appointments-start-date" class="block text-sm font-medium text-gray-700 mb-1">Von</label>
+                    <div class="input-wrapper"><input type="date" id="appointments-start-date" class="modern-input w-full"></div>
+                </div>
+                <div class="w-full">
+                    <label for="appointments-end-date" class="block text-sm font-medium text-gray-700 mb-1">Bis</label>
+                    <div class="input-wrapper"><input type="date" id="appointments-end-date" class="modern-input w-full"></div>
+                </div>
+                <!-- NEU: Suchfeld hierher verschoben -->
+                <div class="sm:col-span-2 w-full">
+                    <label for="appointments-search-filter" class="block text-sm font-medium text-gray-700 mb-1">Suchen</label>
+                    <div class="input-wrapper">
+                        <input type="text" id="appointments-search-filter" placeholder="Kunde, Bewerber oder Mitarbeiter suchen..." class="modern-input w-full">
+                    </div>
+                </div>
+                <!-- NEU: Container für Live-Suchergebnisse -->
+                <div id="appointments-search-results-container" class="sm:col-span-2 w-full hidden">
+                    <!-- Ergebnisse werden per JS eingefügt -->
+                </div>
+            </div>
         </div>
 
         <!-- NEU: Analyse-Container hierher verschoben -->
@@ -105,66 +130,6 @@
         <div class="mt-8 text-center"><button id="add-appointment-btn-stats" class="bg-skt-green-accent text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-green-700 transition-colors flex items-center justify-center w-full max-w-xs mx-auto"><i class="fas fa-plus mr-2"></i>Neuen Termin anlegen</button></div>
     </div>
 
-    <!-- NEU: Checkbox zum Ein-/Ausblenden der Detail-Liste -->
-    <div class="my-6 flex items-center justify-center">
-        <input type="checkbox" id="toggle-details-checkbox" class="h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-main cursor-pointer">
-        <label for="toggle-details-checkbox" class="ml-2 text-sm font-medium text-gray-700 cursor-pointer">Detaillierte Filter & Liste anzeigen</label>
-    </div>
-
-    <!-- Hauptcontainer für die Terminliste und Analyse (standardmäßig ausgeblendet) -->
-    <div id="appointments-details-container" class="hidden bg-white rounded-2xl p-6 md:p-8 shadow-lg">
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-            <h2 id="appointments-title" class="text-3xl font-bold text-skt-blue">Filter</h2>
-        </div>
-
-    <!-- Filter und Aktionen -->
-    <div class="bg-skt-grey-light p-4 rounded-xl mb-6 border border-gray-200">
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-            <div class="w-full">
-                <label for="appointments-start-date" class="block text-sm font-medium text-gray-700 mb-1">Von</label>
-                <div class="input-wrapper"><input type="date" id="appointments-start-date" class="modern-input w-full"></div>
-            </div>
-            <div class="w-full">
-                <label for="appointments-end-date" class="block text-sm font-medium text-gray-700 mb-1">Bis</label>
-                <div class="input-wrapper"><input type="date" id="appointments-end-date" class="modern-input w-full"></div>
-            </div>
-            <div>
-                <label for="stats-scope-filter" class="block text-sm font-medium text-gray-700 mb-1">Anzeigen für</label>
-                <select id="stats-scope-filter" class="modern-select">
-                    <option value="personal">Meine Termine</option>
-                    <option value="group">Meine Gruppe</option>
-                    <option value="structure">Meine Struktur</option>
-                </select>
-            </div>
-            <div class="lg:col-span-1">
-                <label for="appointments-search-filter" class="sr-only">Suchen</label>
-                <input type="text" id="appointments-search-filter" placeholder="Kunde, Bewerber oder Mitarbeiter suchen..." class="modern-input">
-            </div>
-            <div class="lg:col-span-4 flex justify-between items-center mt-4">
-                <div class="flex items-center space-x-3">
-                    <label for="appointments-show-cancelled" class="toggle-switch">
-                        <input type="checkbox" id="appointments-show-cancelled" class="sr-only peer">
-                        <div class="toggle-slider"></div>
-                    </label>
-                    <label for="appointments-show-cancelled" class="text-sm font-medium text-gray-700">Abgesagte</label>
-                </div>
-            </div>
-        </div>
-    </div>
-    <!-- Tabs -->
-    <div class="border-b border-gray-200 mb-6">
-        <nav class="-mb-px flex space-x-8 overflow-x-auto hide-scrollbar pb-2" aria-label="Tabs">
-            <button id="umsatz-tab" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue">Umsatztermine</button>
-            <button id="recruiting-tab" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Recruitingtermine</button>
-            <button id="immo-tab" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Immobilientermine</button>
-            <button id="netzwerk-tab" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Netzwerktermine</button>
-        </nav>
-    </div>
-
-    <div id="appointments-list-container" class="space-y-4">
-        <div class="loader mx-auto"></div>
-    </div>
-    </div>
 </div>
 <!-- Modal zum Bearbeiten/Hinzufügen von Terminen (zunächst verborgen) -->
 <div id="appointment-modal" class="modal-overlay">
