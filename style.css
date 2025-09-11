@@ -1064,3 +1064,8 @@ details[open] > summary::before { transform: rotate(180deg); }
     transition: transform 0.3s ease-out, border-color 0.3s ease-out;
     will-change: transform; /* Performance-Optimierung */
 }
+
+.zero-goal {
+    color: var(--color-accent-red);
+    font-weight: 700;
+}

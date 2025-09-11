@@ -5503,6 +5503,9 @@ class AuswertungView {
             case 'naechstes-info':
                 await this.renderNaechstesInfo(true); // true to repopulate dates
                 break;
+            case 'planungen':
+                await this.renderPlanungen();
+                break;
         }
     }
 
@@ -5925,6 +5928,258 @@ class AuswertungView {
             stepEl.innerHTML = `<span class="funnel-label">${step.label}</span><span class="funnel-value">${step.value}</span>`;
             this.funnelChartContainer.appendChild(stepEl);
         });
+    }
+
+    async logPQQCalculationForUser(userId, forMonth, forYear) {
+        const pqqLog = (message, ...data) => console.log(`%c[PQQ_Drilldown] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
+        const user = findRowById('mitarbeiter', userId);
+        if (!user) {
+            pqqLog(`User with ID ${userId} not found.`);
+            return;
+        }
+        pqqLog(`--- PQQ-Berechnung für: ${user.Name} (für ${forMonth + 1}/${forYear}) ---`);
+
+        // 1. Get previous month's dates
+        const prevMonthDate = new Date(forYear, forMonth, 1);
+        prevMonthDate.setDate(0); // Go to last day of previous month
+        const prevMonthName = prevMonthDate.toLocaleString("de-DE", { month: "long" });
+        const prevYear = prevMonthDate.getFullYear();
+        const prevMonthStartDate = new Date(prevYear, prevMonthDate.getMonth(), 1);
+        const prevMonthEndDate = new Date(prevYear, prevMonthDate.getMonth() + 1, 0);
+        const prevStartDateIso = prevMonthStartDate.toISOString().split('T')[0];
+        const prevEndDateIso = prevMonthEndDate.toISOString().split('T')[0];
+        pqqLog(`Berechnungszeitraum (Vormonat): ${prevStartDateIso} bis ${prevEndDateIso}`);
+
+        // 2. Get planning data from cache
+        const plan = db.monatsplanung.find(p => 
+            p.Mitarbeiter_ID === userId &&
+            p.Monat === prevMonthName &&
+            p.Jahr === prevYear
+        );
+
+        if (!plan) {
+            pqqLog(`Keine Plandaten für ${user.Name} im ${prevMonthName} ${prevYear} gefunden.`);
+            alert(`Für ${user.Name} wurden keine Plandaten im ${prevMonthName} ${prevYear} gefunden. PQQ kann nicht berechnet werden.`);
+            return;
+        }
+
+        const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
+        const ursprungszielET = plan?.Ursprungsziel_ET || 0;
+        pqqLog(`Plandaten (Ursprungsziel):`, { EH: ursprungszielEH, ET: ursprungszielET });
+
+        // 3. Get actual data for previous month via SQL
+        const mitarbeiterNameSql = `'${escapeSql(user.Name)}'`;
+
+        const ehQuery = `SELECT SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID = ${mitarbeiterNameSql} AND Datum >= '${prevStartDateIso}' AND Datum <= '${prevEndDateIso}'`;
+        const etQuery = `SELECT Status FROM Termine WHERE Mitarbeiter_ID = ${mitarbeiterNameSql} AND Kategorie = 'ET' AND Datum >= '${prevStartDateIso}' AND Datum <= '${prevEndDateIso}'`;
+
+        const [ehResultRaw, etResultRaw] = await Promise.all([ seaTableSqlQuery(ehQuery, true), seaTableSqlQuery(etQuery, true) ]);
+
+        const totalEH = ehResultRaw?.[0]?.totalEH || 0;
+        const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+        const totalETAusgemacht = etResultRaw.filter(t => ET_STATUS_AUSGEMACHT.includes(t.Status)).length;
+        pqqLog(`Ist-Werte (Vormonat):`, { EH: totalEH, ET_Ausgemacht: totalETAusgemacht });
+
+        // 4. Calculate PQQ parts
+        const ehQuote = (ursprungszielEH > 0) ? (totalEH / ursprungszielEH) : (ursprungszielEH === 0 ? 1 : 0);
+        pqqLog(`EH-Quote Berechnung: ${totalEH} (Ist) / ${ursprungszielEH} (Ziel) = ${ehQuote.toFixed(4)}`);
+        const etQuote = (ursprungszielET > 0) ? (totalETAusgemacht / ursprungszielET) : (ursprungszielET === 0 ? 1 : 0);
+        pqqLog(`ET-Quote Berechnung: ${totalETAusgemacht} (Ist) / ${ursprungszielET} (Ziel) = ${etQuote.toFixed(4)}`);
+        const pqq = ((ehQuote + etQuote) / 2) * 100;
+        pqqLog(`Gesamt-PQQ: ((${ehQuote.toFixed(4)} + ${etQuote.toFixed(4)}) / 2) * 100 = ${pqq.toFixed(2)}%`);
+        alert(`PQQ-Berechnung für ${user.Name}:\n\nEH-Quote: ${(ehQuote * 100).toFixed(0)}% (${totalEH} Ist / ${ursprungszielEH} Ziel)\nET-Quote: ${(etQuote * 100).toFixed(0)}% (${totalETAusgemacht} Ist / ${ursprungszielET} Ziel)\n\nGesamt-PQQ: ${pqq.toFixed(0)}%\n\n(Details in der Entwicklerkonsole)`);
+    }
+
+    async renderPlanungen() {
+        auswertungLog('Render Planungen View');
+        const viewContainer = document.getElementById('planungen-view');
+        if (!viewContainer) return;
+        const listContainer = viewContainer.querySelector('#planungen-list-container');
+        listContainer.innerHTML = '<div class="loader mx-auto"></div>';
+
+        const monthSelect = viewContainer.querySelector('#planungen-month-select');
+        const yearSelect = viewContainer.querySelector('#planungen-year-select');
+
+        if (monthSelect.options.length === 0) {
+            const months = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+            months.forEach((month, index) => monthSelect.add(new Option(month, index)));
+            const currentYear = new Date().getFullYear();
+            for (let i = currentYear + 1; i >= 2020; i--) {
+                yearSelect.add(new Option(i, i));
+            }
+            const today = new Date();
+            monthSelect.value = today.getMonth();
+            yearSelect.value = today.getFullYear();
+
+            monthSelect.addEventListener('change', () => this.renderPlanungen());
+            yearSelect.addEventListener('change', () => this.renderPlanungen());
+        }
+
+        const selectedMonth = parseInt(monthSelect.value);
+        const selectedYear = parseInt(yearSelect.value);
+        const selectedMonthName = monthSelect.options[selectedMonth].text;
+
+        const allActiveUsers = db.mitarbeiter.filter(m => m.Status !== 'Ausgeschieden');
+        const plansForMonth = db.monatsplanung.filter(p => p.Monat === selectedMonthName && p.Jahr === selectedYear);
+        const plansByUserId = _.keyBy(plansForMonth, 'Mitarbeiter_ID');
+
+        const pqqDataMap = await this.calculatePQQForUserList(allActiveUsers.map(u => u._id), selectedMonth, selectedYear);
+
+        const combinedData = allActiveUsers.map(user => {
+            const plan = plansByUserId[user._id];
+            return {
+                id: user._id,
+                name: user.Name,
+                werberId: user.Werber,
+                ehGoal: plan?.EH_Ziel ?? 0,
+                etGoal: plan?.ET_Ziel ?? 0,
+                pqq: pqqDataMap[user._id] ?? 0,
+                hasPlan: !!plan
+            };
+        });
+        const usersById = _.keyBy(combinedData, 'id');
+
+        const leaders = allActiveUsers.filter(u => isUserLeader(u) && u.Status !== 'Ausgeschieden').sort((a, b) => a.Name.localeCompare(b.Name));
+        listContainer.innerHTML = '';
+
+        const activeGroups = [];
+        const passiveGroups = [];
+
+        leaders.forEach(leader => {
+            const subordinates = getSubordinates(leader._id, 'gruppe');
+            const groupMemberIds = new Set([leader._id, ...subordinates.map(s => s._id)]);
+            
+            const groupMembersData = Array.from(groupMemberIds).map(id => usersById[id]).filter(Boolean);
+
+            if (groupMembersData.length === 0) return;
+
+            // A group is passive if every member has 0 for both EH and ET goals.
+            const isGroupPassive = groupMembersData.every(m => m.ehGoal === 0 && m.etGoal === 0);
+
+            const groupObject = {
+                leader: leader,
+                members: groupMembersData.sort((a,b) => a.name.localeCompare(b.name)),
+                isPassive: isGroupPassive
+            };
+
+            if (isGroupPassive) {
+                passiveGroups.push(groupObject);
+            } else {
+                activeGroups.push(groupObject);
+            }
+        });
+
+        const headerHtml = `
+            <div class="grid grid-cols-4 gap-4 items-center py-2 px-4 bg-gray-100 rounded-t-md sticky top-0 z-10">
+                <div class="col-span-1 font-bold">Name</div>
+                <div class="text-center font-bold">ET Ziel</div>
+                <div class="text-center font-bold">EH Ziel</div>
+                <div class="text-center font-bold">PQQ</div>
+            </div>`;
+
+        const renderUserRow = (user) => {
+            const pqq = user.pqq || 0;
+            const pqqColor = pqq > 120 ? 'text-skt-green-accent' : pqq >= 80 ? 'text-skt-yellow-accent' : 'text-skt-red-accent';
+            const ehGoalClass = user.ehGoal === 0 ? 'zero-goal' : '';
+            const etGoalClass = user.etGoal === 0 ? 'zero-goal' : '';
+            return `
+                <div class="grid grid-cols-4 gap-4 items-center py-2 px-4 cursor-pointer hover:bg-gray-100 rounded-md" data-userid="${user.id}">
+                    <div class="col-span-1 font-semibold text-skt-blue">${user.name}</div>
+                    <div class="text-center ${etGoalClass}">${user.etGoal}</div>
+                    <div class="text-center ${ehGoalClass}">${user.ehGoal}</div>
+                    <div class="text-center font-bold ${pqqColor}">${pqq.toFixed(0)}%</div>
+                </div>
+            `;
+        };
+        
+        const renderGroup = (group) => {
+            const groupContainer = document.createElement('div');
+            groupContainer.className = 'mb-8';
+            let groupHtml = `<h4 class="text-xl font-bold text-skt-blue mb-2">${group.leader.Name}</h4>`;
+            groupHtml += '<div class="bg-white rounded-lg shadow">';
+            groupHtml += headerHtml;
+            group.members.forEach(member => {
+                groupHtml += renderUserRow(member);
+            });
+            groupHtml += '</div>';
+            groupContainer.innerHTML = groupHtml;
+            return groupContainer;
+        };
+
+        activeGroups.forEach(group => {
+            listContainer.appendChild(renderGroup(group));
+        });
+
+        if (passiveGroups.length > 0) {
+            const passiveSection = document.createElement('div');
+            passiveSection.className = 'mt-12';
+            passiveSection.innerHTML = `<h3 class="text-2xl font-bold text-skt-blue mb-4 border-t pt-4">Passive Gruppen (ohne Planung)</h3>`;
+            passiveGroups.forEach(group => {
+                passiveSection.appendChild(renderGroup(group));
+            });
+            listContainer.appendChild(passiveSection);
+        }
+
+        listContainer.querySelectorAll('[data-userid]').forEach(row => { // Make it async
+            row.addEventListener('click', async () => {
+                const userId = row.dataset.userid;
+                await this.logPQQCalculationForUser(userId, selectedMonth, selectedYear);
+                openPlanningModal({ // Then open the modal
+                    userId: userId,
+                    monthName: selectedMonthName,
+                    year: selectedYear,
+                });
+            });
+        });
+    }
+
+    async calculatePQQForUserList(userIds, forMonth, forYear) {
+        const pqqLog = (message, ...data) => console.log(`%c[PQQ_List_Calc] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
+        const pqqDataMap = {};
+        if (!userIds || userIds.length === 0) return pqqDataMap;
+
+        const prevMonthDate = new Date(forYear, forMonth, 1);
+        prevMonthDate.setDate(0);
+        const prevMonthName = prevMonthDate.toLocaleString("de-DE", { month: "long" });
+        const prevYear = prevMonthDate.getFullYear();
+        const prevMonthStartDate = new Date(prevYear, prevMonthDate.getMonth(), 1);
+        const prevMonthEndDate = new Date(prevYear, prevMonthDate.getMonth() + 1, 0);
+        const prevStartDateIso = prevMonthStartDate.toISOString().split('T')[0];
+        const prevEndDateIso = prevMonthEndDate.toISOString().split('T')[0];
+
+        const relevantPlans = db.monatsplanung.filter(p => userIds.includes(p.Mitarbeiter_ID) && p.Monat === prevMonthName && p.Jahr === prevYear);
+        const plansByUserId = _.keyBy(relevantPlans, 'Mitarbeiter_ID');
+
+        const mitarbeiterNames = userIds.map(id => findRowById('mitarbeiter', id)?.Name).filter(Boolean);
+        if (mitarbeiterNames.length === 0) return pqqDataMap;
+        const mitarbeiterNamesSql = mitarbeiterNames.map(name => `'${escapeSql(name)}'`).join(',');
+
+        const ehQuery = `SELECT Mitarbeiter_ID, SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID IN (${mitarbeiterNamesSql}) AND Datum >= '${prevStartDateIso}' AND Datum <= '${prevEndDateIso}' GROUP BY Mitarbeiter_ID`;
+        const etQuery = `SELECT Mitarbeiter_ID, Status FROM Termine WHERE Mitarbeiter_ID IN (${mitarbeiterNamesSql}) AND Kategorie = 'ET' AND Datum >= '${prevStartDateIso}' AND Datum <= '${prevEndDateIso}'`;
+
+        const [ehResultsRaw, etResultsRaw] = await Promise.all([seaTableSqlQuery(ehQuery, true), seaTableSqlQuery(etQuery, true)]);
+
+        const ehByMitarbeiterId = _.keyBy(mapSqlResults(ehResultsRaw, 'Umsatz').map(r => ({ id: r.Mitarbeiter_ID[0].row_id, totalEH: r.totalEH })), 'id');
+        const etByMitarbeiterId = _.groupBy(mapSqlResults(etResultsRaw, 'Termine'), r => r.Mitarbeiter_ID[0].row_id);
+
+        const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+        userIds.forEach(userId => {
+            const plan = plansByUserId[userId];
+            const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
+            const ursprungszielET = plan?.Ursprungsziel_ET || 0;
+            const totalEH = ehByMitarbeiterId[userId]?.totalEH || 0;
+            const userEts = etByMitarbeiterId[userId] || [];
+            const totalETAusgemacht = userEts.filter(t => ET_STATUS_AUSGEMACHT.includes(t.Status)).length;
+
+            // KORREKTUR: Formel ist Ist / Ziel
+            const ehQuote = (ursprungszielEH > 0) ? (totalEH / ursprungszielEH) : (ursprungszielEH === 0 ? 1 : 0);
+
+            // KORREKTUR: Formel ist Ist / Ziel
+            const etQuote = (ursprungszielET > 0) ? (totalETAusgemacht / ursprungszielET) : (totalETAusgemacht === 0 ? 1 : 0);
+            pqqDataMap[userId] = ((ehQuote + etQuote) / 2) * 100;
+        });
+
+        return pqqDataMap;
     }
 }
 
@@ -6930,19 +7185,11 @@ async function calculateAndRenderPQQForCurrentView() {
     pqqLog(`Ist-Werte ermittelt: Total EH=${totalEH}, Total ET Ausgemacht=${totalETAusgemacht}`);
 
     // 4. Berechne PQQ-Teile
-    let ehQuote = 0;
-    if (totalEH > 0) {
-        ehQuote = totalUrsprungszielEH / totalEH;
-    } else if (totalUrsprungszielEH === 0) {
-        ehQuote = 1;
-    }
+    // KORREKTUR: Formel ist Ist / Ziel
+    const ehQuote = (totalUrsprungszielEH > 0) ? (totalEH / totalUrsprungszielEH) : (totalUrsprungszielEH === 0 ? 1 : 0);
 
-    let etQuote = 0;
-    if (totalETAusgemacht > 0) {
-        etQuote = totalUrsprungszielET / totalETAusgemacht;
-    } else if (totalUrsprungszielET === 0) {
-        etQuote = 1;
-    }
+    // KORREKTUR: Formel ist Ist / Ziel
+    const etQuote = (totalUrsprungszielET > 0) ? (totalETAusgemacht / totalUrsprungszielET) : (totalUrsprungszielET === 0 ? 1 : 0);
 
     const pqq = ((ehQuote + etQuote) / 2) * 100;
     pqqLog(`Einzelquoten berechnet: EH-Quote=${(ehQuote * 100).toFixed(2)}%, ET-Quote=${(etQuote * 100).toFixed(2)}%`);
@@ -7908,7 +8155,7 @@ async function saveNewUser() {
 }
 
 // --- Planning Modal Logic ---
-function openPlanningModal() {
+function openPlanningModal(preselectOptions = null) {
     dom.planningForm.reset();
     const userSelect = document.getElementById('planning-user-select');
     const monthSelect = document.getElementById('planning-month-select');
@@ -7931,16 +8178,20 @@ function openPlanningModal() {
         monthSelect.add(new Option(month, month));
     });
 
-    const today = getCurrentDate();
-    monthSelect.value = months[today.getMonth()];
-    yearInput.value = today.getFullYear();
-
-    userSelect.addEventListener('change', loadPlanningDataForSelection);
-    monthSelect.addEventListener('change', loadPlanningDataForSelection);
-    yearInput.addEventListener('change', loadPlanningDataForSelection);
+    if (preselectOptions) {
+        userSelect.value = preselectOptions.userId;
+        monthSelect.value = preselectOptions.monthName;
+        yearInput.value = preselectOptions.year;
+    } else {
+        const today = getCurrentDate();
+        monthSelect.value = months[today.getMonth()];
+        yearInput.value = today.getFullYear();
+        // NEU: Standardmäßig den aktuell angesehenen Mitarbeiter auswählen
+        if (userSelect.querySelector(`[value="${currentlyViewedUserData._id}"]`)) userSelect.value = currentlyViewedUserData._id;
+    }
 
     // Initial load for the first user in the list
-    if (structureUsers.length > 0) {
+    if (structureUsers.length > 0 || preselectOptions) {
         loadPlanningDataForSelection();
     }
 
@@ -7948,6 +8199,11 @@ function openPlanningModal() {
     document.body.classList.add('modal-open');
 }
 
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('planning-user-select')?.addEventListener('change', loadPlanningDataForSelection);
+    document.getElementById('planning-month-select')?.addEventListener('change', loadPlanningDataForSelection);
+    document.getElementById('planning-year-input')?.addEventListener('change', loadPlanningDataForSelection);
+});
 function loadPlanningDataForSelection() {
     const userId = document.getElementById('planning-user-select').value;
     const monthName = document.getElementById('planning-month-select').value;
@@ -7973,13 +8229,6 @@ function loadPlanningDataForSelection() {
 function closePlanningModal() {
     dom.planningModal.classList.remove('visible');
     document.body.classList.remove('modal-open');
-    // Remove event listeners to prevent memory leaks and multiple triggers
-    const userSelect = document.getElementById('planning-user-select');
-    const monthSelect = document.getElementById('planning-month-select');
-    const yearInput = document.getElementById('planning-year-input');
-    userSelect.removeEventListener('change', loadPlanningDataForSelection);
-    monthSelect.removeEventListener('change', loadPlanningDataForSelection);
-    yearInput.removeEventListener('change', loadPlanningDataForSelection);
 }
 
 async function savePlanningData() {
