@@ -49,6 +49,7 @@ let strukturbaumViewInstance = null;
 let pgTagebuchViewInstance = null;
 let HIERARCHY_CACHE = null;
 let currentOnboardingSubView = "leader-list";
+let currentOnboardingScope = 'group'; // NEU
 
 // --- DOM-ELEMENTE ---
 const dom = {
@@ -2110,29 +2111,35 @@ function renderTeamMemberCards(members) {
 }
 
 function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
-    const ehPercentage = isMoneyView ? 0 : (member.ehGoal > 0 ? (member.ehCurrent / member.ehGoal * 100) : 0);
+    // NEU: Berechnungen für alle Fortschrittsbalken und die Soll-Markierung
+    const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
+    
+    // NEU: Eigene Soll-Berechnung für ET basierend auf dem 3-Wochen-Infoabend-Zyklus
+    const today = getCurrentDate();
+    const nextInfoDate = findNextInfoDateAfter(today);
+    const previousInfoDate = new Date(nextInfoDate.getTime() - 21 * 24 * 60 * 60 * 1000);
+    const totalDaysInETCycle = 21;
+    const daysPassedInETCycle = (today.getTime() - previousInfoDate.getTime()) / (1000 * 60 * 60 * 24);
+    const etTimeElapsedPercentage = Math.max(0, Math.min(100, (daysPassedInETCycle / totalDaysInETCycle) * 100));
+    const ehPercentage = member.ehGoal > 0 ? (member.ehCurrent / member.ehGoal) * 100 : 0;
     const etPercentage = member.etGoal > 0 ? (member.etCurrent / member.etGoal * 100) : 0;
-    const ehColorHex = getProgressColorHex(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
+    const atPercentage = member.atGoal > 0 ? (member.atVereinbart / member.atGoal) * 100 : 0;
+    const ehColorClass = getProgressColorClass(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
     const prognosis = getPrognosis(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
     
     const ehValue = isMoneyView ? (member.earnings?.structure || 0) : member.ehCurrent;
     const ehGoal = isMoneyView ? 0 : member.ehGoal;
     const ehUnit = isMoneyView ? "Verdienst" : "Einheiten";
-    const ehDisplayValue = isMoneyView
-        ? ehValue.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 })
-        : `${ehValue.toLocaleString("de-DE", {
+    const ehDisplayValue = isMoneyView ?
+        ehValue.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }) :
+        `${ehValue.toLocaleString("de-DE", {
             maximumFractionDigits: 0,
           })} / ${ehGoal.toLocaleString("de-DE", { maximumFractionDigits: 0 })}`;
 
     const card = document.createElement('div');
     card.className = 'bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl flex flex-col';
-
     const summary = document.createElement('div');
     summary.className = 'p-4 cursor-pointer flex-grow';
-
-    const radius = 40;
-    const circumference = 2 * Math.PI * radius;
-    const offset = circumference * (1 - Math.min(ehPercentage, 100) / 100);
     
     const pos = member.position || "";
     let positionHtml = '';
@@ -2141,6 +2148,7 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
     }
     const prognosisHtml = !isMoneyView ? `<p class="text-sm ${prognosis.colorClass} font-semibold">${prognosis.text}</p>` : '';
 
+    // KORREKTUR: Der Fortschrittskreis wird durch drei Fortschrittsbalken ersetzt.
     summary.innerHTML = `
         <div class="flex justify-between items-start mb-4">
             <div class="min-w-0">
@@ -2152,26 +2160,48 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
                  <i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i>
             </div>
         </div>
-        <div class="flex justify-center items-center flex-col">
-            <div class="w-40 h-40 relative">
-                <svg class="team-progress-circle w-full h-full" viewBox="0 0 100 100">
-                    <circle class="bg-circle" cx="50" cy="50" r="${radius}"></circle>
-                    <circle class="progress-arc" cx="50" cy="50" r="${radius}" 
-                            style="stroke: ${ehColorHex}; stroke-dasharray: ${circumference}; stroke-dashoffset: ${offset};"></circle>
-                </svg>
-                <div class="absolute inset-0 flex items-center justify-center flex-col text-center px-2">
-                    <p class="text-base sm:text-lg font-bold" style="color: ${ehColorHex}; font-size: clamp(0.75rem, 4vw, 1.125rem);">${ehDisplayValue}</p>
-                    <p class="text-xs text-skt-blue-light">${ehUnit}</p>
+        
+        <div class="mt-4 px-2 space-y-4">
+            <!-- EH Bar -->
+            ${!isMoneyView ? `
+            <div>
+                <div class="flex justify-between items-baseline text-xs">
+                    <p class="text-skt-blue-light">${ehUnit}</p>
+                    <p class="font-semibold text-skt-blue">${ehDisplayValue}</p>
+                </div>
+                <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1 relative">
+                    <div class="h-full ${ehColorClass}" style="width: ${Math.min(ehPercentage, 100)}%;"></div>
+                    <div class="absolute top-[-2px] h-4 w-[2px] ml-[-1px] bg-skt-red-accent" style="left: ${timeElapsedPercentage}%;" data-tooltip="Soll-Fortschritt"></div>
+                </div>
+            </div>` : `
+            <div>
+                <div class="flex justify-between items-baseline text-xs">
+                    <p class="text-skt-blue-light">${ehUnit}</p>
+                    <p class="font-semibold text-skt-blue">${ehDisplayValue}</p>
                 </div>
             </div>
-        </div>
-        <div class="mt-4 px-2">
-            <div class="flex justify-between items-baseline text-xs">
-                <p class="text-skt-blue-light">ET Termine</p>
-                <p class="font-semibold text-skt-blue">${member.etCurrent} / ${member.etGoal}</p>
+            `}
+            <!-- AT Bar -->
+            <div>
+                <div class="flex justify-between items-baseline text-xs">
+                    <p class="text-skt-blue-light">AT Termine (Ausgem.)</p>
+                    <p class="font-semibold text-skt-blue">${member.atVereinbart} / ${member.atGoal}</p>
+                </div>
+                <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1 relative">
+                    <div class="h-full bg-skt-yellow-accent" style="width: ${Math.min(atPercentage, 100)}%;"></div>
+                    <div class="absolute top-[-2px] h-4 w-[2px] ml-[-1px] bg-skt-red-accent" style="left: ${timeElapsedPercentage}%;" data-tooltip="Soll-Fortschritt"></div>
+                </div>
             </div>
-            <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1">
-                 <div class="h-full bg-skt-green-accent" style="width: ${Math.min(etPercentage, 100)}%;"></div>
+            <!-- ET Bar -->
+            <div>
+                <div class="flex justify-between items-baseline text-xs">
+                    <p class="text-skt-blue-light">ET Termine</p>
+                    <p class="font-semibold text-skt-blue">${member.etCurrent} / ${member.etGoal}</p>
+                </div>
+                <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1 relative">
+                    <div class="h-full bg-skt-green-accent" style="width: ${Math.min(etPercentage, 100)}%;"></div>
+                    <div class="absolute top-[-2px] h-4 w-[2px] ml-[-1px] bg-skt-red-accent" style="left: ${etTimeElapsedPercentage}%;" data-tooltip="Soll-Fortschritt"></div>
+                </div>
             </div>
         </div>
     `;
@@ -2273,25 +2303,48 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
     const prognosisHtml = !isMoneyView
         ? `<span class="font-semibold text-sm ${prognosis.colorClass}" data-tooltip="Prognose basierend auf dem aktuellen Fortschritt im Verhältnis zur vergangenen Zeit im Monat.">${prognosis.text}</span>`
         : "";
+    
+    // NEU: Berechnungen für Soll-Markierung und AT-Balken
+    const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
+    
+    // NEU: Eigene Soll-Berechnung für ET basierend auf dem 3-Wochen-Infoabend-Zyklus
+    const today = getCurrentDate();
+    const nextInfoDate = findNextInfoDateAfter(today);
+    const previousInfoDate = new Date(nextInfoDate.getTime() - 21 * 24 * 60 * 60 * 1000);
+    const totalDaysInETCycle = 21;
+    const daysPassedInETCycle = (today.getTime() - previousInfoDate.getTime()) / (1000 * 60 * 60 * 24);
+    const etTimeElapsedPercentage = Math.max(0, Math.min(100, (daysPassedInETCycle / totalDaysInETCycle) * 100));
+    const atPercentage = member.atGoal > 0 ? (member.atVereinbart / member.atGoal) * 100 : 0;
+
     summary.innerHTML = `<div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-skt-blue text-lg break-words">${
         member.leaderName || member.name
     }</p>${positionHtml}</div><div class="flex items-center space-x-4 flex-shrink-0">${prognosisHtml}<button data-userid="${
         member.id
     }" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button><i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i></div></div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">${ehUnit}</p><p class="text-xs font-semibold text-skt-blue">${ehDisplayValue} ${ehGoalDisplay}</p></div>${
         !isMoneyView
-        ? `<div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1"><div class="h-full ${ehColorClass}" style="width: ${Math.min(
-            ehPercentage,
-            100
-            )}%;"></div></div>`
+        ? `<div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1 relative">
+            <div class="h-full ${ehColorClass}" style="width: ${Math.min(ehPercentage, 100)}%;"></div>
+            <div class="absolute top-[-2px] h-4 w-[2px] ml-[-1px] bg-skt-red-accent" style="left: ${timeElapsedPercentage}%;" data-tooltip="Soll-Fortschritt"></div>
+           </div>`
         : ""
-    }</div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">ET Termine</p><p class="text-xs font-semibold text-skt-blue">${
+    }</div>
+    <div class="mt-2">
+        <div class="flex justify-between items-baseline">
+            <p class="text-xs text-skt-blue-light">AT Termine (Ausgem.)</p>
+            <p class="text-xs font-semibold text-skt-blue">${member.atVereinbart} / ${member.atGoal}</p>
+        </div>
+        <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1 relative">
+            <div class="h-full bg-skt-yellow-accent" style="width: ${Math.min(atPercentage, 100)}%;"></div>
+            <div class="absolute top-[-2px] h-4 w-[2px] ml-[-1px] bg-skt-red-accent" style="left: ${timeElapsedPercentage}%;" data-tooltip="Soll-Fortschritt"></div>
+        </div>
+    </div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">ET Termine</p><p class="text-xs font-semibold text-skt-blue">${
         member.etCurrent
     } / ${
         member.etGoal
-    }</p></div><div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1"><div class="h-full bg-skt-green-accent" style="width: ${Math.min(
-        etPercentage,
-        100
-    )}%;"></div></div></div>`;
+    }</p></div><div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1 relative">
+        <div class="h-full bg-skt-green-accent" style="width: ${Math.min(etPercentage, 100)}%;"></div>
+        <div class="absolute top-[-2px] h-4 w-[2px] ml-[-1px] bg-skt-red-accent" style="left: ${etTimeElapsedPercentage}%;" data-tooltip="Soll-Fortschritt"></div>
+    </div></div>`;
     const details = document.createElement("div");
     details.className = "team-member-details px-4";
     details.innerHTML = `<div class="details-grid grid grid-cols-1 gap-4"><div class="text-center"><p class="text-sm font-semibold text-skt-blue mb-1">Analysetermine</p><p class="text-md font-bold text-skt-blue">${
@@ -2530,6 +2583,9 @@ async function fetchAndRenderOnboarding(mitarbeiterId) {
   const user = findRowById("mitarbeiter", mitarbeiterId);
   if (!user) return;
 
+  // NEU: Toggle-Element holen und Sichtbarkeit steuern
+  const scopeToggle = document.getElementById('onboarding-scope-toggle');
+
   const position = user.Karrierestufe || "";
   const isTrainee = position.toLowerCase().includes("trainee");
 
@@ -2537,13 +2593,26 @@ async function fetchAndRenderOnboarding(mitarbeiterId) {
     dom.einarbeitungTitle.textContent = "Dein Einarbeitungsplan";
     dom.leaderOnboardingView.classList.add("hidden");
     dom.traineeOnboardingView.classList.remove("hidden");
+    if (scopeToggle) scopeToggle.classList.add('hidden'); // Toggle für Trainees ausblenden
     await renderTraineeOnboardingView(mitarbeiterId);
   } else {
-    currentOnboardingSubView = "leader-list";
-    dom.einarbeitungTitle.textContent = "Einarbeitung: Gruppen-Übersicht";
+    // NEU: Logik für den Toggle
+    if (scopeToggle) scopeToggle.classList.remove('hidden');
+    const scope = currentOnboardingScope || 'group';
+
+    dom.einarbeitungTitle.textContent = `Einarbeitung: ${scope === 'group' ? 'Gruppen' : 'Struktur'}-Übersicht`;
     dom.traineeOnboardingView.classList.add("hidden");
     dom.leaderOnboardingView.classList.remove("hidden");
-    let teamMembers = getSubordinates(mitarbeiterId, "gruppe");
+
+    // NEU: `getSubordinates` mit dem richtigen Scope aufrufen.
+    let teamMembers;
+    if (scope === 'structure') {
+        const allSubordinates = getAllSubordinatesRecursive(mitarbeiterId);
+        // Filtere nur die Trainees/GAs heraus
+        teamMembers = allSubordinates.filter(member => !isUserLeader(member));
+    } else { // scope === 'group'
+        teamMembers = getSubordinates(mitarbeiterId, "gruppe");
+    }
     teamMembers = teamMembers.filter(member => member && member.Startdatum);
     await renderLeaderOnboardingView(teamMembers);
   }
@@ -2585,7 +2654,7 @@ async function renderLeaderOnboardingView(teamMembers) {
                                )}%</p>
                            </div>
                            <div class="w-full bg-gray-200 rounded-full h-4 shadow-inner relative">
-                               <div class="bg-red-300 h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${progressData.sollPercentage.toFixed(
+                               <div class="bg-skt-red-accent h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${progressData.sollPercentage.toFixed(
                                  0
                                )}%; z-index: 1;" data-tooltip="Soll-Fortschritt"></div>
                                <div class="bg-skt-green-accent h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${progressData.percentage.toFixed(
@@ -2639,27 +2708,25 @@ async function getOnboardingProgressForTrainee(traineeId) {
   const userStartDate = user.Startdatum;
   let sollPercentage = 0;
   if (userStartDate) {
+    // KORREKTUR: Die Soll-Prozentzahl wird nun basierend auf der Anzahl der bis heute fälligen Schritte berechnet,
+    // anstatt auf der reinen Zeitspanne. Das spiegelt den tatsächlichen Soll-Fortschritt wider.
     const startDate = new Date(userStartDate);
-    const overallStartDate = new Date(startDate);
-    overallStartDate.setDate(
-      startDate.getDate() + visibleSteps[0]["Tage nach Start"]
-    );
-    const overallEndDate = new Date(startDate);
-    overallEndDate.setDate(
-      startDate.getDate() + visibleSteps[visibleSteps.length - 1]["Tage nach Start"]
-    );
     const today = getCurrentDate();
-    const totalPlanDuration =
-      overallEndDate.getTime() - overallStartDate.getTime();
-    const elapsedPlanDuration = today.getTime() - overallStartDate.getTime();
-    if (totalPlanDuration > 0) {
-      sollPercentage = Math.max(
-        0,
-        Math.min(100, (elapsedPlanDuration / totalPlanDuration) * 100)
-      );
-    } else if (today >= overallStartDate) {
-      sollPercentage = 100;
-    }
+    today.setHours(23, 59, 59, 999); // Stelle sicher, dass der gesamte heutige Tag einbezogen wird.
+
+    const dueStepsCount = visibleSteps.filter(step => {
+        let dueDate;
+        // Diese Logik muss identisch sein mit der in `renderTraineeOnboardingView`, um Konsistenz zu gewährleisten.
+        if (step.Schritt && step.Schritt.toLowerCase().includes("infoabend")) {
+            dueDate = findNextInfoDateAfter(startDate);
+        } else {
+            dueDate = new Date(startDate);
+            dueDate.setDate(startDate.getDate() + (step.Tag || 0));
+        }
+        return dueDate <= today;
+    }).length;
+
+    sollPercentage = visibleSteps.length > 0 ? (dueStepsCount / visibleSteps.length) * 100 : 0;
   }
 
   return { percentage, sollPercentage, totalSteps: visibleSteps.length };
@@ -3131,7 +3198,6 @@ function getMonthDates(date = new Date()) {
 // --- Appointments View Logic (integriert in main.js) ---
 
 const appointmentsLog = (message, ...data) => console.log(`%c[Appointments] %c${message}`, 'color: #4f46e5; font-weight: bold;', 'color: black;', ...data);
-
 class AppointmentsView {
     constructor() {
         // Der Konstruktor ist absichtlich schlank. DOM-Elemente werden in init() geholt.
@@ -3158,8 +3224,8 @@ class AppointmentsView {
         this.statsByStatusBtn = null;
         this.outstandingAppointmentsSection = null;
         this.statsTableSortConfig = {
-            column: 'Datum',
-            direction: 'desc'
+            column: 'Datum', // KORREKTUR: Standard-Sortierung ist aufsteigend (älteste zuerst)
+            direction: 'asc'
         };
         this.outstandingAppointmentsList = null;
         this.prognosisDetailsContainer = null;
@@ -3175,9 +3241,12 @@ class AppointmentsView {
         this.detailsContainer = null;
         this.toggleDetailsCheckbox = null;
         this.calendarWeekStartDate = null;
+        this.showPastToggle = null;
         this.initialized = false;
         this.currentUserId = null;
-        this.allAppointments = [];
+        this.allAppointments = []; // All appointments fetched for the 3-month range
+        this.searchFilteredAppointments = []; // Appointments filtered by search text
+        this.dateAndSearchFilteredAppointments = []; // Appointments filtered by search text AND date range
         this.currentTab = 'umsatz';
         this.downline = [];
         this.sortColumn = 'Datum';
@@ -3187,6 +3256,19 @@ class AppointmentsView {
         this.showCancelled = false;
     }
 
+    // NEU: Methode zum Initialisieren der globalen Modal-Elemente und Listener
+    _initSharedElementsAndListeners() {
+        this.modal = document.getElementById('appointment-modal');
+        this.form = document.getElementById('appointment-form');
+        if (!this.modal || !this.form) {
+            appointmentsLog('!!! FEHLER: Termin-Modal-Elemente nicht im DOM gefunden.');
+            return;
+        }
+        document.getElementById('close-appointment-modal-btn').addEventListener('click', () => this.closeModal());
+        document.getElementById('cancel-appointment-btn').addEventListener('click', () => this.closeModal());
+        this.modal.addEventListener('click', (e) => { if (e.target === this.modal) this.closeModal(); });
+        this.form.addEventListener('submit', (e) => this.handleFormSubmit(e));
+    }
     // Hilfsmethode, um DOM-Elemente zu holen, wird von init() aufgerufen.
     _getDomElements() {
         this.statsChartTitle = document.getElementById('stats-chart-title');
@@ -3210,13 +3292,10 @@ class AppointmentsView {
         this.prognosisDetailsContainer = document.getElementById('prognosis-details-container');
         this.startDateInput = document.getElementById('appointments-start-date');
         this.endDateInput = document.getElementById('appointments-end-date');
-        this.modal = document.getElementById('appointment-modal');
-        this.form = document.getElementById('appointment-form');
         this.searchInput = document.getElementById('appointments-search-filter');
         // NEU: Gekapselte Analyse-Ansicht
         this.detailsContainer = document.getElementById('appointments-details-container');
         this.toggleDetailsCheckbox = document.getElementById('toggle-details-checkbox');
-        this.searchResultsContainer = document.getElementById('appointments-search-results-container'); // NEU
         this.toggleAnalysisBtn = document.getElementById('toggle-analysis-visibility-btn');
         this.analysisContent = document.getElementById('analysis-content');
         this.statsViewPane = document.getElementById('stats-view-pane');
@@ -3224,7 +3303,9 @@ class AppointmentsView {
         this.statsTab = document.getElementById('analysis-stats-tab');
         this.heatmapTab = document.getElementById('analysis-heatmap-tab');
         this.heatmapGrid = document.getElementById('heatmap-grid');
-        return this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.modal && this.form && this.searchInput && this.searchResultsContainer && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.statsTab && this.heatmapTab && this.heatmapGrid && this.statsScopeFilter && this.statsCategoryFilterBtn && this.statsCategoryFilterPanel && this.statsMonthTimeline && this.statsPeriodDisplay && this.statsNavPrevBtn && this.statsNavNextBtn && this.outstandingAppointmentsSection && this.outstandingAppointmentsList && this.statsViewCalendarBtn && this.statsViewTableBtn && this.statsCalendarView && this.statsTableView;
+        this.showPastToggle = document.getElementById('appointments-show-past');
+        this.showCancelledToggle = document.getElementById('appointments-show-cancelled'); // KORREKTUR: showCancelledToggle wiederherstellen
+        return this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.searchInput && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.statsTab && this.heatmapTab && this.heatmapGrid && this.statsScopeFilter && this.statsCategoryFilterBtn && this.statsCategoryFilterPanel && this.statsMonthTimeline && this.statsPeriodDisplay && this.statsNavPrevBtn && this.statsNavNextBtn && this.outstandingAppointmentsSection && this.outstandingAppointmentsList && this.statsViewCalendarBtn && this.statsViewTableBtn && this.statsCalendarView && this.statsTableView && this.showPastToggle && this.showCancelledToggle;
     }
 
     async init(userId) {
@@ -3248,7 +3329,7 @@ class AppointmentsView {
         this.calendarWeekStartDate.setHours(0, 0, 0, 0);
 
         // KORREKTUR: Standard-Datum auf aktuellen Umsatzmonat (Geschäftszyklus) setzen
-        const { startDate, endDate } = SKT_APP.getMonthlyCycleDates();
+        const { startDate, endDate } = getMonthlyCycleDates();
         this.startDateInput.value = startDate.toISOString().split('T')[0];
         this.endDateInput.value = endDate.toISOString().split('T')[0];
 
@@ -3279,12 +3360,9 @@ class AppointmentsView {
     async fetchAndRender() {
         appointmentsLog('--- START: fetchAndRender ---');
         try {
-            const startDateIso = this.startDateInput.value;
-            const endDateIso = this.endDateInput.value;
-            appointmentsLog(`1. Berechneter Zeitraum: ${startDateIso} bis ${endDateIso}`);
-
-            // KORREKTUR: Da der Filter entfernt wurde, wird der Scope fest auf 'personal' gesetzt.
-            const scope = this.statsScopeFilter.value; // KORREKTUR: Greift jetzt auf das korrekte Element zu
+            const today = getCurrentDate();
+            const scope = this.statsScopeFilter.value;
+            // KORREKTUR: Logik zur Sammlung von Benutzer-IDs, um sicherzustellen, dass der aktuelle Benutzer immer enthalten ist.
             let userIds = new Set();
             switch (scope) {
                 case 'personal':
@@ -3295,8 +3373,9 @@ class AppointmentsView {
                     SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
                     break;
                 case 'structure':
-                    userIds.add(this.currentUserId);
-                    this.downline.forEach(u => userIds.add(u._id));
+                    // KORREKTUR: Stelle sicher, dass der aktuelle Benutzer und seine gesamte Struktur enthalten sind.
+                    const structureUserIds = [this.currentUserId, ...this.downline.map(u => u._id)];
+                    structureUserIds.forEach(id => userIds.add(id));
                     break;
             }
 
@@ -3307,15 +3386,48 @@ class AppointmentsView {
             }
 
             const userNames = Array.from(userIds).map(id => SKT_APP.findRowById('mitarbeiter', id)?.Name).filter(Boolean);
-            const userNamesSql = userNames.map(name => `'${SKT_APP.escapeSql(name)}'`).join(',');
             appointmentsLog(`2. Lade Termine für ${userNames.length} Mitarbeiter (Scope: ${scope})`);
-
-            const query = `SELECT *, Mitarbeiter_ID FROM \`Termine\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' AND \`Mitarbeiter_ID\` IN (${userNamesSql}) ORDER BY \`Datum\` DESC`;
-            appointmentsLog('3. Sende SQL-Abfrage an die Datenbank...');
-            const appointmentsRaw = await SKT_APP.seaTableSqlQuery(query, true); // convert_link_id: true
-            appointmentsLog('4. Roh-Antwort von der Datenbank erhalten:', JSON.parse(JSON.stringify(appointmentsRaw)));
             
-            this.allAppointments = SKT_APP.mapSqlResults(appointmentsRaw, 'Termine');
+            const promises = [];
+            const allFetchedAppointments = [];
+
+            // NEUE LOGIK V2: Um das Limit der IN-Klausel und das 10k-Zeilen-Limit zu umgehen,
+            // werden die Abfragen sowohl nach Benutzern als auch nach Monaten aufgeteilt.
+            const userNamesArray = Array.from(userNames);
+            const chunkSize = 50; // 50 Benutzer pro Abfrage
+
+            for (let i = 0; i < userNamesArray.length; i += chunkSize) {
+                const userNameChunk = userNamesArray.slice(i, i + chunkSize);
+                if (userNameChunk.length === 0) continue;
+
+                const userNamesSql = userNameChunk.map(name => `'${SKT_APP.escapeSql(name)}'`).join(',');
+
+                // Für jeden Benutzer-Chunk laden wir die Termine für einen 3-Monats-Zeitraum.
+                for (let j = -1; j <= 1; j++) { 
+                    const monthDate = new Date(today.getFullYear(), today.getMonth() + j, 1);
+                    const startDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+                    const endDate = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+                    const startDateIso = startDate.toISOString().split('T')[0];
+                    const endDateIso = endDate.toISOString().split('T')[0];
+
+                    const query = `SELECT *, Mitarbeiter_ID FROM \`Termine\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' AND \`Mitarbeiter_ID\` IN (${userNamesSql})`;
+                    promises.push(SKT_APP.seaTableSqlQuery(query, true));
+                }
+            }
+
+            const results = await Promise.all(promises);
+            results.forEach(result => {
+                if (result && Array.isArray(result)) {
+                    allFetchedAppointments.push(...result);
+                }
+            });
+            
+            // Sortieren nach Datum, da die Chunks die Reihenfolge durcheinander bringen könnten.
+            // KORREKTUR: Duplikate entfernen, die durch überlappende Abfragen entstehen könnten.
+            const uniqueAppointments = _.uniqBy(allFetchedAppointments, '_id');
+            uniqueAppointments.sort((a, b) => new Date(b.Datum) - new Date(a.Datum));
+
+            this.allAppointments = SKT_APP.mapSqlResults(uniqueAppointments, 'Termine');
             appointmentsLog(`5. Antwort in ${this.allAppointments.length} Termin-Objekte umgewandelt.`);
 
             appointmentsLog('6. Rufe render() auf, um die Termine anzuzeigen.');
@@ -3330,23 +3442,8 @@ class AppointmentsView {
     render() {
         appointmentsLog('--- START: render ---');
 
-        this._renderAppointmentStats(); // NEU: Aufruf der Statistik-Render-Funktion
-        this._renderOutstandingAppointments();
-        // 1. Filter data
-        let filteredAppointments = this.allAppointments.filter(t => {
-            const isUmsatzTermin = ['AT', 'BT', 'ST'].includes(t.Kategorie); // KORREKTUR: ET hinzugefügt, damit sie im Umsatz-Tab erscheinen
-            const isRecruitingTermin = t.Kategorie === 'ET';
-            const isImmoTermin = t.Kategorie === 'Immo';
-            const isNetzwerkTermin = t.Kategorie === 'NT';
-
-            const tabMatch = (this.currentTab === 'umsatz' && isUmsatzTermin) || (this.currentTab === 'recruiting' && isRecruitingTermin) || (this.currentTab === 'immo' && isImmoTermin) || (this.currentTab === 'netzwerk' && isNetzwerkTermin);
-            if (!tabMatch) return false;
-
-            // KORREKTUR: Prüfe auf Status 'Storno' ODER das Absage-Flag
-            if (!this.showCancelled && (t.Status === 'Storno' || t.Absage === true)) { // this.showCancelled is not defined anymore
-                return false;
-            }
-
+        // 1. Filter by search text
+        this.searchFilteredAppointments = this.allAppointments.filter(t => {
             if (this.filterText) {
                 const searchText = this.filterText.toLowerCase();
                 const partner = (t.Terminpartner || '').toLowerCase();
@@ -3358,115 +3455,35 @@ class AppointmentsView {
             return true;
         });
 
-        // 2. Sort data
-        const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
-        filteredAppointments.sort((a, b) => {
-            let valA = a[this.sortColumn];
-            let valB = b[this.sortColumn];
+        // 2. Filter by date
+        const filterStartDate = new Date(this.startDateInput.value);
+        filterStartDate.setHours(0, 0, 0, 0);
+        const filterEndDate = new Date(this.endDateInput.value);
+        filterEndDate.setHours(23, 59, 59, 999);
 
-            if (this.sortColumn === 'Mitarbeiter_ID') {
-                valA = valA?.[0]?.display_value || '';
-                valB = valB?.[0]?.display_value || '';
+        this.dateAndSearchFilteredAppointments = this.searchFilteredAppointments.filter(t => {
+            if (t.Datum) {
+                const terminDate = new Date(t.Datum);
+                return terminDate >= filterStartDate && terminDate <= filterEndDate;
             }
-
-            if (valA === null || valA === undefined) valA = '';
-            if (valB === null || valB === undefined) valB = '';
-
-            let comparison = 0;
-            if (typeof valA === 'number' && typeof valB === 'number') {
-                comparison = valA - valB;
-            } else if (this.sortColumn === 'Datum') {
-                comparison = new Date(valA) - new Date(valB);
-            } else {
-                comparison = collator.compare(String(valA), String(valB));
-            }
-
-            return this.sortDirection === 'asc' ? comparison : -comparison;
+            return false;
         });
 
-        appointmentsLog(`Rendering ${filteredAppointments.length} appointments.`);
-
-        // NEU: KPIs und Statistiken rendern, bevor die Tabelle gebaut wird
+        this._renderAppointmentStats();
+        this._renderOutstandingAppointments();
         this._renderStatsChart();
         this._renderPrognosisDetails();
         this._renderHeatmap();
-        this._renderCalendar();
-
-        if (filteredAppointments.length === 0) {
-            return;
-        }
-
-        // 3. Build table
-        const tableWrapper = document.createElement('div');
-        tableWrapper.className = 'overflow-x-auto';
-
-        const table = document.createElement('table');
-        table.className = 'appointments-table';
-
-        const isUmsatz = this.currentTab === 'umsatz';
-        const isRecruiting = this.currentTab === 'recruiting';
-        const columns = [
-            { key: 'Datum', label: 'Datum' },
-            { key: 'Terminpartner', label: isUmsatz ? 'Kunde' : 'Bewerber' },
-            { key: 'Status', label: 'Status' },
-            { key: 'Mitarbeiter_ID', label: 'Mitarbeiter' },
-        ];
-        if (isUmsatz) {
-            columns.push({ key: 'Umsatzprognose', label: 'Umsatzprognose' });
-        }
-        if (isRecruiting) {
-            columns.push({ key: 'Infoabend', label: 'Infoabend' });
-        }
-
-        const thead = document.createElement('thead');
-        const headerRow = document.createElement('tr');
-        columns.forEach(col => {
-            const th = document.createElement('th');
-            th.dataset.sortKey = col.key;
-            let iconHtml = '<i class="fas fa-sort sort-icon"></i>';
-            if (this.sortColumn === col.key) {
-                iconHtml = this.sortDirection === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>';
-            }
-            th.innerHTML = `${col.label} ${iconHtml}`;
-            headerRow.appendChild(th);
-        });
-        thead.appendChild(headerRow);
-        table.appendChild(thead);
-
-        const tbody = document.createElement('tbody');
-        filteredAppointments.forEach(termin => {
-            const tr = document.createElement('tr');
-            const statusColorClass = this._getStatusColorClass(termin);
-            tr.className = `border-l-4 ${statusColorClass} cursor-pointer`;
-            tr.dataset.id = termin._id;
-
-            columns.forEach(col => {
-                const td = document.createElement('td');
-                let value = termin[col.key];
-                if (col.key === 'Mitarbeiter_ID') {
-                    value = termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
-                } else if (col.key === 'Datum' || col.key === 'Infoabend') {
-                    // NEU: Uhrzeit hinzufügen
-                    value = value ? new Date(value).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' Uhr' : '-';
-                } else if (col.key === 'Umsatzprognose') {
-                    value = value ? value.toLocaleString('de-DE') + ' EH' : '-';
-                }
-                td.textContent = value || '-';
-                tr.appendChild(td);
-            });
-            tbody.appendChild(tr);
-        });
-        table.appendChild(tbody);
-
-        tableWrapper.appendChild(table);
-
-        appointmentsLog('--- ENDE: render ---');
     }
 
     setupEventListeners() {
-        const debouncedFetch = _.debounce(() => this.fetchAndRender(), 300);
-        this.startDateInput.addEventListener('change', debouncedFetch);
-        this.endDateInput.addEventListener('change', debouncedFetch);
+        // KORREKTUR: Filter-Änderungen rufen nur noch render() auf, nicht mehr fetchAndRender().
+        const debouncedRender = _.debounce(() => this.render(), 300);
+        this.startDateInput.addEventListener('change', debouncedRender);
+        this.endDateInput.addEventListener('change', debouncedRender);
+        this.searchInput.addEventListener('input', _.debounce(e => {
+            this.filterText = e.target.value; this.render();
+        }, 350));
         // KORREKTUR: Navigation auf "Tag für Tag" umgestellt
         this.statsNavPrevBtn.addEventListener('click', () => this._navigateStats(-1));
         this.statsNavNextBtn.addEventListener('click', () => this._navigateStats(1));
@@ -3489,8 +3506,10 @@ class AppointmentsView {
         document.addEventListener('click', (e) => { if (!this.statsCategoryFilterPanel.contains(e.target)) this.statsCategoryFilterPanel.classList.add('hidden'); });
         
         // KORREKTUR: Event-Listener wiederhergestellt
-        this.statsScopeFilter.addEventListener('change', () => this.fetchAndRender());
-        this.searchInput.addEventListener('input', _.debounce((e) => this.handleLiveSearch(e.target.value), 350));
+        this.statsScopeFilter.addEventListener('change', () => this.fetchAndRender()); // Scope-Änderung erfordert einen neuen Fetch
+
+        this.showPastToggle.addEventListener('change', () => this.render()); // KORREKTUR: Ruft render() auf, um alle Filter neu anzuwenden
+        this.showCancelledToggle.addEventListener('change', () => this.render());
 
         // KORREKTUR: Event-Listener für die Statistik-Chart-Umschaltung wiederhergestellt
         this.statsByEmployeeBtn.addEventListener('click', () => { this.statsChartMode = 'employee'; this._updateStatsToggleButtons(); this._renderStatsChart(); });
@@ -3502,7 +3521,13 @@ class AppointmentsView {
         this.modal.addEventListener('click', (e) => { if (e.target === this.modal) this.closeModal(); });
         this.form.addEventListener('submit', (e) => this.handleFormSubmit(e));
 
-        document.getElementById('delete-appointment-btn').addEventListener('click', () => this.handleDelete());
+        // NEU: Event Listener für den Absage-Toggle im Modal, um das Grund-Feld sofort anzuzeigen/auszublenden.
+        const cancellationToggle = this.form.querySelector('#appointment-cancellation');
+        const cancellationReasonContainer = this.form.querySelector('#appointment-cancellation-reason-container');
+        cancellationToggle.addEventListener('change', () => {
+            cancellationReasonContainer.classList.toggle('hidden', !cancellationToggle.checked);
+        });
+
         // NEU: Event Listener für den neuen Analyse-Container und die Tabs
         this.toggleAnalysisBtn.addEventListener('click', () => this._toggleCollapsible(this.analysisContent, this.toggleAnalysisBtn));
         this.statsTab.addEventListener('click', () => this._switchAnalysisTab('stats'));
@@ -3652,65 +3677,72 @@ class AppointmentsView {
 
     // NEU: Funktion zum Berechnen und Anzeigen der Termin-Statistiken
     _renderAppointmentStats() {
-        // KORREKTUR: Da der Filter entfernt wurde, wird der Scope fest auf 'personal' gesetzt.
-        const scope = 'personal';
-        const userIds = new Set();
-        switch (scope) {
-            case 'personal':
-                userIds.add(this.currentUserId);
-                break;
-            case 'group':
-                userIds.add(this.currentUserId);
-                SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
-                break;
-            case 'structure':
-                userIds.add(this.currentUserId);
-                this.downline.forEach(u => userIds.add(u._id));
-                break;
-        }
-
         const today = getCurrentDate();
-        const monthName = today.toLocaleString('de-DE', { month: 'long', year: 'numeric' });
-        this.statsPeriodDisplay.textContent = monthName;
+        // KORREKTUR: Verwende die Zyklusdaten für die Anzeige und Filterung
+        const { startDate: cycleStartDate, endDate: cycleEndDate } = getMonthlyCycleDates();
+        this.statsPeriodDisplay.textContent = cycleStartDate.toLocaleString('de-DE', { month: 'long', year: 'numeric' });
 
         const selectedCheckboxes = this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]:checked');
         const selectedCategories = Array.from(selectedCheckboxes).map(cb => cb.value);
 
         if (selectedCategories.length === 0) {
             this.statsCategoryFilterBtn.textContent = 'Keine Auswahl';
-        } else if (selectedCategories.length === this.statsCategoryFilterPanel.querySelectorAll('input').length) {
+        } else if (selectedCategories.length === this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]').length) {
             this.statsCategoryFilterBtn.textContent = 'Alle Kategorien';
         } else {
             this.statsCategoryFilterBtn.textContent = selectedCategories.join(', ');
         }
-        const relevantAppointments = this.allAppointments.filter(t => selectedCategories.includes(t.Kategorie) && t.Datum);
 
-        // anhand des reinen Datum-Strings (YYYY-MM-DD) gruppiert, ohne ihn in ein Date-Objekt umzuwandeln.
-        // Dies stellt sicher, dass ein Termin vom 09.09. immer am 09.09. angezeigt wird, egal um welche Uhrzeit.
-        const appointmentsByDay = _.groupBy(relevantAppointments, t => {
-            return t.Datum ? t.Datum.split(/ |T/)[0] : null;
+        // --- Core Filtering Logic ---
+        const showPast = this.showPastToggle.checked;
+        const showCancelled = this.showCancelledToggle ? this.showCancelledToggle.checked : false;
+        const todayForFilter = new Date(today);
+        todayForFilter.setHours(0, 0, 0, 0);
+
+        // 1. Base appointments: filtered by search and category
+        let baseAppointments = this.searchFilteredAppointments.filter(t => selectedCategories.includes(t.Kategorie) && t.Datum);
+
+        // NEU: Nach abgesagten Terminen filtern
+        if (!showCancelled) {
+            baseAppointments = baseAppointments.filter(t => t.Absage !== true && t.Status !== 'Storno');
+        }
+
+        // 2. Filter by business cycle
+        let cycleAppointments = baseAppointments.filter(t => {
+            const terminDate = new Date(t.Datum);
+            return terminDate >= cycleStartDate && terminDate <= cycleEndDate;
         });
 
-        // KORREKTUR: Die gefilterten Termine müssen vor dem Rendern der Tabelle sortiert werden.
-        const sortedAppointments = this._sortStatsTableData(relevantAppointments);
+        // 3. Apply "show past" toggle logic for the table view
+        let finalAppointmentsForTable = cycleAppointments;
+        if (!showPast) {
+            finalAppointmentsForTable = cycleAppointments.filter(t => new Date(t.Datum) >= todayForFilter);
+        }
+
+        // --- Table View Logic ---
+        const sortedAppointments = this._sortStatsTableData(finalAppointmentsForTable);
         this._renderStatsTable(sortedAppointments);
+
+        // --- Calendar View Logic ---
+        // The calendar always works with all appointments in the cycle. Visibility is handled in the rendering loop.
+        const appointmentsByDay = _.groupBy(cycleAppointments, t => t.Datum ? t.Datum.split(/ |T/)[0] : null);
 
         this.statsMonthTimeline.innerHTML = '';
 
         const categoryColors = {
             'AT': 'bg-skt-green-accent',
-            'BT': 'bg-skt-blue-accent',   // KORREKTUR: 'bg-skt-blue-accent' statt 'bg-skt-blue-main'
-            'ST': 'bg-skt-red-accent', // NEU: Rot für Servicetermine
-            'ET': 'bg-accent-gold',      // Gold
-            'Immo': 'bg-accent-immo',    // Türkis
-            'NT': 'bg-accent-purple',    // Lila
-            'default': 'bg-skt-grey-medium' // Grau
+            'BT': 'bg-skt-blue-accent',
+            'ST': 'bg-skt-red-accent',
+            'ET': 'bg-accent-gold',
+            'Immo': 'bg-accent-immo',
+            'NT': 'bg-accent-purple',
+            'default': 'bg-skt-grey-medium'
         };
 
-        const viewStartDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        const viewEndDate = new Date(today.getFullYear(), today.getMonth() + 2, 0);
+        // KORREKTUR: Die Kalenderansicht erstreckt sich immer über den gesamten Umsatzmonat.
+        const viewStartDate = cycleStartDate;
+        const viewEndDate = cycleEndDate;
 
-        // Hilfsfunktion, um ein Datum in YYYY-MM-DD umzuwandeln, ohne die Zeitzone zu ändern.
         const toLocalISOString = (date) => {
             const year = date.getFullYear();
             const month = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -3719,29 +3751,32 @@ class AppointmentsView {
         };
 
         for (let d = new Date(viewStartDate); d <= viewEndDate; d.setDate(d.getDate() + 1)) {
-            const dateString = toLocalISOString(d); // KORREKTUR: Zeitzonen-sichere Umwandlung verwenden.
-            const appointmentsForDay = (appointmentsByDay[dateString] || []).sort((a,b) => new Date(a.Datum) - new Date(b.Datum));
-            const isToday = d.toDateString() === new Date().toDateString();
+            const dateString = toLocalISOString(d);
+            
+            // KORREKTUR: Wenn "Vergangene anzeigen" AUS ist, überspringe das Rendern für vergangene Tage.
+            if (!showPast && d < todayForFilter) {
+                continue;
+            }
+
+            let appointmentsForDay = (appointmentsByDay[dateString] || []);
+            appointmentsForDay.sort((a,b) => new Date(a.Datum) - new Date(b.Datum));
+
+            const isToday = d.toDateString() === today.toDateString();
 
             const dayCard = document.createElement('div');
-            dayCard.className = `day-card flex-shrink-0 w-56 h-full bg-white rounded-xl p-3 flex flex-col border-2 ${isToday ? 'border-skt-green-accent' : 'border-gray-200'}`;
-            dayCard.dataset.date = dateString; // NEU: Datum als Attribut für die Navigation hinzufügen
-            dayCard.className = `day-card flex-shrink-0 w-72 h-full bg-white rounded-xl p-3 flex flex-col border-2 ${isToday ? 'border-skt-green-accent' : 'border-gray-200'}`;
+            dayCard.className = `day-card flex-shrink-0 w-72 h-full bg-white rounded-xl p-3 flex flex-col border-2 ${isToday ? 'border-skt-green-accent' : 'border-gray-200'}`; dayCard.dataset.date = dateString;
             if (isToday) dayCard.classList.add('is-today');
 
             let appointmentsHtml = '';
             if (appointmentsForDay.length > 0) {
                 appointmentsHtml = appointmentsForDay.map(termin => {
                     const color = categoryColors[termin.Kategorie] || categoryColors['default'];
-                    // KORREKTUR: Robuster Zugriff auf den Mitarbeiternamen. Die Datenquelle für `Mitarbeiter_ID`
-                    // kann entweder eine einfache ID (String) oder ein Link-Objekt sein.
                     let mitarbeiterName = 'N/A';
                     if (termin.Mitarbeiter_ID && Array.isArray(termin.Mitarbeiter_ID) && termin.Mitarbeiter_ID[0]?.display_value) {
                         mitarbeiterName = termin.Mitarbeiter_ID[0].display_value;
                     } else if (typeof termin.Mitarbeiter_ID === 'string') {
                         mitarbeiterName = SKT_APP.findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
                     }
-                    // NEU: Uhrzeit des Termins extrahieren und formatieren
                     const terminTime = termin.Datum ? new Date(termin.Datum).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
 
                     return `<div class="p-1.5 rounded ${color} text-white text-xs mb-1.5 cursor-pointer" data-id="${termin._id}">
@@ -3757,20 +3792,16 @@ class AppointmentsView {
                 <div class="font-bold text-skt-blue mb-3">${d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}</div>
                 <div class="flex-grow overflow-y-auto space-y-2 pr-1">${appointmentsHtml}</div>
             `;
-            dayCard.querySelectorAll('[data-id]').forEach(el => el.addEventListener('click', (e) => this.openModal(relevantAppointments.find(t => t._id === e.currentTarget.dataset.id))));
+            dayCard.querySelectorAll('[data-id]').forEach(el => el.addEventListener('click', (e) => this.openModal(this.allAppointments.find(t => t._id === e.currentTarget.dataset.id))));
             this.statsMonthTimeline.appendChild(dayCard);
         }
-        this._scrollToTodayInTimeline();
 
         setTimeout(() => {
-            this._scrollToTodayInTimeline();
+            // KORREKTUR: Scrolle nach dem Rendern immer zum heutigen Tag.
+            this._scrollToTodayInTimeline('auto');
             this._updateCardScales();
         }, 150);
-        // Stellt sicher, dass nach dem Rendern zum heutigen Tag gescrollt wird.
-        // Ein kleiner Timeout gibt dem Browser Zeit, die Elemente zu zeichnen.
-        setTimeout(() => this._scrollToTodayInTimeline(), 100);
     }
-    
     _renderStatsTable(appointments) {
         const container = document.getElementById('stats-table-container');
         container.innerHTML = '';
@@ -3836,21 +3867,33 @@ class AppointmentsView {
             this.statsTableSortConfig.direction = this.statsTableSortConfig.direction === 'asc' ? 'desc' : 'asc';
         } else {
             this.statsTableSortConfig.column = columnKey;
-            this.statsTableSortConfig.direction = 'desc'; // Standardmäßig absteigend bei neuer Spalte
+            // KORREKTUR: Bei Klick auf eine neue Spalte immer aufsteigend sortieren.
+            this.statsTableSortConfig.direction = 'asc';
         }
-        // Die Daten müssen nicht neu gefiltert, sondern nur neu gerendert werden.
-        // Wir rufen _renderAppointmentStats auf, was wiederum _renderStatsTable mit den bereits gefilterten Daten aufruft.
-        this._renderAppointmentStats();
+        this.render();
     }
 
     _sortStatsTableData(appointments) {
         const { column, direction } = this.statsTableSortConfig;
         const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
         
+        // KORREKTUR: Robuste Sortierung, die Datums- und Textfelder korrekt behandelt.
         return appointments.sort((a, b) => {
-            const valA = (column === 'Mitarbeiter_ID' ? (SKT_APP.findRowById('mitarbeiter', a.Mitarbeiter_ID)?.Name || '') : a[column]) || '';
-            const valB = (column === 'Mitarbeiter_ID' ? (SKT_APP.findRowById('mitarbeiter', b.Mitarbeiter_ID)?.Name || '') : b[column]) || '';
-            const comparison = collator.compare(String(valA), String(valB));
+            let valA = a[column];
+            let valB = b[column];
+
+            if (column === 'Mitarbeiter_ID') {
+                valA = a.Mitarbeiter_ID?.[0]?.display_value || '';
+                valB = b.Mitarbeiter_ID?.[0]?.display_value || '';
+            }
+
+            let comparison = 0;
+            if (column === 'Datum') {
+                comparison = new Date(valA || 0) - new Date(valB || 0);
+            } else {
+                comparison = collator.compare(String(valA || ''), String(valB || ''));
+            }
+
             return direction === 'asc' ? comparison : -comparison;
         });
     }
@@ -3859,7 +3902,7 @@ class AppointmentsView {
         const today = getCurrentDate();
         today.setHours(0, 0, 0, 0);
 
-        const outstanding = this.allAppointments.filter(t => {
+        const outstanding = this.dateAndSearchFilteredAppointments.filter(t => {
             if (!t.Datum || t.Status !== 'Ausgemacht') return false;
             const terminDate = new Date(t.Datum);
             return terminDate < today;
@@ -3924,16 +3967,33 @@ class AppointmentsView {
         if (!container) return;
         container.innerHTML = '';
 
-        const prognosisByEmployee = {};
+        // NEU: Logik zur Gruppierung nach Führungskraft
+        const employeeToGroupMap = new Map();
+        const leaders = db.mitarbeiter.filter(m => SKT_APP.isUserLeader(m));
+        leaders.forEach(leader => {
+            employeeToGroupMap.set(leader._id, leader.Name); // Der Leiter gehört zu seiner eigenen Gruppe
+            const groupMembers = SKT_APP.getSubordinates(leader._id, 'gruppe');
+            groupMembers.forEach(member => employeeToGroupMap.set(member._id, leader.Name));
+        });
 
-        this.allAppointments
+        const prognosisByGroup = {};
+        this.dateAndSearchFilteredAppointments
             .filter(t => t.Kategorie === 'BT' && t.Status !== 'Storno' && t.Absage !== true && t.Umsatzprognose > 0)
             .forEach(t => {
-                const employeeName = t.Mitarbeiter_ID?.[0]?.display_value || 'Unbekannt';
-                prognosisByEmployee[employeeName] = (prognosisByEmployee[employeeName] || 0) + t.Umsatzprognose;
+                const employeeId = t.Mitarbeiter_ID?.[0]?.row_id;
+                if (!employeeId) return;
+                const groupName = employeeToGroupMap.get(employeeId) || 'Ohne Gruppe';
+                prognosisByGroup[groupName] = (prognosisByGroup[groupName] || 0) + t.Umsatzprognose;
             });
 
-        const sortedPrognosis = Object.entries(prognosisByEmployee)
+        // NEU: Gesamtprognose berechnen und Titel aktualisieren
+        const totalPrognosis = Object.values(prognosisByGroup).reduce((sum, val) => sum + val, 0);
+        const titleElement = document.querySelector('#prognosis-section h3');
+        if (titleElement) {
+            titleElement.textContent = `Umsatzprognose (${totalPrognosis.toLocaleString('de-DE')} EH)`;
+        }
+
+        const sortedPrognosis = Object.entries(prognosisByGroup)
             .sort(([, a], [, b]) => b - a);
 
         if (sortedPrognosis.length === 0) {
@@ -3968,7 +4028,7 @@ class AppointmentsView {
         if (this.statsChartMode === 'employee') {
             this.statsChartTitle.textContent = 'Termine nach Mitarbeiter';
             const statsByMitarbeiter = {};
-            this.allAppointments.forEach(t => {
+            this.dateAndSearchFilteredAppointments.forEach(t => {
                 const name = t.Mitarbeiter_ID?.[0]?.display_value || 'Unbekannt';
                 statsByMitarbeiter[name] = (statsByMitarbeiter[name] || 0) + 1;
             });
@@ -3980,7 +4040,7 @@ class AppointmentsView {
         } else { // 'status'
             this.statsChartTitle.textContent = 'Termine nach Status';
             const statsByStatus = {};
-            this.allAppointments.forEach(t => {
+            this.dateAndSearchFilteredAppointments.forEach(t => {
                 const status = t.Status || 'Unbekannt';
                 statsByStatus[status] = (statsByStatus[status] || 0) + 1;
             });
@@ -4074,7 +4134,6 @@ class AppointmentsView {
             const title = this.modal.querySelector('#appointment-modal-title');
             const idInput = this.modal.querySelector('#appointment-id');
             const userSelect = this.modal.querySelector('#appointment-user');
-            const deleteBtn = this.modal.querySelector('#delete-appointment-btn');
             const categorySelect = this.modal.querySelector('#appointment-category');
             appointmentsLog('Modal elements found.');
 
@@ -4104,7 +4163,6 @@ class AppointmentsView {
             if (termin) { // Edit mode
                 appointmentsLog('Entering edit mode for termin:', termin);
                 title.textContent = 'Termin bearbeiten';
-                deleteBtn.classList.remove('hidden');
                 idInput.value = termin._id;
                 const user = allRelevantUsers.find(u => u.Name === termin.Mitarbeiter_ID?.[0]?.display_value);
                 if (user) userSelect.value = user._id;
@@ -4135,7 +4193,6 @@ class AppointmentsView {
             } else { // Add mode
                 appointmentsLog('Entering add mode.');
                 title.textContent = 'Termin anlegen';
-                deleteBtn.classList.add('hidden');
                 idInput.value = '';
                 userSelect.value = this.currentUserId;
                 // KORREKTUR: `datetime-local` erwartet das Format YYYY-MM-DDTHH:mm
@@ -4183,44 +4240,6 @@ class AppointmentsView {
             saveBtn.classList.remove('bg-skt-green-accent');
             saveBtn.classList.add('bg-skt-blue', 'hover:bg-skt-blue-light');
         }
-    }
-
-    handleDelete() {
-        const rowId = this.form.querySelector('#appointment-id').value;
-        if (!rowId) return;
-    
-        // NEU: Benutzerdefiniertes Bestätigungs-Modal verwenden
-        const confirmModal = document.getElementById('confirm-modal');
-        const confirmOkBtn = document.getElementById('confirm-modal-ok-btn');
-        const confirmCancelBtn = document.getElementById('confirm-modal-cancel-btn');
-        document.getElementById('confirm-modal-text').textContent = 'Möchten Sie diesen Termin wirklich endgültig löschen? Diese Aktion kann nicht rückgängig gemacht werden.';
-    
-        confirmModal.classList.add('visible');
-    
-        const handleOk = async () => {
-            const success = await SKT_APP.seaTableDeleteRow('Termine', rowId);
-            if (success) {
-                this.closeModal(); // Schließt das Bearbeitungs-Modal
-                // KORREKTUR: Entferne den gelöschten Termin aus dem lokalen Datenbestand,
-                // damit er sofort aus allen Ansichten (Kalender, Tabelle) verschwindet.
-                const indexToRemove = this.allAppointments.findIndex(t => t._id === rowId);
-                if (indexToRemove > -1) this.allAppointments.splice(indexToRemove, 1);
-                
-                await this.fetchAndRender();
-            } else {
-                alert('Fehler beim Löschen des Termins.');
-            }
-            cleanup();
-        };
-    
-        const cleanup = () => {
-            confirmModal.classList.remove('visible');
-            confirmOkBtn.removeEventListener('click', handleOk);
-            confirmCancelBtn.removeEventListener('click', cleanup);
-        };
-    
-        confirmOkBtn.addEventListener('click', handleOk, { once: true });
-        confirmCancelBtn.addEventListener('click', cleanup, { once: true });
     }
 
     async handleFormSubmit(e) {
@@ -4326,7 +4345,7 @@ class AppointmentsView {
         this.heatmapGrid.innerHTML = '';
 
         const { startDate, endDate } = SKT_APP.getMonthlyCycleDates();
-        const appointmentsByDay = _.groupBy(this.allAppointments, t => t.Datum ? t.Datum.split('T')[0] : null);
+        const appointmentsByDay = _.groupBy(this.dateAndSearchFilteredAppointments, t => t.Datum ? t.Datum.split('T')[0] : null);
         
         const counts = Object.values(appointmentsByDay).map(arr => arr.length).filter(c => c > 0);
         const minAppointments = Math.min(...counts, 1);
@@ -4386,7 +4405,7 @@ class AppointmentsView {
     _renderCalendar() {
         if (!this.calendarDaysGrid) return;
         this.calendarDaysGrid.innerHTML = '';
-        const appointmentsByDay = _.groupBy(this.allAppointments, t => t.Datum ? t.Datum.split('T')[0] : null);
+        const appointmentsByDay = _.groupBy(this.searchFilteredAppointments, t => t.Datum ? t.Datum.split('T')[0] : null);
 
         // Wochenanzeige aktualisieren
         const weekStart = new Date(this.calendarWeekStartDate);
@@ -4418,7 +4437,7 @@ class AppointmentsView {
                     terminEl.dataset.tooltip = `${termin.Terminpartner} (${termin.Status})`;
                     terminEl.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        const clickedTermin = this.allAppointments.find(t => t._id === e.currentTarget.dataset.id);
+                        const clickedTermin = this.searchFilteredAppointments.find(t => t._id === e.currentTarget.dataset.id);
                         if (clickedTermin) this.openModal(clickedTermin);
                     });
                     appointmentsContainer.appendChild(terminEl);
@@ -4430,7 +4449,7 @@ class AppointmentsView {
     }
 
     _showAppointmentsForDay(dateString) {
-        const appointmentsForDay = this.allAppointments.filter(t => t.Datum && t.Datum.startsWith(dateString));
+        const appointmentsForDay = this.searchFilteredAppointments.filter(t => t.Datum && t.Datum.startsWith(dateString));
         if (appointmentsForDay.length === 0) return;
 
         const formattedDate = new Date(dateString).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -4451,95 +4470,6 @@ class AppointmentsView {
         dom.hinweisModal.classList.add('visible');
         document.body.classList.add('modal-open');
         document.documentElement.classList.add('modal-open');
-    }
-
-    // NEU: Funktion für die Live-Suche
-    async handleLiveSearch(searchText) {
-        if (searchText.length < 3) {
-            this.searchResultsContainer.classList.add('hidden');
-            return;
-        }
-
-        this.searchResultsContainer.classList.remove('hidden');
-        this.searchResultsContainer.innerHTML = '<div class="loader mx-auto my-4"></div>';
-
-        try {
-            const escapedText = SKT_APP.escapeSql(searchText);
-            
-            // KORREKTUR: Berücksichtige den ausgewählten Scope (personal, group, structure) bei der Suche.
-            const scope = this.statsScopeFilter.value;
-            let userIds = new Set();
-            switch (scope) {
-                case 'personal':
-                    userIds.add(this.currentUserId);
-                    break;
-                case 'group':
-                    userIds.add(this.currentUserId);
-                    SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
-                    break;
-                case 'structure':
-                    userIds.add(this.currentUserId);
-                    this.downline.forEach(u => userIds.add(u._id));
-                    break;
-            }
-            const userNames = Array.from(userIds).map(id => SKT_APP.findRowById('mitarbeiter', id)?.Name).filter(Boolean);
-            const userNamesSql = userNames.map(name => `'${SKT_APP.escapeSql(name)}'`).join(',');
-
-            const query = `
-                SELECT * 
-                FROM \`Termine\` 
-                WHERE (\`Terminpartner\` LIKE '%${escapedText}%' OR \`Mitarbeiter_ID\` LIKE '%${escapedText}%')
-                  AND \`Mitarbeiter_ID\` IN (${userNamesSql})
-                ORDER BY \`Datum\` DESC
-                LIMIT 20
-            `;
-            
-            const resultsRaw = await SKT_APP.seaTableSqlQuery(query, true);
-            const results = SKT_APP.mapSqlResults(resultsRaw, 'Termine');
-
-            this.renderSearchResults(results);
-        } catch (error) {
-            console.error('Fehler bei der Live-Suche:', error);
-            this.searchResultsContainer.innerHTML = '<p class="text-red-500 text-center p-4">Fehler bei der Suche.</p>';
-        }
-    }
-
-    // NEU: Funktion zum Rendern der Suchergebnisse
-    renderSearchResults(results) {
-        if (results.length === 0) {
-            this.searchResultsContainer.innerHTML = '<p class="text-gray-500 text-center p-4">Keine Termine gefunden.</p>';
-            return;
-        }
-
-        const listHtml = results.map(termin => {
-            const mitarbeiterName = termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
-            const terminDate = termin.Datum ? new Date(termin.Datum).toLocaleDateString('de-DE') : 'Ohne Datum';
-            const statusColorClass = this._getStatusColorClass(termin);
-
-            return `
-                <div data-id="${termin._id}" class="search-result-item flex items-center justify-between p-3 border-t border-gray-200 cursor-pointer hover:bg-skt-grey-light">
-                    <div class="flex items-center gap-3">
-                        <div class="w-1.5 h-8 rounded-full ${statusColorClass.replace('border-l-4', 'bg-').replace('border-', 'bg-')}"></div>
-                        <div>
-                            <p class="font-semibold text-skt-blue">${termin.Terminpartner || 'Unbekannt'}</p>
-                            <p class="text-sm text-gray-500">${mitarbeiterName} am ${terminDate}</p>
-                        </div>
-                    </div>
-                    <i class="fas fa-chevron-right text-gray-400"></i>
-                </div>`;
-        }).join('');
-
-        this.searchResultsContainer.innerHTML = `<div class="bg-white rounded-lg border border-gray-200 shadow-md max-h-80 overflow-y-auto">${listHtml}</div>`;
-
-        this.searchResultsContainer.querySelectorAll('.search-result-item').forEach(item => {
-            item.addEventListener('click', () => {
-                // Wir müssen den vollständigen Termin aus der DB laden, da die Suche evtl. nicht alle Felder hat
-                const fullTermin = SKT_APP.db.termine.find(t => t._id === item.dataset.id) || results.find(t => t._id === item.dataset.id);
-                if (fullTermin) {
-                    this.openModal(fullTermin);
-                }
-            });
-        });
     }
 }
 
@@ -4645,8 +4575,10 @@ class PotentialView {
                     SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
                     break;
                 case 'structure':
-                    userIds.add(this.currentUserId);
-                    this.downline.forEach(u => userIds.add(u._id));
+                    // KORREKTUR: Für die Strukturansicht werden jetzt explizit alle als "Aktiv"
+                    // markierten Mitarbeiter geladen. Das ist die robusteste Methode, um sicherzustellen,
+                    // dass alle Termine, inklusive der des Top-Users, erfasst werden.
+                    db.mitarbeiter.filter(m => m.Status === 'Aktiv').forEach(u => userIds.add(u._id));
                     break;
             }
 
@@ -5116,10 +5048,16 @@ class UmsatzView {
     async fetchAndRender() {
         this.listContainer.innerHTML = '<div class="loader mx-auto"></div>';
         try {
-            const scope = this.scopeFilter.value;
-            let userIds = new Set([this.currentUserId]);
-            if (scope === 'group') SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
-            else if (scope === 'structure') this.downline.forEach(u => userIds.add(u._id));
+            let userIds = new Set();
+            // NEU: Alisa sieht alle Umsätze
+            if (SKT_APP.authenticatedUserData.Name === 'Alisa Kloimstein') {
+                db.mitarbeiter.filter(m => m.Status !== 'Ausgeschieden').forEach(u => userIds.add(u._id));
+            } else {
+                const scope = this.scopeFilter.value;
+                userIds.add(this.currentUserId);
+                if (scope === 'group') SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
+                else if (scope === 'structure') this.downline.forEach(u => userIds.add(u._id));
+            }
 
             const startDateIso = this.startDateInput.value;
             const endDateIso = this.endDateInput.value;
@@ -5222,18 +5160,31 @@ class UmsatzView {
         const umsatzRowsContainer = document.getElementById('umsatz-rows-container');
         umsatzRowsContainer.innerHTML = ''; // Leere alte Zeilen
         const idInput = this.form.querySelector('#umsatz-id');
+        
+        // KORREKTUR: "Status OK"-Feld nur für Alisa Kloimstein änderbar machen
         const boFields = this.form.querySelector('#umsatz-bo-fields');
+        const statusOkCheckbox = this.form.querySelector('#umsatz-status-ok');
+        statusOkCheckbox.disabled = SKT_APP.authenticatedUserData.Name !== 'Alisa Kloimstein';
+
         const deleteBtn = this.form.querySelector('#delete-umsatz-btn');
 
         this.form.querySelector('#save-umsatz-btn').disabled = false;
         this.form.querySelector('#save-umsatz-btn').textContent = 'Speichern';
 
-        const allUsers = [SKT_APP.authenticatedUserData, ...this.downline].filter(Boolean);
-        allUsers.sort((a, b) => a.Name.localeCompare(b.Name));
+        // KORREKTUR: Mitarbeiter-Auswahl für Alisa Kloimstein anpassen
+        let usersForDropdown;
+        if (SKT_APP.authenticatedUserData.Name === 'Alisa Kloimstein') {
+            // Alisa sieht alle aktiven Mitarbeiter
+            usersForDropdown = [...db.mitarbeiter.filter(m => m.Status !== 'Ausgeschieden')];
+        } else {
+            // Andere Benutzer sehen ihre eigene Struktur
+            usersForDropdown = [SKT_APP.authenticatedUserData, ...this.downline].filter(Boolean);
+        }
+        usersForDropdown.sort((a, b) => a.Name.localeCompare(b.Name));
 
         const mitarbeiterSelect = this.form.querySelector('#umsatz-mitarbeiter');
         mitarbeiterSelect.innerHTML = '';
-        allUsers.forEach(u => mitarbeiterSelect.add(new Option(u.Name, u._id)));
+        usersForDropdown.forEach(u => mitarbeiterSelect.add(new Option(u.Name, u._id)));
 
         if (umsatz) {
             this.lastSavedUmsatz = null; // Clear pre-fill cache when editing
@@ -5310,6 +5261,20 @@ class UmsatzView {
 
     async handleFormSubmit(e) {
         e.preventDefault();
+
+        // NEU: Validierung, um EH=0 zu verhindern, bevor die Anfrage gesendet wird.
+        const umsatzRowsForValidation = this.form.querySelectorAll('.umsatz-row');
+        for (const row of umsatzRowsForValidation) {
+            const ehInput = row.querySelector('.umsatz-eh');
+            const eh = parseFloat(ehInput.value);
+
+            if (isNaN(eh) || eh === 0) {
+                alert('Der Wert für Einheiten (EH) muss eine Zahl sein und darf nicht 0 sein. Bitte korrigieren Sie die Eingabe.');
+                ehInput.focus(); // Setzt den Fokus auf das problematische Feld
+                return; // Bricht die Funktion ab, es wird nichts gespeichert.
+            }
+        }
+
         const saveBtn = this.form.querySelector('#save-umsatz-btn');
         saveBtn.disabled = true;
         saveBtn.textContent = 'Speichern...';
@@ -5439,6 +5404,7 @@ class AuswertungView {
         this.currentUserId = null;
         this.downline = [];
         this.currentTab = 'rangliste';
+        this.currentFkRennlisteScope = 'group'; // NEU
         this.currentAktivitaetenTimespan = 'woche';
         this.sortConfig = {
             rangliste: { column: 'eh', direction: 'desc' },
@@ -5460,6 +5426,9 @@ class AuswertungView {
         this.aktivitaetenDateRangeHint = document.getElementById('aktivitaeten-date-range-hint');
         this.aktivitaetenStructureFilter = document.getElementById('aktivitaeten-structure-filter'); // NEU
         this.fkRennlisteStructureFilter = document.getElementById('fk-rennliste-structure-filter'); // NEU
+        this.fkRennlisteScopeToggle = document.getElementById('fk-rennliste-scope-toggle'); // NEU
+        this.fkRennlisteGroupBtn = document.getElementById('fk-rennliste-group-btn'); // NEU
+        this.fkRennlisteStructureBtn = document.getElementById('fk-rennliste-structure-btn'); // NEU
         this.fkRennlisteView = document.getElementById('fk-rennliste-view');
         this.naechstesInfoView = document.getElementById('naechstes-info-view');
         this.infoabendDateSelect = document.getElementById('infoabend-date-select');
@@ -5540,6 +5509,24 @@ class AuswertungView {
         // NEU: Event Listener für Struktur-Filter
         this.aktivitaetenStructureFilter.addEventListener('change', () => this.renderAktivitaeten());
         this.fkRennlisteStructureFilter.addEventListener('change', () => this.renderFkRennliste());
+
+        // NEU: Event Listener für FK Rennliste Scope
+        if (this.fkRennlisteGroupBtn) {
+            this.fkRennlisteGroupBtn.addEventListener('click', () => {
+                if (this.currentFkRennlisteScope === 'group') return;
+                this.currentFkRennlisteScope = 'group';
+                this.fkRennlisteGroupBtn.classList.add('active');
+                this.fkRennlisteStructureBtn.classList.remove('active');
+                this.renderFkRennliste();
+            });
+            this.fkRennlisteStructureBtn.addEventListener('click', () => {
+                if (this.currentFkRennlisteScope === 'structure') return;
+                this.currentFkRennlisteScope = 'structure';
+                this.fkRennlisteStructureBtn.classList.add('active');
+                this.fkRennlisteGroupBtn.classList.remove('active');
+                this.renderFkRennliste();
+            });
+        }
 
         this.infoabendDateSelect.addEventListener('change', () => this.renderNaechstesInfo());
         this.infoabendScopeFilter.addEventListener('change', () => this.renderNaechstesInfo());
@@ -5710,9 +5697,11 @@ class AuswertungView {
         const startDateIso = startDate.toISOString().split('T')[0];
         const endDateIso = endDate.toISOString().split('T')[0];
 
-        const query = `SELECT Mitarbeiter_ID, Kategorie, Status FROM Termine WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+        const query = `SELECT Mitarbeiter_ID, Kategorie, Status, Absage FROM Termine WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
         const termineRaw = await seaTableSqlQuery(query, true);
-        const termineData = mapSqlResults(termineRaw || [], 'Termine');
+        let termineData = mapSqlResults(termineRaw || [], 'Termine');
+        // KORREKTUR: Abgesagte/stornierte Termine aus der Zählung ausschließen.
+        termineData = termineData.filter(t => t.Absage !== true && t.Status !== 'Storno');
 
         const { startDate: monthStartDate } = getMonthlyCycleDates();
         const currentMonthName = monthStartDate.toLocaleString("de-DE", { month: "long" });
@@ -5886,12 +5875,14 @@ class AuswertungView {
         const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
 
         // 2. Lade alle relevanten Termindaten für den Zeitraum
-        const termineQuery = `SELECT Mitarbeiter_ID, Kategorie, Status FROM Termine WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+        const termineQuery = `SELECT Mitarbeiter_ID, Kategorie, Status, Absage FROM Termine WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
         const termineResultsRaw = await seaTableSqlQuery(termineQuery, true);
-        const termineResults = mapSqlResults(termineResultsRaw || [], "Termine");
-
+        let termineResults = mapSqlResults(termineResultsRaw || [], "Termine");
+        // KORREKTUR: Abgesagte/stornierte Termine aus der Zählung ausschließen.
+        termineResults = termineResults.filter(t => t.Absage !== true && t.Status !== 'Storno');
+        // KORREKTUR: Definitionen angepasst
         const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
-        const ET_STATUS_GEHALTEN = ["Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+        const ET_STATUS_GEHALTEN = ["Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter", "Ausgemacht", "Verschoben"];
 
         // 3. Gruppiere Daten nach Mitarbeiter für schnellen Zugriff
         const ehByMitarbeiter = _.keyBy(ehResults.map(e => ({ id: e.Mitarbeiter_ID?.[0]?.row_id, eh: e.ehIst })), 'id');
@@ -5899,14 +5890,17 @@ class AuswertungView {
 
         // 4. Berechne die Strukturdaten für jede Führungskraft
         const structureDataList = leaders.map(leader => {
-            const groupMembers = [leader, ...getSubordinates(leader._id, 'gruppe')];
+            // NEU: Wähle Mitglieder basierend auf dem Scope-Toggle
+            const structureScope = this.currentFkRennlisteScope === 'structure';
+            const membersForCalc = structureScope ? [leader, ...getAllSubordinatesRecursive(leader._id)] : [leader, ...getSubordinates(leader._id, 'gruppe')];
             
             let eh = 0;
             let at = 0;
             let et = 0;
             let atTotalGoal = 0;
+            let etTotalGoal = 0; // NEU: ET-Soll
 
-            for (const member of groupMembers) {
+            for (const member of membersForCalc) {
                 eh += ehByMitarbeiter[member._id]?.eh || 0;
 
                 const memberTermine = termineByMitarbeiter[member._id] || [];
@@ -5918,6 +5912,7 @@ class AuswertungView {
                 const plan = planResults.find(p => p.Mitarbeiter_ID === member._id);
                 const ehZiel = plan?.EH_Ziel || 0;
                 atTotalGoal += member.EHproATQuote && ehZiel > 0 ? Math.round(ehZiel / member.EHproATQuote) : 0;
+                etTotalGoal += plan?.ET_Ziel || 0;
             }
             
             const atSoll = Math.round(atTotalGoal * (effectiveTimePercentageForSoll / 100));
@@ -5928,7 +5923,8 @@ class AuswertungView {
                 eh: eh,
                 at: at,
                 atSoll: atSoll,
-                et: et
+                et: et,
+                etSoll: etTotalGoal // NEU
             };
         });
 
@@ -5954,8 +5950,8 @@ class AuswertungView {
         // ANPASSUNG: Spalten für Name und Rang hinzugefügt
         const headers = [
             { key: 'name', label: 'Führungskraft' }, { key: 'rang', label: 'Rangstufe' },
-            { key: 'eh', label: 'Gesamt EH' }, { key: 'atSoll', label: 'AT Soll' }, { key: 'at', label: 'Gesamt ATs' },
-            { key: 'et', label: 'Gesamt ETs' }
+            { key: 'eh', label: 'Gesamt EH' }, { key: 'atSoll', label: 'AT Soll' }, { key: 'at', label: 'Gesamt ATs' }, { key: 'etSoll', label: 'ET Soll' },
+            { key: 'et', label: 'Gesamt ETs' } // NEU: ET Soll hinzugefügt
         ];
         table.innerHTML = `<thead><tr>${headers.map(h => {
             const icon = sortConfig.column === h.key ? (sortConfig.direction === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>') : '<i class="fas fa-sort sort-icon"></i>';
@@ -5963,8 +5959,7 @@ class AuswertungView {
         }).join('')}</tr></thead>`;
         const tbody = document.createElement('tbody');
         structureDataList.forEach(s => {
-            // ANPASSUNG: Neue Spalten in der Tabelle ausgeben
-            tbody.innerHTML += `<tr><td>${s.name}</td><td>${s.rang}</td><td>${s.eh.toFixed(2)}</td><td>${s.atSoll}</td><td>${s.at}</td><td>${s.et}</td></tr>`;
+            tbody.innerHTML += `<tr><td>${s.name}</td><td>${s.rang}</td><td>${s.eh.toFixed(2)}</td><td>${s.atSoll}</td><td>${s.at}</td><td>${s.etSoll}</td><td>${s.et}</td></tr>`;
         });
         table.appendChild(tbody);
         table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('fkRennliste', e.currentTarget.dataset.sortKey)));
@@ -6008,53 +6003,69 @@ class AuswertungView {
     }
 
     renderInfoabendTable(termine) {
-        this.infoabendListContainer.innerHTML = '';
-        if (termine.length === 0) {
-            this.infoabendListContainer.innerHTML = '<p class="text-center text-gray-500">Keine Bewerber für diesen Infoabend gefunden.</p>';
-            return;
-        }
-
-        const sortConfig = this.sortConfig.infoabend;
-        const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
-        termine.sort((a, b) => {
-            let valA, valB;
-            if (sortConfig.column === 'Mitarbeiter') {
-                valA = db.mitarbeiter.find(m => m._id === a.Mitarbeiter_ID)?.Name || '';
-                valB = db.mitarbeiter.find(m => m._id === b.Mitarbeiter_ID)?.Name || '';
-            } else {
-                valA = a[sortConfig.column];
-                valB = b[sortConfig.column];
-            }
-            let comparison = collator.compare(String(valA), String(valB));
-            return sortConfig.direction === 'asc' ? comparison : -comparison;
-        });
-
-        const tableWrapper = document.createElement('div');
-        tableWrapper.className = 'overflow-x-auto';
-
-        const table = document.createElement('table');
-        table.className = 'appointments-table';
-        const headers = [
-            { key: 'Terminpartner', label: 'Bewerber' }, { key: 'Status', label: 'Status' },
-            { key: 'Mitarbeiter', label: 'Mitarbeiter' }, { key: 'Hinweis', label: 'Hinweis' }
-        ];
-        table.innerHTML = `<thead><tr>${headers.map(h => {
-            const icon = sortConfig.column === h.key ? (sortConfig.direction === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>') : '<i class="fas fa-sort sort-icon"></i>';
-            return `<th data-sort-key="${h.key}">${h.label} ${icon}</th>`;
-        }).join('')}</tr></thead>`;
-
-        const tbody = document.createElement('tbody');
-        termine.forEach(t => {
-            const mitarbeiter = db.mitarbeiter.find(m => m._id === t.Mitarbeiter_ID);
-            tbody.innerHTML += `<tr><td>${t.Terminpartner}</td><td>${t.Status}</td><td>${mitarbeiter?.Name || '-'}</td><td>${t.Hinweis || '-'}</td></tr>`;
-        });
-        table.appendChild(tbody);
-        table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('infoabend', e.currentTarget.dataset.sortKey)));
-        tableWrapper.appendChild(table);
-        this.infoabendListContainer.appendChild(tableWrapper);
+         this.infoabendListContainer.innerHTML = '';
+         if (termine.length === 0) {
+             this.infoabendListContainer.innerHTML = '<p class="text-center text-gray-500">Keine Bewerber für diesen Infoabend gefunden.</p>';
+             return;
+         }
+ 
+         const sortConfig = this.sortConfig.infoabend;
+         const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+         termine.sort((a, b) => {
+             let valA, valB;
+             if (sortConfig.column === 'Mitarbeiter') {
+                 valA = db.mitarbeiter.find(m => m._id === a.Mitarbeiter_ID)?.Name || '';
+                 valB = db.mitarbeiter.find(m => m._id === b.Mitarbeiter_ID)?.Name || '';
+             } else {
+                 valA = a[sortConfig.column];
+                 valB = b[sortConfig.column];
+             }
+             let comparison = collator.compare(String(valA), String(valB));
+             return sortConfig.direction === 'asc' ? comparison : -comparison;
+         });
+ 
+         const tableWrapper = document.createElement('div');
+         tableWrapper.className = 'overflow-x-auto';
+ 
+         const table = document.createElement('table');
+         table.className = 'appointments-table';
+         const headers = [
+             { key: 'Terminpartner', label: 'Bewerber' }, { key: 'Status', label: 'Status' },
+             { key: 'Mitarbeiter', label: 'Mitarbeiter' }, { key: 'Hinweis', label: 'Hinweis' }
+         ];
+         table.innerHTML = `<thead><tr>${headers.map(h => {
+             const icon = sortConfig.column === h.key ? (sortConfig.direction === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>') : '<i class="fas fa-sort sort-icon"></i>';
+             return `<th data-sort-key="${h.key}">${h.label} ${icon}</th>`;
+         }).join('')}</tr></thead>`;
+ 
+         const tbody = document.createElement('tbody');
+         termine.forEach(t => {
+             const tr = document.createElement('tr');
+             tr.className = 'cursor-pointer';
+             tr.dataset.id = t._id;
+ 
+             const mitarbeiter = db.mitarbeiter.find(m => m._id === t.Mitarbeiter_ID);
+             tr.innerHTML = `<td>${t.Terminpartner}</td><td>${t.Status}</td><td>${mitarbeiter?.Name || '-'}</td><td>${t.Hinweis || '-'}</td>`;
+             
+             tr.addEventListener('click', () => {
+                 const terminToEdit = termine.find(term => term._id === t._id);
+                 if (terminToEdit && appointmentsViewInstance) {
+                     appointmentsViewInstance.currentUserId = this.currentUserId;
+                     appointmentsViewInstance.downline = this.downline;
+                     appointmentsViewInstance.openModal(terminToEdit);
+                 }
+             });
+             tbody.appendChild(tr);
+         });
+         table.appendChild(tbody);
+         table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('infoabend', e.currentTarget.dataset.sortKey)));
+         tableWrapper.appendChild(table);
+         this.infoabendListContainer.appendChild(tableWrapper);
     }
 
     renderFunnelChart(termine) {
+        this.funnelChartContainer.innerHTML = ''; // Clear previous chart
+
         const stats = {
             'Ausgemacht': termine.length,
             'Gehalten': termine.filter(t => t.Status === 'Gehalten').length,
@@ -6065,25 +6076,34 @@ class AuswertungView {
         };
 
         const funnelSteps = [
-            { label: 'ET Ausgemacht', value: stats.Ausgemacht },
-            { label: 'ET Gehalten', value: stats.Gehalten },
-            { label: 'Info Eingeladen', value: stats.Eingeladen },
-            { label: 'Info Bestätigt', value: stats.Bestätigt },
-            { label: 'Info Anwesend', value: stats.Anwesend },
-            { label: 'Wird Mitarbeiter', value: stats['Wird Mitarbeiter'] }
+            { label: 'ET Ausgemacht', value: stats.Ausgemacht, color: '#043C64', textColor: 'white' },
+            { label: 'ET Gehalten', value: stats.Gehalten, color: '#0a5a8e', textColor: 'white' },
+            { label: 'Info Eingeladen', value: stats.Eingeladen, color: '#1c75b5', textColor: 'white' },
+            { label: 'Info Bestätigt', value: stats.Bestätigt, color: '#38bdf8', textColor: 'white' },
+            { label: 'Info Anwesend', value: stats.Anwesend, color: '#7dd3fc', textColor: 'var(--color-skt-blue)' },
+            { label: 'Wird Mitarbeiter', value: stats['Wird Mitarbeiter'], color: '#e0f2fe', textColor: 'var(--color-skt-blue)' }
         ];
 
-        this.funnelChartContainer.innerHTML = '';
-        const maxValue = Math.max(...funnelSteps.map(s => s.value), 1);
+        const funnelContainer = document.createElement('div');
+        funnelContainer.className = 'funnel-container-animated';
+        const maxValue = funnelSteps[0]?.value || 0;
 
         funnelSteps.forEach(step => {
-            const percentage = (step.value / maxValue) * 100;
+            const percentage = maxValue > 0 ? (step.value / maxValue) * 100 : 0;
             const stepEl = document.createElement('div');
-            stepEl.className = 'funnel-step';
-            stepEl.style.width = `${percentage}%`;
-            stepEl.innerHTML = `<span class="funnel-label">${step.label}</span><span class="funnel-value">${step.value}</span>`;
-            this.funnelChartContainer.appendChild(stepEl);
+            stepEl.className = 'funnel-step-animated';
+            stepEl.style.backgroundColor = step.color;
+            if (step.textColor) stepEl.style.color = step.textColor;
+            setTimeout(() => { stepEl.style.width = `${Math.max(20, percentage)}%`; }, 100);
+            stepEl.innerHTML = `
+                <div class="funnel-content">
+                    <span class="funnel-label">${step.label}</span>
+                    <span class="funnel-value">${step.value}</span>
+                    </div>
+            `;
+            funnelContainer.appendChild(stepEl);
         });
+        this.funnelChartContainer.appendChild(funnelContainer);
     }
 
     async logPQQCalculationForUser(userId, forMonth, forYear) {
@@ -6680,6 +6700,27 @@ function setupEventListeners() {
   dom.timeTravelForm.addEventListener('submit', (e) => { e.preventDefault(); handleTimeTravelSubmit(); });
   dom.resetTimeTravelBtn.addEventListener('click', resetTimeTravel);
 
+  // NEU: Event Listeners für Einarbeitungs-Scope-Toggle
+  const onboardingGroupBtn = document.getElementById('onboarding-group-btn');
+  const onboardingStructureBtn = document.getElementById('onboarding-structure-btn');
+
+  if (onboardingGroupBtn && onboardingStructureBtn) {
+      onboardingGroupBtn.addEventListener('click', () => {
+          if (currentOnboardingScope === 'group') return;
+          currentOnboardingScope = 'group';
+          onboardingGroupBtn.classList.add('active');
+          onboardingStructureBtn.classList.remove('active');
+          fetchAndRenderOnboarding(authenticatedUserData._id);
+      });
+
+      onboardingStructureBtn.addEventListener('click', () => {
+          if (currentOnboardingScope === 'structure') return;
+          currentOnboardingScope = 'structure';
+          onboardingStructureBtn.classList.add('active');
+          onboardingGroupBtn.classList.remove('active');
+          fetchAndRenderOnboarding(authenticatedUserData._id);
+      });
+  }
 }
 
 async function loadAndCacheTotalEh() {
@@ -6750,6 +6791,11 @@ async function initializeDashboard() {
   // NEU: Lade die Gesamt-EH-Daten, BEVOR das Dashboard gerendert wird.
   setStatus("Lade Gesamtumsätze (dies kann einen Moment dauern)...");
   const totalEhLoaded = await loadAndCacheTotalEh();
+
+  // NEU: Instanz der AppointmentsView erstellen und Modal-Listener initialisieren
+  appointmentsViewInstance = new AppointmentsView();
+  appointmentsViewInstance._initSharedElementsAndListeners();
+
   if (!totalEhLoaded) {
       // loadAndCacheTotalEh setzt bereits die Fehlermeldung
       isInitializing = false;

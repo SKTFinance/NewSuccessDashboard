@@ -672,10 +672,14 @@ details[open] > summary::before { transform: rotate(180deg); }
     transition: .4s;
 }
 .toggle-switch .peer:checked + .toggle-slider {
-    background-color: var(--color-skt-red-accent);
+    background-color: var(--color-accent-green); /* KORREKTUR: Standard-Toggle ist jetzt grün */
 }
 .toggle-switch .peer:focus + .toggle-slider {
-    box-shadow: 0 0 1px var(--color-skt-red-accent);
+    box-shadow: 0 0 1px var(--color-accent-green);
+}
+/* NEU: Eigener Stil für den Storno-Toggle, der rot sein soll */
+.cancellation-toggle.toggle-switch .peer:checked + .toggle-slider {
+    background-color: var(--color-accent-red);
 }
 .toggle-switch .peer:checked + .toggle-slider:before {
     transform: translateX(20px);

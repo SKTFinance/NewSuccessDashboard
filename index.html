@@ -328,7 +328,14 @@
         <!-- NEU: Ansicht für Einarbeitung -->
     <main id="einarbeitung-view" class="hidden w-full max-w-7xl mx-auto flex-grow px-4 md:px-8 pt-6 pb-6">
          <div class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
-              <h2 id="einarbeitung-title" class="text-3xl font-bold text-skt-blue mb-8 text-center">Dein Einarbeitungsplan</h2>
+              <div class="flex flex-col sm:flex-row justify-between items-center mb-8">
+                  <h2 id="einarbeitung-title" class="text-3xl font-bold text-skt-blue text-center sm:text-left">Dein Einarbeitungsplan</h2>
+                  <!-- NEU: Toggle für Gruppe/Struktur -->
+                  <div id="onboarding-scope-toggle" class="view-toggle hidden flex w-full sm:w-auto space-x-2 mt-4 sm:mt-0">
+                      <button id="onboarding-group-btn" class="active flex-1">Gruppe</button>
+                      <button id="onboarding-structure-btn" class="flex-1">Struktur</button>
+                  </div>
+              </div>
               
               <!-- Container für die Trainee-Ansicht -->
               <div id="trainee-onboarding-view">
@@ -338,7 +345,7 @@
                           <p id="onboarding-progress-text" class="font-bold text-skt-blue">0%</p>
                       </div>
                       <div class="w-full bg-gray-200 rounded-full h-4 shadow-inner relative">
-                          <div id="onboarding-soll-bar" class="bg-red-300 h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: 0%; z-index: 1;" data-tooltip="Soll-Fortschritt"></div>
+                          <div id="onboarding-soll-bar" class="bg-skt-red-accent h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: 0%; z-index: 1;" data-tooltip="Soll-Fortschritt"></div>
                           <div id="onboarding-progress-bar" class="bg-skt-green-accent h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: 0%; z-index: 2;" data-tooltip="Ist-Fortschritt"></div>
                       </div>
                   </div>
@@ -410,6 +417,30 @@
     </div>
 
     <!-- Modals -->
+    <!-- Modal zum Bearbeiten/Hinzufügen von Terminen (zunächst verborgen) -->
+    <div id="appointment-modal" class="modal-overlay">
+        <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-2xl w-full relative max-h-[90vh] overflow-y-auto">
+            <button id="close-appointment-modal-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
+            <h3 id="appointment-modal-title" class="text-2xl font-bold text-skt-blue mb-6">Termin anlegen</h3>
+            <form id="appointment-form" class="space-y-4">
+                <input type="hidden" id="appointment-id">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><label for="appointment-user" class="block text-sm font-medium text-gray-700 mb-1">Mitarbeiter</label><select id="appointment-user" required class="modern-select"></select></div>
+                    <div><label for="appointment-date" class="block text-sm font-medium text-gray-700 mb-1">Datum & Uhrzeit</label><div class="input-wrapper"><input type="datetime-local" id="appointment-date" required class="modern-input w-full"></div></div>
+                    <div><label for="appointment-category" class="block text-sm font-medium text-gray-700 mb-1">Kategorie</label><select id="appointment-category" required class="modern-select"></select></div>
+                    <div><label for="appointment-status" class="block text-sm font-medium text-gray-700 mb-1">Status</label><select id="appointment-status" required class="modern-select"></select></div>
+                </div>
+                <div><label for="appointment-partner" class="block text-sm font-medium text-gray-700">Terminpartner</label><input type="text" id="appointment-partner" class="modern-input"></div>
+                <div id="appointment-infoabend-container" class="hidden"><label for="appointment-infoabend-date" class="block text-sm font-medium text-gray-700">Nächster Infoabend</label><div class="input-wrapper"><input type="date" id="appointment-infoabend-date" class="modern-input w-full"></div></div>
+                <div id="appointment-prognose-container" class="hidden"><label for="appointment-prognose" class="block text-sm font-medium text-gray-700">Umsatzprognose (EH)</label><input type="number" step="0.01" id="appointment-prognose" class="modern-input"></div>
+                <div><label for="appointment-referrals" class="block text-sm font-medium text-gray-700">Empfehlungen</label><input type="number" id="appointment-referrals" class="modern-input"></div>
+                <div><label for="appointment-note" class="block text-sm font-medium text-gray-700">Hinweis</label><textarea id="appointment-note" rows="3" class="modern-input"></textarea></div>
+                <div class="flex items-center space-x-3 pt-2"><label for="appointment-cancellation" class="toggle-switch cancellation-toggle"><input type="checkbox" id="appointment-cancellation" class="sr-only peer"><div class="toggle-slider"></div></label><label for="appointment-cancellation" class="text-sm font-medium text-gray-700">Absage/Storno</label></div>
+                <div id="appointment-cancellation-reason-container" class="hidden"><label for="appointment-cancellation-reason" class="block text-sm font-medium text-gray-700">Absagegrund</label><textarea id="appointment-cancellation-reason" rows="2" class="modern-input"></textarea></div>
+                <div class="pt-4 flex justify-end items-center gap-4"><div class="flex space-x-3"><button type="button" id="cancel-appointment-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button><button type="submit" id="save-appointment-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors flex items-center justify-center" style="min-width: 110px; min-height: 42px;"><span id="save-btn-text">Speichern</span><div class="loader-small hidden"></div></button></div></div>
+            </form>
+        </div>
+    </div>
     <div id="ios-instructions-modal" class="modal-overlay">
         <div class="bg-white rounded-lg shadow-xl p-6 m-4 max-w-sm text-center">
             <h3 class="text-xl font-bold text-skt-blue mb-2">Benachrichtigungen aktivieren</h3>
