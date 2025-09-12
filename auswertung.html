@@ -30,9 +30,13 @@
                 <p id="aktivitaeten-date-range-hint" class="text-sm text-gray-600"></p>
                 <div class="flex items-center gap-4">
                     <select id="aktivitaeten-role-filter" class="modern-select">
-                        <option value="all">Alle anzeigen</option>
-                        <option value="trainee">Trainees & GA</option>
+                        <option value="individual" selected>Einzelleistung</option>
                         <option value="leader">Führungskräfte</option>
+                    </select>
+                    <!-- NEU: Filter für "Nur meine Struktur" -->
+                    <select id="aktivitaeten-structure-filter" class="modern-select hidden">
+                        <option value="all">Gesamt</option>
+                        <option value="mine" selected>Nur meine Struktur</option>
                     </select>
                     <div class="view-toggle flex space-x-2"><button id="aktivitaeten-woche-btn" data-timespan="woche" class="aktivitaeten-timespan-btn active">Woche</button><button id="aktivitaeten-monat-btn" data-timespan="monat" class="aktivitaeten-timespan-btn">Monat</button></div>
                 </div>
@@ -45,6 +49,13 @@
 
         <!-- FK Rennliste View -->
         <div id="fk-rennliste-view" class="auswertung-view-content hidden">
+            <!-- NEU: Filter für "Nur meine Struktur" -->
+            <div class="flex justify-end items-center mb-4">
+                <select id="fk-rennliste-structure-filter" class="modern-select hidden w-full sm:w-auto">
+                    <option value="all">Gesamt</option>
+                    <option value="mine" selected>Nur meine Struktur</option>
+                </select>
+            </div>
             <div id="fk-rennliste-container">
                 <!-- Inhalt wird per JS generiert -->
                 <div class="loader mx-auto"></div>
@@ -86,7 +97,7 @@
                     </summary>
                     <div id="infoabend-stats-container" class="p-4 pt-0">
                         <h3 class="text-lg font-bold text-skt-blue mb-4 text-center">Recruiting Trichter</h3>
-                        <div id="funnel-chart-container" class="w-full max-w-2xl mx-auto space-y-1">
+                        <div id="funnel-chart-container" class="w-full max-w-2xl mx-auto">
                             <!-- Trichter wird per JS generiert -->
                         </div>
                     </div>
@@ -125,16 +136,29 @@
 </div>
 
 <style>
+    /* NEU: Verbesserte Stile für den Funnel-Chart */
     .funnel-step {
-        background-color: var(--color-skt-blue-light);
+        position: relative;
         color: white;
-        padding: 0.75rem;
+        padding: 0.75rem 2rem;
         margin: 0 auto;
         transition: width 0.5s ease-in-out;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-radius: 0.25rem;
+        clip-path: polygon(15% 0, 85% 0, 100% 100%, 0% 100%);
+        min-height: 50px;
+        margin-bottom: -15px; /* Lässt die Stufen überlappen */
+    }
+    .funnel-step:last-child {
+        margin-bottom: 0;
+    }
+    .funnel-step:nth-child(1) { background-color: #043C64; }
+    .funnel-step:nth-child(2) { background-color: #0a5a8e; }
+    .funnel-step:nth-child(3) { background-color: #1c75b5; }
+    .funnel-step:nth-child(4) { background-color: #38bdf8; }
+    .funnel-step:nth-child(5) { background-color: #7dd3fc; color: var(--color-skt-blue); }
+    .funnel-step:nth-child(6) { background-color: #e0f2fe; color: var(--color-skt-blue); }
     }
     .funnel-label {
         font-weight: 600;
@@ -143,4 +167,5 @@
         font-weight: 700;
         font-size: 1.125rem;
     }
+
 </style>

@@ -1766,6 +1766,13 @@ function updateWeeklyProgress() {
 
 function updateMonthlyPlanningView(data) {
   updateWeeklyProgress();
+
+  // Gemeinsame Zeitberechnung für die Soll-Werte
+  const { startDate, endDate } = getMonthlyCycleDates();
+  const today = getCurrentDate();
+  const totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
+  const daysPassedInCycle = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24));
+  const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
   
   if (isMoneyView) {
     let earningsToShow = 0;
@@ -1801,12 +1808,6 @@ function updateMonthlyPlanningView(data) {
     const moneyPercentage = earningsGoal > 0 ? (earningsToShow / earningsGoal) * 100 : 0;
     updateCircleProgress(dom.ehProgressCircle, 45, moneyPercentage);
 
-    // Prognose- und Soll-Logik für Geld-Ansicht
-    const { startDate, endDate } = getMonthlyCycleDates();
-    const today = getCurrentDate();
-    const totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
-    const daysPassedInCycle = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24));
-    const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
     updateCircleProgress(dom.prognosisCircleEh, 35, timeElapsedPercentage);
 
     const sollValue = Math.round(earningsGoal * (timeElapsedPercentage / 100));
@@ -1826,12 +1827,6 @@ function updateMonthlyPlanningView(data) {
       data.ehGoal > 0 ? (data.ehCurrent / data.ehGoal) * 100 : 0;
     updateCircleProgress(dom.ehProgressCircle, 45, ehPercentage);
 
-    // Prognose- und Soll-Logik wiederhergestellt
-    const { startDate, endDate } = getMonthlyCycleDates();
-    const today = getCurrentDate();
-    const totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
-    const daysPassedInCycle = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24));
-    const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
     updateCircleProgress(dom.prognosisCircleEh, 35, timeElapsedPercentage);
 
     const sollValue = Math.round((data.ehGoal || 0) * (timeElapsedPercentage / 100));
@@ -1839,9 +1834,11 @@ function updateMonthlyPlanningView(data) {
     drawSegmentDividers();
   }
 
-  dom.appointmentsText.textContent = `${data.atCurrent || 0} / ${
-    data.atVereinbart || 0
-  } / ${data.atGoal || 0}`;
+  // UPDATE: Zeitbasiertes Soll für Analysetermine mit 50% Minimum berechnen
+  const effectiveTimePercentageForAT = Math.max(50, timeElapsedPercentage);
+  const atSollTimeBased = Math.round((data.atGoal || 0) * (effectiveTimePercentageForAT / 100));
+
+  dom.appointmentsText.textContent = `${data.atCurrent || 0} / ${data.atVereinbart || 0} / ${atSollTimeBased}`;
   const vereinbartPercent =
     data.atGoal > 0 ? (data.atVereinbart / data.atGoal) * 100 : 0;
   const gehaltenPercent =
@@ -5391,6 +5388,8 @@ class AuswertungView {
         this.aktivitaetenListContainer = document.getElementById('aktivitaeten-list-container');
         this.aktivitaetenRoleFilter = document.getElementById('aktivitaeten-role-filter');
         this.aktivitaetenDateRangeHint = document.getElementById('aktivitaeten-date-range-hint');
+        this.aktivitaetenStructureFilter = document.getElementById('aktivitaeten-structure-filter'); // NEU
+        this.fkRennlisteStructureFilter = document.getElementById('fk-rennliste-structure-filter'); // NEU
         this.fkRennlisteView = document.getElementById('fk-rennliste-view');
         this.naechstesInfoView = document.getElementById('naechstes-info-view');
         this.infoabendDateSelect = document.getElementById('infoabend-date-select');
@@ -5436,6 +5435,12 @@ class AuswertungView {
             return;
         }
 
+        const isLeader = SKT_APP.isUserLeader(SKT_APP.authenticatedUserData);
+        if (isLeader) {
+            this.aktivitaetenStructureFilter.classList.remove('hidden');
+            this.fkRennlisteStructureFilter.classList.remove('hidden');
+        }
+
         // Die Event-Listener müssen bei jeder Initialisierung neu gesetzt werden,
         // da der HTML-Inhalt der Ansicht dynamisch neu geladen wird.
         this.setupEventListeners();
@@ -5462,6 +5467,9 @@ class AuswertungView {
         });
 
         this.aktivitaetenRoleFilter.addEventListener('change', () => this.renderAktivitaeten());
+        // NEU: Event Listener für Struktur-Filter
+        this.aktivitaetenStructureFilter.addEventListener('change', () => this.renderAktivitaeten());
+        this.fkRennlisteStructureFilter.addEventListener('change', () => this.renderFkRennliste());
 
         this.infoabendDateSelect.addEventListener('change', () => this.renderNaechstesInfo());
         this.infoabendScopeFilter.addEventListener('change', () => this.renderNaechstesInfo());
@@ -5562,6 +5570,21 @@ class AuswertungView {
         const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
 
         this.ranglisteView.innerHTML = '';
+        const tableWrapper = document.createElement('div');
+        tableWrapper.className = 'overflow-x-auto';
+        const table = document.createElement('table');
+        table.className = 'appointments-table';
+        const headers = [
+            { key: 'name', label: 'Name' },
+            { key: 'eh', label: 'Einheiten' },
+        ];
+        table.innerHTML = `<thead><tr>${headers.map(h => {
+            const icon = sortConfig.column === h.key ? (sortConfig.direction === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>') : '<i class="fas fa-sort sort-icon"></i>';
+            return `<th data-sort-key="${h.key}">${h.label} ${icon}</th>`;
+        }).join('')}</tr></thead>`;
+
+        const tbody = document.createElement('tbody');
+
         // ANPASSUNG: Iteriere über die sortierten Anzeigegruppen
         for (const groupName of displayGroups) {
             if (groupedByRank[groupName]) {
@@ -5578,35 +5601,23 @@ class AuswertungView {
                     return sortConfig.direction === 'asc' ? comparison : -comparison;
                 });
 
-                const groupEl = document.createElement('div');
-                groupEl.innerHTML = `<h3 class="text-xl font-bold text-skt-blue mb-3">${groupName}</h3>`;
-                const tableWrapper = document.createElement('div');
-                tableWrapper.className = 'overflow-x-auto';
+                // Füge Gruppen-Header-Zeile hinzu
+                const groupHeaderRow = document.createElement('tr');
+                groupHeaderRow.innerHTML = `<td colspan="${headers.length}" class="bg-skt-grey-light font-bold text-skt-blue text-lg py-3">${groupName}</td>`;
+                tbody.appendChild(groupHeaderRow);
 
-                const table = document.createElement('table');
-                table.className = 'appointments-table';
-                // ANPASSUNG: "Rangstufe" entfernt
-                const headers = [
-                    { key: 'name', label: 'Name' },
-                    { key: 'eh', label: 'Einheiten' },
-                ];
-                table.innerHTML = `<thead><tr>${headers.map(h => {
-                    const icon = sortConfig.column === h.key ? (sortConfig.direction === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>') : '<i class="fas fa-sort sort-icon"></i>';
-                    return `<th data-sort-key="${h.key}">${h.label} ${icon}</th>`;
-                }).join('')}</tr></thead>`;
-
-                const tbody = document.createElement('tbody');
+                // Füge Benutzer-Zeilen hinzu
                 usersInRank.forEach(user => {
-                    // ANPASSUNG: Spaltenstruktur angepasst
-                    tbody.innerHTML += `<tr><td>${user.name}</td><td>${user.eh.toFixed(2)}</td></tr>`;
+                    const userRow = document.createElement('tr');
+                    userRow.innerHTML = `<td>${user.name}</td><td>${user.eh.toFixed(2)}</td>`;
+                    tbody.appendChild(userRow);
                 });
-                table.appendChild(tbody);
-                table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('rangliste', e.currentTarget.dataset.sortKey)));
-                tableWrapper.appendChild(table);
-                groupEl.appendChild(tableWrapper);
-                this.ranglisteView.appendChild(groupEl);
             }
         }
+        table.appendChild(tbody);
+        table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('rangliste', e.currentTarget.dataset.sortKey)));
+        tableWrapper.appendChild(table);
+        this.ranglisteView.appendChild(tableWrapper);
     }
 
     async renderAktivitaeten() {
@@ -5616,6 +5627,14 @@ class AuswertungView {
             ? getWeeklyCycleDates()
             : getMonthlyCycleDates();
 
+        // NEU: Zeitbasierte Berechnung für Soll-Werte
+        const { startDate: monthStartDateForSoll, endDate: monthEndDateForSoll } = getMonthlyCycleDates();
+        const todayForSoll = getCurrentDate();
+        const totalDaysInCycleForSoll = (monthEndDateForSoll - monthStartDateForSoll) / (1000 * 60 * 60 * 24);
+        const daysPassedInCycleForSoll = Math.max(0, (todayForSoll - monthStartDateForSoll) / (1000 * 60 * 60 * 24));
+        const timeElapsedPercentageForSoll = totalDaysInCycleForSoll > 0 ? (daysPassedInCycleForSoll / totalDaysInCycleForSoll) * 100 : 0;
+        const effectiveTimePercentageForSoll = Math.max(50, timeElapsedPercentageForSoll);
+
         this.aktivitaetenDateRangeHint.textContent = `Zeitraum: ${startDate.toLocaleDateString('de-DE')} - ${endDate.toLocaleDateString('de-DE')}`;
 
         const startDateIso = startDate.toISOString().split('T')[0];
@@ -5624,6 +5643,11 @@ class AuswertungView {
         const query = `SELECT Mitarbeiter_ID, Kategorie, Status FROM Termine WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
         const termineRaw = await seaTableSqlQuery(query, true);
         const termineData = mapSqlResults(termineRaw || [], 'Termine');
+
+        const { startDate: monthStartDate } = getMonthlyCycleDates();
+        const currentMonthName = monthStartDate.toLocaleString("de-DE", { month: "long" });
+        const currentYear = monthStartDate.getFullYear();
+        const planResults = db.monatsplanung.filter(p => p.Monat === currentMonthName && p.Jahr === currentYear);
 
         const AT_STATUS_GEHALTEN = ["Gehalten"];
         const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
@@ -5637,7 +5661,7 @@ class AuswertungView {
             if (!mitarbeiterId) return;
 
             if (!statsByMitarbeiter[mitarbeiterId]) {
-                statsByMitarbeiter[mitarbeiterId] = { atAusgemacht: 0, atGehalten: 0, etAusgemacht: 0, etGehalten: 0 };
+                statsByMitarbeiter[mitarbeiterId] = { atAusgemacht: 0, atGehalten: 0, etAusgemacht: 0, etGehalten: 0, atSoll: 0 };
             }
 
             if (t.Kategorie === 'AT') {
@@ -5649,30 +5673,62 @@ class AuswertungView {
             }
         });
 
-        const enrichedUsers = Object.keys(statsByMitarbeiter).map(mitarbeiterId => {
-            const mitarbeiter = db.mitarbeiter.find(m => m._id === mitarbeiterId);
-            if (!mitarbeiter || mitarbeiter.Status === 'Ausgeschieden') return null;
-            return { name: mitarbeiter.Name, rang: mitarbeiter.Karrierestufe || 'N/A', ...statsByMitarbeiter[mitarbeiterId] };
-        }).filter(Boolean);
+        let allActiveUsers = db.mitarbeiter.filter(m => m.Status !== 'Ausgeschieden');
+
+        // NEU: Filter by structure if selected
+        if (this.aktivitaetenStructureFilter.value === 'mine') {
+            const myStructureIds = new Set([this.currentUserId, ...this.downline.map(u => u._id)]);
+            allActiveUsers = allActiveUsers.filter(u => myStructureIds.has(u._id));
+        }
+
+        const allEnrichedUsers = allActiveUsers.map(mitarbeiter => {
+            const mitarbeiterId = mitarbeiter._id;
+            const stats = statsByMitarbeiter[mitarbeiterId] || { atAusgemacht: 0, atGehalten: 0, etAusgemacht: 0, etGehalten: 0 };
+            const plan = planResults.find(p => p.Mitarbeiter_ID === mitarbeiterId);
+            const ehZiel = plan?.EH_Ziel || 0;
+            const atTotalGoal = mitarbeiter.EHproATQuote && ehZiel > 0 ? Math.round(ehZiel / mitarbeiter.EHproATQuote) : 0;
+            return { id: mitarbeiterId, name: mitarbeiter.Name, rang: mitarbeiter.Karrierestufe || 'N/A', atTotalGoal, ...stats };
+        });
 
         const filterValue = this.aktivitaetenRoleFilter.value;
-        const isTraineeOrGA = (rank) => {
+        const isLeaderFunc = (rank) => {
             const rankStr = String(rank || '').trim().toLowerCase();
-            return rankStr.includes('trainee') || (rankStr.includes('ga') && rankStr.length < 5);
+            return !rankStr.includes('trainee') && !(rankStr.includes('ga') && rankStr.length < 5);
         };
 
-        const filteredUsers = enrichedUsers.filter(user => {
-            if (filterValue === 'all') return true;
-            if (filterValue === 'trainee') return isTraineeOrGA(user.rang);
-            if (filterValue === 'leader') return !isTraineeOrGA(user.rang);
-            return true; // Fallback to show all
-        });
+        let usersToDisplay = [];
+        if (filterValue === 'leader') {
+            const leaders = allActiveUsers.filter(u => isLeaderFunc(u.Karrierestufe));
+            usersToDisplay = leaders.map(leader => {
+                const groupMembers = [leader, ...getSubordinates(leader._id, 'gruppe')];
+                const groupMemberIds = new Set(groupMembers.map(m => m._id));
+                const groupMemberData = allEnrichedUsers.filter(u => groupMemberIds.has(u.id));
+
+                const aggregatedStats = groupMemberData.reduce((acc, member) => {
+                    acc.atAusgemacht += member.atAusgemacht;
+                    acc.atGehalten += member.atGehalten;
+                    acc.etAusgemacht += member.etAusgemacht;
+                    acc.etGehalten += member.etGehalten;
+                    acc.atTotalGoal += member.atTotalGoal;
+                    return acc;
+                }, { atAusgemacht: 0, atGehalten: 0, etAusgemacht: 0, etGehalten: 0, atTotalGoal: 0 });
+
+                aggregatedStats.atSoll = Math.round(aggregatedStats.atTotalGoal * (effectiveTimePercentageForSoll / 100));
+
+                return { name: leader.Name, rang: leader.Karrierestufe || 'N/A', ...aggregatedStats };
+            });
+        } else {
+            usersToDisplay = allEnrichedUsers.map(user => ({
+                ...user,
+                atSoll: Math.round(user.atTotalGoal * (effectiveTimePercentageForSoll / 100))
+            }));
+        }
 
         const sortConfig = this.sortConfig.aktivitaeten;
         const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
 
         // Sort all users directly, removing the grouping logic
-        filteredUsers.sort((a, b) => {
+        usersToDisplay.sort((a, b) => {
             let valA = a[sortConfig.column];
             let valB = b[sortConfig.column];
             let comparison = 0;
@@ -5687,7 +5743,7 @@ class AuswertungView {
 
         this.aktivitaetenListContainer.innerHTML = '';
 
-        if (filteredUsers.length === 0) {
+        if (usersToDisplay.length === 0) {
             this.aktivitaetenListContainer.innerHTML = `<p class="text-center text-gray-500 py-8">Keine Aktivitäten im ausgewählten Zeitraum gefunden.</p>`;
             return;
         }
@@ -5703,6 +5759,7 @@ class AuswertungView {
         const headers = [
             { key: 'name', label: 'Name' },
             { key: 'rang', label: 'Rang' },
+            { key: 'atSoll', label: 'AT Soll' },
             { key: 'atAusgemacht', label: 'AT Ausgem.' },
             { key: 'atGehalten', label: 'AT Gehalt.' },
             { key: 'etAusgemacht', label: 'ET Ausgem.' },
@@ -5715,8 +5772,8 @@ class AuswertungView {
         }).join('')}</tr></thead>`;
 
         const tbody = document.createElement('tbody');
-        filteredUsers.forEach(user => {
-            tbody.innerHTML += `<tr><td>${user.name}</td><td>${user.rang}</td><td>${user.atAusgemacht}</td><td>${user.atGehalten}</td><td>${user.etAusgemacht}</td><td>${user.etGehalten}</td></tr>`;
+        usersToDisplay.forEach(user => {
+            tbody.innerHTML += `<tr><td>${user.name}</td><td>${user.rang}</td><td>${user.atSoll}</td><td>${user.atAusgemacht}</td><td>${user.atGehalten}</td><td>${user.etAusgemacht}</td><td>${user.etGehalten}</td></tr>`;
         });
         table.appendChild(tbody);
         table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('aktivitaeten', e.currentTarget.dataset.sortKey)));
@@ -5726,9 +5783,30 @@ class AuswertungView {
     }
 
     async renderFkRennliste() {
-        this.fkRennlisteView.innerHTML = '<div class="loader mx-auto"></div>';
-        const leaders = db.mitarbeiter.filter(m => isUserLeader(m) && m.Status !== 'Ausgeschieden');
+        const container = document.getElementById('fk-rennliste-container');
+        if (!container) return;
+        container.innerHTML = '<div class="loader mx-auto"></div>';
+
+        let leaders = db.mitarbeiter.filter(m => isUserLeader(m) && m.Status !== 'Ausgeschieden');
+
+        // NEU: Filter by structure if selected
+        if (this.fkRennlisteStructureFilter.value === 'mine') {
+            const myStructureIds = new Set([this.currentUserId, ...this.downline.map(u => u._id)]);
+            leaders = leaders.filter(l => myStructureIds.has(l._id));
+        }
         const { startDate, endDate } = getMonthlyCycleDates();
+
+        // NEU: Zeitbasierte Berechnung für Soll-Werte
+        const { startDate: monthStartDateForSoll, endDate: monthEndDateForSoll } = getMonthlyCycleDates();
+        const todayForSoll = getCurrentDate();
+        const totalDaysInCycleForSoll = (monthEndDateForSoll - monthStartDateForSoll) / (1000 * 60 * 60 * 24);
+        const daysPassedInCycleForSoll = Math.max(0, (todayForSoll - monthStartDateForSoll) / (1000 * 60 * 60 * 24));
+        const timeElapsedPercentageForSoll = totalDaysInCycleForSoll > 0 ? (daysPassedInCycleForSoll / totalDaysInCycleForSoll) * 100 : 0;
+        const effectiveTimePercentageForSoll = Math.max(50, timeElapsedPercentageForSoll);
+        const currentMonthName = monthStartDateForSoll.toLocaleString("de-DE", { month: "long" });
+        const currentYear = monthStartDateForSoll.getFullYear();
+        const planResults = db.monatsplanung.filter(p => p.Monat === currentMonthName && p.Jahr === currentYear);
+
         const startDateIso = startDate.toISOString().split('T')[0];
         const endDateIso = endDate.toISOString().split('T')[0];
 
@@ -5742,7 +5820,7 @@ class AuswertungView {
         const termineResultsRaw = await seaTableSqlQuery(termineQuery, true);
         const termineResults = mapSqlResults(termineResultsRaw || [], "Termine");
 
-        const AT_STATUS_GEHALTEN = ["Gehalten"];
+        const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
         const ET_STATUS_GEHALTEN = ["Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
 
         // 3. Gruppiere Daten nach Mitarbeiter für schnellen Zugriff
@@ -5751,27 +5829,35 @@ class AuswertungView {
 
         // 4. Berechne die Strukturdaten für jede Führungskraft
         const structureDataList = leaders.map(leader => {
-            const structureMembers = [leader, ...getAllSubordinatesRecursive(leader._id)];
+            const groupMembers = [leader, ...getSubordinates(leader._id, 'gruppe')];
             
             let eh = 0;
             let at = 0;
             let et = 0;
+            let atTotalGoal = 0;
 
-            for (const member of structureMembers) {
+            for (const member of groupMembers) {
                 eh += ehByMitarbeiter[member._id]?.eh || 0;
 
                 const memberTermine = termineByMitarbeiter[member._id] || [];
                 memberTermine.forEach(t => {
-                    if (t.Kategorie === "AT" && AT_STATUS_GEHALTEN.includes(t.Status)) at++;
+                    if (t.Kategorie === "AT" && AT_STATUS_AUSGEMACHT.includes(t.Status)) at++;
                     else if (t.Kategorie === "ET" && ET_STATUS_GEHALTEN.includes(t.Status)) et++;
                 });
+
+                const plan = planResults.find(p => p.Mitarbeiter_ID === member._id);
+                const ehZiel = plan?.EH_Ziel || 0;
+                atTotalGoal += member.EHproATQuote && ehZiel > 0 ? Math.round(ehZiel / member.EHproATQuote) : 0;
             }
             
+            const atSoll = Math.round(atTotalGoal * (effectiveTimePercentageForSoll / 100));
+
             return {
                 name: leader.Name,
                 rang: leader.Karrierestufe,
                 eh: eh,
                 at: at,
+                atSoll: atSoll,
                 et: et
             };
         });
@@ -5798,7 +5884,7 @@ class AuswertungView {
         // ANPASSUNG: Spalten für Name und Rang hinzugefügt
         const headers = [
             { key: 'name', label: 'Führungskraft' }, { key: 'rang', label: 'Rangstufe' },
-            { key: 'eh', label: 'Gesamt EH' }, { key: 'at', label: 'Gesamt ATs' },
+            { key: 'eh', label: 'Gesamt EH' }, { key: 'atSoll', label: 'AT Soll' }, { key: 'at', label: 'Gesamt ATs' },
             { key: 'et', label: 'Gesamt ETs' }
         ];
         table.innerHTML = `<thead><tr>${headers.map(h => {
@@ -5808,13 +5894,13 @@ class AuswertungView {
         const tbody = document.createElement('tbody');
         structureDataList.forEach(s => {
             // ANPASSUNG: Neue Spalten in der Tabelle ausgeben
-            tbody.innerHTML += `<tr><td>${s.name}</td><td>${s.rang}</td><td>${s.eh.toFixed(2)}</td><td>${s.at}</td><td>${s.et}</td></tr>`;
+            tbody.innerHTML += `<tr><td>${s.name}</td><td>${s.rang}</td><td>${s.eh.toFixed(2)}</td><td>${s.atSoll}</td><td>${s.at}</td><td>${s.et}</td></tr>`;
         });
         table.appendChild(tbody);
         table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('fkRennliste', e.currentTarget.dataset.sortKey)));
-        tableWrapper.appendChild(table);
-        this.fkRennlisteView.innerHTML = '';
-        this.fkRennlisteView.appendChild(tableWrapper);
+        tableWrapper.appendChild(table);        
+        container.innerHTML = '';
+        container.appendChild(tableWrapper);
     }
 
     async renderNaechstesInfo(repopulateDates = false) {
@@ -5848,7 +5934,7 @@ class AuswertungView {
         });
 
         this.renderInfoabendTable(filteredTermine);
-        this.renderFunnelChart(allETs.filter(t => t.Infoabend && t.Infoabend.startsWith(selectedDate)));
+        this.renderFunnelChart(filteredTermine);
     }
 
     renderInfoabendTable(termine) {
