@@ -91,10 +91,12 @@ const dom = {
   appointmentsGehaltenBar: document.getElementById("appointments-gehalten-bar"),
   employeeCountDisplay: document.getElementById("employee-count-display"),
   employeeSlotsContainer: document.getElementById("employee-slots-container"),
+  nextCareerGoalLabel: document.getElementById("next-career-goal-label"),
   employeeGoalStatus: document.getElementById("employee-goal-status"),
   interviewsProgressBar: document.getElementById("interviews-progress-bar"),
   userDropdownSelect: document.getElementById("user-dropdown-select"),
   userSelectError: document.getElementById("user-select-error"),
+  tierCardsContainer: document.getElementById("tier-cards-container"),
   tierCards: [
     document.getElementById("tier-1-card"),
     document.getElementById("tier-2-card"),
@@ -1260,8 +1262,8 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
         ? Math.round(ehZiel / user.EHproATQuote)
         : 0;
     const totalCurrentEh = totalEh.totalEh || 0;
-    const anzahlGeworbenerMA = db.mitarbeiter.filter(
-      (m) => m.Werber === user._id
+    const anzahlGeworbenerMA = db.mitarbeiter.filter( // KORREKTUR: Zähle nur aktive Mitarbeiter
+      (m) => m.Werber === user._id && m.Status !== 'Ausgeschieden'
     ).length;
     const position = user.Karrierestufe || "";
 
@@ -1860,45 +1862,113 @@ function updateMonthlyPlanningView(data) {
 }
 
 function updateEmployeeCareerView() {
+  const user = currentlyViewedUserData;
   const { totalCurrentEh, recruitedEmployees, position } = personalData;
+  const promotionRaceDate = user.Befoerderungsdatum;
+
   animateValue(dom.currentEhDisplay, 0, totalCurrentEh, 1500);
-  const currentStage = db.karriereplan.find((k) => k.Stufe === position);
-  if (!currentStage) {
-    console.error(
-      "Aktuelle Karrierestufe nicht im Karriereplan gefunden:",
-      position
-    );
-    return;
+
+  const isTrainee = position && position.toLowerCase().includes('trainee');
+  const isGst = position && position.toLowerCase().includes('geschäftsstellenleiter');
+
+  // KORREKTUR: Tier-Karten für GST ausblenden
+  if (dom.tierCardsContainer) {
+    dom.tierCardsContainer.classList.toggle('hidden', isGst);
   }
-  const nextStage = db.karriereplan
-    .filter((k) => k.Hierarchie > currentStage.Hierarchie)
-    .sort((a, b) => a.Hierarchie - b.Hierarchie)[0];
-  if (nextStage) {
-    dom.nextMilestone.innerHTML = `Nächster Meilenstein: <span class="text-skt-blue font-semibold">${nextStage.Stufe}</span>`;
-    const ehNeeded = nextStage.Kriterium_EH || 0;
-    const progressEh = ehNeeded > 0 ? (totalCurrentEh / ehNeeded) * 100 : 0;
-    dom.careerProgressPercentage.textContent = `${Math.min(
-      progressEh,
-      100
-    ).toFixed(1)}%`;
-    dom.progressToNextText.textContent = `Fortschritt zum ${nextStage.Stufe}`;
-    updateCircleProgress(dom.fortschrittKreisKarriere, 40, progressEh);
-    const maNeeded = nextStage.Kriterium_MA || 0;
-    dom.employeeCountDisplay.textContent = `${recruitedEmployees} / ${maNeeded}`;
-    dom.employeeGoalStatus.textContent = `Ziel: ${maNeeded} MA`;
-    clearChildren(dom.employeeSlotsContainer);
-    for (let i = 0; i < maNeeded; i++) {
-      const slot = document.createElement("div");
-      slot.className = `employee-slot ${
-        i < recruitedEmployees ? "filled" : ""
-      }`;
-      dom.employeeSlotsContainer.appendChild(slot);
-    }
-  } else {
-    dom.nextMilestone.innerHTML = "Höchste Stufe erreicht!";
-    dom.careerProgressPercentage.textContent = "100%";
-    updateCircleProgress(dom.fortschrittKreisKarriere, 40, 100);
+
+  // Sonderlogik für Trainee-Rennen zum GST
+  if (isTrainee && promotionRaceDate) {
+      const targetDate = new Date(promotionRaceDate).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      dom.nextMilestone.innerHTML = `Chancenseminar am <span class="text-skt-blue font-semibold">${targetDate}</span>`;
+      const ehNeeded = 4000; // Festes Ziel für GST
+      const progressEh = ehNeeded > 0 ? (totalCurrentEh / ehNeeded) * 100 : 0;
+      dom.careerProgressPercentage.textContent = `${Math.min(progressEh, 100).toFixed(1)}%`;
+      dom.progressToNextText.textContent = `Fortschritt zum GST`;
+      updateCircleProgress(dom.fortschrittKreisKarriere, 40, progressEh);
+      const maNeeded = 3;
+      dom.nextCareerGoalLabel.textContent = 'Nächstes Karriereziel GST';
+      dom.employeeCountDisplay.textContent = `${recruitedEmployees} / ${maNeeded} MA`;
+      dom.employeeGoalStatus.textContent = `Zeit bis: ${targetDate}`;
+      dom.employeeCountDisplay.classList.remove('hidden');
+      dom.employeeSlotsContainer.classList.remove('hidden');
+      dom.employeeGoalStatus.classList.remove('text-skt-red-accent', 'font-bold');
+      dom.employeeGoalStatus.classList.add('text-skt-blue-light');
+      clearChildren(dom.employeeSlotsContainer);
+      for (let i = 0; i < maNeeded; i++) {
+          const slot = document.createElement("div");
+          slot.className = `employee-slot ${i < recruitedEmployees ? "filled" : ""}`;
+          dom.employeeSlotsContainer.appendChild(slot);
+      }
+  } 
+  // Sonderlogik für GST-Rennen zum BL
+  else if (isGst && promotionRaceDate) {
+      const targetDate = new Date(promotionRaceDate).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      dom.nextMilestone.innerHTML = `Ziel BL am <span class="text-skt-blue font-semibold">${targetDate}</span>`;
+      const blStage = db.karriereplan.find(k => k.Stufe.toLowerCase().includes('bezirksleiter'));
+      const ehNeeded = blStage ? blStage.Kriterium_EH : 12000; // Fallback
+      const progressEh = ehNeeded > 0 ? (totalCurrentEh / ehNeeded) * 100 : 0;
+      dom.careerProgressPercentage.textContent = `${Math.min(progressEh, 100).toFixed(1)}%`;
+      dom.progressToNextText.textContent = `Fortschritt zum BL`;
+      updateCircleProgress(dom.fortschrittKreisKarriere, 40, progressEh);
+      const maNeeded = 6;
+      dom.nextCareerGoalLabel.textContent = 'Nächstes Karriereziel BL';
+      dom.employeeCountDisplay.textContent = `${recruitedEmployees} / ${maNeeded} MA`;
+      dom.employeeGoalStatus.textContent = `Zeit bis: ${targetDate}`;
+      dom.employeeCountDisplay.classList.remove('hidden');
+      dom.employeeSlotsContainer.classList.remove('hidden');
+      dom.employeeGoalStatus.classList.remove('text-skt-red-accent', 'font-bold');
+      dom.employeeGoalStatus.classList.add('text-skt-blue-light');
+      clearChildren(dom.employeeSlotsContainer);
+      for (let i = 0; i < maNeeded; i++) {
+          const slot = document.createElement("div");
+          slot.className = `employee-slot ${i < recruitedEmployees ? "filled" : ""}`;
+          dom.employeeSlotsContainer.appendChild(slot);
+      }
   }
+  // Standard-Logik
+  else {
+      dom.nextCareerGoalLabel.textContent = 'Nächstes Karriereziel';
+      const currentStage = db.karriereplan.find((k) => k.Stufe === position);
+      if (!currentStage) { console.error("Aktuelle Karrierestufe nicht im Karriereplan gefunden:", position); return; }
+      const nextStage = db.karriereplan.filter((k) => k.Hierarchie > currentStage.Hierarchie).sort((a, b) => a.Hierarchie - b.Hierarchie)[0];
+      if (nextStage) {
+          let milestoneText = `Nächster Meilenstein: <span class="text-skt-blue font-semibold">${nextStage.Stufe}</span>`;
+          dom.nextMilestone.innerHTML = milestoneText;
+          const ehNeeded = nextStage.Kriterium_EH || 0;
+          const progressEh = ehNeeded > 0 ? (totalCurrentEh / ehNeeded) * 100 : 0;
+          dom.careerProgressPercentage.textContent = `${Math.min(progressEh, 100).toFixed(1)}%`;
+          dom.progressToNextText.textContent = `Fortschritt zum ${nextStage.Stufe}`;
+          updateCircleProgress(dom.fortschrittKreisKarriere, 40, progressEh);
+          const maNeeded = nextStage.Kriterium_MA || 0;
+          if (promotionRaceDate) {
+              const targetDate = new Date(promotionRaceDate).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+              dom.employeeGoalStatus.textContent = `Zeit bis: ${targetDate}`;
+              dom.employeeGoalStatus.classList.remove('text-skt-red-accent', 'font-bold');
+              dom.employeeGoalStatus.classList.add('text-skt-blue-light');
+              dom.employeeCountDisplay.textContent = `${recruitedEmployees} / ${maNeeded} MA`;
+              dom.employeeCountDisplay.classList.remove('hidden');
+              dom.employeeSlotsContainer.classList.remove('hidden');
+              clearChildren(dom.employeeSlotsContainer);
+              for (let i = 0; i < maNeeded; i++) {
+                  const slot = document.createElement("div");
+                  slot.className = `employee-slot ${i < recruitedEmployees ? "filled" : ""}`;
+                  dom.employeeSlotsContainer.appendChild(slot);
+              }
+          } else {
+              dom.employeeGoalStatus.textContent = `nächsten Karriere Schritt mit FK klären!`;
+              dom.employeeGoalStatus.classList.remove('text-skt-blue-light');
+              dom.employeeGoalStatus.classList.add('text-skt-red-accent', 'font-bold');
+              dom.employeeCountDisplay.classList.add('hidden');
+              dom.employeeSlotsContainer.classList.add('hidden');
+              clearChildren(dom.employeeSlotsContainer);
+          }
+      } else {
+          dom.nextMilestone.innerHTML = "Höchste Stufe erreicht!";
+          dom.careerProgressPercentage.textContent = "100%";
+          updateCircleProgress(dom.fortschrittKreisKarriere, 40, 100);
+      }
+  }
+
   const careerPlanTiers = db.karriereplan
     .filter(
       (p) =>
@@ -6470,6 +6540,9 @@ function setupEventListeners() {
     updateMonthlyPlanningView(personalData);
     updateLeadershipView();
     calculateAndRenderPQQForCurrentView();
+    // NEU: Zeige die persönliche Karriere-Ansicht für Führungskräfte an
+    dom.employeeView.classList.remove('hidden');
+    updateEmployeeCareerView();
   });
   dom.teamViewBtn.addEventListener("click", () => {
     currentPlanningView = "team";
@@ -6480,6 +6553,8 @@ function setupEventListeners() {
     updateMonthlyPlanningView(teamData);
     updateLeadershipView();
     calculateAndRenderPQQForCurrentView();
+    // NEU: Blende die persönliche Karriere-Ansicht aus
+    dom.employeeView.classList.add('hidden');
   });
   dom.strukturViewBtn.addEventListener("click", () => {
     currentPlanningView = "struktur";
@@ -6490,6 +6565,8 @@ function setupEventListeners() {
     updateMonthlyPlanningView(structureData);
     updateLeadershipView();
     calculateAndRenderPQQForCurrentView();
+    // NEU: Blende die persönliche Karriere-Ansicht aus
+    dom.employeeView.classList.add('hidden');
   });
 
   dom.gridViewBtn.addEventListener("click", () => {
