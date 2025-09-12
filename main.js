@@ -47,6 +47,7 @@ let umsatzViewInstance = null;
 let auswertungViewInstance = null;
 let strukturbaumViewInstance = null;
 let pgTagebuchViewInstance = null;
+let datenschutzViewInstance = null; // NEU
 let HIERARCHY_CACHE = null;
 let currentOnboardingSubView = "leader-list";
 let currentOnboardingScope = 'group'; // NEU
@@ -136,6 +137,7 @@ const dom = {
   pgTagebuchHeaderBtn: document.getElementById('pg-tagebuch-header-btn'),
   strukturbaumHeaderBtn: document.getElementById("strukturbaum-header-btn"),
   auswertungView: document.getElementById("auswertung-view"),
+  datenschutzView: document.getElementById("datenschutz-view"), // NEU
   umsatzView: document.getElementById("umsatz-view"),
   potentialView: document.getElementById("potential-view"),
   appointmentsView: document.getElementById("appointments-view"),
@@ -204,6 +206,7 @@ const dom = {
   timeTravelDateDisplay: document.getElementById('time-travel-date-display'),
   resetTimeTravelBtn: document.getElementById('reset-time-travel-btn'),
   // NEU: "Mehr"-Menü
+  datenschutzHeaderBtn: document.getElementById('datenschutz-header-btn'),
   moreToolsBtn: document.getElementById('more-tools-btn'),
   moreToolsMenu: document.getElementById('more-tools-menu'),
 };
@@ -3268,6 +3271,15 @@ class AppointmentsView {
         document.getElementById('cancel-appointment-btn').addEventListener('click', () => this.closeModal());
         this.modal.addEventListener('click', (e) => { if (e.target === this.modal) this.closeModal(); });
         this.form.addEventListener('submit', (e) => this.handleFormSubmit(e));
+
+        // Event Listener für den Absage-Toggle im Modal, um das Grund-Feld sofort anzuzeigen/auszublenden.
+        const cancellationToggle = this.form.querySelector('#appointment-cancellation');
+        const cancellationReasonContainer = this.form.querySelector('#appointment-cancellation-reason-container');
+        if (cancellationToggle && cancellationReasonContainer) {
+            cancellationToggle.addEventListener('change', () => {
+                cancellationReasonContainer.classList.toggle('hidden', !cancellationToggle.checked);
+            });
+        }
     }
     // Hilfsmethode, um DOM-Elemente zu holen, wird von init() aufgerufen.
     _getDomElements() {
@@ -3515,20 +3527,10 @@ class AppointmentsView {
         this.statsByEmployeeBtn.addEventListener('click', () => { this.statsChartMode = 'employee'; this._updateStatsToggleButtons(); this._renderStatsChart(); });
         this.statsByStatusBtn.addEventListener('click', () => { this.statsChartMode = 'status'; this._updateStatsToggleButtons(); this._renderStatsChart(); });
 
+        // Listener für den "Neuen Termin anlegen" Button, der sich in der dynamisch geladenen appointments.html befindet.
         document.getElementById('add-appointment-btn-stats').addEventListener('click', () => this.openModal());
-        document.getElementById('close-appointment-modal-btn').addEventListener('click', () => this.closeModal());
-        document.getElementById('cancel-appointment-btn').addEventListener('click', () => this.closeModal());
-        this.modal.addEventListener('click', (e) => { if (e.target === this.modal) this.closeModal(); });
-        this.form.addEventListener('submit', (e) => this.handleFormSubmit(e));
 
-        // NEU: Event Listener für den Absage-Toggle im Modal, um das Grund-Feld sofort anzuzeigen/auszublenden.
-        const cancellationToggle = this.form.querySelector('#appointment-cancellation');
-        const cancellationReasonContainer = this.form.querySelector('#appointment-cancellation-reason-container');
-        cancellationToggle.addEventListener('change', () => {
-            cancellationReasonContainer.classList.toggle('hidden', !cancellationToggle.checked);
-        });
-
-        // NEU: Event Listener für den neuen Analyse-Container und die Tabs
+        // Event Listener für den Analyse-Container und die Tabs
         this.toggleAnalysisBtn.addEventListener('click', () => this._toggleCollapsible(this.analysisContent, this.toggleAnalysisBtn));
         this.statsTab.addEventListener('click', () => this._switchAnalysisTab('stats'));
         this.heatmapTab.addEventListener('click', () => this._switchAnalysisTab('heatmap'));
@@ -6476,10 +6478,18 @@ function setupEventListeners() {
       if (user && user.PWD === enteredPassword) {
         localStorage.setItem("loggedInUserId", selectedUserId);
         authenticatedUserData = user;
-        viewHistory = [selectedUserId];
-        document.getElementById("user-select-screen").classList.add("hidden");
-        document.getElementById("dashboard-content").classList.remove("hidden");
-        fetchAndRenderDashboard(selectedUserId);
+        
+        // KORREKTUR: Prüfe die Datenschutzzustimmung direkt nach dem Login.
+        if (authenticatedUserData && !authenticatedUserData.Datenschutz) {
+            document.getElementById("user-select-screen").classList.add("hidden");
+            document.getElementById("dashboard-content").classList.remove("hidden");
+            await showPrivacyConsentView();
+        } else {
+            viewHistory = [selectedUserId];
+            document.getElementById("user-select-screen").classList.add("hidden");
+            document.getElementById("dashboard-content").classList.remove("hidden");
+            await fetchAndRenderDashboard(selectedUserId);
+        }
       } else {
         dom.userSelectError.textContent =
           "Falsches Passwort oder Benutzer nicht gefunden.";
@@ -6656,6 +6666,10 @@ function setupEventListeners() {
     switchView("strukturbaum");
   });
 
+  dom.datenschutzHeaderBtn.addEventListener('click', () => {
+    switchView('datenschutz');
+  });
+
   // --- Modal Controls ---
   dom.closeHinweisModalBtn.addEventListener("click", () => {
     dom.hinweisModal.classList.remove("visible");
@@ -6823,18 +6837,45 @@ async function initializeDashboard() {
   const loggedInUserId = localStorage.getItem("loggedInUserId");
   if (loggedInUserId && findRowById("mitarbeiter", loggedInUserId)) {
     authenticatedUserData = findRowById("mitarbeiter", loggedInUserId);
-    viewHistory = [loggedInUserId];
-    document.getElementById("user-select-screen").classList.add("hidden");
-    document.getElementById("dashboard-content").classList.remove("hidden");
-    await fetchAndRenderDashboard(loggedInUserId);
+    
+    // NEU: Prüfe die Datenschutzzustimmung, BEVOR das Dashboard geladen wird.
+    if (authenticatedUserData && !authenticatedUserData.Datenschutz) {
+        document.getElementById("user-select-screen").classList.add("hidden");
+        document.getElementById("dashboard-content").classList.remove("hidden");
+        await showPrivacyConsentView();
+    } else {
+        viewHistory = [loggedInUserId];
+        document.getElementById("user-select-screen").classList.add("hidden");
+        document.getElementById("dashboard-content").classList.remove("hidden");
+        await fetchAndRenderDashboard(loggedInUserId);
+    }
   } else {
     document.getElementById("user-select-screen").classList.remove("hidden");
     document.getElementById("user-select-screen").classList.add("flex");
     setStatus("");
   }
-
   setupEventListeners();
   isInitializing = false;
+}
+
+async function showPrivacyConsentView() {
+    // Alle anderen Ansichten ausblenden und nur die Datenschutz-Ansicht anzeigen
+    Object.values(dom).forEach(el => {
+        if (el && el.id && el.id.endsWith('-view') && el.id !== 'datenschutz-view') {
+            el.classList.add('hidden');
+        }
+    });
+    dom.datenschutzView.classList.remove('hidden');
+
+    // Header-Buttons deaktivieren, außer Logout
+    const headerButtons = document.querySelectorAll('header button');
+    headerButtons.forEach(btn => {
+        if (btn.id !== 'settings-btn' && btn.id !== 'clear-cache-btn') {
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+    });
+    await loadAndInitDatenschutzView();
 }
 
 async function renderSubordinatesForLeader(leaderId, container) {
@@ -8578,6 +8619,7 @@ function switchView(viewName) {
   dom.einarbeitungView.classList.toggle("hidden", viewName !== "einarbeitung");
   dom.appointmentsView.classList.toggle("hidden", viewName !== "appointments");
   dom.potentialView.classList.toggle("hidden", viewName !== "potential");
+  dom.datenschutzView.classList.toggle("hidden", viewName !== "datenschutz");
   dom.umsatzView.classList.toggle("hidden", viewName !== "umsatz");
   dom.auswertungView.classList.toggle("hidden", viewName !== "auswertung");
   dom.strukturbaumView.classList.toggle("hidden", viewName !== "strukturbaum");
@@ -8608,9 +8650,91 @@ function switchView(viewName) {
     loadAndInitAuswertungView();
   } else if (viewName === "strukturbaum") {
     loadAndInitStrukturbaumView();
+  } else if (viewName === "datenschutz") {
+    loadAndInitDatenschutzView();
   } else if (viewName === 'pg-tagebuch') {
     loadAndInitPGTagebuchView();
   }
+}
+
+class DatenschutzView {
+    constructor() {
+        this.initialized = false;
+    }
+
+    async init() {
+        const hasConsented = authenticatedUserData.Datenschutz === true;
+
+        const consentInteractionContainer = document.getElementById('consent-interaction-container');
+        const consentGivenContainer = document.getElementById('consent-given-container');
+
+        if (consentInteractionContainer && consentGivenContainer) {
+            consentInteractionContainer.classList.toggle('hidden', hasConsented);
+            consentGivenContainer.classList.toggle('hidden', !hasConsented);
+        }
+
+        // Event-Listener nur einrichten, wenn die Zustimmung noch aussteht.
+        if (!hasConsented) {
+            this.setupEventListeners();
+        }
+        this.initialized = true;
+    }
+
+    setupEventListeners() {
+        const consentPersonal = document.getElementById('consent-personal-data');
+        const consentCustomer = document.getElementById('consent-customer-data');
+        const acceptBtn = document.getElementById('accept-privacy-policy-btn');
+
+        const checkConsents = () => {
+            acceptBtn.disabled = !(consentPersonal.checked && consentCustomer.checked);
+        };
+
+        consentPersonal.addEventListener('change', checkConsents);
+        consentCustomer.addEventListener('change', checkConsents);
+
+        acceptBtn.addEventListener('click', async () => {
+            acceptBtn.disabled = true;
+            acceptBtn.textContent = 'Speichere...';
+
+            const sql = `UPDATE \`Mitarbeiter\` SET \`Datenschutz\` = true WHERE _id = '${authenticatedUserData._id}'`;
+            const result = await seaTableSqlQuery(sql, false);
+
+            if (result !== null) {
+                // 1. Update den lokalen Zustand im Speicher. Dies aktualisiert auch das Objekt im `db.mitarbeiter`-Array.
+                authenticatedUserData.Datenschutz = true;
+                const userInDb = findRowById('mitarbeiter', authenticatedUserData._id);
+                if (userInDb) {
+                    userInDb.Datenschutz = true;
+                }
+
+                // 2. Leere den Mitarbeiter-Cache. Beim nächsten vollständigen Laden der App werden die Daten
+                // frisch von der Datenbank geholt, die dann die gespeicherte Zustimmung enthält.
+                // Dies vermeidet Caching-Probleme mit veralteten oder falsch formatierten Daten.
+                localStorage.removeItem(CACHE_PREFIX + 'mitarbeiter');
+                // 3. Aktiviere die Header-Buttons wieder
+                const headerButtons = document.querySelectorAll('header button');
+                headerButtons.forEach(btn => {
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                });
+
+                // 4. Wechsle zurück zur Dashboard-Ansicht
+                switchView('dashboard');
+            } else {
+                alert('Fehler beim Speichern der Zustimmung. Bitte versuchen Sie es erneut.');
+                acceptBtn.disabled = false;
+                acceptBtn.textContent = 'Zustimmen und Dashboard nutzen';
+            }
+        });
+    }
+}
+
+async function loadAndInitDatenschutzView() {
+    const container = dom.datenschutzView;
+    const response = await fetch("./datenschutz.html");
+    container.innerHTML = await response.text();
+    if (!datenschutzViewInstance) datenschutzViewInstance = new DatenschutzView();
+    await datenschutzViewInstance.init();
 }
 
 // Mache Kernfunktionen global verfügbar für andere Module/Dateien

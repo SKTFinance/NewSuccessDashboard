@@ -1,0 +1,105 @@
+<!-- Ansicht für Datenschutz -->
+<div id="datenschutz-module-root" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+        <h2 class="text-3xl font-bold text-skt-blue">Datenschutz & Zustimmung</h2>
+    </div>
+
+    <!-- Der Text der Datenschutzerklärung, immer sichtbar -->
+    <div id="privacy-policy-content" class="prose max-w-none p-6 bg-skt-grey-light rounded-lg border border-gray-200 mb-8">
+        <h3 class="text-xl font-bold text-skt-blue">Datenschutzerklärung für das SKT Success Dashboard</h3>
+        <p class="text-sm text-gray-500">Stand: 24.07.2024</p>
+        
+        <p><strong>Wichtiger Hinweis:</strong> Bevor du dieses Dashboard nutzen kannst, bitten wir dich, die folgenden Informationen sorgfältig zu lesen und deine Zustimmung zu geben. Diese Erklärung dient der Transparenz und deiner rechtlichen Absicherung sowie der des Betreibers.</p>
+
+        <h4>1. Verantwortlicher für die Datenverarbeitung</h4>
+        <p>Als Entwickler und Betreiber dieser Anwendung ist für die Verarbeitung deiner personenbezogenen Daten verantwortlich: <br>
+         <strong>Samuel Königslehner, Wolfernstraße 20b, 4400 Steyr<br>+436769506466, samuel.koenigslehner@ovb.at</strong>
+            <strong>
+
+        <h4>2. Zweck und Umfang der Datenverarbeitung</h4>
+        <p>Diese Anwendung dient der Erfassung, Darstellung und Auswertung von Leistungsdaten zur Unterstützung deiner Karriereplanung und der Steuerung von Vertriebsaktivitäten. Folgende Daten werden verarbeitet:</p>
+        <ul>
+            <li>
+                
+            <li>
+                <strong>Leistungs- und Aktivitätsdaten:</strong> Von dir erfasste Umsätze (in EH), Termine (inkl. Kategorien, Status, Notizen), absolvierte Einarbeitungsschritte und Monatsplanungen. Diese Daten bilden die Grundlage für alle Auswertungen, Ranglisten und Fortschrittsanzeigen in diesem Dashboard.
+            </li>
+            <li>
+                <strong>Kontaktdaten von Dritten (Kunden/Potentiale):</strong> Namen, Telefonnummern oder E-Mail-Adressen, die du in den Modulen "Potentialbearbeitung" oder "Termine" eingibst. Diese Daten werden ausschließlich dir zur Verfügung gestellt, um deine Arbeit zu organisieren.
+            </li>
+        </ul>
+
+        <h4>3. Speicherort und Datensicherheit</h4>
+        <p>Alle oben genannten Daten werden in einer Datenbank des Anbieters SeaTable GmbH gespeichert. Die Server von SeaTable für die Cloud-Version befinden sich in zertifizierten Rechenzentren in Deutschland und unterliegen somit den strengen Anforderungen der EU-Datenschutz-Grundverordnung (DSGVO). Wir haben mit der SeaTable GmbH einen Auftragsverarbeitungsvertrag (AVV) abgeschlossen, der die datenschutzkonforme Verarbeitung sicherstellt.</p>
+
+        <h4>4. Deine Pflichten als Nutzer</h4>
+        <p>Du bist für die Rechtmäßigkeit der von dir eingegebenen Daten von Dritten (insbesondere Kunden und Potentialen) allein verantwortlich. Mit deiner Zustimmung bestätigst du, dass du von jeder Person, deren Daten du in dieses System einträgst, eine gültige datenschutzrechtliche Einwilligung eingeholt hast.</p>
+
+        <h4>5. Deine Rechte als Betroffener</h4>
+        <p>Gemäß der DSGVO hast du jederzeit das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung und Datenübertragbarkeit bezüglich deiner personenbezogenen Daten. Wende dich hierfür bitte an den oben genannten Verantwortlichen.</p>
+    </div>
+
+    <!-- Container für die Interaktion (wird bei Zustimmung ausgeblendet) -->
+    <div id="consent-interaction-container" class="space-y-8">
+        <!-- Zustimmungs-Sektion -->
+        <div class="space-y-6 p-6 bg-blue-50 border-l-4 border-skt-blue-main rounded-r-lg">
+            <h3 class="text-xl font-bold text-skt-blue">Erforderliche Zustimmung</h3>
+            <p>Bitte bestätige die folgenden Punkte, um das Dashboard nutzen zu können:</p>
+            
+            <label for="consent-personal-data" class="flex items-start space-x-3 p-3 rounded-md hover:bg-blue-100 cursor-pointer">
+                <input type="checkbox" id="consent-personal-data" class="mt-1 h-5 w-5 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-main">
+                <div class="flex-grow">
+                    <span class="font-semibold text-skt-blue">Zustimmung zur Verarbeitung meiner Daten</span>
+                    <p class="text-sm text-gray-600">Ich habe die Datenschutzerklärung gelesen und stimme zu, dass meine personenbezogenen und leistungsbezogenen Daten wie oben beschrieben gespeichert und für die Zwecke dieser Anwendung verarbeitet werden.</p>
+                </div>
+            </label>
+
+            <label for="consent-customer-data" class="flex items-start space-x-3 p-3 rounded-md hover:bg-blue-100 cursor-pointer">
+                <input type="checkbox" id="consent-customer-data" class="mt-1 h-5 w-5 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-main">
+                <div class="flex-grow">
+                    <span class="font-semibold text-skt-blue">Verantwortung für Kundendaten</span>
+                    <p class="text-sm text-gray-600">Ich bestätige, dass ich für alle von mir eingegebenen Daten Dritter (insbesondere Kunden) die erforderliche datenschutzrechtliche Einwilligung hole und dafür selbst die Verantwortung trage und stelle den Entwickler dieser App von jeglichen Ansprüchen Dritter frei.</p>
+                </div>
+            </label>
+        </div>
+
+        <div class="text-center">
+            <button id="accept-privacy-policy-btn" disabled class="bg-skt-green-accent text-white font-bold py-3 px-8 rounded-lg shadow-md transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-green-700">
+                Zustimmen und Dashboard nutzen
+            </button>
+        </div>
+    </div>
+
+    <!-- NEU: Container für bereits erteilte Zustimmung -->
+    <div id="consent-given-container" class="hidden space-y-4 p-6 bg-green-50 border-l-4 border-skt-green-accent rounded-r-lg mt-8">
+        <h3 class="text-xl font-bold text-skt-blue">Zustimmung bereits erteilt</h3>
+        <p class="text-gray-700">Vielen Dank! Du hast der Datenschutzerklärung bereits zugestimmt und kannst das Dashboard uneingeschränkt nutzen.</p>
+    </div>
+
+    <!-- Druckbare Vorlage -->
+    <div class="mt-12 border-t pt-8">
+        <button onclick="window.open('datenschutz-kunde.html', '_blank');" class="text-lg font-semibold text-skt-blue cursor-pointer hover:underline no-print">
+            Vorlage für Kundenzustimmung drucken
+        </button>
+    </div>
+</div>
+
+<style>
+    @media print {
+        body * {
+            visibility: hidden;
+        }
+        #privacy-policy-content, #privacy-policy-content * {
+            visibility: visible;
+        }
+        #privacy-policy-content {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+        }
+        .no-print {
+            display: none;
+        }
+    }
+</style>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Datenschutzerklärung für Kunden</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        @media print {
+            body {
+                font-size: 12pt;
+                line-height: 1.4;
+            }
+            .no-print {
+                display: none;
+            }
+            .print-container {
+                box-shadow: none;
+                border: none;
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="print-container max-w-2xl mx-auto bg-white p-10 rounded-lg shadow-lg">
+        <h1 class="text-2xl font-bold text-skt-blue mb-6">Einwilligung zur Datenverarbeitung</h1>
+        <p class="mb-4">Diese Einwilligungserklärung betrifft die Verarbeitung Ihrer personenbezogenen Daten im Rahmen der Nutzung des SKT Success Dashboards durch Ihren Finanzberater.</p>
+
+        <h2 class="text-lg font-semibold text-skt-blue mt-6 mb-2">1. Verantwortlicher Berater & Datenverarbeiter</h2>
+        <p>Ihr Berater, der Ihre Daten in das System eingibt, ist für die Einhaltung der Datenschutzbestimmungen Ihnen gegenüber verantwortlich. Der technische Betreiber der Anwendung ist:</p>
+        <p class="font-semibold mt-2">Samuel Königslehner<br>Wolfernstraße 20b, 4400 Steyr<br>E-Mail: samuel.koenigslehner@ovb.at</p>
+
+        <h2 class="text-lg font-semibold text-skt-blue mt-6 mb-2">2. Welche Daten werden verarbeitet?</h2>
+        <p>Ihr Berater erfasst folgende Daten, um die Zusammenarbeit mit Ihnen optimal zu gestalten :</p>
+        <ul class="list-disc list-inside space-y-1 mt-2">
+            <li><strong>Kontaktdaten:</strong> Ihr Name, ggf. Telefonnummer und E-Mail-Adresse.</li>
+            <li><strong>Termindaten:</strong> Datum, Art und Status von vereinbarten Terminen (z.B. Analyse-, Beratungs- oder Servicetermin).</li>
+            <li><strong>Umsatzdaten:</strong> Bei Abschluss eines Vertrages werden anonymisierte Leistungsdaten (in "Einheiten") erfasst, die keinen direkten Rückschluss auf die Vertragssumme oder spezifische Informationen zulassen. Ebenso Produktart und Gesellschaft wird gespeichert.</li>
+        </ul>
+
+        <h2 class="text-lg font-semibold text-skt-blue mt-6 mb-2">3. Zweck der Verarbeitung</h2>
+        <p>Die Datenverarbeitung dient ausschließlich dazu, Ihrem Berater eine effiziente Organisation seiner Arbeit, die Nachverfolgung von Terminen und die Analyse zu ermöglichen. Ihre Daten werden nicht für andere Zwecke verwendet oder an unbeteiligte Dritte weitergegeben.</p>
+
+        <h2 class="text-lg font-semibold text-skt-blue mt-6 mb-2">4. Ihre Rechte & Widerruf</h2>
+        <p>Sie haben jederzeit das Recht auf Auskunft, Berichtigung und Löschung Ihrer Daten. Sie können diese Einwilligung jederzeit ohne Angabe von Gründen bei Ihrem Berater widerrufen. Der Widerruf berührt nicht die Rechtmäßigkeit der bis dahin erfolgten Datenverarbeitung.</p>
+
+        <div class="mt-10 border-t pt-6">
+            <h2 class="text-xl font-bold text-skt-blue mb-4">Einwilligungserklärung</h2>
+            <p class="mb-6">Ich habe die obenstehenden Informationen zur Kenntnis genommen und willige ein, dass mein Berater meine oben genannten Daten im SKT Success Dashboard für die beschriebenen Zwecke verarbeitet.</p>
+            
+            <div class="mt-12 grid grid-cols-2 gap-8">
+                <div>
+                    <div class="border-b-2 border-gray-400 pb-2"></div>
+                    <p class="text-sm text-center mt-2">Ort, Datum</p>
+                </div>
+                <div>
+                    <div class="border-b-2 border-gray-400 pb-2"></div>
+                    <p class="text-sm text-center mt-2">Unterschrift des Kunden</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="text-center mt-8 no-print">
+        <button onclick="window.print();" class="bg-skt-blue text-white font-semibold py-2 px-6 rounded-lg hover:bg-skt-blue-light transition-colors"><i class="fas fa-print mr-2"></i>Erneut drucken</button>
+    </div>
+</body>
+</html>
