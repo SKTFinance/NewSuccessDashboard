@@ -5697,9 +5697,13 @@ class AuswertungView {
         const startDateIso = startDate.toISOString().split('T')[0];
         const endDateIso = endDate.toISOString().split('T')[0];
 
-        const query = `SELECT Mitarbeiter_ID, Kategorie, Status, Absage FROM Termine WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
-        const termineRaw = await seaTableSqlQuery(query, true);
-        let termineData = mapSqlResults(termineRaw || [], 'Termine');
+        // KORREKTUR: Verwende die vorgeladenen und vollständigen Termindaten aus `db.termine`,
+        // um das 10k-Zeilen-Limit von SQL-Abfragen zu umgehen und Datenkonsistenz sicherzustellen.
+        let termineData = db.termine.filter(t => {
+            if (!t.Datum) return false;
+            const terminDate = new Date(t.Datum);
+            return terminDate >= startDate && terminDate <= endDate;
+        });
         // KORREKTUR: Abgesagte/stornierte Termine aus der Zählung ausschließen.
         termineData = termineData.filter(t => t.Absage !== true && t.Status !== 'Storno');
 
@@ -5709,14 +5713,14 @@ class AuswertungView {
         const planResults = db.monatsplanung.filter(p => p.Monat === currentMonthName && p.Jahr === currentYear);
 
         const AT_STATUS_GEHALTEN = ["Gehalten"];
-        const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
+        const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"]; // KORREKTUR: "Verschoben" zählt nicht mehr als ausgemacht.
         const ET_STATUS_GEHALTEN = ["Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
         const ET_STATUS_AUSGEMACHT = ["Ausgemacht", ...ET_STATUS_GEHALTEN];
 
         const statsByMitarbeiter = {};
 
         termineData.forEach(t => {
-            const mitarbeiterId = t.Mitarbeiter_ID?.[0]?.row_id;
+            const mitarbeiterId = t.Mitarbeiter_ID; // KORREKTUR: Nach der Normalisierung ist dies eine direkte ID.
             if (!mitarbeiterId) return;
 
             if (!statsByMitarbeiter[mitarbeiterId]) {
@@ -5871,22 +5875,27 @@ class AuswertungView {
 
         // 1. Lade alle EH-Daten für den Zeitraum
         const ehQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`ehIst\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' GROUP BY \`Mitarbeiter_ID\``;
-        const ehResultRaw = await seaTableSqlQuery(ehQuery, false);
+        const ehResultRaw = await seaTableSqlQuery(ehQuery, true); // KORREKTUR: convert_link_id auf true setzen, um konsistente Datenobjekte zu erhalten.
         const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
 
         // 2. Lade alle relevanten Termindaten für den Zeitraum
-        const termineQuery = `SELECT Mitarbeiter_ID, Kategorie, Status, Absage FROM Termine WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
-        const termineResultsRaw = await seaTableSqlQuery(termineQuery, true);
-        let termineResults = mapSqlResults(termineResultsRaw || [], "Termine");
+        // KORREKTUR: Verwende die vorgeladenen und vollständigen Termindaten aus `db.termine`,
+        // um das 10k-Zeilen-Limit von SQL-Abfragen zu umgehen und Datenkonsistenz sicherzustellen.
+        let termineResults = db.termine.filter(t => {
+            if (!t.Datum) return false;
+            const terminDate = new Date(t.Datum);
+            return terminDate >= startDate && terminDate <= endDate;
+        });
         // KORREKTUR: Abgesagte/stornierte Termine aus der Zählung ausschließen.
         termineResults = termineResults.filter(t => t.Absage !== true && t.Status !== 'Storno');
         // KORREKTUR: Definitionen angepasst
-        const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
-        const ET_STATUS_GEHALTEN = ["Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter", "Ausgemacht", "Verschoben"];
+        const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"]; // KORREKTUR: "Verschoben" zählt nicht mehr als ausgemacht.
+        const ET_STATUS_GEHALTEN = ["Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter", "Ausgemacht", "Verschoben"]; // Diese Definition ist für "Gesamt ETs" in dieser Ansicht korrekt
 
         // 3. Gruppiere Daten nach Mitarbeiter für schnellen Zugriff
+        // KORREKTUR: Greife auf die `row_id` aus dem verknüpften Objekt zu, das durch `convert_link_id=true` zurückgegeben wird.
         const ehByMitarbeiter = _.keyBy(ehResults.map(e => ({ id: e.Mitarbeiter_ID?.[0]?.row_id, eh: e.ehIst })), 'id');
-        const termineByMitarbeiter = _.groupBy(termineResults, t => t.Mitarbeiter_ID?.[0]?.row_id);
+        const termineByMitarbeiter = _.groupBy(termineResults, 'Mitarbeiter_ID'); // KORREKTUR: Nach der Normalisierung ist dies eine direkte ID.
 
         // 4. Berechne die Strukturdaten für jede Führungskraft
         const structureDataList = leaders.map(leader => {
