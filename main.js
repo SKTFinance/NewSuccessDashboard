@@ -1260,6 +1260,8 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
   // KORREKTUR: Falsche Status für "gehaltene" ETs entfernt (z.B. Storno, Ausgemacht).
   const ET_STATUS_GEHALTEN = ["Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+  // NEU: Definition für ausgemachte ETs, die "Ausgemacht" und alle "Gehalten"-Stati umfasst.
+  const ET_STATUS_AUSGEMACHT = ["Ausgemacht", ...ET_STATUS_GEHALTEN];
 
   return users.map((user) => {
     // Plandaten kommen aus dem Cache und sind normalisiert.
@@ -1296,13 +1298,13 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
 
     let atIst = 0,
       atVereinbart = 0,
-      etIst = 0;
+      etAusgemacht = 0;
     userTermine.forEach((t) => {
       if (t.Kategorie === "AT") {
         if (AT_STATUS_GEHALTEN.includes(t.Status)) atIst++;
         if (AT_STATUS_AUSGEMACHT.includes(t.Status)) atVereinbart++;
       } else if (t.Kategorie === "ET") {
-        if (ET_STATUS_GEHALTEN.includes(t.Status)) etIst++;
+        if (ET_STATUS_AUSGEMACHT.includes(t.Status)) etAusgemacht++;
       }
     });
 
@@ -1326,7 +1328,7 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
       ehGoal: ehZiel,
       ehCurrent: ehIst,
       etGoal: etZiel,
-      etCurrent: etIst,
+      etCurrent: etAusgemacht,
       atGoal: atSoll,
       atCurrent: atIst,
       atVereinbart,
@@ -2207,8 +2209,8 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
                 ${positionHtml || prognosisHtml}
             </div>
             <div class="flex items-center space-x-2">
-                 <button data-username="${member.leaderName || member.name}" class="calendar-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Termine anzeigen"><i class="fas fa-calendar-alt"></i></button>
                  <button data-userid="${member.id}" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button>
+                 <button data-userid="${member.id}" class="calendar-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Termine anzeigen"><i class="fas fa-calendar-alt"></i></button>
                  <i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i>
             </div>
         </div>
@@ -2297,11 +2299,16 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
     // NEU: Event-Listener für den Kalender-Button
     const calendarBtnGrid = summary.querySelector('.calendar-view-btn');
     if (calendarBtnGrid) {
-        calendarBtnGrid.addEventListener('click', (e) => {
+        calendarBtnGrid.addEventListener('click', async (e) => {
             e.stopPropagation();
-            const username = e.currentTarget.dataset.username;
-            if (username) {
-                switchToAppointmentsAndFilter(username);
+            const userId = e.currentTarget.dataset.userid;
+            if (userId) {
+                viewHistory.push(userId);
+                await fetchAndRenderDashboard(userId);
+                pendingAppointmentFilter = null;
+                pendingAppointmentViewMode = 'table';
+                pendingAppointmentScope = 'group';
+                switchView('appointments');
             }
         });
     }
@@ -2382,7 +2389,7 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
 
     summary.innerHTML = `<div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-skt-blue text-lg break-words">${
         member.leaderName || member.name
-    }</p>${positionHtml}</div><div class="flex items-center space-x-2 flex-shrink-0">${prognosisHtml}<button data-username="${member.leaderName || member.name}" class="calendar-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Termine anzeigen"><i class="fas fa-calendar-alt"></i></button><button data-userid="${
+    }</p>${positionHtml}</div><div class="flex items-center space-x-2 flex-shrink-0">${prognosisHtml}<button data-userid="${member.id}" class="calendar-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Termine anzeigen"><i class="fas fa-calendar-alt"></i></button><button data-userid="${
         member.id
     }" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button><i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i></div></div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">${ehUnit}</p><p class="text-xs font-semibold text-skt-blue">${ehDisplayValue} ${ehGoalDisplay}</p></div>${
         !isMoneyView
@@ -2459,11 +2466,16 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
     // NEU: Event-Listener für den Kalender-Button
     const calendarBtnList = summary.querySelector('.calendar-view-btn');
     if (calendarBtnList) {
-        calendarBtnList.addEventListener('click', (e) => {
+        calendarBtnList.addEventListener('click', async (e) => {
             e.stopPropagation();
-            const username = e.currentTarget.dataset.username;
-            if (username) {
-                switchToAppointmentsAndFilter(username);
+            const userId = e.currentTarget.dataset.userid;
+            if (userId) {
+                viewHistory.push(userId);
+                await fetchAndRenderDashboard(userId);
+                pendingAppointmentFilter = null;
+                pendingAppointmentViewMode = 'table';
+                pendingAppointmentScope = 'group';
+                switchView('appointments');
             }
         });
     }
@@ -4632,7 +4644,7 @@ async function loadAndInitAppointmentsView() {
     }
     
     console.log('%c[Loader] %cInitializing appointments view instance...', 'color: orange; font-weight: bold;', 'color: black;');
-    await appointmentsViewInstance.init(authenticatedUserData._id);
+    await appointmentsViewInstance.init(currentlyViewedUserData._id);
   } catch (error) {
     console.error("Fehler beim Laden der Termin-Ansicht:", error);
     container.innerHTML = `<div class="text-center p-8 bg-red-50 rounded-lg border border-red-200"><i class="fas fa-exclamation-triangle fa-3x text-red-400 mb-4"></i><h3 class="text-xl font-bold text-skt-blue">Fehler beim Laden</h3><p class="text-red-600 mt-2">${error.message}</p><p class="text-gray-500 mt-4">Bitte stelle sicher, dass die Datei 'appointments.html' im selben Verzeichnis wie 'index.html' liegt.</p></div>`;
@@ -6714,6 +6726,9 @@ function setupEventListeners() {
     if (authenticatedUserData?._id) {
         isSuperuserView = false; // Stellt sicher, dass die Superuser-Ansicht beendet wird.
         viewHistory = [authenticatedUserData._id]; // Setzt die Ansichts-Historie zurück.
+        // KORREKTUR: Zuerst die Ansicht auf das Dashboard umschalten, damit der Lade-Indikator sichtbar ist.
+        switchView('dashboard');
+        // Dann die Daten für den eingeloggten Benutzer laden und das Dashboard neu rendern.
         await fetchAndRenderDashboard(authenticatedUserData._id);
     }
   });
@@ -8827,13 +8842,6 @@ function switchView(viewName) {
   } else if (viewName === 'pg-tagebuch') {
     loadAndInitPGTagebuchView();
   }
-}
-
-function switchToAppointmentsAndFilter(username) {
-    pendingAppointmentFilter = username;
-    pendingAppointmentViewMode = 'table';
-    pendingAppointmentScope = 'structure';
-    switchView('appointments');
 }
 
 class DatenschutzView {
