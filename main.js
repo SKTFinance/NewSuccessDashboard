@@ -40,8 +40,6 @@ let currentLeadershipViewMode = "list";
 let isSuperuserView = false;
 let isMoneyView = false;
 let currentView = "dashboard";
-let timeTravelDate = null; // NEU
-let appointmentsViewInstance = null;
 let potentialViewInstance = null;
 let umsatzViewInstance = null;
 let auswertungViewInstance = null;
@@ -52,8 +50,11 @@ let pendingAppointmentFilter = null;
 let pendingAppointmentViewMode = null;
 let pendingAppointmentScope = null;
 let HIERARCHY_CACHE = null;
-let currentOnboardingSubView = "leader-list";
-let currentOnboardingScope = 'group'; // NEU
+
+// --- NEU: Gekapselte Instanzen für jede Ansicht ---
+let appointmentsViewInstance = null;
+let timeTravelDate = null; // NEU
+let currentOnboardingSubView = "leader-list"; // Wird von der Einarbeitungslogik verwaltet
 
 // --- DOM-ELEMENTE ---
 const dom = {
@@ -1049,6 +1050,23 @@ function findRowById(tableName, id) {
 function escapeSql(str) {
   if (typeof str !== "string") return str;
   return str.replace(/'/g, "''");
+}
+
+// --- NEU: UI-Einstellungen im LocalStorage speichern/laden ---
+function getUiSettings() {
+    try {
+        const settings = localStorage.getItem('skt-ui-settings');
+        return settings ? JSON.parse(settings) : {};
+    } catch (e) { return {}; }
+}
+function saveUiSetting(key, value) {
+    const settings = getUiSettings();
+    settings[key] = value;
+    localStorage.setItem('skt-ui-settings', JSON.stringify(settings));
+}
+function loadUiSetting(key, defaultValue) {
+    const settings = getUiSettings();
+    return settings[key] !== undefined ? settings[key] : defaultValue;
 }
 
 // NEU: Generische Funktion für das Bestätigungs-Modal
@@ -2592,6 +2610,11 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
 
   // KORREKTUR: Verwende die robustere isUserLeader-Funktion, um zu bestimmen, ob die Führungsansicht angezeigt werden soll.
   const isLeader = isUserLeader(user);
+  // NEU: Lade die bevorzugte Ansicht aus dem Speicher
+  currentPlanningView = loadUiSetting('dashboardPlanningView', isLeader ? 'team' : 'personal');
+  if (!isLeader) {
+      currentPlanningView = 'personal'; // Erzwinge persönliche Ansicht für Nicht-Führungskräfte
+  }
   if (isLeader) {
     // OPTIMIERUNG: Berechne teamData direkt aus dem vorgeladenen Datenspeicher,
     // anstatt eine weitere (redundante) API-Abfrage in calculateGroupOrStructureData auszulösen.
@@ -2607,8 +2630,9 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
         acc.atGoal += (member.atGoal || 0);
         acc.atCurrent += (member.atCurrent || 0);
         acc.atVereinbart += (member.atVereinbart || 0);
+        acc.outstandingAppointmentsCount += (member.outstandingAppointmentsCount || 0);
         return acc;
-    }, { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atCurrent: 0, atVereinbart: 0 });
+    }, { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atCurrent: 0, atVereinbart: 0, outstandingAppointmentsCount: 0 });
 
     teamData = { ...aggregatedGroupData, id: mitarbeiterId, earnings: personalData.earnings, members: groupDataForCalc.filter(d => d.id !== mitarbeiterId) };
 
@@ -2618,22 +2642,36 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
       augmentedDataStore
     );
 
-    currentPlanningView = "team";
-    dom.teamViewBtn.classList.add("active");
-    dom.personalViewBtn.classList.remove("active");
-    dom.strukturViewBtn.classList.remove("active");
-    dom.monthlyPlanningTitle.textContent = "Gruppen-Übersicht";
-    updateMonthlyPlanningView(teamData);
-    updateLeadershipView();
-  } else {
-    currentPlanningView = "personal";
-    dom.monthlyPlanningTitle.textContent = "Deine Monatsplanung";
-    updateMonthlyPlanningView(personalData);
-    updateEmployeeCareerView();
   }
 
-  dom.employeeView.classList.toggle("hidden", isLeader);
-  dom.leadershipView.classList.toggle("hidden", !isLeader);
+  // NEU: UI für den Planning-View-Toggle basierend auf der geladenen Einstellung aktualisieren
+  dom.teamViewBtn.classList.toggle("active", currentPlanningView === "team");
+  dom.personalViewBtn.classList.toggle("active", currentPlanningView === "personal");
+  dom.strukturViewBtn.classList.toggle("active", currentPlanningView === "struktur");
+
+  // NEU: Titel und Daten basierend auf der geladenen Ansicht setzen
+  const viewTitles = { team: 'Gruppen-Übersicht', struktur: 'Struktur-Übersicht', personal: 'Deine Monatsplanung' };
+  dom.monthlyPlanningTitle.textContent = viewTitles[currentPlanningView] || 'Deine Monatsplanung';
+
+  let dataForPlanningView;
+  switch(currentPlanningView) {
+      case 'team': dataForPlanningView = teamData; break;
+      case 'struktur': dataForPlanningView = structureData; break;
+      default: dataForPlanningView = personalData;
+  }
+  updateMonthlyPlanningView(dataForPlanningView);
+
+  // NEU: Sichtbarkeit der Sektionen basierend auf der Ansicht steuern
+  if (isLeader) {
+      dom.leadershipView.classList.remove('hidden');
+      updateLeadershipView();
+      dom.employeeView.classList.toggle('hidden', currentPlanningView !== 'personal');
+      if (currentPlanningView === 'personal') updateEmployeeCareerView();
+  } else {
+      dom.leadershipView.classList.add('hidden');
+      dom.employeeView.classList.remove('hidden');
+      updateEmployeeCareerView();
+  }
   dom.planningViewToggle.classList.toggle("hidden", !isLeader);
   // KORREKTUR: Banner nur für Trainees OHNE Einheiten anzeigen.
   const showEinarbeitungBanner = !isLeader && (!personalData.totalCurrentEh || personalData.totalCurrentEh === 0);
@@ -2705,22 +2743,23 @@ async function fetchAndRenderOnboarding(mitarbeiterId) {
 
   if (isTrainee) {
     dom.einarbeitungTitle.textContent = "Dein Einarbeitungsplan";
+    if (scopeToggle) scopeToggle.classList.add('hidden'); // Toggle für Trainees ausblenden
     dom.leaderOnboardingView.classList.add("hidden");
     dom.traineeOnboardingView.classList.remove("hidden");
-    if (scopeToggle) scopeToggle.classList.add('hidden'); // Toggle für Trainees ausblenden
     await renderTraineeOnboardingView(mitarbeiterId);
   } else {
     // NEU: Logik für den Toggle
     if (scopeToggle) scopeToggle.classList.remove('hidden');
-    const scope = currentOnboardingScope || 'group';
+
+    // NEU: Lade die bevorzugte Ansicht aus dem Speicher
+    const scope = loadUiSetting('onboardingScope', 'group');
 
     dom.einarbeitungTitle.textContent = `Einarbeitung: ${scope === 'group' ? 'Gruppen' : 'Struktur'}-Übersicht`;
     dom.traineeOnboardingView.classList.add("hidden");
     dom.leaderOnboardingView.classList.remove("hidden");
 
-    // NEU: `getSubordinates` mit dem richtigen Scope aufrufen.
     let teamMembers;
-    if (scope === 'structure') {
+    if (scope === 'structure') { // KORREKTUR: `scope` statt `currentOnboardingScope` verwenden
         const allSubordinates = getAllSubordinatesRecursive(mitarbeiterId);
         // Filtere nur die Trainees/GAs heraus
         teamMembers = allSubordinates.filter(member => !isUserLeader(member));
@@ -2728,6 +2767,11 @@ async function fetchAndRenderOnboarding(mitarbeiterId) {
         teamMembers = getSubordinates(mitarbeiterId, "gruppe");
     }
     teamMembers = teamMembers.filter(member => member && member.Startdatum);
+
+    // NEU: UI des Toggles aktualisieren
+    document.getElementById('onboarding-group-btn').classList.toggle('active', scope === 'group');
+    document.getElementById('onboarding-structure-btn').classList.toggle('active', scope === 'structure');
+
     await renderLeaderOnboardingView(teamMembers);
   }
 }
@@ -3325,6 +3369,10 @@ class AppointmentsView {
         this.statsByEmployeeBtn = null;
         // NEU: DOM-Elemente für die neue Statistik-Sektion
         this.statsScopeFilter = null;
+        // NEU: Gruppenfilter-Elemente
+        this.groupFilterContainer = null;
+        this.groupFilterBtn = null;
+        this.groupFilterPanel = null;
         this.statsCategoryFilterBtn = null;
         this.statsCategoryFilterPanel = null;
         this.statsMonthTimeline = null;
@@ -3333,6 +3381,13 @@ class AppointmentsView {
         this.statsNavNextBtn = null;    // Beibehalten für die Navigation
         this.statsViewCalendarBtn = null;
         this.statsViewTableBtn = null;
+        this.statsViewInfoBtn = null; // NEU
+
+        this.statsCalendarView = null;
+        this.statsTableView = null;
+        this.naechstesInfoView = null; // NEU
+        this.infoabendDateSelect = null;
+        this.infoabendScopeFilter = null;
         this.statsCalendarView = null;
         this.statsTableView = null;
         this.statsByStatusBtn = null;
@@ -3368,6 +3423,10 @@ class AppointmentsView {
         this.filterText = '';
         this.statsChartMode = 'employee';
         this.showCancelled = false;
+        // NEU: Sortierkonfiguration für die Infoabend-Tabelle
+        this.infoabendSortConfig = {
+            column: 'Terminpartner', direction: 'asc'
+        };
     }
 
     // NEU: Methode zum Initialisieren der globalen Modal-Elemente und Listener
@@ -3404,17 +3463,30 @@ class AppointmentsView {
         this.statsPieChartContainer = document.getElementById('stats-pie-chart-container');
         this.statsPieChartLegend = document.getElementById('stats-pie-chart-legend');
         this.statsByEmployeeBtn = document.getElementById('stats-by-employee-btn');
-        this.statsScopeFilter = document.getElementById('appointments-scope-filter'); // KORREKTUR: ID von appointments-scope-filter verwenden
+        this.statsScopeFilter = document.getElementById('appointments-scope-filter');
+        // NEU: Gruppenfilter
+        this.groupFilterContainer = document.getElementById('appointments-group-filter-container');
+        this.groupFilterBtn = document.getElementById('appointments-group-filter-btn');
+        this.groupFilterPanel = document.getElementById('appointments-group-filter-panel');
+
         this.statsCategoryFilterBtn = document.getElementById('stats-category-filter-btn');
         this.statsCategoryFilterPanel = document.getElementById('stats-category-filter-panel');
         this.statsMonthTimeline = document.getElementById('stats-month-timeline');
-        this.statsPeriodDisplay = document.getElementById('stats-period-display'); // Beibehalten
-        this.statsNavPrevBtn = document.getElementById('stats-nav-prev-btn');       // Beibehalten
-        this.statsNavNextBtn = document.getElementById('stats-nav-next-btn');       // Beibehalten
+        this.statsPeriodDisplay = document.getElementById('stats-period-display');
+        this.statsNavPrevBtn = document.getElementById('stats-nav-prev-btn');
+        this.statsNavNextBtn = document.getElementById('stats-nav-next-btn');
         this.statsViewCalendarBtn = document.getElementById('stats-view-calendar-btn');
         this.statsViewTableBtn = document.getElementById('stats-view-table-btn');
+        this.statsViewInfoBtn = document.getElementById('stats-view-info-btn'); // NEU
         this.statsCalendarView = document.getElementById('stats-calendar-view');
         this.statsTableView = document.getElementById('stats-table-view');
+        this.naechstesInfoView = document.getElementById('naechstes-info-view'); // NEU
+        this.infoabendDateSelect = document.getElementById('infoabend-date-select');
+        this.infoabendShowCancelled = document.getElementById('infoabend-show-cancelled');
+        this.infoabendListContainer = document.getElementById('infoabend-list-container');
+        this.funnelChartContainer = document.getElementById('funnel-chart-container');
+        this.mainFilterContainer = document.getElementById('appointments-main-filter-container');
+        this.analysisContainer = document.getElementById('analysis-container'); // NEU
         this.statsByStatusBtn = document.getElementById('stats-by-status-btn');
         this.outstandingAppointmentsSection = document.getElementById('outstanding-appointments-section');
         this.outstandingAppointmentsList = document.getElementById('outstanding-appointments-list');
@@ -3423,8 +3495,6 @@ class AppointmentsView {
         this.endDateInput = document.getElementById('appointments-end-date');
         this.searchInput = document.getElementById('appointments-search-filter');
         // NEU: Gekapselte Analyse-Ansicht
-        this.detailsContainer = document.getElementById('appointments-details-container');
-        this.toggleDetailsCheckbox = document.getElementById('toggle-details-checkbox');
         this.toggleAnalysisBtn = document.getElementById('toggle-analysis-visibility-btn');
         this.analysisContent = document.getElementById('analysis-content');
         this.statsViewPane = document.getElementById('stats-view-pane');
@@ -3434,7 +3504,7 @@ class AppointmentsView {
         this.heatmapGrid = document.getElementById('heatmap-grid');
         this.showPastToggle = document.getElementById('appointments-show-past');
         this.showCancelledToggle = document.getElementById('appointments-show-cancelled'); // KORREKTUR: showCancelledToggle wiederherstellen
-        return this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.searchInput && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.statsTab && this.heatmapTab && this.heatmapGrid && this.statsScopeFilter && this.statsCategoryFilterBtn && this.statsCategoryFilterPanel && this.statsMonthTimeline && this.statsPeriodDisplay && this.statsNavPrevBtn && this.statsNavNextBtn && this.outstandingAppointmentsSection && this.outstandingAppointmentsList && this.statsViewCalendarBtn && this.statsViewTableBtn && this.statsCalendarView && this.statsTableView && this.showPastToggle && this.showCancelledToggle;
+        return this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.searchInput && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.statsTab && this.heatmapTab && this.heatmapGrid && this.statsScopeFilter && this.statsCategoryFilterBtn && this.statsCategoryFilterPanel && this.statsMonthTimeline && this.statsPeriodDisplay && this.statsNavPrevBtn && this.statsNavNextBtn && this.outstandingAppointmentsSection && this.outstandingAppointmentsList && this.statsViewCalendarBtn && this.statsViewTableBtn && this.statsCalendarView && this.statsTableView && this.showPastToggle && this.showCancelledToggle && this.statsViewInfoBtn && this.naechstesInfoView && this.groupFilterContainer && this.mainFilterContainer && this.analysisContainer;
     }
 
     async init(userId) {
@@ -3465,11 +3535,17 @@ class AppointmentsView {
         this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
         const isLeader = SKT_APP.isUserLeader(SKT_APP.authenticatedUserData);
         this.statsScopeFilter.classList.toggle('hidden', !isLeader);
-        // KORREKTUR: Wenn der Benutzer eine Führungskraft ist, wird standardmäßig "Meine Gruppe" ausgewählt.
-        if (isLeader) {
-            this.statsScopeFilter.value = 'group';
-        }
+        
+        // NEU: Lade gespeicherte Einstellung für den Scope-Filter
+        this.statsScopeFilter.value = loadUiSetting('appointmentsScope', isLeader ? 'group' : 'personal');
 
+        // NEU: Zeige den Gruppenfilter an, wenn die Strukturansicht standardmäßig geladen wird
+        // KORREKTUR: Gruppenfilter nur für Führungskräfte anzeigen, unabhängig vom Scope.
+        this.groupFilterContainer.classList.toggle('hidden', !isLeader);
+        if (isLeader) {
+            this._populateGroupFilter();
+        }
+        
         // NEU: Prüft, ob ein Filter aus einer anderen Ansicht übergeben wurde.
         if (pendingAppointmentFilter) {
             this.filterText = pendingAppointmentFilter;
@@ -3512,23 +3588,40 @@ class AppointmentsView {
     async fetchAndRender() {
         appointmentsLog('--- START: fetchAndRender ---');
         try { // KORREKTUR: Kopie erstellen, um Seiteneffekte zu vermeiden.
-            const today = new Date(getCurrentDate());
             const scope = this.statsScopeFilter.value;
-            // KORREKTUR: Logik zur Sammlung von Benutzer-IDs, um sicherzustellen, dass der aktuelle Benutzer immer enthalten ist.
             let userIds = new Set();
-            switch (scope) {
-                case 'personal':
+
+            // NEU: Logik zur Sammlung von Benutzer-IDs basierend auf Scope und Gruppenfilter
+            if (scope === 'structure') {
+                const selectedLeaderIds = Array.from(this.groupFilterPanel.querySelectorAll('input:checked')).map(cb => cb.value);
+                if (selectedLeaderIds.length > 0) {
+                    // Wenn bestimmte Gruppen ausgewählt sind, nur deren Mitglieder laden
+                    selectedLeaderIds.forEach(leaderId => {
+                        userIds.add(leaderId);
+                        SKT_APP.getSubordinates(leaderId, 'gruppe').forEach(u => userIds.add(u._id));
+                    });
+                } else {
+                    // Wenn keine Gruppe ausgewählt ist, die gesamte Struktur laden
                     userIds.add(this.currentUserId);
-                    break;
-                case 'group':
-                    userIds.add(this.currentUserId);
-                    SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
-                    break;
-                case 'structure':
-                    // KORREKTUR: Stelle sicher, dass der aktuelle Benutzer und seine gesamte Struktur enthalten sind.
+                    this.downline.forEach(u => userIds.add(u._id));
+                }
+            } else if (scope === 'group') {
+                userIds.add(this.currentUserId);
+                SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
+            } else { // personal
+                userIds.add(this.currentUserId);
+            }
+
+            // Fallback, falls die Logik oben fehlschlägt
+            if (userIds.size === 0) {
+                switch (scope) {
+                    case 'personal': userIds.add(this.currentUserId); break;
+                    case 'group': userIds.add(this.currentUserId); SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id)); break;
+                    case 'structure':
                     const structureUserIds = [this.currentUserId, ...this.downline.map(u => u._id)];
                     structureUserIds.forEach(id => userIds.add(id));
                     break;
+                }
             }
 
             if (userIds.size === 0) {
@@ -3544,9 +3637,18 @@ class AppointmentsView {
             const allFetchedAppointments = [];
 
             // NEUE LOGIK V2: Um das Limit der IN-Klausel und das 10k-Zeilen-Limit zu umgehen,
-            // werden die Abfragen sowohl nach Benutzern als auch nach Monaten aufgeteilt.
+            // werden die Abfragen nach Benutzern aufgeteilt.
             const userNamesArray = Array.from(userNames);
             const chunkSize = 50; // 50 Benutzer pro Abfrage
+
+            // NEU: Bestimme den gesamten benötigten Datumsbereich, um sowohl den Filter als auch den Kalender abzudecken.
+            const { startDate: cycleStartDate, endDate: cycleEndDate } = getMonthlyCycleDates();
+            const filterStartDate = new Date(this.startDateInput.value);
+            const filterEndDate = new Date(this.endDateInput.value);
+            const overallStartDate = new Date(Math.min(cycleStartDate, filterStartDate));
+            const overallEndDate = new Date(Math.max(cycleEndDate, filterEndDate));
+            const overallStartDateIso = overallStartDate.toISOString().split('T')[0];
+            const overallEndDateIso = overallEndDate.toISOString().split('T')[0];
 
             for (let i = 0; i < userNamesArray.length; i += chunkSize) {
                 const userNameChunk = userNamesArray.slice(i, i + chunkSize);
@@ -3554,19 +3656,12 @@ class AppointmentsView {
 
                 const userNamesSql = userNameChunk.map(name => `'${SKT_APP.escapeSql(name)}'`).join(',');
 
-                // Für jeden Benutzer-Chunk laden wir die Termine für einen 3-Monats-Zeitraum.
-                for (let j = -1; j <= 1; j++) { 
-                    const monthDate = new Date(today.getFullYear(), today.getMonth() + j, 1);
-                    const startDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-                    const endDate = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
-                    const startDateIso = startDate.toISOString().split('T')[0];
-                    const endDateIso = endDate.toISOString().split('T')[0];
-
-                    const query = `SELECT *, Mitarbeiter_ID FROM \`Termine\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' AND \`Mitarbeiter_ID\` IN (${userNamesSql})`;
-                    promises.push(SKT_APP.seaTableSqlQuery(query, true));
-                }
+                // KORREKTUR: Lade den gesamten benötigten Datumsbereich auf einmal, anstatt in Monats-Schritten.
+                const query = `SELECT *, Mitarbeiter_ID FROM \`Termine\` WHERE \`Datum\` >= '${overallStartDateIso}' AND \`Datum\` <= '${overallEndDateIso}' AND \`Mitarbeiter_ID\` IN (${userNamesSql})`;
+                promises.push(SKT_APP.seaTableSqlQuery(query, true));
 
                 // KORREKTUR: Lade zusätzlich alle überfälligen Termine, um die Diskrepanz zur Dashboard-Anzeige zu beheben.
+                const today = new Date(getCurrentDate());
                 const todayIso = today.toISOString().split('T')[0];
                 const outstandingQuery = `SELECT *, Mitarbeiter_ID FROM \`Termine\` WHERE \`Datum\` < '${todayIso}' AND \`Status\` = 'Ausgemacht' AND \`Mitarbeiter_ID\` IN (${userNamesSql})`;
                 promises.push(SKT_APP.seaTableSqlQuery(outstandingQuery, true));
@@ -3629,13 +3724,19 @@ class AppointmentsView {
         this._renderStatsChart();
         this._renderPrognosisDetails();
         this._renderHeatmap();
+        // NEU: Wenn die Info-Ansicht aktiv ist, muss sie ebenfalls neu gerendert werden,
+        // da sie vom Haupt-Scope-Filter abhängt.
+        if (this.naechstesInfoView && !this.naechstesInfoView.classList.contains('hidden')) {
+            this.renderNaechstesInfo();
+        }
     }
 
     setupEventListeners() {
         // KORREKTUR: Filter-Änderungen rufen nur noch render() auf, nicht mehr fetchAndRender().
-        const debouncedRender = _.debounce(() => this.render(), 300);
-        this.startDateInput.addEventListener('change', debouncedRender);
-        this.endDateInput.addEventListener('change', debouncedRender);
+        // KORREKTUR VOM 25.07: Muss fetchAndRender aufrufen, damit auch Zeiträume außerhalb des initialen 3-Monats-Fensters geladen werden.
+        const debouncedFetchAndRender = _.debounce(() => this.fetchAndRender(), 350);
+        this.startDateInput.addEventListener('change', debouncedFetchAndRender);
+        this.endDateInput.addEventListener('change', debouncedFetchAndRender);
         this.searchInput.addEventListener('input', _.debounce(e => {
             this.filterText = e.target.value; this.render();
         }, 350));
@@ -3643,13 +3744,14 @@ class AppointmentsView {
         this.statsNavPrevBtn.addEventListener('click', () => this._navigateStats(-1));
         this.statsNavNextBtn.addEventListener('click', () => this._navigateStats(1));
         this.statsPeriodDisplay.addEventListener('click', () => this._scrollToTodayInTimeline());
+        this.statsViewInfoBtn.addEventListener('click', () => this._switchStatsView('info')); // NEU
 
         // NEU: Event Listener für den dynamischen Skalierungseffekt beim Scrollen
         this.statsMonthTimeline.addEventListener('scroll', _.throttle(() => {
             this._updateCardScales();
         }, 50));
         
-        this.statsViewCalendarBtn.addEventListener('click', () => this._switchStatsView('calendar')); //FIXME: this is a bug
+        this.statsViewCalendarBtn.addEventListener('click', () => this._switchStatsView('calendar'));
         this.statsViewTableBtn.addEventListener('click', () => this._switchStatsView('table'));
 
 
@@ -3660,8 +3762,13 @@ class AppointmentsView {
         });
         document.addEventListener('click', (e) => { if (!this.statsCategoryFilterPanel.contains(e.target)) this.statsCategoryFilterPanel.classList.add('hidden'); });
         
-        // KORREKTUR: Event-Listener wiederhergestellt
-        this.statsScopeFilter.addEventListener('change', () => this.fetchAndRender()); // Scope-Änderung erfordert einen neuen Fetch
+        // NEU: Erweiterter Event-Listener für den Scope-Filter
+        this.statsScopeFilter.addEventListener('change', () => {
+            const scope = this.statsScopeFilter.value;
+            saveUiSetting('appointmentsScope', scope); // Einstellung speichern
+            // Das Anzeigen/Verstecken des Gruppenfilters wird entfernt.
+            this.fetchAndRender(); // Daten bei jeder Änderung neu laden
+        });
 
         this.showPastToggle.addEventListener('change', () => this.render()); // KORREKTUR: Ruft render() auf, um alle Filter neu anzuwenden
         this.showCancelledToggle.addEventListener('change', () => this.render());
@@ -3677,6 +3784,10 @@ class AppointmentsView {
         this.toggleAnalysisBtn.addEventListener('click', () => this._toggleCollapsible(this.analysisContent, this.toggleAnalysisBtn));
         this.statsTab.addEventListener('click', () => this._switchAnalysisTab('stats'));
         this.heatmapTab.addEventListener('click', () => this._switchAnalysisTab('heatmap'));
+
+        // NEU: Event-Listener für die "Nächstes Info"-Ansicht
+        this.infoabendDateSelect.addEventListener('change', () => this.renderNaechstesInfo());
+        this.infoabendShowCancelled.addEventListener('change', () => this.renderNaechstesInfo());
     }
 
     _updateStatusDropdown(category, currentStatus = null) {
@@ -3686,7 +3797,7 @@ class AppointmentsView {
 
         const terminMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'termine');
         const allStatuses = terminMeta.columns.find(c => c.name === 'Status').data.options.map(o => o.name);
-      //GROssbuchstaben! Also Weiterer ET, Weiterer BT, Offen, Verschoben usw.
+      //GROSSBUCHSTABEN! Also Weiterer ET, Weiterer BT, Offen, Verschoben usw.
         const baseStati = ['Ausgemacht', 'Gehalten', 'Verschoben', 'Offen'];
         let allowedStati = [...baseStati];
 
@@ -3758,8 +3869,25 @@ class AppointmentsView {
     _switchStatsView(view) {
         this.statsCalendarView.classList.toggle('hidden', view !== 'calendar');
         this.statsTableView.classList.toggle('hidden', view !== 'table');
+        this.naechstesInfoView.classList.toggle('hidden', view !== 'info');
+
+        // NEU: Hauptfilter-Maske ausblenden, wenn die Info-Ansicht aktiv ist.
+        if (this.mainFilterContainer) {
+            this.mainFilterContainer.classList.toggle('hidden', view === 'info');
+        }
+
+        // NEU: Analyse-Container ausblenden, wenn die Info-Ansicht aktiv ist.
+        if (this.analysisContainer) {
+            this.analysisContainer.classList.toggle('hidden', view === 'info');
+        }
+
         this.statsViewCalendarBtn.classList.toggle('active', view === 'calendar');
         this.statsViewTableBtn.classList.toggle('active', view === 'table');
+        this.statsViewInfoBtn.classList.toggle('active', view === 'info');
+
+        if (view === 'info') {
+            this.renderNaechstesInfo(true); // true to repopulate dates
+        }
     }
     _populateCategoryFilter() {
         const terminMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'termine');
@@ -3817,6 +3945,50 @@ class AppointmentsView {
         });
         document.getElementById('deselect-all-cats').addEventListener('click', () => {
             this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false); this._renderAppointmentStats();
+        });
+    }
+
+    // NEU: Funktion zum Befüllen des Gruppen-Filters
+    _populateGroupFilter() {
+        this.groupFilterPanel.innerHTML = '';
+        const leaders = SKT_APP.getSubordinates(this.currentUserId, 'struktur');
+        if (leaders.length === 0) {
+            this.groupFilterPanel.innerHTML = '<p class="text-xs text-gray-500 p-2">Keine Gruppen in deiner Struktur.</p>';
+            return;
+        }
+
+        const createCheckbox = (label, value, isChecked = false) => {
+            const wrapper = document.createElement('label');
+            wrapper.className = 'flex items-center space-x-3 p-2 rounded-md hover:bg-gray-100 cursor-pointer';
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'h-5 w-5 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light';
+            checkbox.value = value;
+            checkbox.checked = isChecked;
+            checkbox.addEventListener('change', () => {
+                this.fetchAndRender(); // Daten bei Änderung neu laden
+            });
+            const span = document.createElement('span');
+            span.textContent = label;
+            wrapper.appendChild(checkbox);
+            wrapper.appendChild(span);
+            this.groupFilterPanel.appendChild(wrapper);
+        };
+
+        leaders.forEach(leader => createCheckbox(leader.Name, leader._id, false)); // Standardmäßig nicht ausgewählt
+
+        const headerWrapper = document.createElement('div');
+        headerWrapper.className = 'flex justify-between items-center mb-2';
+        headerWrapper.innerHTML = `<h4 class="font-semibold text-skt-blue">Gruppen</h4>`;
+        this.groupFilterPanel.insertBefore(headerWrapper, this.groupFilterPanel.firstChild);
+
+        // Event Listener für Dropdown-Steuerung
+        this.groupFilterBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.groupFilterPanel.classList.toggle('hidden');
+        });
+        document.addEventListener('click', (e) => {
+            if (!this.groupFilterPanel.contains(e.target)) this.groupFilterPanel.classList.add('hidden');
         });
     }
 
@@ -4146,6 +4318,153 @@ class AppointmentsView {
             default:
                 return '';
         }
+    }
+
+    // --- NEU: Methoden für "Nächstes Info", hierher verschoben ---
+    async renderNaechstesInfo(repopulateDates = false) {
+        if (repopulateDates) {
+            this.infoabendDateSelect.innerHTML = '';
+            let currentDate = new Date();
+            for (let i = 0; i < 5; i++) {
+                const infoDate = findNextInfoDateAfter(currentDate);
+                const dateString = infoDate.toISOString().split('T')[0];
+                this.infoabendDateSelect.add(new Option(infoDate.toLocaleDateString('de-DE'), dateString));
+                currentDate = new Date(infoDate.getTime() + 24 * 60 * 60 * 1000);
+            }
+        }
+
+        this.infoabendListContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        const selectedDate = this.infoabendDateSelect.value;
+        const showCancelled = this.infoabendShowCancelled.checked;
+        const scope = this.statsScopeFilter.value; // NEU: Der Scope wird vom Haupt-Dropdown der Termin-Ansicht übernommen.
+
+        let userIds = new Set([this.currentUserId]);
+        if (scope === 'group') getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
+        else if (scope === 'structure') this.downline.forEach(u => userIds.add(u._id));
+
+        const allETs = db.termine.filter(t => t.Kategorie === 'ET');
+        
+        let filteredTermine = allETs.filter(t => {
+            const userMatch = userIds.has(t.Mitarbeiter_ID);
+            const dateMatch = t.Infoabend && t.Infoabend.startsWith(selectedDate);
+            const cancelledMatch = showCancelled || (t.Status !== 'Storno' && !t.Absage);
+            return userMatch && dateMatch && cancelledMatch;
+        });
+
+        this.renderInfoabendTable(filteredTermine);
+        this.renderFunnelChart(filteredTermine);
+    }
+
+    renderInfoabendTable(termine) {
+         this.infoabendListContainer.innerHTML = '';
+         if (termine.length === 0) {
+             this.infoabendListContainer.innerHTML = '<p class="text-center text-gray-500">Keine Bewerber für diesen Infoabend gefunden.</p>';
+             return;
+         }
+ 
+         const sortConfig = this.infoabendSortConfig;
+         const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+         termine.sort((a, b) => {
+             let valA, valB;
+             if (sortConfig.column === 'Mitarbeiter') {
+                 valA = db.mitarbeiter.find(m => m._id === a.Mitarbeiter_ID)?.Name || '';
+                 valB = db.mitarbeiter.find(m => m._id === b.Mitarbeiter_ID)?.Name || '';
+             } else {
+                 valA = a[sortConfig.column];
+                 valB = b[sortConfig.column];
+             }
+             let comparison = collator.compare(String(valA), String(valB));
+             return sortConfig.direction === 'asc' ? comparison : -comparison;
+         });
+ 
+         const tableWrapper = document.createElement('div');
+         tableWrapper.className = 'overflow-x-auto';
+ 
+         const table = document.createElement('table');
+         table.className = 'appointments-table';
+         const headers = [
+             { key: 'Terminpartner', label: 'Bewerber' }, { key: 'Status', label: 'Status' },
+             { key: 'Mitarbeiter', label: 'Mitarbeiter' }, { key: 'Hinweis', label: 'Hinweis' }
+         ];
+         table.innerHTML = `<thead><tr>${headers.map(h => {
+             const icon = sortConfig.column === h.key ? (sortConfig.direction === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>') : '<i class="fas fa-sort sort-icon"></i>';
+             return `<th data-sort-key="${h.key}">${h.label} ${icon}</th>`;
+         }).join('')}</tr></thead>`;
+ 
+         const tbody = document.createElement('tbody');
+         termine.forEach(t => {
+             const tr = document.createElement('tr');
+             // NEU: Zeilen nach Status einfärben
+             const statusBorderClass = this._getStatusColorClass(t);
+             tr.className = `border-l-4 ${statusBorderClass} cursor-pointer`;
+             tr.dataset.id = t._id;
+ 
+             const mitarbeiter = db.mitarbeiter.find(m => m._id === t.Mitarbeiter_ID);
+             // NEU: Status-Text ebenfalls einfärben
+             const statusTextColorClass = this._getStatusTextColorClass(t.Status);
+             
+             tr.innerHTML = `<td>${t.Terminpartner}</td><td><span class="${statusTextColorClass}">${t.Status}</span></td><td>${mitarbeiter?.Name || '-'}</td><td>${t.Hinweis || '-'}</td>`;
+             tr.addEventListener('click', () => {
+                 const terminToEdit = termine.find(term => term._id === t._id);
+                 if (terminToEdit) {
+                     this.openModal(terminToEdit);
+                 }
+             });
+             tbody.appendChild(tr);
+         });
+         table.appendChild(tbody);
+         table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleInfoabendTableSort(e.currentTarget.dataset.sortKey)));
+         tableWrapper.appendChild(table);
+         this.infoabendListContainer.appendChild(tableWrapper);
+    }
+
+    _handleInfoabendTableSort(key) {
+        const config = this.infoabendSortConfig;
+        if (config.column === key) {
+            config.direction = config.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            config.column = key;
+            config.direction = 'asc';
+        }
+        this.renderNaechstesInfo();
+    }
+
+    renderFunnelChart(termine) {
+        this.funnelChartContainer.innerHTML = '';
+
+        const stats = {
+            'Ausgemacht': termine.length,
+            'Gehalten': termine.filter(t => t.Status === 'Gehalten').length,
+            'Eingeladen': termine.filter(t => t.Status === 'Info Eingeladen').length,
+            'Bestätigt': termine.filter(t => t.Status === 'Info Bestätigt').length,
+            'Anwesend': termine.filter(t => t.Status === 'Info Anwesend').length,
+            'Wird Mitarbeiter': termine.filter(t => t.Status === 'Wird Mitarbeiter').length,
+        };
+
+        const funnelSteps = [
+            { label: 'ET Ausgemacht', value: stats.Ausgemacht, color: '#043C64', textColor: 'white' },
+            { label: 'ET Gehalten', value: stats.Gehalten, color: '#0a5a8e', textColor: 'white' },
+            { label: 'Info Eingeladen', value: stats.Eingeladen, color: '#1c75b5', textColor: 'white' },
+            { label: 'Info Bestätigt', value: stats.Bestätigt, color: '#38bdf8', textColor: 'white' },
+            { label: 'Info Anwesend', value: stats.Anwesend, color: '#7dd3fc', textColor: 'var(--color-skt-blue)' },
+            { label: 'Wird Mitarbeiter', value: stats['Wird Mitarbeiter'], color: '#e0f2fe', textColor: 'var(--color-skt-blue)' }
+        ];
+
+        const funnelContainer = document.createElement('div');
+        funnelContainer.className = 'funnel-container-animated';
+        const maxValue = funnelSteps[0]?.value || 0;
+
+        funnelSteps.forEach(step => {
+            const percentage = maxValue > 0 ? (step.value / maxValue) * 100 : 0;
+            const stepEl = document.createElement('div');
+            stepEl.className = 'funnel-step-animated';
+            stepEl.style.backgroundColor = step.color;
+            if (step.textColor) stepEl.style.color = step.textColor;
+            setTimeout(() => { stepEl.style.width = `${Math.max(20, percentage)}%`; }, 100);
+            stepEl.innerHTML = `<span class="funnel-label">${step.label}</span><span class="funnel-value">${step.value}</span>`;
+            funnelContainer.appendChild(stepEl);
+        });
+        this.funnelChartContainer.appendChild(funnelContainer);
     }
 
     _renderPrognosisDetails() {
@@ -5636,7 +5955,7 @@ class AuswertungView {
         this.initialized = false;
         this.currentUserId = null;
         this.downline = [];
-        this.currentTab = 'rangliste';
+        this.currentTab = 'rangliste'; // Wird in init() aus dem Speicher geladen
         this.currentFkRennlisteScope = 'group'; // NEU
         this.currentAktivitaetenTimespan = 'woche';
         this.sortConfig = {
@@ -5651,7 +5970,6 @@ class AuswertungView {
         this.ranglisteTab = document.getElementById('rangliste-tab');
         this.aktivitaetenTab = document.getElementById('aktivitaeten-tab');
         this.fkRennlisteTab = document.getElementById('fk-rennliste-tab');
-        this.naechstesInfoTab = document.getElementById('naechstes-info-tab');
         this.ranglisteView = document.getElementById('rangliste-view');
         this.aktivitaetenView = document.getElementById('aktivitaeten-view');
         this.aktivitaetenListContainer = document.getElementById('aktivitaeten-list-container');
@@ -5664,13 +5982,9 @@ class AuswertungView {
         this.fkRennlisteStructureBtn = document.getElementById('fk-rennliste-structure-btn'); // NEU
         this.fkRennlisteView = document.getElementById('fk-rennliste-view');
         this.naechstesInfoView = document.getElementById('naechstes-info-view');
-        this.infoabendDateSelect = document.getElementById('infoabend-date-select');
-        this.infoabendScopeFilter = document.getElementById('infoabend-scope-filter');
-        this.infoabendShowCancelled = document.getElementById('infoabend-show-cancelled');
-        this.infoabendListContainer = document.getElementById('infoabend-list-container');
-        this.funnelChartContainer = document.getElementById('funnel-chart-container');
-
-        return this.ranglisteTab && this.aktivitaetenTab && this.fkRennlisteTab && this.naechstesInfoTab && this.ranglisteView && this.aktivitaetenView && this.fkRennlisteView && this.naechstesInfoView;
+        this.planungenTab = document.getElementById('planungen-tab'); // NEU
+        this.planungenView = document.getElementById('planungen-view'); // NEU
+        return this.ranglisteTab && this.aktivitaetenTab && this.fkRennlisteTab && this.planungenTab && this.ranglisteView && this.aktivitaetenView && this.fkRennlisteView && this.planungenView;
     }
 
     _getHierarchyForGroup(groupName) {
@@ -5702,6 +6016,11 @@ class AuswertungView {
         this.currentUserId = userId;
         this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
 
+        // NEU: Gespeicherte Einstellungen laden
+        this.currentTab = loadUiSetting('auswertungTab', 'rangliste');
+        this.currentAktivitaetenTimespan = loadUiSetting('aktivitaetenTimespan', 'woche');
+        this.currentAktivitaetenRole = loadUiSetting('aktivitaetenRole', 'individual');
+
         if (!this._getDomElements()) {
             auswertungLog('!!! FEHLER: Benötigte DOM-Elemente wurden nicht gefunden.');
             return;
@@ -5712,6 +6031,13 @@ class AuswertungView {
             this.aktivitaetenStructureFilter.classList.remove('hidden');
             this.fkRennlisteStructureFilter.classList.remove('hidden');
         }
+
+        // NEU: UI basierend auf geladenen Einstellungen aktualisieren
+        document.querySelectorAll('.aktivitaeten-timespan-btn').forEach(b => b.classList.toggle('active', b.dataset.timespan === this.currentAktivitaetenTimespan));
+        this.aktivitaetenRoleFilter.value = this.currentAktivitaetenRole;
+
+        // NEU: Scope für FK-Rennliste laden und UI aktualisieren
+        this.currentFkRennlisteScope = loadUiSetting('fkRennlisteScope', 'group');
 
         // Die Event-Listener müssen bei jeder Initialisierung neu gesetzt werden,
         // da der HTML-Inhalt der Ansicht dynamisch neu geladen wird.
@@ -5724,6 +6050,7 @@ class AuswertungView {
         document.querySelectorAll('.auswertung-tab').forEach(tab => {
             tab.addEventListener('click', (e) => {
                 this.currentTab = e.currentTarget.dataset.view;
+                saveUiSetting('auswertungTab', this.currentTab); // NEU
                 this.updateTabs();
                 this.renderCurrentView();
             });
@@ -5732,15 +6059,22 @@ class AuswertungView {
         document.querySelectorAll('.aktivitaeten-timespan-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 this.currentAktivitaetenTimespan = e.currentTarget.dataset.timespan;
+                saveUiSetting('aktivitaetenTimespan', this.currentAktivitaetenTimespan); // NEU
                 document.querySelectorAll('.aktivitaeten-timespan-btn').forEach(b => b.classList.remove('active'));
                 e.currentTarget.classList.add('active');
                 this.renderAktivitaeten();
             });
         });
 
-        this.aktivitaetenRoleFilter.addEventListener('change', () => this.renderAktivitaeten());
+        this.aktivitaetenRoleFilter.addEventListener('change', () => {
+            this.currentAktivitaetenRole = this.aktivitaetenRoleFilter.value;
+            saveUiSetting('aktivitaetenRole', this.currentAktivitaetenRole); // NEU
+            this.renderAktivitaeten();
+        });
         // NEU: Event Listener für Struktur-Filter
-        this.aktivitaetenStructureFilter.addEventListener('change', () => this.renderAktivitaeten());
+        if (this.aktivitaetenStructureFilter) {
+            this.aktivitaetenStructureFilter.addEventListener('change', () => this.renderAktivitaeten());
+        }
         this.fkRennlisteStructureFilter.addEventListener('change', () => this.renderFkRennliste());
 
         // NEU: Event Listener für FK Rennliste Scope
@@ -5748,6 +6082,7 @@ class AuswertungView {
             this.fkRennlisteGroupBtn.addEventListener('click', () => {
                 if (this.currentFkRennlisteScope === 'group') return;
                 this.currentFkRennlisteScope = 'group';
+                saveUiSetting('fkRennlisteScope', 'group'); // NEU
                 this.fkRennlisteGroupBtn.classList.add('active');
                 this.fkRennlisteStructureBtn.classList.remove('active');
                 this.renderFkRennliste();
@@ -5755,15 +6090,12 @@ class AuswertungView {
             this.fkRennlisteStructureBtn.addEventListener('click', () => {
                 if (this.currentFkRennlisteScope === 'structure') return;
                 this.currentFkRennlisteScope = 'structure';
+                saveUiSetting('fkRennlisteScope', 'structure'); // NEU
                 this.fkRennlisteStructureBtn.classList.add('active');
                 this.fkRennlisteGroupBtn.classList.remove('active');
                 this.renderFkRennliste();
             });
         }
-
-        this.infoabendDateSelect.addEventListener('change', () => this.renderNaechstesInfo());
-        this.infoabendScopeFilter.addEventListener('change', () => this.renderNaechstesInfo());
-        this.infoabendShowCancelled.addEventListener('change', () => this.renderNaechstesInfo());
     }
 
     _handleSort(viewType, key) {
@@ -5797,9 +6129,6 @@ class AuswertungView {
                 break;
             case 'fk-rennliste':
                 await this.renderFkRennliste();
-                break;
-            case 'naechstes-info':
-                await this.renderNaechstesInfo(true); // true to repopulate dates
                 break;
             case 'planungen':
                 await this.renderPlanungen();
@@ -6208,144 +6537,6 @@ class AuswertungView {
         tableWrapper.appendChild(table);        
         container.innerHTML = '';
         container.appendChild(tableWrapper);
-    }
-
-    async renderNaechstesInfo(repopulateDates = false) {
-        if (repopulateDates) {
-            this.infoabendDateSelect.innerHTML = '';
-            let currentDate = new Date();
-            for (let i = 0; i < 5; i++) {
-                const infoDate = findNextInfoDateAfter(currentDate);
-                const dateString = infoDate.toISOString().split('T')[0];
-                this.infoabendDateSelect.add(new Option(infoDate.toLocaleDateString('de-DE'), dateString));
-                currentDate = new Date(infoDate.getTime() + 24 * 60 * 60 * 1000);
-            }
-        }
-
-        this.infoabendListContainer.innerHTML = '<div class="loader mx-auto"></div>';
-        const selectedDate = this.infoabendDateSelect.value;
-        const scope = this.infoabendScopeFilter.value;
-        const showCancelled = this.infoabendShowCancelled.checked;
-
-        let userIds = new Set([this.currentUserId]);
-        if (scope === 'group') getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
-        else if (scope === 'structure') this.downline.forEach(u => userIds.add(u._id));
-
-        const allETs = db.termine.filter(t => t.Kategorie === 'ET');
-        
-        let filteredTermine = allETs.filter(t => {
-            const userMatch = userIds.has(t.Mitarbeiter_ID);
-            const dateMatch = t.Infoabend && t.Infoabend.startsWith(selectedDate);
-            const cancelledMatch = showCancelled || (t.Status !== 'Storno' && !t.Absage);
-            return userMatch && dateMatch && cancelledMatch;
-        });
-
-        this.renderInfoabendTable(filteredTermine);
-        this.renderFunnelChart(filteredTermine);
-    }
-
-    renderInfoabendTable(termine) {
-         this.infoabendListContainer.innerHTML = '';
-         if (termine.length === 0) {
-             this.infoabendListContainer.innerHTML = '<p class="text-center text-gray-500">Keine Bewerber für diesen Infoabend gefunden.</p>';
-             return;
-         }
- 
-         const sortConfig = this.sortConfig.infoabend;
-         const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
-         termine.sort((a, b) => {
-             let valA, valB;
-             if (sortConfig.column === 'Mitarbeiter') {
-                 valA = db.mitarbeiter.find(m => m._id === a.Mitarbeiter_ID)?.Name || '';
-                 valB = db.mitarbeiter.find(m => m._id === b.Mitarbeiter_ID)?.Name || '';
-             } else {
-                 valA = a[sortConfig.column];
-                 valB = b[sortConfig.column];
-             }
-             let comparison = collator.compare(String(valA), String(valB));
-             return sortConfig.direction === 'asc' ? comparison : -comparison;
-         });
- 
-         const tableWrapper = document.createElement('div');
-         tableWrapper.className = 'overflow-x-auto';
- 
-         const table = document.createElement('table');
-         table.className = 'appointments-table';
-         const headers = [
-             { key: 'Terminpartner', label: 'Bewerber' }, { key: 'Status', label: 'Status' },
-             { key: 'Mitarbeiter', label: 'Mitarbeiter' }, { key: 'Hinweis', label: 'Hinweis' }
-         ];
-         table.innerHTML = `<thead><tr>${headers.map(h => {
-             const icon = sortConfig.column === h.key ? (sortConfig.direction === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>') : '<i class="fas fa-sort sort-icon"></i>';
-             return `<th data-sort-key="${h.key}">${h.label} ${icon}</th>`;
-         }).join('')}</tr></thead>`;
- 
-         const tbody = document.createElement('tbody');
-         termine.forEach(t => {
-             const tr = document.createElement('tr');
-             tr.className = 'cursor-pointer';
-             tr.dataset.id = t._id;
- 
-             const mitarbeiter = db.mitarbeiter.find(m => m._id === t.Mitarbeiter_ID);
-             tr.innerHTML = `<td>${t.Terminpartner}</td><td>${t.Status}</td><td>${mitarbeiter?.Name || '-'}</td><td>${t.Hinweis || '-'}</td>`;
-             
-             tr.addEventListener('click', () => {
-                 const terminToEdit = termine.find(term => term._id === t._id);
-                 if (terminToEdit && appointmentsViewInstance) {
-                     appointmentsViewInstance.currentUserId = this.currentUserId;
-                     appointmentsViewInstance.downline = this.downline;
-                     appointmentsViewInstance.openModal(terminToEdit);
-                 }
-             });
-             tbody.appendChild(tr);
-         });
-         table.appendChild(tbody);
-         table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('infoabend', e.currentTarget.dataset.sortKey)));
-         tableWrapper.appendChild(table);
-         this.infoabendListContainer.appendChild(tableWrapper);
-    }
-
-    renderFunnelChart(termine) {
-        this.funnelChartContainer.innerHTML = ''; // Clear previous chart
-
-        const stats = {
-            'Ausgemacht': termine.length,
-            'Gehalten': termine.filter(t => t.Status === 'Gehalten').length,
-            'Eingeladen': termine.filter(t => t.Status === 'Info Eingeladen').length,
-            'Bestätigt': termine.filter(t => t.Status === 'Info Bestätigt').length,
-            'Anwesend': termine.filter(t => t.Status === 'Info Anwesend').length,
-            'Wird Mitarbeiter': termine.filter(t => t.Status === 'Wird Mitarbeiter').length,
-        };
-
-        const funnelSteps = [
-            { label: 'ET Ausgemacht', value: stats.Ausgemacht, color: '#043C64', textColor: 'white' },
-            { label: 'ET Gehalten', value: stats.Gehalten, color: '#0a5a8e', textColor: 'white' },
-            { label: 'Info Eingeladen', value: stats.Eingeladen, color: '#1c75b5', textColor: 'white' },
-            { label: 'Info Bestätigt', value: stats.Bestätigt, color: '#38bdf8', textColor: 'white' },
-            { label: 'Info Anwesend', value: stats.Anwesend, color: '#7dd3fc', textColor: 'var(--color-skt-blue)' },
-            { label: 'Wird Mitarbeiter', value: stats['Wird Mitarbeiter'], color: '#e0f2fe', textColor: 'var(--color-skt-blue)' }
-        ];
-
-        const funnelContainer = document.createElement('div');
-        funnelContainer.className = 'funnel-container-animated';
-        const maxValue = funnelSteps[0]?.value || 0;
-
-        funnelSteps.forEach(step => {
-            const percentage = maxValue > 0 ? (step.value / maxValue) * 100 : 0;
-            const stepEl = document.createElement('div');
-            stepEl.className = 'funnel-step-animated';
-            stepEl.style.backgroundColor = step.color;
-            if (step.textColor) stepEl.style.color = step.textColor;
-            setTimeout(() => { stepEl.style.width = `${Math.max(20, percentage)}%`; }, 100);
-            stepEl.innerHTML = `
-                <div class="funnel-content">
-                    <span class="funnel-label">${step.label}</span>
-                    <span class="funnel-value">${step.value}</span>
-                    </div>
-            `;
-            funnelContainer.appendChild(stepEl);
-        });
-        this.funnelChartContainer.appendChild(funnelContainer);
     }
 
     async logPQQCalculationForUser(userId, forMonth, forYear) {
@@ -6806,6 +6997,7 @@ function setupEventListeners() {
   // --- View Toggles ---
   dom.personalViewBtn.addEventListener("click", () => {
     currentPlanningView = "personal";
+    saveUiSetting('dashboardPlanningView', currentPlanningView);
     dom.personalViewBtn.classList.add("active");
     dom.teamViewBtn.classList.remove("active");
     dom.strukturViewBtn.classList.remove("active");
@@ -6819,6 +7011,7 @@ function setupEventListeners() {
   });
   dom.teamViewBtn.addEventListener("click", () => {
     currentPlanningView = "team";
+    saveUiSetting('dashboardPlanningView', currentPlanningView);
     dom.teamViewBtn.classList.add("active");
     dom.personalViewBtn.classList.remove("active");
     dom.strukturViewBtn.classList.remove("active");
@@ -6831,6 +7024,7 @@ function setupEventListeners() {
   });
   dom.strukturViewBtn.addEventListener("click", () => {
     currentPlanningView = "struktur";
+    saveUiSetting('dashboardPlanningView', currentPlanningView);
     dom.strukturViewBtn.classList.add("active");
     dom.teamViewBtn.classList.remove("active");
     dom.personalViewBtn.classList.remove("active");
@@ -6845,6 +7039,7 @@ function setupEventListeners() {
   dom.gridViewBtn.addEventListener("click", () => {
     if (currentLeadershipViewMode === "grid") return;
     currentLeadershipViewMode = "grid";
+    saveUiSetting('leadershipViewMode', currentLeadershipViewMode);
     dom.gridViewBtn.classList.add("active");
     dom.listViewBtn.classList.remove("active");
     updateLeadershipView();
@@ -6853,6 +7048,7 @@ function setupEventListeners() {
   dom.listViewBtn.addEventListener("click", () => {
     if (currentLeadershipViewMode === "list") return;
     currentLeadershipViewMode = "list";
+    saveUiSetting('leadershipViewMode', currentLeadershipViewMode);
     dom.listViewBtn.classList.add("active");
     dom.gridViewBtn.classList.remove("active");
     updateLeadershipView();
@@ -6963,16 +7159,18 @@ function setupEventListeners() {
 
   if (onboardingGroupBtn && onboardingStructureBtn) {
       onboardingGroupBtn.addEventListener('click', () => {
-          if (currentOnboardingScope === 'group') return;
-          currentOnboardingScope = 'group';
+          const scope = 'group';
+          if (loadUiSetting('onboardingScope', 'group') === scope) return;
+          saveUiSetting('onboardingScope', scope);
           onboardingGroupBtn.classList.add('active');
           onboardingStructureBtn.classList.remove('active');
           fetchAndRenderOnboarding(authenticatedUserData._id);
       });
 
       onboardingStructureBtn.addEventListener('click', () => {
-          if (currentOnboardingScope === 'structure') return;
-          currentOnboardingScope = 'structure';
+          const scope = 'structure';
+          if (loadUiSetting('onboardingScope', 'group') === scope) return;
+          saveUiSetting('onboardingScope', scope);
           onboardingStructureBtn.classList.add('active');
           onboardingGroupBtn.classList.remove('active');
           fetchAndRenderOnboarding(authenticatedUserData._id);
@@ -7032,6 +7230,7 @@ async function initializeDashboard() {
   isInitializing = true;
 
   // NEU: Zeitreise-Datum aus dem Speicher laden
+  currentLeadershipViewMode = loadUiSetting('leadershipViewMode', 'list');
   const storedTimeTravelDate = localStorage.getItem('timeTravelDate');
   if (storedTimeTravelDate) {
       timeTravelDate = new Date(storedTimeTravelDate);

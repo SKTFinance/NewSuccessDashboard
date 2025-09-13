@@ -18,6 +18,7 @@
                 <div id="stats-view-toggle" class="view-toggle flex space-x-2">
                     <button id="stats-view-calendar-btn" class="active" title="Kalenderansicht"><i class="fas fa-calendar-alt"></i></button>
                     <button id="stats-view-table-btn" title="Tabellenansicht"><i class="fas fa-list"></i></button>
+                    <button id="stats-view-info-btn" title="Nächstes Info"><i class="fas fa-users"></i></button>
                 </div>
             </div>
             <div class="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
@@ -28,6 +29,13 @@
                         <div id="stats-category-filter-panel" class="hidden absolute right-0 z-10 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 p-4">
                             <!-- Checkboxen werden per JS gefüllt -->
                         </div>
+                    </div>
+                </div>
+                <!-- NEU: Gruppenfilter für die Strukturansicht -->
+                <div id="appointments-group-filter-container" class="relative hidden w-full sm:w-auto">
+                    <button id="appointments-group-filter-btn" class="modern-select w-full text-left">Alle Gruppen</button>
+                    <div id="appointments-group-filter-panel" class="hidden absolute right-0 z-30 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 p-4">
+                        <!-- Checkboxen werden per JS gefüllt -->
                     </div>
                 </div>
                 <div class="w-full sm:w-auto">
@@ -42,7 +50,7 @@
         </div>
 
         <!-- Filter -->
-        <div class="bg-skt-grey-light p-4 rounded-xl mb-6 border border-gray-200">
+        <div id="appointments-main-filter-container" class="bg-skt-grey-light p-4 rounded-xl mb-6 border border-gray-200">
             <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                 <div class="md:col-span-1">
                     <label for="appointments-search-filter" class="block text-sm font-medium text-gray-700 mb-1">Suchen</label>
@@ -86,6 +94,46 @@
         </div>
         <div id="stats-table-view" class="hidden">
             <div id="stats-table-container" class="max-h-[500px] overflow-y-auto"></div>
+        </div>
+        <!-- NEU: Ansicht für "Nächstes Info", hierher verschoben -->
+        <div id="naechstes-info-view" class="hidden">
+            <!-- Filter -->
+            <div class="bg-skt-grey-light p-4 rounded-xl mb-6 border border-gray-200">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                    <div>
+                        <label for="infoabend-date-select" class="block text-sm font-medium text-gray-700 mb-1">Infoabend Datum</label>
+                        <select id="infoabend-date-select" class="modern-select"></select>
+                    </div>
+                    <div class="flex items-center space-x-3 self-center justify-self-start pt-6">
+                        <label for="infoabend-show-cancelled" class="toggle-switch">
+                            <input type="checkbox" id="infoabend-show-cancelled" class="sr-only peer">
+                            <div class="toggle-slider"></div>
+                        </label>
+                        <label for="infoabend-show-cancelled" class="text-sm font-medium text-gray-700">Abgesagte anzeigen</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistik -->
+            <div class="mb-6">
+                <details id="infoabend-stats-details" class="bg-skt-grey-light rounded-xl border border-gray-200">
+                    <summary class="p-4 font-semibold text-skt-blue cursor-pointer">
+                        Statistik anzeigen
+                    </summary>
+                    <div id="infoabend-stats-container" class="p-4 pt-0">
+                        <h3 class="text-lg font-bold text-skt-blue mb-4 text-center">Recruiting Trichter</h3>
+                        <div id="funnel-chart-container" class="w-full max-w-2xl mx-auto">
+                            <!-- Trichter wird per JS generiert -->
+                        </div>
+                    </div>
+                </details>
+            </div>
+
+            <!-- Tabelle -->
+            <div id="infoabend-list-container">
+                <!-- Inhalt wird per JS generiert -->
+                <div class="loader mx-auto"></div>
+            </div>
         </div>
 
         <!-- NEU: Analyse-Container hierher verschoben -->
@@ -141,3 +189,30 @@
     </div>
 
 </div>
+
+<!-- NEU: Stile für den animierten Trichter, hierher verschoben -->
+<style>
+    .funnel-container-animated {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+    }
+    .funnel-step-animated {
+        position: relative;
+        color: white;
+        padding: 0.75rem 2rem;
+        transition: width 0.7s cubic-bezier(0.25, 1, 0.5, 1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        clip-path: polygon(0% 0%, 100% 0%, 90% 100%, 10% 100%);
+        min-height: 50px;
+        width: 0%; /* Startbreite für Animation */
+    }
+    .funnel-label { font-weight: 600; }
+    .funnel-value {
+        font-weight: 700;
+        font-size: 1.125rem;
+    }
+</style>
