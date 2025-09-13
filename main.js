@@ -1316,6 +1316,14 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
         ? Math.round(ehZiel / user.EHproATQuote)
         : 0;
     const totalCurrentEh = totalEh.totalEh || 0;
+    // NEU: Zähle Termine in der Vergangenheit mit Status "Ausgemacht"
+    const today = new Date(getCurrentDate()); // KORREKTUR: Kopie erstellen, um Seiteneffekte zu vermeiden.
+    today.setHours(0, 0, 0, 0);
+    const outstandingAppointmentsCount = db.termine.filter(t =>
+        t.Mitarbeiter_ID === user._id &&
+        t.Status === 'Ausgemacht' &&
+        t.Datum && new Date(t.Datum) < today
+    ).length;
     const anzahlGeworbenerMA = db.mitarbeiter.filter( // KORREKTUR: Zähle nur aktive Mitarbeiter
       (m) => m.Werber === user._id && m.Status !== 'Ausgeschieden'
     ).length;
@@ -1333,6 +1341,7 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
       atCurrent: atIst,
       atVereinbart,
       totalCurrentEh,
+      outstandingAppointmentsCount,
       recruitedEmployees: anzahlGeworbenerMA,
       isTrainee:
         position.toLowerCase().includes("trainee") ||
@@ -1524,10 +1533,11 @@ async function calculateGroupOrStructureData(
       acc.atGoal += (member.atGoal || 0);
       acc.atCurrent += (member.atCurrent || 0);
       acc.atVereinbart += (member.atVereinbart || 0);
+      acc.outstandingAppointmentsCount += (member.outstandingAppointmentsCount || 0);
       return acc;
   }, {
       ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0,
-      atGoal: 0, atCurrent: 0, atVereinbart: 0
+      atGoal: 0, atCurrent: 0, atVereinbart: 0, outstandingAppointmentsCount: 0
   });
 
   // Der Gesamtverdienst der Gruppe/Struktur ist der Verdienst der Führungskraft,
@@ -1579,12 +1589,13 @@ async function calculateGroupOrStructureData(
               acc.atGoal += (member.atGoal || 0);
               acc.atCurrent += (member.atCurrent || 0);
               acc.atVereinbart += (member.atVereinbart || 0);
+              acc.outstandingAppointmentsCount += (member.outstandingAppointmentsCount || 0);
               // Die 'earnings' werden pro Karte aus den Daten der jeweiligen FK geholt
               if (member.id === leader._id) {
                   acc.earnings = member.earnings;
               }
               return acc;
-          }, { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atCurrent: 0, atVereinbart: 0, earnings: { personal: 0, group: 0, structure: 0 } });
+          }, { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atCurrent: 0, atVereinbart: 0, earnings: { personal: 0, group: 0, structure: 0 }, outstandingAppointmentsCount: 0 });
           
           // NEU: Füge die FK selbst zur Mitgliederliste hinzu, damit sie beim Ausklappen erscheint.
           const leaderDataForCard = groupDataForDisplay.find(d => d.id === leader._id);
@@ -1611,6 +1622,7 @@ async function calculateGroupOrStructureData(
     atGoal: aggregatedData.atGoal,
     atCurrent: aggregatedData.atCurrent,
     atVereinbart: aggregatedData.atVereinbart,
+    outstandingAppointmentsCount: aggregatedData.outstandingAppointmentsCount,
     earnings: totalEarnings,
     members: memberData,
   };
@@ -1687,8 +1699,9 @@ async function calculateGesamtansichtData() {
           acc.atGoal += (member.atGoal || 0);
           acc.atCurrent += (member.atCurrent || 0);
           acc.atVereinbart += (member.atVereinbart || 0);
+          acc.outstandingAppointmentsCount += (member.outstandingAppointmentsCount || 0);
           return acc;
-      }, { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atCurrent: 0, atVereinbart: 0 });
+      }, { ehGoal: 0, ehCurrent: 0, etGoal: 0, etCurrent: 0, atGoal: 0, atCurrent: 0, atVereinbart: 0, outstandingAppointmentsCount: 0 });
 
       const leaderData = augmentedMemberData.find(d => d.id === leader._id);
       return { ...aggregatedGroupData, id: leader._id, earnings: leaderData?.earnings };
@@ -2178,8 +2191,18 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
     const etPercentage = member.etGoal > 0 ? (member.etCurrent / member.etGoal * 100) : 0;
     const atPercentage = member.atGoal > 0 ? (member.atVereinbart / member.atGoal) * 100 : 0;
     const ehColorClass = getProgressColorClass(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
-    const prognosis = getPrognosis(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
+    // ENTFERNT: Prognose wird nicht mehr angezeigt.
     
+    // NEU: Indikator für offene Statusänderungen
+    let outstandingAppointmentsHtml = '';
+    if (member.outstandingAppointmentsCount > 0) {
+        outstandingAppointmentsHtml = `
+            <div class="flex items-center gap-1 text-skt-red-accent font-semibold" data-tooltip="Anzahl der Termine in der Vergangenheit mit Status 'Ausgemacht'">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>${member.outstandingAppointmentsCount}</span>
+            </div>
+        `;
+    }
     const ehValue = isMoneyView ? (member.earnings?.structure || 0) : member.ehCurrent;
     const ehGoal = isMoneyView ? 0 : member.ehGoal;
     const ehUnit = isMoneyView ? "Verdienst" : "Einheiten";
@@ -2199,16 +2222,16 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
     if (pos && !pos.toLowerCase().includes("trainee")) {
         positionHtml = `<p class="text-sm text-skt-blue-light">${member.originalPosition || member.position}</p>`;
     }
-    const prognosisHtml = !isMoneyView ? `<p class="text-sm ${prognosis.colorClass} font-semibold">${prognosis.text}</p>` : '';
 
     // KORREKTUR: Der Fortschrittskreis wird durch drei Fortschrittsbalken ersetzt.
     summary.innerHTML = `
         <div class="flex justify-between items-start mb-4">
             <div class="min-w-0">
                 <p class="font-bold text-skt-blue text-lg break-words">${member.leaderName || member.name}</p>
-                ${positionHtml || prognosisHtml}
+                ${positionHtml}
             </div>
-            <div class="flex items-center space-x-2">
+            <div class="flex items-center space-x-3">
+                 ${outstandingAppointmentsHtml}
                  <button data-userid="${member.id}" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button>
                  <button data-userid="${member.id}" class="calendar-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Termine anzeigen"><i class="fas fa-calendar-alt"></i></button>
                  <i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i>
@@ -2326,12 +2349,18 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
 }
 
 function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
-    const prognosis = getPrognosis(
-        member.ehCurrent,
-        member.ehGoal,
-        totalDaysInCycle,
-        daysPassedInCycle
-    );
+    // ENTFERNT: Prognose wird nicht mehr angezeigt.
+    
+    // NEU: Indikator für offene Statusänderungen
+    let outstandingAppointmentsHtml = '';
+    if (member.outstandingAppointmentsCount > 0) {
+        outstandingAppointmentsHtml = `
+            <div class="flex items-center gap-1 text-skt-red-accent font-semibold" data-tooltip="Anzahl der Termine in der Vergangenheit mit Status 'Ausgemacht'">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>${member.outstandingAppointmentsCount}</span>
+            </div>
+        `;
+    }
     const etPercentage =
         member.etGoal > 0 ? (member.etCurrent / member.etGoal) * 100 : 0;
 
@@ -2371,9 +2400,6 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
             member.originalPosition || member.position
             }</p>`
         : "";
-    const prognosisHtml = !isMoneyView
-        ? `<span class="font-semibold text-sm ${prognosis.colorClass}" data-tooltip="Prognose basierend auf dem aktuellen Fortschritt im Verhältnis zur vergangenen Zeit im Monat.">${prognosis.text}</span>`
-        : "";
 
     // NEU: Berechnungen für Soll-Markierung und AT-Balken
     const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
@@ -2389,7 +2415,7 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
 
     summary.innerHTML = `<div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-skt-blue text-lg break-words">${
         member.leaderName || member.name
-    }</p>${positionHtml}</div><div class="flex items-center space-x-2 flex-shrink-0">${prognosisHtml}<button data-userid="${member.id}" class="calendar-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Termine anzeigen"><i class="fas fa-calendar-alt"></i></button><button data-userid="${
+    }</p>${positionHtml}</div><div class="flex items-center space-x-3 flex-shrink-0">${outstandingAppointmentsHtml}<button data-userid="${member.id}" class="calendar-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Termine anzeigen"><i class="fas fa-calendar-alt"></i></button><button data-userid="${
         member.id
     }" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button><i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i></div></div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">${ehUnit}</p><p class="text-xs font-semibold text-skt-blue">${ehDisplayValue} ${ehGoalDisplay}</p></div>${
         !isMoneyView
@@ -3485,8 +3511,8 @@ class AppointmentsView {
 
     async fetchAndRender() {
         appointmentsLog('--- START: fetchAndRender ---');
-        try {
-            const today = getCurrentDate();
+        try { // KORREKTUR: Kopie erstellen, um Seiteneffekte zu vermeiden.
+            const today = new Date(getCurrentDate());
             const scope = this.statsScopeFilter.value;
             // KORREKTUR: Logik zur Sammlung von Benutzer-IDs, um sicherzustellen, dass der aktuelle Benutzer immer enthalten ist.
             let userIds = new Set();
@@ -3539,6 +3565,11 @@ class AppointmentsView {
                     const query = `SELECT *, Mitarbeiter_ID FROM \`Termine\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' AND \`Mitarbeiter_ID\` IN (${userNamesSql})`;
                     promises.push(SKT_APP.seaTableSqlQuery(query, true));
                 }
+
+                // KORREKTUR: Lade zusätzlich alle überfälligen Termine, um die Diskrepanz zur Dashboard-Anzeige zu beheben.
+                const todayIso = today.toISOString().split('T')[0];
+                const outstandingQuery = `SELECT *, Mitarbeiter_ID FROM \`Termine\` WHERE \`Datum\` < '${todayIso}' AND \`Status\` = 'Ausgemacht' AND \`Mitarbeiter_ID\` IN (${userNamesSql})`;
+                promises.push(SKT_APP.seaTableSqlQuery(outstandingQuery, true));
             }
 
             const results = await Promise.all(promises);
@@ -3548,10 +3579,8 @@ class AppointmentsView {
                 }
             });
             
-            // Sortieren nach Datum, da die Chunks die Reihenfolge durcheinander bringen könnten.
-            // KORREKTUR: Duplikate entfernen, die durch überlappende Abfragen entstehen könnten.
-            const uniqueAppointments = _.uniqBy(allFetchedAppointments, '_id');
-            uniqueAppointments.sort((a, b) => new Date(b.Datum) - new Date(a.Datum));
+            // KORREKTUR: Duplikate entfernen (da sich die Abfragen überschneiden können) und nach Datum sortieren.
+            const uniqueAppointments = _.uniqBy(allFetchedAppointments, '_id').sort((a, b) => new Date(b.Datum) - new Date(a.Datum));
 
             this.allAppointments = SKT_APP.mapSqlResults(uniqueAppointments, 'Termine');
             appointmentsLog(`5. Antwort in ${this.allAppointments.length} Termin-Objekte umgewandelt.`);
@@ -3794,7 +3823,6 @@ class AppointmentsView {
     // NEU: Funktion zum Berechnen und Anzeigen der Termin-Statistiken
     _renderAppointmentStats() {
         const today = getCurrentDate();
-        // KORREKTUR: Verwende die Zyklusdaten für die Anzeige und Filterung
         const { startDate: cycleStartDate, endDate: cycleEndDate } = getMonthlyCycleDates();
         this.statsPeriodDisplay.textContent = cycleStartDate.toLocaleString('de-DE', { month: 'long', year: 'numeric' });
 
@@ -3809,39 +3837,38 @@ class AppointmentsView {
             this.statsCategoryFilterBtn.textContent = selectedCategories.join(', ');
         }
 
-        // --- Core Filtering Logic ---
+        // --- Filter-Einstellungen ---
         const showPast = this.showPastToggle.checked;
         const showCancelled = this.showCancelledToggle ? this.showCancelledToggle.checked : false;
         const todayForFilter = new Date(today);
         todayForFilter.setHours(0, 0, 0, 0);
 
-        // 1. Base appointments: filtered by search and category
-        let baseAppointments = this.searchFilteredAppointments.filter(t => selectedCategories.includes(t.Kategorie) && t.Datum);
+        // --- Gemeinsame Filterfunktionen ---
+        const categoryFilter = t => selectedCategories.includes(t.Kategorie) && t.Datum;
+        const cancelledFilter = t => showCancelled || (t.Absage !== true && t.Status !== 'Storno');
+        const pastFilter = t => showPast || new Date(t.Datum) >= todayForFilter;
 
-        // NEU: Nach abgesagten Terminen filtern
-        if (!showCancelled) {
-            baseAppointments = baseAppointments.filter(t => t.Absage !== true && t.Status !== 'Storno');
-        }
-
-        // 2. Filter by business cycle
-        let cycleAppointments = baseAppointments.filter(t => {
-            const terminDate = new Date(t.Datum);
-            return terminDate >= cycleStartDate && terminDate <= cycleEndDate;
-        });
-
-        // 3. Apply "show past" toggle logic for the table view
-        let finalAppointmentsForTable = cycleAppointments;
-        if (!showPast) {
-            finalAppointmentsForTable = cycleAppointments.filter(t => new Date(t.Datum) >= todayForFilter);
-        }
+        // --- Daten für die Tabellenansicht vorbereiten ---
+        // KORREKTUR: Beginnt mit `dateAndSearchFilteredAppointments`, um die Datumsauswahl zu berücksichtigen.
+        let finalAppointmentsForTable = this.dateAndSearchFilteredAppointments
+            .filter(categoryFilter)
+            .filter(cancelledFilter)
+            .filter(pastFilter);
 
         // --- Table View Logic ---
         const sortedAppointments = this._sortStatsTableData(finalAppointmentsForTable);
         this._renderStatsTable(sortedAppointments);
 
         // --- Calendar View Logic ---
-        // The calendar always works with all appointments in the cycle. Visibility is handled in the rendering loop.
-        const appointmentsByDay = _.groupBy(cycleAppointments, t => t.Datum ? t.Datum.split(/ |T/)[0] : null);
+        // Der Kalender arbeitet mit den Zyklusdaten, ignoriert aber die Datumsauswahl-Filter.
+        const calendarAppointments = this.searchFilteredAppointments
+            .filter(categoryFilter)
+            .filter(cancelledFilter)
+            .filter(t => {
+                const terminDate = new Date(t.Datum);
+                return terminDate >= cycleStartDate && terminDate <= cycleEndDate;
+            });
+        const appointmentsByDay = _.groupBy(calendarAppointments, t => t.Datum ? t.Datum.split(/ |T/)[0] : null);
 
         this.statsMonthTimeline.innerHTML = '';
 
@@ -3959,16 +3986,18 @@ class AppointmentsView {
             const tr = document.createElement('tr');
             tr.className = 'cursor-pointer';
             tr.dataset.id = termin._id;
-            const statusColorClass = this._getStatusColorClass(termin);
-            tr.className = `border-l-4 ${statusColorClass} cursor-pointer`;
+            const categoryColorClass = this._getCategoryColorClass(termin.Kategorie);
+            tr.className = `border-l-4 ${categoryColorClass} cursor-pointer`; // Behält die linke Randfarbe bei
             
             // KORREKTUR: Der Mitarbeitername wird aus dem verknüpften Objekt ausgelesen, das von der API kommt.
             const mitarbeiterName = termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
+            // NEU: Status-Text basierend auf den neuen Regeln einfärben
+            const statusTextColorClass = this._getStatusTextColorClass(termin.Status);
             tr.innerHTML = `
                 <td>${new Date(termin.Datum).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
                 <td>${termin.Terminpartner || '-'}</td>
                 <td>${termin.Kategorie || '-'}</td>
-                <td>${termin.Status || '-'}</td>
+                <td><span class="${statusTextColorClass}">${termin.Status || '-'}</span></td>
                 <td>${mitarbeiterName}</td>
             `;
             tr.addEventListener('click', () => this.openModal(termin));
@@ -4015,10 +4044,11 @@ class AppointmentsView {
     }
 
     _renderOutstandingAppointments() {
-        const today = getCurrentDate();
+        const today = new Date(getCurrentDate()); // KORREKTUR: Kopie erstellen, um Seiteneffekte zu vermeiden.
         today.setHours(0, 0, 0, 0);
 
-        const outstanding = this.dateAndSearchFilteredAppointments.filter(t => {
+        // KORREKTUR: Filtere von `searchFilteredAppointments`, um die Datumsfilter zu ignorieren und Diskrepanzen zu beheben.
+        const outstanding = this.searchFilteredAppointments.filter(t => {
             if (!t.Datum || t.Status !== 'Ausgemacht') return false;
             const terminDate = new Date(t.Datum);
             return terminDate < today;
@@ -4075,6 +4105,46 @@ class AppointmentsView {
             case 'Info Anwesend': return 'border-accent-purple'; // Lila
             case 'Gehalten': return 'border-skt-grey-medium'; // Neutrales Grau für erledigt
             default: return 'border-gray-300'; // Standard
+        }
+    }
+
+    // NEU: Gibt die Tailwind-CSS-Klasse für die Randfarbe der Termin-Kategorie zurück.
+    _getCategoryColorClass(category) {
+        const colorMap = {
+            'AT': 'border-skt-green-accent',
+            'BT': 'border-skt-blue-accent',
+            'ST': 'border-skt-red-accent',
+            'ET': 'border-accent-gold',
+            'Immo': 'border-immo-accent',
+            'NT': 'border-accent-purple',
+        };
+        return colorMap[category] || 'border-gray-300';
+    }
+
+    // NEU: Gibt die Tailwind-CSS-Klasse für die Textfarbe des Termin-Status zurück.
+    _getStatusTextColorClass(status) {
+        switch (status) {
+            case 'Offen':
+            case 'Storno':
+                return 'text-skt-red-accent font-semibold';
+            case 'Weiterer BT':
+            case 'Weiterer ET':
+            case 'Verschoben':
+                return 'text-orange-500 font-semibold';
+            case 'Ausgemacht':
+                return 'text-skt-green-accent font-semibold';
+            case 'Gehalten':
+                return 'text-gold font-semibold';
+            case 'Info Eingeladen':
+                return 'text-skt-yellow-accent font-semibold';
+            case 'Info Bestätigt':
+                return 'text-blue-600 font-semibold';
+            case 'Info Anwesend':
+                return 'text-purple-600 font-semibold';
+            case 'Wird Mitarbeiter':
+                return 'text-pink-500 font-semibold';
+            default:
+                return '';
         }
     }
 
@@ -7117,28 +7187,6 @@ async function renderSubordinatesForLeader(leaderId, container) {
 
     // NEU: Füge eine maximale Höhe und eine Scroll-Funktion hinzu
     container.innerHTML = `<div class="space-y-2 max-h-80 overflow-y-auto">${listHtml}</div>`;
-}
-
-function getPrognosis(current, goal, totalDays, daysPassed) {
-  if (goal <= 0 || daysPassed <= 0)
-    return { text: "-", colorClass: "text-gray-500" };
-  const dailyRate = current / daysPassed;
-  const prognosis = dailyRate * totalDays;
-
-  if (prognosis >= goal)
-    return {
-      text: `↗ ${Math.round(prognosis)}`,
-      colorClass: "text-skt-green-accent",
-    };
-  if (prognosis >= goal * 0.8)
-    return {
-      text: `→ ${Math.round(prognosis)}`,
-      colorClass: "text-skt-yellow-accent",
-    };
-  return {
-    text: `↘ ${Math.round(prognosis)}`,
-    colorClass: "text-skt-red-accent",
-  };
 }
 
 function getProgressColorClass(current, goal, totalDays, daysPassed) {
