@@ -48,6 +48,9 @@ let auswertungViewInstance = null;
 let strukturbaumViewInstance = null;
 let pgTagebuchViewInstance = null;
 let datenschutzViewInstance = null; // NEU
+let pendingAppointmentFilter = null;
+let pendingAppointmentViewMode = null;
+let pendingAppointmentScope = null;
 let HIERARCHY_CACHE = null;
 let currentOnboardingSubView = "leader-list";
 let currentOnboardingScope = 'group'; // NEU
@@ -2204,6 +2207,7 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
                 ${positionHtml || prognosisHtml}
             </div>
             <div class="flex items-center space-x-2">
+                 <button data-username="${member.leaderName || member.name}" class="calendar-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Termine anzeigen"><i class="fas fa-calendar-alt"></i></button>
                  <button data-userid="${member.id}" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button>
                  <i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i>
             </div>
@@ -2290,6 +2294,18 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
         }
     });
 
+    // NEU: Event-Listener für den Kalender-Button
+    const calendarBtnGrid = summary.querySelector('.calendar-view-btn');
+    if (calendarBtnGrid) {
+        calendarBtnGrid.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const username = e.currentTarget.dataset.username;
+            if (username) {
+                switchToAppointmentsAndFilter(username);
+            }
+        });
+    }
+
     // KORREKTUR: Logik zum Laden der Untergebenen nur für Führungskräfte hinzufügen.
     if (isLeader) {
         summary.addEventListener('click', async (e) => {
@@ -2351,7 +2367,7 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
     const prognosisHtml = !isMoneyView
         ? `<span class="font-semibold text-sm ${prognosis.colorClass}" data-tooltip="Prognose basierend auf dem aktuellen Fortschritt im Verhältnis zur vergangenen Zeit im Monat.">${prognosis.text}</span>`
         : "";
-    
+
     // NEU: Berechnungen für Soll-Markierung und AT-Balken
     const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
     
@@ -2366,7 +2382,7 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
 
     summary.innerHTML = `<div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-skt-blue text-lg break-words">${
         member.leaderName || member.name
-    }</p>${positionHtml}</div><div class="flex items-center space-x-4 flex-shrink-0">${prognosisHtml}<button data-userid="${
+    }</p>${positionHtml}</div><div class="flex items-center space-x-2 flex-shrink-0">${prognosisHtml}<button data-username="${member.leaderName || member.name}" class="calendar-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Termine anzeigen"><i class="fas fa-calendar-alt"></i></button><button data-userid="${
         member.id
     }" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button><i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i></div></div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">${ehUnit}</p><p class="text-xs font-semibold text-skt-blue">${ehDisplayValue} ${ehGoalDisplay}</p></div>${
         !isMoneyView
@@ -2439,6 +2455,18 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
         fetchAndRenderDashboard(newuserId);
         }
     });
+
+    // NEU: Event-Listener für den Kalender-Button
+    const calendarBtnList = summary.querySelector('.calendar-view-btn');
+    if (calendarBtnList) {
+        calendarBtnList.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const username = e.currentTarget.dataset.username;
+            if (username) {
+                switchToAppointmentsAndFilter(username);
+            }
+        });
+    }
     return card;
 }
 
@@ -3404,6 +3432,28 @@ class AppointmentsView {
             this.statsScopeFilter.value = 'group';
         }
 
+        // NEU: Prüft, ob ein Filter aus einer anderen Ansicht übergeben wurde.
+        if (pendingAppointmentFilter) {
+            this.filterText = pendingAppointmentFilter;
+            if (this.searchInput) {
+                this.searchInput.value = pendingAppointmentFilter;
+            }
+            pendingAppointmentFilter = null;
+        } else {
+            this.filterText = '';
+            if (this.searchInput) this.searchInput.value = '';
+        }
+
+        if (pendingAppointmentViewMode) {
+            this._switchStatsView(pendingAppointmentViewMode);
+            pendingAppointmentViewMode = null;
+        }
+        if (pendingAppointmentScope) {
+            if (this.statsScopeFilter) {
+                this.statsScopeFilter.value = pendingAppointmentScope;
+            }
+            pendingAppointmentScope = null;
+        }
         this._populateCategoryFilter(); // KORREKTUR: Reihenfolge getauscht
 
         // Die Event-Listener müssen bei jeder Initialisierung neu gesetzt werden,
@@ -3419,6 +3469,7 @@ class AppointmentsView {
 
         await this.fetchAndRender();
     }
+
 
     async fetchAndRender() {
         appointmentsLog('--- START: fetchAndRender ---');
@@ -8776,6 +8827,13 @@ function switchView(viewName) {
   } else if (viewName === 'pg-tagebuch') {
     loadAndInitPGTagebuchView();
   }
+}
+
+function switchToAppointmentsAndFilter(username) {
+    pendingAppointmentFilter = username;
+    pendingAppointmentViewMode = 'table';
+    pendingAppointmentScope = 'structure';
+    switchView('appointments');
 }
 
 class DatenschutzView {
