@@ -1251,9 +1251,9 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
   // const totalEhResults = mapSqlResults(totalEhResultRaw || [], "Umsatz"); // ALT: Wurde hier geladen
 
-  // KORREKTUR: "Ausgemacht" wird nun auch als "gehaltener" AT gezählt, um die Diskrepanz
-  // zwischen der Kartenansicht (die "vereinbart" zeigt) und der Detailansicht (die "gehalten" zeigt) aufzulösen.
-  const AT_STATUS_GEHALTEN = ["Gehalten", "Ausgemacht"];
+  // Definitionen für Termin-Status
+  // "Gehalten" zählt nur Termine mit Status 'Gehalten'.
+  const AT_STATUS_GEHALTEN = ["Gehalten"];
   const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
   // KORREKTUR: Falsche Status für "gehaltene" ETs entfernt (z.B. Storno, Ausgemacht).
   const ET_STATUS_GEHALTEN = ["Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
@@ -7016,7 +7016,8 @@ async function renderSubordinatesForLeader(leaderId, container) {
     const listHtml = activeSubordinates.map(member => {
         const ehPercentage = member.ehGoal > 0 ? (member.ehCurrent / member.ehGoal * 100) : 0;
         const etPercentage = member.etGoal > 0 ? (member.etCurrent / member.etGoal * 100) : 0;
-        const atPercentage = member.atGoal > 0 ? (member.atCurrent / member.atGoal * 100) : 0;
+        // KORREKTUR: Verwende 'atVereinbart' für die Anzeige, um konsistent mit der Haupt-Dashboard-Karte zu sein.
+        const atPercentage = member.atGoal > 0 ? (member.atVereinbart / member.atGoal * 100) : 0;
 
         return `
             <div class="p-3 border-t border-gray-200">
@@ -7030,7 +7031,7 @@ async function renderSubordinatesForLeader(leaderId, container) {
                     </div>
                     </div>
             <div>
-                <div class="flex justify-between"><span class="text-gray-600">AT</span><span>${member.atCurrent} / ${member.atGoal}</span></div>
+                <div class="flex justify-between"><span class="text-gray-600">AT</span><span>${member.atVereinbart} / ${member.atGoal}</span></div>
                 <div class="w-full bg-gray-200 h-2 rounded-full relative">
                     <div class="bg-accent-gold h-2 rounded-full" style="width: ${Math.min(atPercentage, 100)}%;"></div>
                     <div class="absolute top-[-2px] h-3 w-[2px] ml-[-1px] bg-skt-red-accent" style="left: ${timeElapsedPercentage}%;" data-tooltip="Soll-Fortschritt"></div>
