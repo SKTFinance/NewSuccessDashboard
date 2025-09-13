@@ -1048,6 +1048,46 @@ function escapeSql(str) {
   return str.replace(/'/g, "''");
 }
 
+// NEU: Generische Funktion für das Bestätigungs-Modal
+async function showConfirmationModal(text, title = 'Bestätigung', okText = 'Bestätigen', cancelText = 'Abbrechen') {
+    return new Promise((resolve) => {
+        const confirmModal = document.getElementById('confirm-modal');
+        const confirmOkBtn = document.getElementById('confirm-modal-ok-btn');
+        const confirmCancelBtn = document.getElementById('confirm-modal-cancel-btn');
+        const titleEl = document.getElementById('confirm-modal-title');
+        const textEl = document.getElementById('confirm-modal-text');
+
+        if (!confirmModal || !confirmOkBtn || !confirmCancelBtn || !titleEl || !textEl) {
+            console.error('Bestätigungs-Modal-Elemente nicht gefunden. Fallback auf window.confirm.');
+            resolve(window.confirm(text));
+            return;
+        }
+
+        titleEl.textContent = title;
+        textEl.textContent = text;
+        confirmOkBtn.textContent = okText;
+        confirmCancelBtn.textContent = cancelText;
+
+        const handleOk = () => { cleanup(); resolve(true); };
+        const handleCancel = () => { cleanup(); resolve(false); };
+
+        const cleanup = () => {
+            confirmModal.classList.remove('visible');
+            document.body.classList.remove('modal-open');
+            document.documentElement.classList.remove('modal-open');
+            confirmOkBtn.removeEventListener('click', handleOk);
+            confirmCancelBtn.removeEventListener('click', handleCancel);
+        };
+
+        confirmOkBtn.addEventListener('click', handleOk, { once: true });
+        confirmCancelBtn.addEventListener('click', handleCancel, { once: true });
+
+        confirmModal.classList.add('visible');
+        document.body.classList.add('modal-open');
+        document.documentElement.classList.add('modal-open');
+    });
+}
+
 function _findCycleStartForMonth(year, month) {
     const date = new Date(year, month, 1);
     while (date.getDay() !== 4) { // Thursday
@@ -1211,18 +1251,12 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
   // const totalEhResults = mapSqlResults(totalEhResultRaw || [], "Umsatz"); // ALT: Wurde hier geladen
 
-  const AT_STATUS_GEHALTEN = ["Gehalten"];
+  // KORREKTUR: "Ausgemacht" wird nun auch als "gehaltener" AT gezählt, um die Diskrepanz
+  // zwischen der Kartenansicht (die "vereinbart" zeigt) und der Detailansicht (die "gehalten" zeigt) aufzulösen.
+  const AT_STATUS_GEHALTEN = ["Gehalten", "Ausgemacht"];
   const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
-  const ET_STATUS_GEHALTEN = [
-    "Gehalten",
-    "Ausgemacht",
-    "Weiterer ET",
-    "Info Eingeladen",
-    "Info Bestätigt",
-    "Info Anwesend",
-    "Verschoben",
-    "Storno",
-  ];
+  // KORREKTUR: Falsche Status für "gehaltene" ETs entfernt (z.B. Storno, Ausgemacht).
+  const ET_STATUS_GEHALTEN = ["Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
 
   return users.map((user) => {
     // Plandaten kommen aus dem Cache und sind normalisiert.
@@ -1244,7 +1278,18 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
           te.Mitarbeiter_ID[0].row_id === user._id
       ) || {};
     // Termindaten aus dem Cache nach Benutzer filtern.
-    const userTermine = termineResults.filter((t) => t.Mitarbeiter_ID === user._id);
+    // KORREKTUR: Robusterer Filter, der inkonsistente Datenstrukturen (string vs. link-Objekt) abfängt.
+    // Dies stellt sicher, dass Termine korrekt zugeordnet werden, auch wenn die Normalisierung fehlschlägt.
+    const userTermine = termineResults.filter((t) => {
+        const terminMitarbeiterId = t.Mitarbeiter_ID;
+        if (typeof terminMitarbeiterId === 'string') {
+            return terminMitarbeiterId === user._id;
+        }
+        if (Array.isArray(terminMitarbeiterId) && terminMitarbeiterId.length > 0 && terminMitarbeiterId[0]?.row_id) {
+            return terminMitarbeiterId[0].row_id === user._id;
+        }
+        return false;
+    });
 
     let atIst = 0,
       atVereinbart = 0,
@@ -3280,6 +3325,12 @@ class AppointmentsView {
                 cancellationReasonContainer.classList.toggle('hidden', !cancellationToggle.checked);
             });
         }
+
+        // NEU: Event-Listener, der auf Änderungen der Kategorie reagiert.
+        const categorySelect = this.form.querySelector('#appointment-category');
+        if (categorySelect) {
+            categorySelect.addEventListener('change', (e) => this._handleCategoryChange(e.target.value));
+        }
     }
     // Hilfsmethode, um DOM-Elemente zu holen, wird von init() aufgerufen.
     _getDomElements() {
@@ -4200,19 +4251,10 @@ class AppointmentsView {
                 // KORREKTUR: `datetime-local` erwartet das Format YYYY-MM-DDTHH:mm
                 this.form.querySelector('#appointment-date').value = new Date().toISOString().slice(0, 16);
 
-                // NEU: Standard-Kategorie basierend auf dem aktiven Tab setzen
-                if (this.currentTab === 'umsatz') {
-                    categorySelect.value = 'AT';
-                } else if (this.currentTab === 'recruiting' || this.currentTab === 'netzwerk') {
-                    categorySelect.value = 'ET';
-                    // Wert im Hintergrund setzen, auch wenn das Feld nicht sichtbar ist
-                    const nextInfoDate = findNextInfoDateAfter(getCurrentDate());
-                    this.form.querySelector('#appointment-infoabend-date').value = nextInfoDate.toISOString().split('T')[0];
-                } else if (this.currentTab === 'immo') {
-                    categorySelect.value = 'Immo';
-                }
-                this._updateStatusDropdown(categorySelect.value);
-                this.toggleConditionalFields(categorySelect.value, true);
+                // KORREKTUR: Veraltete `currentTab`-Logik entfernt.
+                // Die Logik wird jetzt durch den neuen Event-Listener in `_handleCategoryChange` gesteuert.
+                // Wir rufen die Funktion hier einmal auf, um den initialen Zustand zu setzen.
+                this._handleCategoryChange(categorySelect.value);
             }
 
             this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !this.form.querySelector('#appointment-cancellation').checked);
@@ -4257,6 +4299,7 @@ class AppointmentsView {
 
         try {
             const rowId = this.form.querySelector('#appointment-id').value;
+            const isNewAppointment = !rowId;
             const isCancellation = this.form.querySelector('#appointment-cancellation').checked;
 
             // Log individual form values
@@ -4270,6 +4313,34 @@ class AppointmentsView {
             const hinweis = this.form.querySelector('#appointment-note').value;
             const absagegrund = this.form.querySelector('#appointment-cancellation-reason').value;
             const infoabend = this.form.querySelector('#appointment-infoabend-date').value;
+
+            // NEU: Duplikatsprüfung beim Anlegen eines neuen Termins
+            if (isNewAppointment && terminpartner) {
+                const newAppointmentDate = new Date(datum).toISOString().split('T')[0]; // Nur das Datum vergleichen
+
+                const potentialDuplicate = this.allAppointments.find(t => {
+                    // KORREKTUR: Robusterer Zugriff auf die Mitarbeiter-ID, da sie normalisiert sein kann oder nicht.
+                    const existingMitarbeiterId = t.Mitarbeiter_ID?.[0]?.row_id || t.Mitarbeiter_ID;
+                    const existingDate = t.Datum ? new Date(t.Datum).toISOString().split('T')[0] : null;
+
+                    return t.Terminpartner && t.Terminpartner.toLowerCase() === terminpartner.toLowerCase() &&
+                           existingMitarbeiterId === mitarbeiterId &&
+                           existingDate === newAppointmentDate;
+                });
+
+                if (potentialDuplicate) {
+                    const confirmed = await showConfirmationModal(
+                        `Es existiert bereits ein Termin für "${terminpartner}" an diesem Tag. Möchten Sie den Termin trotzdem anlegen?`,
+                        'Doppelter Termin?',
+                        'Ja, trotzdem anlegen',
+                        'Abbrechen'
+                    );
+                    if (!confirmed) {
+                        saveBtn.disabled = false; saveBtnText.classList.remove('hidden'); saveBtnLoader.classList.add('hidden');
+                        return; // Stop the submission
+                    }
+                }
+            }
 
             const rowData = {
                 [SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID]: [mitarbeiterId],
@@ -4339,6 +4410,18 @@ class AppointmentsView {
         const inactiveClass = 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
         this.statsTab.className = `analysis-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-base ${tabName === 'stats' ? activeClass : inactiveClass}`;
         this.heatmapTab.className = `analysis-tab whitespace-nowrap py-3 px-1 border-b-2 font-medium text-base ${tabName === 'heatmap' ? activeClass : inactiveClass}`;
+    }
+
+    // NEU: Eigene Methode, um auf Kategorie-Änderungen zu reagieren.
+    _handleCategoryChange(newCategory) {
+        // Status-Dropdown aktualisieren
+        this._updateStatusDropdown(newCategory);
+        // Bedingte Felder ein-/ausblenden
+        this.toggleConditionalFields(newCategory);
+        // Wenn die neue Kategorie "ET" ist, das Datum für den nächsten Infoabend setzen.
+        if (newCategory === 'ET') {
+            this.form.querySelector('#appointment-infoabend-date').value = findNextInfoDateAfter(getCurrentDate()).toISOString().split('T')[0];
+        }
     }
 
     // NEU: Methode zum Rendern der Heatmap
@@ -4533,12 +4616,13 @@ class PotentialView {
         this.scheduleForm = document.getElementById('schedule-form');
         this.searchInput = document.getElementById('potential-search-filter');
         this.scopeFilter = document.getElementById('potential-scope-filter');
+        this.statusFilter = document.getElementById('potential-status-filter'); // NEU
         // NEU: Zusätzliche Elemente für Robustheit
         this.addBtn = document.getElementById('add-potential-btn');
         this.downloadBtn = document.getElementById('download-template-btn');
         this.importBtn = document.getElementById('import-excel-btn');
         this.fileInput = document.getElementById('potential-import-input');
-        return this.listContainer && this.modal && this.form && this.scheduleModal && this.scheduleForm && this.searchInput && this.scopeFilter && this.addBtn && this.downloadBtn && this.importBtn && this.fileInput;
+        return this.listContainer && this.modal && this.form && this.scheduleModal && this.scheduleForm && this.searchInput && this.scopeFilter && this.statusFilter && this.addBtn && this.downloadBtn && this.importBtn && this.fileInput;
     }
 
     async init(userId) {
@@ -4577,10 +4661,9 @@ class PotentialView {
                     SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
                     break;
                 case 'structure':
-                    // KORREKTUR: Für die Strukturansicht werden jetzt explizit alle als "Aktiv"
-                    // markierten Mitarbeiter geladen. Das ist die robusteste Methode, um sicherzustellen,
-                    // dass alle Termine, inklusive der des Top-Users, erfasst werden.
-                    db.mitarbeiter.filter(m => m.Status === 'Aktiv').forEach(u => userIds.add(u._id));
+                    // KORREKTUR: Lade nur die eigene Struktur, nicht alle Mitarbeiter.
+                    userIds.add(this.currentUserId);
+                    this.downline.forEach(u => userIds.add(u._id));
                     break;
             }
 
@@ -4602,12 +4685,26 @@ class PotentialView {
 
     render() {
         this.listContainer.innerHTML = '';
+        const statusFilterValue = this.statusFilter.value;
+
         let filteredPotentials = this.allPotentials.filter(p => {
+            // Filter 1: Suchtext
             if (this.filterText) {
                 const searchText = this.filterText.toLowerCase();
                 const partner = (p.Terminpartner || '').toLowerCase();
                 const mitarbeiter = (p.Mitarbeiter_ID?.[0]?.display_value || '').toLowerCase();
-                return partner.includes(searchText) || mitarbeiter.includes(searchText);
+                if (!partner.includes(searchText) && !mitarbeiter.includes(searchText)) {
+                    return false;
+                }
+            }
+            // Filter 2: Status "Kontaktiert"
+            if (statusFilterValue !== 'all') {
+                const potentialStatus = p.Kontaktiert || null;
+                if (statusFilterValue === 'null') {
+                    if (potentialStatus !== null) return false;
+                } else {
+                    if (potentialStatus !== statusFilterValue) return false;
+                }
             }
             return true;
         });
@@ -4663,6 +4760,7 @@ class PotentialView {
         this.fileInput.addEventListener('change', (e) => this.handleFileImport(e));
         
         this.scopeFilter.addEventListener('change', () => this.fetchAndRender());
+        this.statusFilter.addEventListener('change', () => this.render()); // NEU
 
         this.searchInput.addEventListener('input', _.debounce(e => {
             this.filterText = e.target.value;
@@ -6893,6 +6991,19 @@ async function renderSubordinatesForLeader(leaderId, container) {
         return;
     }
 
+    // NEU: Zeitberechnungen für die Soll-Markierungen
+    const { startDate, endDate } = getMonthlyCycleDates();
+    const totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
+    const today = getCurrentDate();
+    const daysPassedInCycle = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24));
+    const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
+
+    const nextInfoDate = findNextInfoDateAfter(today);
+    const previousInfoDate = new Date(nextInfoDate.getTime() - 21 * 24 * 60 * 60 * 1000);
+    const totalDaysInETCycle = 21;
+    const daysPassedInETCycle = (today.getTime() - previousInfoDate.getTime()) / (1000 * 60 * 60 * 24);
+    const etTimeElapsedPercentage = Math.max(0, Math.min(100, (daysPassedInETCycle / totalDaysInETCycle) * 100));
+
     // KORREKTUR: Filtere Mitarbeiter heraus, die kein EH-Ziel haben (passive MA), aber behalte die FK selbst immer drin.
     const activeSubordinates = subordinateData.filter(member => member.id === leaderId || (member.ehGoal || 0) > 0);
     container.dataset.loaded = "true";
@@ -6913,16 +7024,25 @@ async function renderSubordinatesForLeader(leaderId, container) {
                 <div class="mt-2 space-y-2 text-xs">
                     <div>
                         <div class="flex justify-between"><span class="text-gray-600">EH</span><span>${member.ehCurrent} / ${member.ehGoal}</span></div>
-                        <div class="w-full bg-gray-200 h-2 rounded-full"><div class="bg-skt-green-accent h-2 rounded-full" style="width: ${Math.min(ehPercentage, 100)}%;"></div></div>
+                    <div class="w-full bg-gray-200 h-2 rounded-full relative">
+                        <div class="bg-skt-green-accent h-2 rounded-full" style="width: ${Math.min(ehPercentage, 100)}%;"></div>
+                        <div class="absolute top-[-2px] h-3 w-[2px] ml-[-1px] bg-skt-red-accent" style="left: ${timeElapsedPercentage}%;" data-tooltip="Soll-Fortschritt"></div>
                     </div>
-                    <div>
-                        <div class="flex justify-between"><span class="text-gray-600">ET</span><span>${member.etCurrent} / ${member.etGoal}</span></div>
-                        <div class="w-full bg-gray-200 h-2 rounded-full"><div class="bg-skt-blue-accent h-2 rounded-full" style="width: ${Math.min(etPercentage, 100)}%;"></div></div>
                     </div>
-                    <div>
-                        <div class="flex justify-between"><span class="text-gray-600">AT</span><span>${member.atCurrent} / ${member.atGoal}</span></div>
-                        <div class="w-full bg-gray-200 h-2 rounded-full"><div class="bg-accent-gold h-2 rounded-full" style="width: ${Math.min(atPercentage, 100)}%;"></div></div>
+            <div>
+                <div class="flex justify-between"><span class="text-gray-600">AT</span><span>${member.atCurrent} / ${member.atGoal}</span></div>
+                <div class="w-full bg-gray-200 h-2 rounded-full relative">
+                    <div class="bg-accent-gold h-2 rounded-full" style="width: ${Math.min(atPercentage, 100)}%;"></div>
+                    <div class="absolute top-[-2px] h-3 w-[2px] ml-[-1px] bg-skt-red-accent" style="left: ${timeElapsedPercentage}%;" data-tooltip="Soll-Fortschritt"></div>
+                </div>
+            </div>
+                <div>
+                    <div class="flex justify-between"><span class="text-gray-600">ET</span><span>${member.etCurrent} / ${member.etGoal}</span></div>
+                    <div class="w-full bg-gray-200 h-2 rounded-full relative">
+                        <div class="bg-skt-blue-accent h-2 rounded-full" style="width: ${Math.min(etPercentage, 100)}%;"></div>
+                        <div class="absolute top-[-2px] h-3 w-[2px] ml-[-1px] bg-skt-red-accent" style="left: ${etTimeElapsedPercentage}%;" data-tooltip="Soll-Fortschritt"></div>
                     </div>
+                </div>
                 </div>
             </div>
         `;

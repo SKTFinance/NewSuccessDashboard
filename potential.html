@@ -6,7 +6,7 @@
 
     <!-- Filter und Aktionen -->
     <div class="bg-skt-grey-light p-4 rounded-xl mb-6 border border-gray-200">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <!-- Suchfeld -->
             <div>
                 <label for="potential-search-filter" class="sr-only">Suchen</label>
@@ -19,6 +19,20 @@
                     <option value="personal">Meine Potentiale</option>
                     <option value="group">Meine Gruppe</option>
                     <option value="structure">Meine Struktur</option>
+                </select>
+            </div>
+            <!-- NEU: Filter für Kontaktiert-Status -->
+            <div>
+                <label for="potential-status-filter" class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select id="potential-status-filter" class="modern-select">
+                    <option value="all">Alle</option>
+                    <option value="offen">Offen</option>
+                    <option value="nicht abgehoben 1">Nicht abgehoben 1</option>
+                    <option value="nicht abgehoben 2">Nicht abgehoben 2</option>
+                    <option value="nicht abgehoben 3">Nicht abgehoben 3</option>
+                    <option value="nächste TP">Nächste TP</option>
+                    <option value="sperre">Gesperrt</option>
+                    <option value="null">Ohne Status</option>
                 </select>
             </div>
             <!-- Aktionsbuttons -->
