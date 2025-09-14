@@ -3516,6 +3516,8 @@ class AppointmentsView {
         this.btFollowUpModal = document.getElementById('bt-follow-up-modal');
         this.btFollowUpForm = document.getElementById('bt-follow-up-form');
         document.getElementById('cancel-bt-follow-up-btn').addEventListener('click', () => {
+            // KORREKTUR: Body-Scroll wieder aktivieren, wenn das Modal geschlossen wird.
+            document.body.classList.remove('modal-open');
             // KORREKTUR: Bei "Später entscheiden" wird das Modal geschlossen, OHNE den Status des AT zu ändern.
             // Die fetchAndRender() Funktion wird nicht aufgerufen, der alte Zustand bleibt.
             this.btFollowUpModal.classList.remove('visible');
@@ -5079,18 +5081,13 @@ class AppointmentsView {
                 saveBtn.classList.remove('bg-skt-blue', 'hover:bg-skt-blue-light');
                 saveBtn.classList.add('bg-skt-green-accent');
 
-                // KORREKTUR: fetchAndRender() ist der korrekte Weg. Es lädt die Daten für den
-                // aktuellen Filterbereich neu und füllt `this.allAppointments`, worauf
-                // jetzt auch die Statistik-Ansicht zugreift.
-                await this.fetchAndRender(); // Rendert jetzt alles mit den frischesten Daten.
-
-                setTimeout(() => this.closeModal(), 1500);
-                
                 // NEU: Wenn AT auf "Gehalten" gesetzt wurde, öffne das Folge-Modal NACH dem Speichern.
                 if (isAtGehalten) {
-                this._openBtFollowUpModal(originalTermin);
-                return; // Beende hier, das Hauptmodal wird vom Folge-Modal geschlossen
-            }
+                    this._openBtFollowUpModal(originalTermin);
+                    return; // Beende hier, das Hauptmodal wird vom Folge-Modal geschlossen
+                }
+                await this.fetchAndRender();
+                setTimeout(() => this.closeModal(), 1500);
 
             } else {
                 appointmentsLog('!!! FEHLER: API call was not successful.');
@@ -5111,12 +5108,16 @@ class AppointmentsView {
     // NEU: Funktion zum Öffnen des BT-Folge-Modals
     _openBtFollowUpModal(originalAt) {
         this.closeModal(); // Schließe das Haupt-Terminmodal
+        // KORREKTUR: Body-Scroll sperren, wenn das Modal geöffnet wird.
+        document.body.classList.add('modal-open');
 
         this.btFollowUpForm.reset();
         this.btFollowUpForm.querySelector('#bt-follow-up-original-at-id').value = originalAt._id;
         this.btFollowUpForm.querySelector('#bt-follow-up-partner-name').value = originalAt.Terminpartner;
         this.btFollowUpForm.querySelector('#bt-follow-up-owner-id').value = originalAt.Mitarbeiter_ID?.[0]?.row_id || originalAt.Mitarbeiter_ID;
         
+        // NEU: Speichere die ID des ursprünglichen ATs im Modal-Element, um sie bei "Abbrechen" zu verwenden.
+        this.btFollowUpModal.dataset.originalAtId = originalAt._id;
         // NEU: Produkt-Auswahl befüllen
         const produkteContainer = this.btFollowUpForm.querySelector('#bt-follow-up-produkte-container');
         produkteContainer.innerHTML = '';
@@ -5187,14 +5188,24 @@ class AppointmentsView {
             success = await SKT_APP.seaTableAddRow('Termine', rowData);
         } else if (selectedAction === 'no_bt') {
             // Grund im ursprünglichen AT speichern
+            // NEU: Status auf "Gehalten" setzen, da die Aktion jetzt abgeschlossen ist.
             const rowData = {
+                [SKT_APP.COLUMN_MAPS.termine.Status]: 'Gehalten',
                 [SKT_APP.COLUMN_MAPS.termine.Hinweis]: `Kein BT, Grund: ${noBtReason}`
             };
             success = await SKT_APP.seaTableUpdateRow('Termine', originalAtId, rowData);
         }
 
+        // NEU: Wenn eine Aktion (BT planen oder Kein BT) erfolgreich war, setze den Status des ursprünglichen AT auf "Gehalten".
+        if (success && selectedAction === 'plan_bt') {
+            const updateAtStatusData = { [SKT_APP.COLUMN_MAPS.termine.Status]: 'Gehalten' };
+            await SKT_APP.seaTableUpdateRow('Termine', originalAtId, updateAtStatusData);
+        }
+
         if (success) {
             await this.fetchAndRender();
+            // KORREKTUR: Body-Scroll wieder aktivieren, wenn das Modal geschlossen wird.
+            document.body.classList.remove('modal-open');
             this.btFollowUpModal.classList.remove('visible');
         } else {
             alert('Ein Fehler ist aufgetreten. Die Aktion konnte nicht gespeichert werden.');
