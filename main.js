@@ -4213,9 +4213,20 @@ class AppointmentsView {
                     }
                     const terminTime = termin.Datum ? new Date(termin.Datum).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
 
-                    return `<div class="p-1.5 rounded ${color} text-white text-xs mb-1.5 cursor-pointer" data-id="${termin._id}">
-                                <div class="flex justify-between items-center"><p class="font-bold truncate">${termin.Terminpartner || 'Unbekannt'}</p><div class="flex items-center gap-2"><span class="font-normal opacity-90">${terminTime}</span><button class="add-to-calendar-btn text-white opacity-80 hover:opacity-100" data-termin-id="${termin._id}" title="Zum Kalender hinzufügen"><i class="fas fa-calendar-plus"></i></button></div></div>
-                                <p class="opacity-80">${mitarbeiterName}</p>
+                    // NEU: Logik für Status-Farben und Kategorie-Bereich
+                    const statusColorClass = this._getStatusColorClass(termin).replace('border-l-4', 'border-').replace('bg-', 'border-');
+                    const categoryPillColor = categoryColors[termin.Kategorie] || 'bg-gray-400';
+
+                    return `<div class="rounded-lg shadow-sm bg-white text-skt-blue text-xs mb-1.5 flex overflow-hidden border border-gray-200 border-l-4 ${statusColorClass}" data-id="${termin._id}">
+                                <div class="flex-shrink-0 ${categoryPillColor} text-white font-bold flex items-center justify-center p-2 w-12 text-center">${termin.Kategorie}</div>
+                                <div class="flex-grow p-2 min-w-0 cursor-pointer">
+                                    <p class="font-bold truncate">${termin.Terminpartner || 'Unbekannt'}</p>
+                                    <p class="text-gray-500">${mitarbeiterName}</p>
+                                </div>
+                                <div class="add-to-calendar-btn flex flex-col items-center justify-center flex-shrink-0 p-2 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors" data-termin-id="${termin._id}" title="Zum Kalender hinzufügen">
+                                    <span class="font-semibold">${terminTime}</span>
+                                    <i class="fas fa-calendar-plus text-gray-400 mt-1"></i>
+                                </div>
                             </div>`;
                 }).join('');
             } else {
@@ -4264,7 +4275,15 @@ class AppointmentsView {
             `DTSTAMP:${toIcsDate(new Date())}`,
             `DTSTART:${toIcsDate(startDate)}`,
             `DTEND:${toIcsDate(endDate)}`,
-            `SUMMARY:Termin: ${termin.Terminpartner || 'Unbekannt'} (${termin.Kategorie})`,
+            `SUMMARY:${(() => {
+                let summary = `${termin.Kategorie} ${termin.Terminpartner || 'Unbekannt'}`;
+                const terminOwnerId = termin.Mitarbeiter_ID?.[0]?.row_id || termin.Mitarbeiter_ID;
+                if (terminOwnerId && terminOwnerId !== SKT_APP.authenticatedUserData._id) {
+                    const ownerName = termin.Mitarbeiter_ID?.[0]?.display_value || SKT_APP.findRowById('mitarbeiter', terminOwnerId)?.Name || 'Unbekannt';
+                    summary += ` (${ownerName})`;
+                }
+                return summary;
+            })()}`,
             `DESCRIPTION:Mitarbeiter: ${termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A'}\\nStatus: ${termin.Status}\\nHinweis: ${termin.Hinweis || ''}`,
             'END:VEVENT',
             'END:VCALENDAR'
