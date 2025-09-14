@@ -61,7 +61,8 @@ body {
 }
 
 html.modal-open, body.modal-open {
-    overflow: hidden;
+    overflow: hidden; /* Verhindert das Scrollen des Hintergrunds */
+    height: 100%; /* Wichtig für iOS, um das Scrollen zuverlässig zu blockieren */
 }
 
 .font-times-new-roman {
@@ -472,6 +473,7 @@ details[open] > summary::before { transform: rotate(180deg); }
     justify-content: center;
     z-index: 1000;
     opacity: 0;
+    padding: 1rem; /* Fügt einen Abstand hinzu, damit Modals nicht am Rand kleben */
     visibility: hidden;
     transition: opacity 0.3s ease, visibility 0.3s ease;
 }

@@ -3521,6 +3521,9 @@ class AppointmentsView {
             // KORREKTUR: Bei "Später entscheiden" wird das Modal geschlossen, OHNE den Status des AT zu ändern.
             // Die fetchAndRender() Funktion wird nicht aufgerufen, der alte Zustand bleibt.
             this.btFollowUpModal.classList.remove('visible');
+            // KORREKTUR: Body-Scroll wieder aktivieren, wenn das Modal geschlossen wird.
+            document.documentElement.classList.remove('modal-open');
+
         });
         this.btFollowUpModal.querySelectorAll('input[name="bt_follow_up_action"]').forEach(radio => {
             radio.addEventListener('change', (e) => {
@@ -5206,6 +5209,8 @@ class AppointmentsView {
             await this.fetchAndRender();
             // KORREKTUR: Body-Scroll wieder aktivieren, wenn das Modal geschlossen wird.
             document.body.classList.remove('modal-open');
+            // KORREKTUR: Body-Scroll wieder aktivieren, wenn das Modal geschlossen wird.
+            document.documentElement.classList.remove('modal-open');
             this.btFollowUpModal.classList.remove('visible');
         } else {
             alert('Ein Fehler ist aufgetreten. Die Aktion konnte nicht gespeichert werden.');
