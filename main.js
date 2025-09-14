@@ -1528,20 +1528,18 @@ function getAllSubordinatesRecursive(leaderId, hierarchy = buildHierarchy()) {  
 async function calculateGroupOrStructureData(
   leaderId,
   type = "gruppe",
-  fullDataStore // This parameter will now be ignored, but we keep it for now to avoid breaking other calls.
+  fullDataStore // This parameter contains pre-fetched data including earnings.
 ) {
   const leaderUser = findRowById("mitarbeiter", leaderId);
   if (!leaderUser) return { members: [] };
 
-  // NEUER ANSATZ: Wir definieren die Mitarbeiter für die Berechnung und holen ihre Daten frisch.  
-  // 'gruppe' = FK + ihre direkten Trainees/GAs.  
-  // 'struktur' = FK + ihre gesamte Downline (FKs und Trainees).  
   const subordinates = (type === 'gruppe') ? getSubordinates(leaderId, "gruppe") : getAllSubordinatesRecursive(leaderId);
   const membersForCalculation = [leaderUser, ...subordinates];
   const memberIdsForCalc = membersForCalculation.map(m => m._id);
 
-  // FRISCHE DATEN HOLEN: Anstatt auf `fullDataStore` zu vertrauen, holen wir die Daten für genau diese Mitarbeiter.
-  const dataForCalc = await fetchBulkDashboardData(memberIdsForCalc);
+  // KORREKTUR: Anstatt die Daten neu zu laden (was die Verdienste verlieren würde),
+  // verwenden wir den `fullDataStore`, der bereits alle benötigten Daten inklusive Verdienste enthält.
+  const dataForCalc = fullDataStore.filter(d => new Set(memberIdsForCalc).has(d.id));
 
   // Die Summen für die Gruppe berechnen.
   const aggregatedData = dataForCalc.reduce((acc, member) => {
@@ -1572,12 +1570,12 @@ async function calculateGroupOrStructureData(
   let memberData;
   const cacheKey = `subordinate-data-${leaderId}-${type}`;
 
-  if (type === 'struktur') {
+  if (type === 'struktur' && fullDataStore) { // KORREKTUR: Stelle sicher, dass fullDataStore vorhanden ist.
       const subordinateLeaders = subordinates.filter(isUserLeader);
       const subordinateLeaderIds = subordinateLeaders.map(leader => leader._id);
       
       // OPTIMIERUNG: Anstatt für jede FK einzeln die Gruppendaten zu berechnen,
-      // holen wir alle benötigten Daten auf einmal und berechnen die Gruppen im Frontend.
+      // filtern wir die benötigten Daten aus dem `fullDataStore` und berechnen die Gruppen im Frontend.
       // NEU: Wir holen auch die Daten der Unter-Untergebenen (Enkelkinder) für den Cache.
       const allGroupMemberIds = new Set(); // IDs der FKs und ihrer direkten Teams
       const allGrandchildIds = new Set(); // IDs der Teams der unterstellten FKs
@@ -1592,7 +1590,8 @@ async function calculateGroupOrStructureData(
           grandchildren.forEach(gc => allGrandchildIds.add(gc._id));
       });
 
-      const groupDataForDisplay = await fetchBulkDashboardData(Array.from(allGroupMemberIds));
+      // KORREKTUR: Nicht neu laden, sondern den bereits angereicherten `fullDataStore` verwenden.
+      const groupDataForDisplay = fullDataStore.filter(d => allGroupMemberIds.has(d.id));
 
       memberData = subordinateLeaders.map(leader => {
           const groupMembers = [leader, ...getSubordinates(leader._id, 'gruppe')];
@@ -1867,7 +1866,14 @@ function updateMonthlyPlanningView(data) {
     let earningsGoal = 0;
 
     if (data.earnings) {
-      if (isSuperuserView) {
+      if (currentPlanningView === "team" && !isSuperuserView) {
+        // KORREKTUR: Der Gruppen-Verdienst in der Ansicht ist die Summe aus persönlichem Verdienst und dem reinen Gruppen-Differenzverdienst.
+        earningsToShow = (data.earnings.personal || 0) + (data.earnings.group || 0);
+        const leaderRate = getVerdienstForPosition(personalData.position);
+        // Die Durchschnittsrate basiert auf dem Gesamtverdienst und dem Gesamtumsatz der Gruppe (inkl. Leiter).
+        const avgRate = data.ehCurrent > 0 ? earningsToShow / data.ehCurrent : leaderRate;
+        earningsGoal = data.ehGoal * avgRate;
+      } else if (isSuperuserView) {
         earningsToShow = data.earnings;
         const avgRate = data.ehCurrent > 0 ? data.earnings / data.ehCurrent : 0;
         earningsGoal = data.ehGoal * avgRate;
@@ -1875,11 +1881,6 @@ function updateMonthlyPlanningView(data) {
         earningsToShow = data.earnings.personal;
         const rate = getVerdienstForPosition(data.position);
         earningsGoal = data.ehGoal * rate;
-      } else if (currentPlanningView === "team") {
-        earningsToShow = data.earnings.group;
-        const leaderRate = getVerdienstForPosition(personalData.position);
-        const avgRate = data.ehCurrent > 0 ? data.earnings.group / data.ehCurrent : leaderRate;
-        earningsGoal = data.ehGoal * avgRate;
       } else if (currentPlanningView === "struktur") {
         earningsToShow = data.earnings.structure;
         const leaderRate = getVerdienstForPosition(personalData.position);
@@ -7459,74 +7460,145 @@ function getVerdienstForPosition(position) {
 }
 
 async function calculateAllStructureEarnings(memberIds, startDate, endDate) {
-  const earningsMap = {};
-  if (memberIds.length === 0) return earningsMap;
+    const earningsMap = {};
+    if (memberIds.length === 0) return earningsMap;
 
-  const startDateIso = startDate.toISOString().split("T")[0];
-  const endDateIso = endDate.toISOString().split("T")[0];
+    const startDateIso = startDate.toISOString().split("T")[0];
+    const endDateIso = endDate.toISOString().split("T")[0];
 
-  const turnoverQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`turnover\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' GROUP BY \`Mitarbeiter_ID\``;
+    const turnoverQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`turnover\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' GROUP BY \`Mitarbeiter_ID\``;
 
-  const turnoverResultsRaw = await seaTableSqlQuery(turnoverQuery, false);
-  const allTurnovers = mapSqlResults(turnoverResultsRaw, "Umsatz");
+    const turnoverResultsRaw = await seaTableSqlQuery(turnoverQuery, false);
+    const allTurnovers = mapSqlResults(turnoverResultsRaw, "Umsatz");
 
-  const getTurnoverForMember = (memberId) => {
-    const result = allTurnovers.find(
-      (s) =>
-        s.Mitarbeiter_ID &&
-        Array.isArray(s.Mitarbeiter_ID) &&
-        s.Mitarbeiter_ID[0] &&
-        s.Mitarbeiter_ID[0].row_id === memberId
-    );
-    return result?.turnover || 0;
-  };
-
-  const hierarchy = buildHierarchy();
-
-  for (const leaderId of memberIds) {
-    const leader = findRowById("mitarbeiter", leaderId);
-    if (!leader || !leader.Name) {
-      earningsMap[leaderId] = { personal: 0, group: 0, structure: 0 };
-      continue;
-    }
-
-    const leaderRate = getVerdienstForPosition(leader.Karrierestufe);
-    const leaderTurnover = getTurnoverForMember(leaderId);
-
-    const personalEarnings = leaderTurnover * leaderRate;
-    let groupEarnings = personalEarnings;
-    let structureEarnings = personalEarnings;
-
-    const directSubordinates = (hierarchy[leaderId]?.children || [])
-      .map((id) => findRowById("mitarbeiter", id))
-      .filter(Boolean);
-
-    directSubordinates.forEach((sub) => {
-      const subRate = getVerdienstForPosition(sub.Karrierestufe);
-      const differentialRate = leaderRate - subRate;
-
-      if (differentialRate > 0) {
-        const subAndHisTeam = [sub, ...getAllSubordinatesRecursive(sub._id)];
-        const subStructureTurnover = subAndHisTeam.reduce(
-          (total, currentMember) =>
-            total + getTurnoverForMember(currentMember._id),
-          0
+    const getTurnoverForMember = (memberId) => {
+        const result = allTurnovers.find(
+            (s) =>
+            s.Mitarbeiter_ID &&
+            Array.isArray(s.Mitarbeiter_ID) &&
+            s.Mitarbeiter_ID[0] &&
+            s.Mitarbeiter_ID[0].row_id === memberId
         );
-        const differentialEarning = subStructureTurnover * differentialRate;
-        structureEarnings += differentialEarning;
-        if (!isUserLeader(sub)) {
-          groupEarnings += differentialEarning;
-        }
-      }
-    });
-
-    earningsMap[leaderId] = {
-      personal: personalEarnings,
-      group: groupEarnings,
-      structure: structureEarnings,
+        return result?.turnover || 0;
     };
-  }
-  return earningsMap;
+    const hierarchy = buildHierarchy();
+
+    const earningsLog = (message, ...data) => console.log(`%c[EarningsCalc] %c${message}`, 'color: #17a2b8; font-weight: bold;', 'color: black;', ...data);
+
+    for (const leaderId of memberIds) {
+        const leader = findRowById("mitarbeiter", leaderId);
+        if (!leader || !leader.Name) {
+            earningsMap[leaderId] = { personal: 0, group: 0, structure: 0 };
+            continue;
+        }
+
+        if (leader.Status === 'Ausgeschieden') {
+            earningsMap[leaderId] = { personal: 0, group: 0, structure: 0 };
+            continue;
+        }
+
+        const leaderRate = getVerdienstForPosition(leader.Karrierestufe);
+        earningsLog(`--- Berechnung für ${leader.Name} (Satz: ${leaderRate}€) ---`);
+
+        const leaderTurnover = getTurnoverForMember(leaderId);
+        const personalEarnings = leaderTurnover * leaderRate;
+        earningsLog(`Persönlicher Umsatz: ${leaderTurnover.toFixed(2)} EH * ${leaderRate}€ = ${personalEarnings.toFixed(2)}€`);
+
+        let groupEarnings = 0;
+        let structureEarnings = personalEarnings;
+
+        // NEU: Logik, um inaktive Führungskräfte zu "überspringen" und deren
+        // direkte Untergebene für die Provisionsberechnung an die nächsthöhere aktive FK zu hängen.
+        const subordinatesToProcess = [];
+        const queue = [...(hierarchy[leaderId]?.children || [])];
+        const visited = new Set(queue);
+
+        while (queue.length > 0) {
+            const currentId = queue.shift();
+            const user = findRowById("mitarbeiter", currentId);
+            if (!user) continue;
+
+            if (user.Status !== 'Ausgeschieden') {
+                subordinatesToProcess.push(user);
+            } else {
+                // Inaktiver Mitarbeiter: Füge dessen Kinder zur Warteschlange hinzu,
+                // um sie als direkte Untergebene des aktuellen Leaders zu behandeln.
+                earningsLog(`  -> Überspringe inaktiven Mitarbeiter: ${user.Name}. Prüfe dessen Untergebene...`);
+                const node = hierarchy[currentId];
+                if (node) {
+                    node.children.forEach(childId => {
+                        if (!visited.has(childId)) {
+                            queue.push(childId);
+                            visited.add(childId);
+                        }
+                    });
+                }
+            }
+        }
+
+        if (subordinatesToProcess.length > 0) {
+            earningsLog(`Analysiere ${subordinatesToProcess.length} effektive direkte Untergebene...`);
+        }
+
+        subordinatesToProcess.forEach((sub, index) => {
+            const subRate = getVerdienstForPosition(sub.Karrierestufe);
+            const differentialRate = leaderRate - subRate;
+
+            earningsLog(`  [${index + 1}] ${sub.Name} (Satz: ${subRate}€)`);
+
+            if (differentialRate > 0) {
+                earningsLog(`      -> Differenzsatz: ${leaderRate}€ - ${subRate}€ = ${differentialRate}€`);
+
+                const subAndHisTeam = [sub, ...getAllSubordinatesRecursive(sub._id)]
+                    .filter(m => m.Status !== 'Ausgeschieden');
+
+                earningsLog(`      -> Team-Umsatz von '${sub.Name}':`);
+
+                const subStructureTurnover = subAndHisTeam.reduce(
+                    (total, currentMember) => {
+                        const memberTurnover = getTurnoverForMember(currentMember._id);
+                        if (memberTurnover > 0) {
+                            earningsLog(`         - ${currentMember.Name}: ${memberTurnover.toFixed(2)} EH`);
+                        }
+                        return total + memberTurnover;
+                    }, 0
+                );
+
+                if (subStructureTurnover > 0) {
+                    earningsLog(`      -> Gesamt-Team-Umsatz: ${subStructureTurnover.toFixed(2)} EH`);
+                    const differentialEarning = subStructureTurnover * differentialRate;
+                    earningsLog(`      -> Differenzverdienst: ${subStructureTurnover.toFixed(2)} EH * ${differentialRate}€ = ${differentialEarning.toFixed(2)}€`);
+
+                    structureEarnings += differentialEarning;
+
+                    if (!isUserLeader(sub)) {
+                        groupEarnings += differentialEarning;
+                        earningsLog(`      => +${differentialEarning.toFixed(2)}€ zum Gruppen- & Strukturverdienst (da Trainee)`);
+                    } else {
+                        earningsLog(`      => +${differentialEarning.toFixed(2)}€ zum Strukturverdienst (da FK)`);
+                    }
+                } else {
+                    earningsLog(`      -> Gesamt-Team-Umsatz: 0 EH. Kein Differenzverdienst.`);
+                }
+            } else {
+                earningsLog(`      -> Kein Differenzsatz (${differentialRate.toFixed(0)}€). Kein Differenzverdienst.`);
+            }
+        });
+
+        earningsMap[leaderId] = {
+            personal: personalEarnings,
+            group: groupEarnings,
+            structure: structureEarnings,
+        };
+
+        earningsLog(`--- Endergebnis für ${leader.Name} ---`);
+        earningsLog(`Persönlicher Verdienst: ${personalEarnings.toFixed(2)} €`);
+        const totalGroupEarningsForView = personalEarnings + groupEarnings;
+        earningsLog(`Gruppenverdienst (reiner Differenzverdienst): ${groupEarnings.toFixed(2)} €`);
+        earningsLog(`Strukturverdienst (Gesamtwert für Ansicht): ${structureEarnings.toFixed(2)} €`);
+        earningsLog(`(Info für Anzeige 'Gruppe'): Persönlich (${personalEarnings.toFixed(2)}€) + Gruppe (${groupEarnings.toFixed(2)}€) = ${totalGroupEarningsForView.toFixed(2)}€`);
+    }
+    return earningsMap;
 }
 
 async function checkAndApplyAutomaticPromotion(mitarbeiterId, totalEh) {
