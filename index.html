@@ -151,7 +151,7 @@
             <div id="dashboard-sections" class="space-y-12 opacity-0 transition-opacity duration-500">
                 <section id="monthly-planning-view" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
                     <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
-                        <h2 id="monthly-planning-title" class="text-2xl font-semibold text-skt-blue">Monatsplanung</h2>
+                        <h2 id="monthly-planning-title" class="text-2xl font-semibold text-skt-blue text-center sm:text-left">Monatsplanung</h2>
                         <div id="planning-view-toggle" class="view-toggle hidden flex w-full sm:w-auto space-x-2">
                             <button id="struktur-view-btn" class="flex-1">Struktur</button>
                             <button id="team-view-btn" class="active flex-1">Gruppe</button>
@@ -450,6 +450,14 @@
                 <div><label for="appointment-note" class="block text-sm font-medium text-gray-700">Hinweis</label><textarea id="appointment-note" rows="3" class="modern-input"></textarea></div>
                 <div class="flex items-center space-x-3 pt-2"><label for="appointment-cancellation" class="toggle-switch cancellation-toggle"><input type="checkbox" id="appointment-cancellation" class="sr-only peer"><div class="toggle-slider"></div></label><label for="appointment-cancellation" class="text-sm font-medium text-gray-700">Absage/Storno</label></div>
                 <div id="appointment-cancellation-reason-container" class="hidden"><label for="appointment-cancellation-reason" class="block text-sm font-medium text-gray-700">Absagegrund</label><textarea id="appointment-cancellation-reason" rows="2" class="modern-input"></textarea></div>
+                <!-- NEU: iCal Download Checkbox -->
+                <div class="flex items-center space-x-3 pt-2">
+                    <label for="appointment-download-ical" class="toggle-switch">
+                        <input type="checkbox" id="appointment-download-ical" class="sr-only peer" checked>
+                        <div class="toggle-slider"></div>
+                    </label>
+                    <label for="appointment-download-ical" class="text-sm font-medium text-gray-700">iCal-Datei nach Speichern herunterladen</label>
+                </div>
                 <div class="pt-4 flex justify-end items-center gap-4"><div class="flex space-x-3"><button type="button" id="cancel-appointment-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button><button type="submit" id="save-appointment-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors flex items-center justify-center" style="min-width: 110px; min-height: 42px;"><span id="save-btn-text">Speichern</span><div class="loader-small hidden"></div></button></div></div>
             </form>
         </div>

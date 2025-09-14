@@ -474,7 +474,7 @@ async function seaTableUpdateRow(tableName, rowId, rowData) {
       }
     }
   }
-  return allUpdatesSucceeded;
+  return allUpdatesSucceeded ? rowId : false;
 }
 
 async function seaTableUpdateLinkField(terminRowId, mitarbeiterRowId) {
@@ -608,8 +608,8 @@ async function seaTableAddRow(tableName, rowData) {
     console.log("[ADD-ROW-NEW] Step 2 Success: Employee linked.");
   }
 
-  console.log("[ADD-ROW-NEW] Process finished successfully.");
-  return true;
+  console.log(`[ADD-ROW-NEW] Process finished successfully. Returning new row ID: ${newRowId}`);
+  return newRowId;
 }
 
 async function updateSingleLink(baseTableName, baseRowId, linkColumnName, otherRowIds) {
@@ -4377,8 +4377,8 @@ class AppointmentsView {
             const tr = document.createElement('tr');
             tr.className = 'cursor-pointer';
             tr.dataset.id = termin._id;
-            const categoryColorClass = this._getCategoryColorClass(termin.Kategorie);
-            tr.className = `border-l-4 ${categoryColorClass} cursor-pointer`; // Behält die linke Randfarbe bei
+            const categoryColorClass = this._getCategoryColorClass(termin.Kategorie); // KORREKTUR: Rand prominenter machen
+            tr.className = `border-l-8 ${categoryColorClass} cursor-pointer`; // Behält die linke Randfarbe bei
             
             // KORREKTUR: Der Mitarbeitername wird aus dem verknüpften Objekt ausgelesen, das von der API kommt.
             const mitarbeiterName = termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
@@ -4614,8 +4614,8 @@ class AppointmentsView {
          termine.forEach(t => {
              const tr = document.createElement('tr');
              // NEU: Zeilen nach Status einfärben
-             const statusBorderClass = this._getStatusColorClass(t);
-             tr.className = `border-l-4 ${statusBorderClass} cursor-pointer`;
+             const statusBorderClass = this._getStatusColorClass(t); // KORREKTUR: Rand prominenter machen
+             tr.className = `border-l-8 ${statusBorderClass} cursor-pointer`;
              tr.dataset.id = t._id;
  
              const mitarbeiter = db.mitarbeiter.find(m => m._id === t.Mitarbeiter_ID);
@@ -5067,29 +5067,36 @@ class AppointmentsView {
                 [SKT_APP.COLUMN_MAPS.termine.Infoabend]: kategorie === 'ET' ? infoabend : null,
             };
 
-            appointmentsLog('Constructed rowData object for API:', JSON.parse(JSON.stringify(rowData)));
-
-            const success = rowId 
+            const terminId = rowId 
                 ? await SKT_APP.seaTableUpdateRow('Termine', rowId, rowData)
                 : await SKT_APP.seaTableAddRow('Termine', rowData);
 
-            appointmentsLog(`API call finished. Success: ${success ? 'true' : 'false'}`);
+            appointmentsLog(`API call finished. Termin ID: ${terminId}`);
 
-            if (success) {
+            if (terminId) {
                 appointmentsLog('API call successful. Showing success message and refreshing.');
                 
+                // NEU: iCal-Download-Logik
+                const downloadIcalCheckbox = this.form.querySelector('#appointment-download-ical');
+                if (downloadIcalCheckbox.checked && isNewAppointment) {
+                    // Wir müssen die Daten neu laden, damit der neue Termin in `this.allAppointments` ist.
+                    await this.fetchAndRender();
+                    this._addToCalendar(terminId);
+                } else {
+                    // Wenn kein Download, einfach nur neu laden.
+                    await this.fetchAndRender();
+                }
+
                 saveBtnText.textContent = 'Gespeichert!';
                 saveBtnLoader.classList.add('hidden');
                 saveBtnText.classList.remove('hidden');
                 saveBtn.classList.remove('bg-skt-blue', 'hover:bg-skt-blue-light');
                 saveBtn.classList.add('bg-skt-green-accent');
 
-                // NEU: Wenn AT auf "Gehalten" gesetzt wurde, öffne das Folge-Modal NACH dem Speichern.
                 if (isAtGehalten) {
                     this._openBtFollowUpModal(originalTermin);
-                    return; // Beende hier, das Hauptmodal wird vom Folge-Modal geschlossen
+                    return;
                 }
-                await this.fetchAndRender();
                 setTimeout(() => this.closeModal(), 1500);
 
             } else {
@@ -7894,8 +7901,6 @@ async function calculateAllStructureEarnings(memberIds, startDate, endDate) {
     };
     const hierarchy = buildHierarchy();
 
-    const earningsLog = (message, ...data) => console.log(`%c[EarningsCalc] %c${message}`, 'color: #17a2b8; font-weight: bold;', 'color: black;', ...data);
-
     for (const leaderId of memberIds) {
         const leader = findRowById("mitarbeiter", leaderId);
         if (!leader || !leader.Name) {
@@ -7909,11 +7914,9 @@ async function calculateAllStructureEarnings(memberIds, startDate, endDate) {
         }
 
         const leaderRate = getVerdienstForPosition(leader.Karrierestufe);
-        earningsLog(`--- Berechnung für ${leader.Name} (Satz: ${leaderRate}€) ---`);
 
         const leaderTurnover = getTurnoverForMember(leaderId);
         const personalEarnings = leaderTurnover * leaderRate;
-        earningsLog(`Persönlicher Umsatz: ${leaderTurnover.toFixed(2)} EH * ${leaderRate}€ = ${personalEarnings.toFixed(2)}€`);
 
         let groupEarnings = 0;
         let structureEarnings = personalEarnings;
@@ -7934,7 +7937,6 @@ async function calculateAllStructureEarnings(memberIds, startDate, endDate) {
             } else {
                 // Inaktiver Mitarbeiter: Füge dessen Kinder zur Warteschlange hinzu,
                 // um sie als direkte Untergebene des aktuellen Leaders zu behandeln.
-                earningsLog(`  -> Überspringe inaktiven Mitarbeiter: ${user.Name}. Prüfe dessen Untergebene...`);
                 const node = hierarchy[currentId];
                 if (node) {
                     node.children.forEach(childId => {
@@ -7948,51 +7950,33 @@ async function calculateAllStructureEarnings(memberIds, startDate, endDate) {
         }
 
         if (subordinatesToProcess.length > 0) {
-            earningsLog(`Analysiere ${subordinatesToProcess.length} effektive direkte Untergebene...`);
+            // Placeholder for potential future logging
         }
 
         subordinatesToProcess.forEach((sub, index) => {
             const subRate = getVerdienstForPosition(sub.Karrierestufe);
             const differentialRate = leaderRate - subRate;
 
-            earningsLog(`  [${index + 1}] ${sub.Name} (Satz: ${subRate}€)`);
-
             if (differentialRate > 0) {
-                earningsLog(`      -> Differenzsatz: ${leaderRate}€ - ${subRate}€ = ${differentialRate}€`);
-
                 const subAndHisTeam = [sub, ...getAllSubordinatesRecursive(sub._id)]
                     .filter(m => m.Status !== 'Ausgeschieden');
-
-                earningsLog(`      -> Team-Umsatz von '${sub.Name}':`);
 
                 const subStructureTurnover = subAndHisTeam.reduce(
                     (total, currentMember) => {
                         const memberTurnover = getTurnoverForMember(currentMember._id);
-                        if (memberTurnover > 0) {
-                            earningsLog(`         - ${currentMember.Name}: ${memberTurnover.toFixed(2)} EH`);
-                        }
                         return total + memberTurnover;
                     }, 0
                 );
 
                 if (subStructureTurnover > 0) {
-                    earningsLog(`      -> Gesamt-Team-Umsatz: ${subStructureTurnover.toFixed(2)} EH`);
                     const differentialEarning = subStructureTurnover * differentialRate;
-                    earningsLog(`      -> Differenzverdienst: ${subStructureTurnover.toFixed(2)} EH * ${differentialRate}€ = ${differentialEarning.toFixed(2)}€`);
 
                     structureEarnings += differentialEarning;
 
                     if (!isUserLeader(sub)) {
                         groupEarnings += differentialEarning;
-                        earningsLog(`      => +${differentialEarning.toFixed(2)}€ zum Gruppen- & Strukturverdienst (da Trainee)`);
-                    } else {
-                        earningsLog(`      => +${differentialEarning.toFixed(2)}€ zum Strukturverdienst (da FK)`);
                     }
-                } else {
-                    earningsLog(`      -> Gesamt-Team-Umsatz: 0 EH. Kein Differenzverdienst.`);
                 }
-            } else {
-                earningsLog(`      -> Kein Differenzsatz (${differentialRate.toFixed(0)}€). Kein Differenzverdienst.`);
             }
         });
 
@@ -8001,13 +7985,6 @@ async function calculateAllStructureEarnings(memberIds, startDate, endDate) {
             group: groupEarnings,
             structure: structureEarnings,
         };
-
-        earningsLog(`--- Endergebnis für ${leader.Name} ---`);
-        earningsLog(`Persönlicher Verdienst: ${personalEarnings.toFixed(2)} €`);
-        const totalGroupEarningsForView = personalEarnings + groupEarnings;
-        earningsLog(`Gruppenverdienst (reiner Differenzverdienst): ${groupEarnings.toFixed(2)} €`);
-        earningsLog(`Strukturverdienst (Gesamtwert für Ansicht): ${structureEarnings.toFixed(2)} €`);
-        earningsLog(`(Info für Anzeige 'Gruppe'): Persönlich (${personalEarnings.toFixed(2)}€) + Gruppe (${groupEarnings.toFixed(2)}€) = ${totalGroupEarningsForView.toFixed(2)}€`);
     }
     return earningsMap;
 }
