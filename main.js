@@ -2212,7 +2212,7 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
     const atPercentage = member.atGoal > 0 ? (member.atVereinbart / member.atGoal) * 100 : 0;
     const ehColorClass = getProgressColorClass(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle);
     // ENTFERNT: Prognose wird nicht mehr angezeigt.
-    
+
     // NEU: Indikator für offene Statusänderungen
     let outstandingAppointmentsHtml = '';
     if (member.outstandingAppointmentsCount > 0) {
@@ -2227,7 +2227,7 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
     const ehGoal = isMoneyView ? 0 : member.ehGoal;
     const ehUnit = isMoneyView ? "Verdienst" : "Einheiten";
     const ehDisplayValue = isMoneyView ?
-        ehValue.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }) :
+        ehValue.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }) : // This part is for money view
         `${ehValue.toLocaleString("de-DE", {
             maximumFractionDigits: 0,
           })} / ${ehGoal.toLocaleString("de-DE", { maximumFractionDigits: 0 })}`;
@@ -2252,53 +2252,59 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
             </div>
             <div class="flex items-center space-x-3">
                  ${outstandingAppointmentsHtml}
-                 <button data-userid="${member.id}" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button>
                  <button data-userid="${member.id}" class="calendar-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Termine anzeigen"><i class="fas fa-calendar-alt"></i></button>
                  <i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i>
             </div>
         </div>
         
-        <div class="mt-4 px-2 space-y-4">
-            <!-- EH Bar -->
-            ${!isMoneyView ? `
-            <div>
-                <div class="flex justify-between items-baseline text-xs">
-                    <p class="text-skt-blue-light">${ehUnit}</p>
-                    <p class="font-semibold text-skt-blue">${ehDisplayValue}</p>
+        <div class="mt-4 px-2 flex flex-col items-center space-y-4">
+            <!-- EH Circle -->
+            <div class="flex flex-col items-center justify-center">
+                <div class="relative w-28 h-28">
+                    <svg class="team-progress-circle w-full h-full" viewBox="0 0 100 100">
+                        <circle class="bg-circle" cx="50" cy="50" r="40"></circle>
+                        <circle class="progress-arc" cx="50" cy="50" r="40" style="stroke-dasharray: 251.2, 251.2; stroke-dashoffset: ${251.2 - (Math.min(ehPercentage, 100) / 100) * 251.2}; stroke: ${getProgressColorHex(member.ehCurrent, member.ehGoal, totalDaysInCycle, daysPassedInCycle)};"></circle>
+                    </svg>
+                    <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                        <span class="text-xl font-bold text-skt-blue">${member.ehCurrent.toLocaleString('de-DE', {maximumFractionDigits: 0})}</span>
+                        <div class="h-px w-10 bg-skt-grey-medium my-0.5"></div>
+                        <span class="text-sm text-skt-blue-light">${member.ehGoal.toLocaleString('de-DE', {maximumFractionDigits: 0})}</span>
+                    </div>
                 </div>
-                <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1 relative">
-                    <div class="h-full ${ehColorClass}" style="width: ${Math.min(ehPercentage, 100)}%;"></div>
-                    <div class="absolute top-[-2px] h-4 w-[2px] ml-[-1px] bg-skt-red-accent" style="left: ${timeElapsedPercentage}%;" data-tooltip="Soll-Fortschritt"></div>
-                </div>
-            </div>` : `
-            <div>
-                <div class="flex justify-between items-baseline text-xs">
-                    <p class="text-skt-blue-light">${ehUnit}</p>
-                    <p class="font-semibold text-skt-blue">${ehDisplayValue}</p>
-                </div>
+                <p class="text-xs text-skt-blue-light mt-1">${ehUnit}</p>
             </div>
-            `}
-            <!-- AT Bar -->
-            <div>
-                <div class="flex justify-between items-baseline text-xs">
-                    <p class="text-skt-blue-light">AT Termine (Ausgem.)</p>
-                    <p class="font-semibold text-skt-blue">${member.atVereinbart} / ${member.atGoal}</p>
+
+            <!-- AT and ET Bars -->
+            <div class="w-full space-y-4 flex flex-col justify-center">
+                ${isMoneyView ? `
+                    <div>
+                        <p class="text-skt-blue-light text-xs">${ehUnit}</p>
+                        <p class="font-semibold text-skt-blue text-lg">${ehDisplayValue}</p>
+                    </div>
+                ` : `
+                <!-- AT Bar -->
+                <div>
+                    <div class="flex justify-between items-baseline text-xs">
+                        <p class="text-skt-blue-light">AT Termine (Ausgem.)</p>
+                        <p class="font-semibold text-skt-blue">${member.atVereinbart} / ${member.atGoal}</p>
+                    </div>
+                    <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1 relative">
+                        <div class="h-full bg-skt-yellow-accent" style="width: ${Math.min(atPercentage, 100)}%;"></div>
+                        <div class="absolute top-[-2px] h-4 w-[2px] ml-[-1px] bg-skt-red-accent" style="left: ${timeElapsedPercentage}%;" data-tooltip="Soll-Fortschritt"></div>
+                    </div>
                 </div>
-                <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1 relative">
-                    <div class="h-full bg-skt-yellow-accent" style="width: ${Math.min(atPercentage, 100)}%;"></div>
-                    <div class="absolute top-[-2px] h-4 w-[2px] ml-[-1px] bg-skt-red-accent" style="left: ${timeElapsedPercentage}%;" data-tooltip="Soll-Fortschritt"></div>
+                <!-- ET Bar -->
+                <div>
+                    <div class="flex justify-between items-baseline text-xs">
+                        <p class="text-skt-blue-light">ET Termine</p>
+                        <p class="font-semibold text-skt-blue">${member.etCurrent} / ${member.etGoal}</p>
+                    </div>
+                    <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1 relative">
+                        <div class="h-full bg-skt-green-accent" style="width: ${Math.min(etPercentage, 100)}%;"></div>
+                        <div class="absolute top-[-2px] h-4 w-[2px] ml-[-1px] bg-skt-red-accent" style="left: ${etTimeElapsedPercentage}%;" data-tooltip="Soll-Fortschritt"></div>
+                    </div>
                 </div>
-            </div>
-            <!-- ET Bar -->
-            <div>
-                <div class="flex justify-between items-baseline text-xs">
-                    <p class="text-skt-blue-light">ET Termine</p>
-                    <p class="font-semibold text-skt-blue">${member.etCurrent} / ${member.etGoal}</p>
-                </div>
-                <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1 relative">
-                    <div class="h-full bg-skt-green-accent" style="width: ${Math.min(etPercentage, 100)}%;"></div>
-                    <div class="absolute top-[-2px] h-4 w-[2px] ml-[-1px] bg-skt-red-accent" style="left: ${etTimeElapsedPercentage}%;" data-tooltip="Soll-Fortschritt"></div>
-                </div>
+                `}
             </div>
         </div>
     `;
@@ -2324,22 +2330,15 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
     // KORREKTUR: Die Ausklapp-Funktion nur für Führungskräfte aktivieren.
     // Trainees in der Gruppenansicht haben keine unterstellten Mitarbeiter, die angezeigt werden könnten.
     const isLeader = member.position && !member.position.toLowerCase().includes('trainee');
-    if (isLeader) {
-        summary.addEventListener('click', (e) => { if (!e.target.closest('.switch-view-btn')) { details.classList.toggle('open'); summary.classList.toggle('open'); } });
-    } else {
-        summary.querySelector('.chevron-icon').classList.add('hidden'); // Pfeil ausblenden
-    }
-
-    summary.querySelector('.switch-view-btn').addEventListener('click', (e) => { 
-        e.stopPropagation();
-        const newuserId = e.currentTarget.dataset.userid;
-        if (newuserId) {
-            viewHistory.push(newuserId);
-            fetchAndRenderDashboard(newuserId);
+    summary.addEventListener('click', (e) => {
+        if (e.target.closest('.calendar-view-btn')) return; // Klick auf Kalender-Button ignorieren
+        if (isLeader && e.target.closest('.chevron-icon')) {
+            details.classList.toggle('open');
+            summary.classList.toggle('open');
+            return;
         }
+        fetchAndRenderDashboard(member.id);
     });
-
-    // NEU: Event-Listener für den Kalender-Button
     const calendarBtnGrid = summary.querySelector('.calendar-view-btn');
     if (calendarBtnGrid) {
         calendarBtnGrid.addEventListener('click', (e) => {
@@ -2364,6 +2363,10 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
                 switchView('appointments');
             }
         });
+    }
+
+    if (!isLeader) {
+        summary.querySelector('.chevron-icon').classList.add('hidden'); // Pfeil für Trainees ausblenden
     }
 
     // KORREKTUR: Logik zum Laden der Untergebenen nur für Führungskräfte hinzufügen.
@@ -2445,9 +2448,7 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
 
     summary.innerHTML = `<div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-skt-blue text-lg break-words">${
         member.leaderName || member.name
-    }</p>${positionHtml}</div><div class="flex items-center space-x-3 flex-shrink-0">${outstandingAppointmentsHtml}<button data-userid="${member.id}" class="calendar-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Termine anzeigen"><i class="fas fa-calendar-alt"></i></button><button data-userid="${
-        member.id
-    }" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button><i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i></div></div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">${ehUnit}</p><p class="text-xs font-semibold text-skt-blue">${ehDisplayValue} ${ehGoalDisplay}</p></div>${
+    }</p>${positionHtml}</div><div class="flex items-center space-x-3 flex-shrink-0">${outstandingAppointmentsHtml}<button data-userid="${member.id}" class="calendar-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Termine anzeigen"><i class="fas fa-calendar-alt"></i></button><i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i></div></div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">${ehUnit}</p><p class="text-xs font-semibold text-skt-blue">${ehDisplayValue} ${ehGoalDisplay}</p></div>${
         !isMoneyView
         ? `<div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1 relative">
             <div class="h-full ${ehColorClass}" style="width: ${Math.min(ehPercentage, 100)}%;"></div>
@@ -2490,34 +2491,27 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
 
     // KORREKTUR: Die Ausklapp-Funktion nur für Führungskräfte aktivieren.
     const isLeader = member.position && !member.position.toLowerCase().includes('trainee');
-    if (isLeader) {
-        summary.addEventListener("click", (e) => {
-            if (!e.target.closest(".switch-view-btn")) {
-                details.classList.toggle("open");
-                summary.classList.toggle("open");
-            }
-        });
-    } else {
-        summary.querySelector('.chevron-icon').classList.add('hidden'); // Pfeil ausblenden
-    }
+    summary.addEventListener('click', (e) => {
+        if (e.target.closest('.calendar-view-btn')) return; // Klick auf Kalender-Button ignorieren
+        if (isLeader && e.target.closest('.chevron-icon')) {
+            details.classList.toggle('open');
+            summary.classList.toggle('open');
+            return;
+        }
+        fetchAndRenderDashboard(member.id);
+    });
 
     // KORREKTUR: Logik zum Laden der Untergebenen nur für Führungskräfte hinzufügen.
     if (isLeader) {
         summary.addEventListener('click', async (e) => {
-            if (e.target.closest('.switch-view-btn')) return;
+            if (e.target.closest('.calendar-view-btn')) return;
             if (details.classList.contains('open') && !details.dataset.loaded) {
                 await renderSubordinatesForLeader(member.id, details);
             }
         });
+    } else {
+        summary.querySelector('.chevron-icon').classList.add('hidden'); // Pfeil für Trainees ausblenden
     }
-    summary.querySelector(".switch-view-btn").addEventListener("click", (e) => {
-        e.stopPropagation();
-        const newuserId = e.currentTarget.dataset.userid;
-        if (newuserId) {
-        viewHistory.push(newuserId);
-        fetchAndRenderDashboard(newuserId);
-        }
-    });
 
     // NEU: Event-Listener für den Kalender-Button
     const calendarBtnList = summary.querySelector('.calendar-view-btn');
@@ -2633,6 +2627,10 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
   // KORREKTUR: Verwende die robustere isUserLeader-Funktion, um zu bestimmen, ob die Führungsansicht angezeigt werden soll.
   const isLeader = isUserLeader(user);
   // NEU: Lade die bevorzugte Ansicht aus dem Speicher
+
+  // NEU: "Neuen Nutzer anlegen"-Button nur für Führungskräfte anzeigen
+  dom.addNewUserBtn.classList.toggle('hidden', !isLeader);
+
   currentPlanningView = loadUiSetting('dashboardPlanningView', isLeader ? 'team' : 'personal');
   if (!isLeader) {
       currentPlanningView = 'personal'; // Erzwinge persönliche Ansicht für Nicht-Führungskräfte
@@ -8874,8 +8872,10 @@ function openAddUserModal() {
     clearChildren(werberSelect);
     clearChildren(bueroSelect);
 
-    const usersForWerber = [...db.mitarbeiter.filter(m => m.Status !== 'Ausgeschieden')].sort((a, b) => a.Name.localeCompare(b.Name));
-    usersForWerber.forEach(user => {
+    // KORREKTUR: Werber-Auswahl auf die eigene Struktur begrenzen.
+    const structureUsers = [authenticatedUserData, ...getAllSubordinatesRecursive(authenticatedUserData._id)];
+    structureUsers.sort((a, b) => a.Name.localeCompare(b.Name));
+    structureUsers.forEach(user => {
         werberSelect.add(new Option(user.Name, user._id));
     });
 
@@ -9255,7 +9255,9 @@ class DatenschutzView {
                 });
 
                 // 4. Wechsle zurück zur Dashboard-Ansicht
-                switchView('dashboard');
+                // KORREKTUR: Rufe fetchAndRenderDashboard auf, um die Ansicht korrekt zu laden.
+                // switchView allein rendert den Inhalt nicht neu.
+                await fetchAndRenderDashboard(authenticatedUserData._id);
             } else {
                 alert('Fehler beim Speichern der Zustimmung. Bitte versuchen Sie es erneut.');
                 acceptBtn.disabled = false;
