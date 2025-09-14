@@ -431,15 +431,22 @@
             <form id="appointment-form" class="space-y-4">
                 <input type="hidden" id="appointment-id">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="col-span-1 md:col-span-2 grid grid-cols-2 gap-4">
                     <div><label for="appointment-user" class="block text-sm font-medium text-gray-700 mb-1">Mitarbeiter</label><select id="appointment-user" required class="modern-select"></select></div>
                     <div><label for="appointment-date" class="block text-sm font-medium text-gray-700 mb-1">Datum & Uhrzeit</label><div class="input-wrapper"><input type="datetime-local" id="appointment-date" required class="modern-input w-full"></div></div>
                     <div><label for="appointment-category" class="block text-sm font-medium text-gray-700 mb-1">Kategorie</label><select id="appointment-category" required class="modern-select"></select></div>
                     <div><label for="appointment-status" class="block text-sm font-medium text-gray-700 mb-1">Status</label><select id="appointment-status" required class="modern-select"></select></div>
                 </div>
-                <div><label for="appointment-partner" class="block text-sm font-medium text-gray-700">Kunde, Bewerber,...</label><input type="text" id="appointment-partner" class="modern-input"></div>
+            </div>
+            <div id="appointment-partner-referrals-grid" class="grid grid-cols-2 gap-4">
+                <div id="appointment-partner-container" class="col-span-2"><label for="appointment-partner" class="block text-sm font-medium text-gray-700">Kunde, Bewerber,...</label><input type="text" id="appointment-partner" class="modern-input"></div>
+                <div id="appointment-referrals-container-single" class="hidden"><label for="appointment-referrals-single" class="block text-sm font-medium text-gray-700">Empfehlungen</label><input type="number" id="appointment-referrals-single" class="modern-input"></div>
+            </div>
                 <div id="appointment-infoabend-container" class="hidden"><label for="appointment-infoabend-date" class="block text-sm font-medium text-gray-700">Nächster Infoabend</label><div class="input-wrapper"><input type="date" id="appointment-infoabend-date" class="modern-input w-full"></div></div>
+            <div class="grid grid-cols-2 gap-4">
                 <div id="appointment-prognose-container" class="hidden"><label for="appointment-prognose" class="block text-sm font-medium text-gray-700">Umsatzprognose (EH)</label><input type="number" step="0.01" id="appointment-prognose" class="modern-input"></div>
-                <div><label for="appointment-referrals" class="block text-sm font-medium text-gray-700">Empfehlungen</label><input type="number" id="appointment-referrals" class="modern-input"></div>
+                <div id="appointment-referrals-container-paired"><label for="appointment-referrals-paired" class="block text-sm font-medium text-gray-700">Empfehlungen</label><input type="number" id="appointment-referrals-paired" class="modern-input"></div>
+                </div>
                 <div><label for="appointment-note" class="block text-sm font-medium text-gray-700">Hinweis</label><textarea id="appointment-note" rows="3" class="modern-input"></textarea></div>
                 <div class="flex items-center space-x-3 pt-2"><label for="appointment-cancellation" class="toggle-switch cancellation-toggle"><input type="checkbox" id="appointment-cancellation" class="sr-only peer"><div class="toggle-slider"></div></label><label for="appointment-cancellation" class="text-sm font-medium text-gray-700">Absage/Storno</label></div>
                 <div id="appointment-cancellation-reason-container" class="hidden"><label for="appointment-cancellation-reason" class="block text-sm font-medium text-gray-700">Absagegrund</label><textarea id="appointment-cancellation-reason" rows="2" class="modern-input"></textarea></div>
@@ -642,6 +649,53 @@
                 <button id="confirm-modal-cancel-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-6 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button>
                 <button id="confirm-modal-ok-btn" class="bg-red-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-red-700 transition-colors">Bestätigen</button>
             </div>
+        </div>
+    </div>
+    <!-- NEU: Modal für die BT-Folgeplanung nach einem gehaltenen AT -->
+    <div id="bt-follow-up-modal" class="modal-overlay">
+        <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative">
+            <h3 class="text-2xl font-bold text-skt-blue mb-6">Nächster Schritt: Beratungstermin</h3>
+            <form id="bt-follow-up-form" class="space-y-4">
+                <input type="hidden" id="bt-follow-up-original-at-id">
+                <input type="hidden" id="bt-follow-up-partner-name">
+                <input type="hidden" id="bt-follow-up-owner-id">
+                
+                <p class="text-gray-600">Der Analysetermin wurde als "gehalten" markiert. Was ist der nächste Schritt?</p>
+
+                <!-- NEU: Radio-Buttons zur Auswahl der Aktion -->
+                <div class="flex space-x-4">
+                    <label class="flex-1 p-4 border rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md hover:border-skt-blue-main has-[:checked]:border-skt-blue has-[:checked]:bg-blue-50 has-[:checked]:ring-2 has-[:checked]:ring-skt-blue-main"><input type="radio" name="bt_follow_up_action" value="plan_bt" class="sr-only"><span class="font-semibold text-skt-blue">Neuen BT anlegen</span></label>
+                    <label class="flex-1 p-4 border rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md hover:border-skt-blue-main has-[:checked]:border-skt-blue has-[:checked]:bg-blue-50 has-[:checked]:ring-2 has-[:checked]:ring-skt-blue-main"><input type="radio" name="bt_follow_up_action" value="no_bt" class="sr-only"><span class="font-semibold text-skt-blue">Kein BT</span></label>
+                </div>
+
+                <!-- Option 1: BT planen (wird per JS ein-/ausgeblendet) -->
+                <div id="bt-follow-up-plan-bt-container" class="hidden p-4 border rounded-lg space-y-4">
+                    <h4 class="font-semibold text-skt-blue">Details für den neuen Beratungstermin (BT)</h4>
+                    <div>
+                        <label for="bt-follow-up-date" class="block text-sm font-medium text-gray-700 mb-1">Datum & Uhrzeit</label>
+                        <div class="input-wrapper"><input type="datetime-local" id="bt-follow-up-date" class="modern-input w-full"></div>
+                    </div>
+                    <div>
+                        <label for="bt-follow-up-produkte" class="block text-sm font-medium text-gray-700 mb-1">Geplante Produkte</label>
+                        <div id="bt-follow-up-produkte-container" class="grid grid-cols-2 gap-x-4 gap-y-2 p-3 bg-gray-50 rounded-lg border max-h-40 overflow-y-auto">
+                            <!-- Produkt-Checkboxen werden hier per JS eingefügt -->
+                        </div>
+                    </div>
+                    <div><label for="bt-follow-up-prognose" class="block text-sm font-medium text-gray-700 mb-1">Umsatzprognose (EH)</label><input type="number" step="0.01" id="bt-follow-up-prognose" class="modern-input"></div>
+                    <div><label for="bt-follow-up-notiz" class="block text-sm font-medium text-gray-700 mb-1">Notiz</label><textarea id="bt-follow-up-notiz" rows="3" class="modern-input"></textarea></div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label for="bt-follow-up-prognose" class="block text-sm font-medium text-gray-700 mb-1">Umsatzprognose (EH)</label><input type="number" step="0.01" id="bt-follow-up-prognose" class="modern-input"></div>
+                        <div><label for="bt-follow-up-notiz" class="block text-sm font-medium text-gray-700 mb-1">Notiz</label><textarea id="bt-follow-up-notiz" rows="3" class="modern-input"></textarea></div>
+                    </div>
+                </div>
+
+                <!-- Option 2: Kein BT (wird per JS ein-/ausgeblendet) -->
+                <div id="bt-follow-up-no-bt-container" class="hidden p-4 border rounded-lg">
+                    <h4 class="font-semibold text-skt-blue mb-2">Grund für keinen Beratungstermin</h4>
+                    <div><label for="bt-follow-up-no-bt-reason" class="block text-sm font-medium text-gray-700 mb-1">Grund (z.B. kein Interesse, unpassend)</label><textarea id="bt-follow-up-no-bt-reason" rows="2" class="modern-input" placeholder="Bitte gib einen Grund an..."></textarea></div>
+                </div>
+                <div class="pt-4 flex justify-end space-x-3"><button type="button" id="cancel-bt-follow-up-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Später entscheiden</button><button type="submit" id="save-bt-follow-up-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors">Aktion speichern</button></div>
+            </form>
         </div>
     </div>
 

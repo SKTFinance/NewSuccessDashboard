@@ -3511,6 +3511,20 @@ class AppointmentsView {
         document.getElementById('close-appointment-modal-btn').addEventListener('click', () => this.closeModal());
         document.getElementById('cancel-appointment-btn').addEventListener('click', () => this.closeModal());
         this.modal.addEventListener('click', (e) => { if (e.target === this.modal) this.closeModal(); });
+
+        // NEU: Listener für das BT-Folge-Modal
+        this.btFollowUpModal = document.getElementById('bt-follow-up-modal');
+        this.btFollowUpForm = document.getElementById('bt-follow-up-form');
+        document.getElementById('cancel-bt-follow-up-btn').addEventListener('click', () => {
+            // KORREKTUR: Bei "Später entscheiden" wird das Modal geschlossen, OHNE den Status des AT zu ändern.
+            // Die fetchAndRender() Funktion wird nicht aufgerufen, der alte Zustand bleibt.
+            this.btFollowUpModal.classList.remove('visible');
+        });
+        this.btFollowUpModal.querySelectorAll('input[name="bt_follow_up_action"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                this._toggleBtFollowUpSections(e.target.value);
+            });
+        });
         this.form.addEventListener('submit', (e) => this.handleFormSubmit(e));
 
         // Event Listener für den Absage-Toggle im Modal, um das Grund-Feld sofort anzuzeigen/auszublenden.
@@ -3526,6 +3540,11 @@ class AppointmentsView {
         const categorySelect = this.form.querySelector('#appointment-category');
         if (categorySelect) {
             categorySelect.addEventListener('change', (e) => this._handleCategoryChange(e.target.value));
+        }
+
+        // NEU: Listener für das BT-Folge-Formular
+        if (this.btFollowUpForm) {
+            this.btFollowUpForm.addEventListener('submit', (e) => this._handleBtFollowUpSubmit(e));
         }
     }
     // Hilfsmethode, um DOM-Elemente zu holen, wird von init() aufgerufen.
@@ -4823,6 +4842,28 @@ class AppointmentsView {
     toggleConditionalFields(category) {
         this.form.querySelector('#appointment-prognose-container').classList.toggle('hidden', !['BT', 'ST'].includes(category));
         this.form.querySelector('#appointment-infoabend-container').classList.toggle('hidden', category !== 'ET');
+
+        // NEU: Logik für das Empfehlungsfeld
+        const partnerContainer = this.form.querySelector('#appointment-partner-container');
+        const referralsSingleContainer = this.form.querySelector('#appointment-referrals-container-single');
+        const referralsPairedContainer = this.form.querySelector('#appointment-referrals-container-paired');
+
+        if (['AT', 'NT'].includes(category)) {
+            // Zeige Empfehlungen neben dem Partner an
+            partnerContainer.classList.remove('col-span-2');
+            referralsSingleContainer.classList.remove('hidden');
+            referralsPairedContainer.classList.add('hidden');
+        } else if (category === 'ET') {
+            // Blende beide Empfehlungsfelder aus
+            partnerContainer.classList.add('col-span-2');
+            referralsSingleContainer.classList.add('hidden');
+            referralsPairedContainer.classList.add('hidden');
+        } else { // BT, ST, Immo
+            // Zeige Empfehlungen neben der Prognose an
+            partnerContainer.classList.add('col-span-2');
+            referralsSingleContainer.classList.add('hidden');
+            referralsPairedContainer.classList.remove('hidden');
+        }
     }
 
     openModal(termin = null) {
@@ -4881,7 +4922,10 @@ class AppointmentsView {
                 categorySelect.value = termin.Kategorie || '';
                 this.form.querySelector('#appointment-partner').value = termin.Terminpartner || '';
                 this.form.querySelector('#appointment-prognose').value = termin.Umsatzprognose || '';
-                this.form.querySelector('#appointment-referrals').value = termin.Empfehlungen || '';
+                // NEU: Wert in beide Empfehlungsfelder schreiben
+                this.form.querySelector('#appointment-referrals-single').value = termin.Empfehlungen || '';
+                this.form.querySelector('#appointment-referrals-paired').value = termin.Empfehlungen || '';
+
                 this.form.querySelector('#appointment-note').value = termin.Hinweis || '';
                 this.form.querySelector('#appointment-cancellation').checked = termin.Absage || false;
                 this.form.querySelector('#appointment-cancellation-reason').value = termin.Absagegrund || '';
@@ -4952,6 +4996,15 @@ class AppointmentsView {
             const isNewAppointment = !rowId;
             const isCancellation = this.form.querySelector('#appointment-cancellation').checked;
 
+            // NEU: Prüfen, ob ein AT auf "Gehalten" gesetzt wird
+            const originalTermin = isNewAppointment ? null : this.allAppointments.find(t => t._id === rowId);
+            const newStatus = this.form.querySelector('#appointment-status').value;
+            const newCategory = this.form.querySelector('#appointment-category').value;
+            const isAtGehalten = 
+                !isNewAppointment && 
+                originalTermin.Kategorie === 'AT' && 
+                newStatus === 'Gehalten' && 
+                originalTermin.Status !== 'Gehalten';
             // Log individual form values
             const mitarbeiterId = this.form.querySelector('#appointment-user').value;
             const datum = this.form.querySelector('#appointment-date').value;
@@ -4959,7 +5012,10 @@ class AppointmentsView {
             const status = this.form.querySelector('#appointment-status').value;
             const terminpartner = this.form.querySelector('#appointment-partner').value;
             const prognoseRaw = this.form.querySelector('#appointment-prognose').value;
-            const empfehlungenRaw = this.form.querySelector('#appointment-referrals').value;
+            // NEU: Wert aus dem sichtbaren Empfehlungsfeld lesen
+            const empfehlungenRaw = this.form.querySelector('#appointment-referrals-container-single').classList.contains('hidden')
+                ? this.form.querySelector('#appointment-referrals-paired').value
+                : this.form.querySelector('#appointment-referrals-single').value;
             const hinweis = this.form.querySelector('#appointment-note').value;
             const absagegrund = this.form.querySelector('#appointment-cancellation-reason').value;
             const infoabend = this.form.querySelector('#appointment-infoabend-date').value;
@@ -5029,6 +5085,12 @@ class AppointmentsView {
                 await this.fetchAndRender(); // Rendert jetzt alles mit den frischesten Daten.
 
                 setTimeout(() => this.closeModal(), 1500);
+                
+                // NEU: Wenn AT auf "Gehalten" gesetzt wurde, öffne das Folge-Modal NACH dem Speichern.
+                if (isAtGehalten) {
+                this._openBtFollowUpModal(originalTermin);
+                return; // Beende hier, das Hauptmodal wird vom Folge-Modal geschlossen
+            }
 
             } else {
                 appointmentsLog('!!! FEHLER: API call was not successful.');
@@ -5045,6 +5107,104 @@ class AppointmentsView {
             saveBtnLoader.classList.add('hidden');
         }
     }
+
+    // NEU: Funktion zum Öffnen des BT-Folge-Modals
+    _openBtFollowUpModal(originalAt) {
+        this.closeModal(); // Schließe das Haupt-Terminmodal
+
+        this.btFollowUpForm.reset();
+        this.btFollowUpForm.querySelector('#bt-follow-up-original-at-id').value = originalAt._id;
+        this.btFollowUpForm.querySelector('#bt-follow-up-partner-name').value = originalAt.Terminpartner;
+        this.btFollowUpForm.querySelector('#bt-follow-up-owner-id').value = originalAt.Mitarbeiter_ID?.[0]?.row_id || originalAt.Mitarbeiter_ID;
+        
+        // NEU: Produkt-Auswahl befüllen
+        const produkteContainer = this.btFollowUpForm.querySelector('#bt-follow-up-produkte-container');
+        produkteContainer.innerHTML = '';
+        const produkteDisplayKey = 'Produkt';
+        const produkteToExclude = ['FLV Erhöhung', 'Einmalerlag', 'FLV Einmalerlag', 'Strom', 'Gas'];
+        
+        const filteredProdukte = db.produkte.filter(p => !produkteToExclude.includes(p[produkteDisplayKey]));
+
+        filteredProdukte.forEach(p => {
+            const produktName = p[produkteDisplayKey] || p.Name;
+            const checkboxWrapper = document.createElement('label');
+            checkboxWrapper.className = 'flex items-center space-x-2 p-1.5 rounded-md hover:bg-gray-200 cursor-pointer';
+            checkboxWrapper.innerHTML = `
+                <input type="checkbox" name="bt_follow_up_produkt" value="${produktName}" class="h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light">
+                <span class="text-sm text-gray-700">${produktName}</span>
+            `;
+            produkteContainer.appendChild(checkboxWrapper);
+        });
+
+        this._toggleBtFollowUpSections(null); // Blendet beide Sektionen initial aus
+        this.btFollowUpModal.classList.add('visible');
+    }
+
+    // NEU: Funktion zum Ein-/Ausblenden der Sektionen im Folge-Modal
+    _toggleBtFollowUpSections(action) {
+        document.getElementById('bt-follow-up-plan-bt-container').classList.toggle('hidden', action !== 'plan_bt');
+        document.getElementById('bt-follow-up-no-bt-container').classList.toggle('hidden', action !== 'no_bt');
+    }
+    // NEU: Funktion zum Verarbeiten des BT-Folge-Formulars
+    async _handleBtFollowUpSubmit(e) {
+        e.preventDefault();
+        const saveBtn = this.btFollowUpForm.querySelector('#save-bt-follow-up-btn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Speichern...';
+
+        const originalAtId = this.btFollowUpForm.querySelector('#bt-follow-up-original-at-id').value;
+        const selectedAction = this.btFollowUpForm.querySelector('input[name="bt_follow_up_action"]:checked')?.value;
+        const btDate = this.btFollowUpForm.querySelector('#bt-follow-up-date').value;
+        const noBtReason = this.btFollowUpForm.querySelector('#bt-follow-up-no-bt-reason').value;
+
+        if (!selectedAction || (selectedAction === 'plan_bt' && !btDate) || (selectedAction === 'no_bt' && !noBtReason)) {
+            alert('Bitte wähle eine Aktion und fülle die entsprechenden Felder aus.');
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Aktion speichern';
+            return;
+        }
+
+        let success = true;
+
+        if (selectedAction === 'plan_bt') {
+            // Neuen BT-Termin anlegen
+            const partnerName = this.btFollowUpForm.querySelector('#bt-follow-up-partner-name').value;
+            const ownerId = this.btFollowUpForm.querySelector('#bt-follow-up-owner-id').value;
+            const selectedProdukte = Array.from(this.btFollowUpForm.querySelectorAll('input[name="bt_follow_up_produkt"]:checked')).map(cb => cb.value);
+            const prognose = parseFloat(this.btFollowUpForm.querySelector('#bt-follow-up-prognose').value) || null;
+            const notiz = this.btFollowUpForm.querySelector('#bt-follow-up-notiz').value;
+            const produkteText = selectedProdukte.length > 0 ? `Geplante Produkte: ${selectedProdukte.join(', ')}` : '';
+
+            const rowData = {
+                [SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID]: [ownerId],
+                [SKT_APP.COLUMN_MAPS.termine.Datum]: btDate,
+                [SKT_APP.COLUMN_MAPS.termine.Kategorie]: 'BT',
+                [SKT_APP.COLUMN_MAPS.termine.Status]: 'Ausgemacht',
+                [SKT_APP.COLUMN_MAPS.termine.Terminpartner]: partnerName,
+                [SKT_APP.COLUMN_MAPS.termine.Umsatzprognose]: prognose,
+                [SKT_APP.COLUMN_MAPS.termine.Hinweis]: `${produkteText}\n${notiz}`.trim(),
+            };
+            success = await SKT_APP.seaTableAddRow('Termine', rowData);
+        } else if (selectedAction === 'no_bt') {
+            // Grund im ursprünglichen AT speichern
+            const rowData = {
+                [SKT_APP.COLUMN_MAPS.termine.Hinweis]: `Kein BT, Grund: ${noBtReason}`
+            };
+            success = await SKT_APP.seaTableUpdateRow('Termine', originalAtId, rowData);
+        }
+
+        if (success) {
+            await this.fetchAndRender();
+            this.btFollowUpModal.classList.remove('visible');
+        } else {
+            alert('Ein Fehler ist aufgetreten. Die Aktion konnte nicht gespeichert werden.');
+        }
+
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Aktion speichern';
+    }
+
+
 
     // NEU: Generische Funktion zum Ein-/Ausklappen von Sektionen
     _toggleCollapsible(contentElement, buttonElement) {
