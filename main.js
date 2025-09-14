@@ -7276,6 +7276,48 @@ function setupEventListeners() {
   }
 }
 
+// --- NEU: Swipe-to-Back-Funktionalität ---
+function setupSwipeToBack() {
+    let touchstartX = 0;
+    let touchendX = 0;
+    let touchstartTime = 0;
+
+    const gestureZone = document.body;
+
+    gestureZone.addEventListener('touchstart', function(event) {
+        // Starte die Geste nur, wenn der Touch am linken Bildschirmrand beginnt
+        if (event.touches[0].clientX < 50) {
+            touchstartX = event.changedTouches[0].screenX;
+            touchstartTime = new Date().getTime();
+        } else {
+            touchstartX = 0; // Setze zurück, wenn nicht am Rand gestartet
+        }
+    }, { passive: true });
+
+    gestureZone.addEventListener('touchend', function(event) {
+        if (touchstartX === 0) return; // Geste wurde nicht am Rand gestartet
+
+        touchendX = event.changedTouches[0].screenX;
+        const elapsedTime = new Date().getTime() - touchstartTime;
+
+        handleSwipeGesture();
+        touchstartX = 0; // Reset
+    }, { passive: true });
+
+    function handleSwipeGesture() {
+        const swipeDistance = touchendX - touchstartX;
+        // Prüfe auf eine ausreichend lange und schnelle Wischgeste nach rechts
+        if (swipeDistance > 100) {
+            // Nur auslösen, wenn der Zurück-Button sichtbar ist
+            if (dom.backButton && !dom.backButton.classList.contains('hidden')) {
+                console.log('Swipe-to-back detected, triggering back button click.');
+                dom.backButton.click();
+            }
+        }
+    }
+}
+
+
 async function loadAndCacheTotalEh() {
     const totalEhCacheKey = 'total-eh-results-v2'; // Neuer Cache-Key, um alte Formate zu invalidieren
     let cachedResults = loadFromCache(totalEhCacheKey, 240); // Cache für 4 Stunden
@@ -7393,6 +7435,7 @@ async function initializeDashboard() {
     setStatus("");
   }
   setupEventListeners();
+  setupSwipeToBack(); // NEU: Swipe-Geste initialisieren
   isInitializing = false;
 }
 
