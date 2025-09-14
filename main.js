@@ -49,6 +49,7 @@ let datenschutzViewInstance = null; // NEU
 let pendingAppointmentFilter = null;
 let pendingAppointmentViewMode = null;
 let pendingAppointmentScope = null;
+let pendingAppointmentGroupFilter = null; // NEU
 let HIERARCHY_CACHE = null;
 
 // --- NEU: Gekapselte Instanzen für jede Ansicht ---
@@ -2340,15 +2341,25 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
     // NEU: Event-Listener für den Kalender-Button
     const calendarBtnGrid = summary.querySelector('.calendar-view-btn');
     if (calendarBtnGrid) {
-        calendarBtnGrid.addEventListener('click', async (e) => {
+        calendarBtnGrid.addEventListener('click', (e) => {
             e.stopPropagation();
             const userId = e.currentTarget.dataset.userid;
             if (userId) {
-                viewHistory.push(userId);
-                await fetchAndRenderDashboard(userId);
-                pendingAppointmentFilter = null;
+                const clickedUser = findRowById("mitarbeiter", userId);
+                if (!clickedUser) return;
+
+                const isClickedUserLeader = isUserLeader(clickedUser);
+
                 pendingAppointmentViewMode = 'table';
-                pendingAppointmentScope = 'group';
+                pendingAppointmentScope = 'structure';
+
+                if (isClickedUserLeader) {
+                    pendingAppointmentGroupFilter = userId;
+                    pendingAppointmentFilter = null;
+                } else {
+                    pendingAppointmentFilter = clickedUser.Name;
+                    pendingAppointmentGroupFilter = null;
+                }
                 switchView('appointments');
             }
         });
@@ -2510,15 +2521,25 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
     // NEU: Event-Listener für den Kalender-Button
     const calendarBtnList = summary.querySelector('.calendar-view-btn');
     if (calendarBtnList) {
-        calendarBtnList.addEventListener('click', async (e) => {
+        calendarBtnList.addEventListener('click', (e) => {
             e.stopPropagation();
             const userId = e.currentTarget.dataset.userid;
             if (userId) {
-                viewHistory.push(userId);
-                await fetchAndRenderDashboard(userId);
-                pendingAppointmentFilter = null;
+                const clickedUser = findRowById("mitarbeiter", userId);
+                if (!clickedUser) return;
+
+                const isClickedUserLeader = isUserLeader(clickedUser);
+
                 pendingAppointmentViewMode = 'table';
-                pendingAppointmentScope = 'group';
+                pendingAppointmentScope = 'structure';
+
+                if (isClickedUserLeader) {
+                    pendingAppointmentGroupFilter = userId;
+                    pendingAppointmentFilter = null;
+                } else {
+                    pendingAppointmentFilter = clickedUser.Name;
+                    pendingAppointmentGroupFilter = null;
+                }
                 switchView('appointments');
             }
         });
@@ -3544,6 +3565,15 @@ class AppointmentsView {
         this.groupFilterContainer.classList.toggle('hidden', !isLeader);
         if (isLeader) {
             this._populateGroupFilter();
+            // NEU: Prüfe, ob eine Gruppe aus einer anderen Ansicht vorausgewählt werden soll.
+            if (pendingAppointmentGroupFilter) {
+                this.groupFilterPanel.querySelectorAll('input:checked').forEach(cb => cb.checked = false);
+                const checkbox = this.groupFilterPanel.querySelector(`input[value="${pendingAppointmentGroupFilter}"]`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+                pendingAppointmentGroupFilter = null;
+            }
         }
         
         // NEU: Prüft, ob ein Filter aus einer anderen Ansicht übergeben wurde.
