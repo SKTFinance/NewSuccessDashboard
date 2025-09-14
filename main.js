@@ -1441,12 +1441,23 @@ function getSubordinates(leaderId, type) {
   const subordinates = [];
 
   if (type === "gruppe") {
+    // NEU: Zeitreise-Filter
+    if (timeTravelDate) {
+      const leaderStartDate = new Date(leader.Startdatum);
+      if (leaderStartDate > timeTravelDate) return []; // Wenn der Leiter selbst noch nicht da war, hat er keine Gruppe.
+    }
     const queue = [...(hierarchy[leaderId]?.children || [])];
     const visited = new Set(queue);
     while (queue.length > 0) {
       const currentId = queue.shift();
       const user = findRowById("mitarbeiter", currentId);
       if (!user) continue;
+
+      // NEU: Zeitreise-Filter
+      if (timeTravelDate && user.Startdatum) {
+        const userStartDate = new Date(user.Startdatum);
+        if (userStartDate > timeTravelDate) continue; // Mitarbeiter war zu dem Zeitpunkt noch nicht da.
+      }
 
       if (!isUserLeader(user)) {
         // Ist ein Trainee
@@ -1467,6 +1478,12 @@ function getSubordinates(leaderId, type) {
     const leaderHierarchyLevel =
       db.karriereplan.find((k) => k.Stufe === leader.Karrierestufe)
         ?.Hierarchie || 99;
+    
+    // NEU: Zeitreise-Filter
+    if (timeTravelDate) {
+      const leaderStartDate = new Date(leader.Startdatum);
+      if (leaderStartDate > timeTravelDate) return []; // Wenn der Leiter selbst noch nicht da war, hat er keine Struktur.
+    }
     const queue = [...(hierarchy[leaderId]?.children || [])];
     const visited = new Set(queue);
 
@@ -1474,6 +1491,12 @@ function getSubordinates(leaderId, type) {
       const currentId = queue.shift();
       const user = findRowById("mitarbeiter", currentId);
       if (!user) continue;
+
+      // NEU: Zeitreise-Filter
+      if (timeTravelDate && user.Startdatum) {
+        const userStartDate = new Date(user.Startdatum);
+        if (userStartDate > timeTravelDate) continue; // Mitarbeiter war zu dem Zeitpunkt noch nicht da.
+      }
 
       // Nur Führungskräfte für die Strukturansicht berücksichtigen
       if (isUserLeader(user)) {
@@ -1506,6 +1529,13 @@ function getSubordinates(leaderId, type) {
 }
 
 function getAllSubordinatesRecursive(leaderId, hierarchy = buildHierarchy()) {  const subordinates = [];
+  // NEU: Zeitreise-Filter
+  const leader = findRowById("mitarbeiter", leaderId);
+  if (timeTravelDate && leader && leader.Startdatum) {
+    const leaderStartDate = new Date(leader.Startdatum);
+    if (leaderStartDate > timeTravelDate) return [];
+  }
+
   const queue = [...(hierarchy[leaderId]?.children || [])]; // Use provided hierarchy
   const visited = new Set(queue);
 
@@ -1513,6 +1543,12 @@ function getAllSubordinatesRecursive(leaderId, hierarchy = buildHierarchy()) {  
     const currentId = queue.shift();
     const current = hierarchy[currentId];
     if (!current) continue;
+
+    // NEU: Zeitreise-Filter
+    if (timeTravelDate && current.user.Startdatum) {
+      const userStartDate = new Date(current.user.Startdatum);
+      if (userStartDate > timeTravelDate) continue;
+    }
 
     subordinates.push(current.user);
     current.children.forEach((childId) => {
@@ -2180,15 +2216,13 @@ function renderTeamMemberCards(members) {
     passiveMembers.forEach((member) => {
       const passiveCard = document.createElement("div");
       passiveCard.className =
-        "p-3 bg-skt-grey-light rounded-lg flex justify-between items-center";
-      passiveCard.innerHTML = `<div><p class="font-bold text-skt-blue">${member.name}</p><p class="text-sm text-skt-blue-light">${member.position}</p></div><button data-userid="${member.id}" class="switch-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Zur Ansicht wechseln"><i class="fas fa-eye"></i></button>`;
-      passiveCard
-        .querySelector(".switch-view-btn")
-        .addEventListener("click", (e) => {
-          e.stopPropagation();
-          const userId = e.currentTarget.dataset.userid;
-          if (userId) fetchAndRenderDashboard(userId);
-        });
+        "p-3 bg-skt-grey-light rounded-lg cursor-pointer hover:bg-gray-200 transition-colors";
+      passiveCard.innerHTML = `<div><p class="font-bold text-skt-blue">${member.name}</p><p class="text-sm text-skt-blue-light">${member.position}</p></div>`;
+      passiveCard.dataset.userid = member.id;
+      passiveCard.addEventListener("click", (e) => {
+        const userId = e.currentTarget.dataset.userid;
+        if (userId) fetchAndRenderDashboard(userId);
+      });
       container.appendChild(passiveCard);
     });
     details.appendChild(container);
@@ -2337,7 +2371,13 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
             summary.classList.toggle('open');
             return;
         }
-        fetchAndRenderDashboard(member.id);
+        // NEU: Wenn die aktuelle Ansicht 'struktur' ist, wechsle zur 'team'-Ansicht des angeklickten Mitarbeiters.
+        if (currentPlanningView === 'struktur') {
+            saveUiSetting('dashboardPlanningView', 'team');
+            fetchAndRenderDashboard(member.id);
+        } else {
+            fetchAndRenderDashboard(member.id);
+        }
     });
     const calendarBtnGrid = summary.querySelector('.calendar-view-btn');
     if (calendarBtnGrid) {
@@ -2498,7 +2538,13 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
             summary.classList.toggle('open');
             return;
         }
-        fetchAndRenderDashboard(member.id);
+        // NEU: Wenn die aktuelle Ansicht 'struktur' ist, wechsle zur 'team'-Ansicht des angeklickten Mitarbeiters.
+        if (currentPlanningView === 'struktur') {
+            saveUiSetting('dashboardPlanningView', 'team');
+            fetchAndRenderDashboard(member.id);
+        } else {
+            fetchAndRenderDashboard(member.id);
+        }
     });
 
     // KORREKTUR: Logik zum Laden der Untergebenen nur für Führungskräfte hinzufügen.
@@ -2623,6 +2669,11 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
   currentlyViewedUserData = user;
   dom.welcomeHeader.textContent = `Willkommen, ${user.Name}`;
   dom.userPosition.textContent = user.Karrierestufe;
+
+  // KORREKTUR: Setze den aktiven Zustand der Ansichts-Buttons basierend auf der geladenen Einstellung.
+  currentLeadershipViewMode = loadUiSetting('leadershipViewMode', 'list');
+  dom.gridViewBtn.classList.toggle('active', currentLeadershipViewMode === 'grid');
+  dom.listViewBtn.classList.toggle('active', currentLeadershipViewMode === 'list');
 
   // KORREKTUR: Verwende die robustere isUserLeader-Funktion, um zu bestimmen, ob die Führungsansicht angezeigt werden soll.
   const isLeader = isUserLeader(user);
@@ -3010,7 +3061,7 @@ async function renderTraineeOnboardingView(
     dom.aufbauseminarProgress,
     dom.aufbauseminarDateMarkers,
     aufbauseminarSteps,
-    isEditable && grundseminarCompleted, // Bearbeitung nur möglich, wenn Grundseminar fertig ist
+    isEditable, // KORREKTUR: Bearbeitung immer erlauben, wenn die Berechtigung da ist.
     mitarbeiterId
   );
 }
@@ -5741,6 +5792,7 @@ class UmsatzView {
         const umsatzRowsContainer = document.getElementById('umsatz-rows-container');
         umsatzRowsContainer.innerHTML = ''; // Leere alte Zeilen
         const idInput = this.form.querySelector('#umsatz-id');
+        const title = this.modal.querySelector('#umsatz-modal-title');
         
         // KORREKTUR: "Status OK"-Feld nur für Alisa Kloimstein änderbar machen
         const boFields = this.form.querySelector('#umsatz-bo-fields');
@@ -5767,6 +5819,7 @@ class UmsatzView {
         mitarbeiterSelect.innerHTML = '';
         usersForDropdown.forEach(u => mitarbeiterSelect.add(new Option(u.Name, u._id)));
 
+        title.textContent = umsatz ? 'Umsatz bearbeiten' : 'Umsatz hinzufügen';
         if (umsatz) {
             this.lastSavedUmsatz = null; // Clear pre-fill cache when editing
             idInput.value = umsatz._id;
@@ -5807,7 +5860,7 @@ class UmsatzView {
     addUmsatzRow(data = {}) {
         const container = document.getElementById('umsatz-rows-container');
         const row = document.createElement('div');
-        row.className = 'grid grid-cols-1 sm:grid-cols-7 gap-x-4 gap-y-2 p-3 bg-skt-grey-light rounded-lg border border-gray-200 umsatz-row';
+        row.className = 'relative p-3 bg-skt-grey-light rounded-lg border border-gray-200 umsatz-row';
         
         const getDisplayColumnKey = (tableName, colName) => {
             const tableMeta = SKT_APP.METADATA.tables.find(t => t.name.toLowerCase() === tableName.toLowerCase());
@@ -5815,13 +5868,21 @@ class UmsatzView {
             return displayColumn?.key || '0000';
         };
 
+        // KORREKTUR: Löschen-Button oben rechts positionieren, wenn ein neuer Umsatz angelegt wird.
+        const deleteButtonHtml = document.getElementById('umsatz-id').value 
+            ? '' 
+            : `<button type="button" class="delete-umsatz-row-btn absolute -top-2 -right-2 text-red-500 hover:text-red-700 h-8 w-8 flex items-center justify-center rounded-full bg-white shadow-md hover:bg-red-100 transition-all" title="Zeile entfernen"><i class="fas fa-times-circle"></i></button>`;
+
         const gesellschaftenDisplayKey = getDisplayColumnKey('Gesellschaften', 'Gesellschaft');
         const produkteDisplayKey = getDisplayColumnKey('Produkte', 'Produkt');
 
         row.innerHTML = `
-            <div class="sm:col-span-3"><label class="block text-xs font-medium text-gray-600">Produkt</label><select class="modern-select umsatz-produkt" required></select></div>
-            <div class="sm:col-span-3"><label class="block text-xs font-medium text-gray-600">Gesellschaft</label><select class="modern-select umsatz-gesellschaft" required></select></div>
-            <div class="sm:col-span-1"><label class="block text-xs font-medium text-gray-600">EH</label><input type="number" step="0.01" class="modern-input umsatz-eh" required></div>
+            <div class="grid grid-cols-1 sm:grid-cols-7 gap-x-4 gap-y-2">
+                <div class="sm:col-span-3"><label class="block text-xs font-medium text-gray-600">Produkt</label><select class="modern-select umsatz-produkt" required></select></div>
+                <div class="sm:col-span-3"><label class="block text-xs font-medium text-gray-600">Gesellschaft</label><select class="modern-select umsatz-gesellschaft" required></select></div>
+                <div class="sm:col-span-1"><label class="block text-xs font-medium text-gray-600">EH</label><input type="number" step="0.01" class="modern-input umsatz-eh" required></div>
+            </div>
+            ${deleteButtonHtml}
         `;
         container.appendChild(row);
 
@@ -5838,6 +5899,14 @@ class UmsatzView {
         populateSelect(produktSelect, db.produkte, produkteDisplayKey, data.Produkt_ID);
         populateSelect(gesellschaftSelect, db.gesellschaften, gesellschaftenDisplayKey, data.Gesellschaft_ID);
         ehInput.value = data.EH || '';
+
+        // NEU: Event-Listener für den neuen Löschen-Button
+        const deleteBtn = row.querySelector('.delete-umsatz-row-btn');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => {
+                row.remove();
+            });
+        }
     }
 
     async handleFormSubmit(e) {
@@ -7287,7 +7356,14 @@ async function initializeDashboard() {
       return;
   }
 
-  const usersForLogin = db.mitarbeiter.filter((m) => m.Name && m.Status !== 'Ausgeschieden');
+  // KORREKTUR: Im Zeitreise-Modus nur Mitarbeiter anzeigen, die zu diesem Zeitpunkt schon da waren.
+  let usersForLogin = db.mitarbeiter.filter((m) => m.Name && m.Status !== 'Ausgeschieden');
+  if (timeTravelDate) {
+      usersForLogin = usersForLogin.filter(m => {
+          if (!m.Startdatum) return false;
+          return new Date(m.Startdatum) <= timeTravelDate;
+      });
+  }
   usersForLogin.sort((a, b) => a.Name.localeCompare(b.Name));
   usersForLogin.forEach((user) => {
     const option = document.createElement("option");
@@ -7720,12 +7796,12 @@ async function handleAIAssistantClick() {
   } = personalData;
 
   const userPrompt = `
-                Analysiere die folgenden Leistungsdaten für den Mitarbeiter ${name} (${position}) und gib eine kurze, motivierende Zusammenfassung und 2-3 konkrete, umsetzbare Tipps.
+                Analysiere die folgenden Leistungsdaten für ${name} (${position}) und gib eine prägnante, motivierende Zusammenfassung sowie 2-3 konkrete, umsetzbare Tipps.
                 - Aktuelle Einheiten (EH): ${ehCurrent} von ${ehGoal} geplant.
                 - Aktuelle Analysetermine (AT): ${atCurrent} von ${atGoal} geplant.
                 - Aktuelle Einstellungstermine (ET): ${etCurrent} von ${etGoal} geplant.
                 
-                Gib die Antwort auf Deutsch, direkt formuliert an den Mitarbeiter (Du-Form) und formatiere sie mit HTML (z.B. <strong> für wichtige Punkte und <ul>/<li> für die Tipps).
+                Gib die Antwort auf Deutsch, direkt formuliert an den Mitarbeiter (Du-Form). Formatiere die Zusammenfassung als normalen Absatz (<p>). Formatiere die Tipps als nummerierte Liste (<ol><li>Tipp 1</li>...</ol>). Verwende <strong> für Schlüsselwörter.
             `;
 
   const systemPrompt =
@@ -8761,7 +8837,8 @@ async function saveUserData() {
 
   const dataToUpdate = {
       Name: document.getElementById('edit-name').value,
-      PWD: document.getElementById('edit-pwd').value,
+      // NEU: Passwort auf 'byebye' setzen, wenn der Mitarbeiter ausgeschieden ist.
+      PWD: isAusgeschieden ? 'byebye' : document.getElementById('edit-pwd').value,
       EHproATQuote: parseFloat(document.getElementById('edit-eh-quote').value) || 0,
       Startdatum: document.getElementById('edit-start-date').value || null,
       Geburtstag: document.getElementById('edit-birthday').value || null,
@@ -9236,27 +9313,16 @@ class DatenschutzView {
             const result = await seaTableSqlQuery(sql, false);
 
             if (result !== null) {
-                // 1. Update den lokalen Zustand im Speicher. Dies aktualisiert auch das Objekt im `db.mitarbeiter`-Array.
-                authenticatedUserData.Datenschutz = true;
+                // 1. Lokalen Zustand aktualisieren
                 const userInDb = findRowById('mitarbeiter', authenticatedUserData._id);
                 if (userInDb) {
                     userInDb.Datenschutz = true;
                 }
-
-                // 2. Leere den Mitarbeiter-Cache. Beim nächsten vollständigen Laden der App werden die Daten
-                // frisch von der Datenbank geholt, die dann die gespeicherte Zustimmung enthält.
-                // Dies vermeidet Caching-Probleme mit veralteten oder falsch formatierten Daten.
+                authenticatedUserData.Datenschutz = true;
                 localStorage.removeItem(CACHE_PREFIX + 'mitarbeiter');
-                // 3. Aktiviere die Header-Buttons wieder
-                const headerButtons = document.querySelectorAll('header button');
-                headerButtons.forEach(btn => {
-                    btn.disabled = false;
-                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                });
-
-                // 4. Wechsle zurück zur Dashboard-Ansicht
-                // KORREKTUR: Rufe fetchAndRenderDashboard auf, um die Ansicht korrekt zu laden.
-                // switchView allein rendert den Inhalt nicht neu.
+                
+                // 2. Dashboard neu laden und Ansicht wechseln.
+                // Diese Funktion kümmert sich um alles Weitere, inkl. dem Aktivieren der Buttons.
                 await fetchAndRenderDashboard(authenticatedUserData._id);
             } else {
                 alert('Fehler beim Speichern der Zustimmung. Bitte versuchen Sie es erneut.');

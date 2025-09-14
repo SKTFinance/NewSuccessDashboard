@@ -66,9 +66,11 @@
                  <div><label for="umsatz-hinweis-bo" class="block text-sm font-medium text-gray-700">Hinweis BO</label><textarea id="umsatz-hinweis-bo" rows="3" class="modern-input"></textarea></div>
                  <div class="flex items-center space-x-3"><label for="umsatz-status-ok" class="toggle-switch"><input type="checkbox" id="umsatz-status-ok" class="sr-only peer"><div class="toggle-slider"></div></label><label for="umsatz-status-ok" class="text-sm font-medium text-gray-700">Status OK</label></div>
             </div>
-            <div class="pt-4 flex justify-between items-center">
-                <button type="button" id="delete-umsatz-btn" class="bg-red-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-red-700 transition-colors hidden"><i class="fas fa-trash-alt mr-2"></i>Löschen</button>
-                <div class="flex justify-end w-full space-x-3"><button type="button" id="cancel-umsatz-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button><button type="submit" id="save-umsatz-btn" class="bg-skt-green-accent text-white font-semibold py-2 px-5 rounded-lg hover:bg-green-700 transition-colors">Speichern</button></div>
+            <div class="pt-4 flex justify-between items-center gap-4">
+                <button type="button" id="delete-umsatz-btn" class="bg-red-600 text-white font-semibold py-2 px-5 rounded-lg hover:bg-red-700 transition-colors hidden">
+                    <i class="fas fa-trash-alt mr-2"></i>Löschen
+                </button>
+                <div class="flex-grow flex justify-end space-x-3"><button type="button" id="cancel-umsatz-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button><button type="submit" id="save-umsatz-btn" class="bg-skt-green-accent text-white font-semibold py-2 px-5 rounded-lg hover:bg-green-700 transition-colors">Speichern</button></div>
             </div>
         </form>
     </div>
