@@ -21,30 +21,32 @@
                     <button id="stats-view-info-btn" title="Nächstes Info"><i class="fas fa-users"></i></button>
                 </div>
             </div>
-            <div class="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
+                <div class="flex flex-col sm:flex-row gap-4 w-full sm:w-auto items-center">
                 <div class="w-full sm:w-auto">
                     <!-- NEU: Dropdown-Container für den Kategorie-Filter -->
                     <div id="stats-category-filter-dropdown" class="relative">
-                        <button id="stats-category-filter-btn" class="modern-select w-full text-left">Alle Kategorien</button>
-                        <div id="stats-category-filter-panel" class="hidden absolute right-0 z-10 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 p-4">
+                        <button id="stats-category-filter-btn" class="modern-select w-full text-left">Filter</button>
+                            <div id="stats-category-filter-panel" class="hidden absolute right-0 z-40 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 p-4">
                             <!-- Checkboxen werden per JS gefüllt -->
                         </div>
                     </div>
                 </div>
-                <!-- NEU: Gruppenfilter für die Strukturansicht -->
-                <div id="appointments-group-filter-container" class="relative hidden w-full sm:w-auto">
-                    <button id="appointments-group-filter-btn" class="modern-select w-full text-left">Alle Gruppen</button>
-                    <div id="appointments-group-filter-panel" class="hidden absolute right-0 z-30 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 p-4">
-                        <!-- Checkboxen werden per JS gefüllt -->
+                    <!-- KORREKTUR: Scope- und Gruppenfilter in einem Wrapper zusammengefasst, um sie nebeneinander zu halten -->
+                    <div class="flex gap-4 w-full sm:w-auto">
+                        <div class="w-full sm:w-auto">
+                            <label for="appointments-scope-filter" class="sr-only">Statistik anzeigen für</label>
+                            <select id="appointments-scope-filter" class="modern-select">
+                                <option value="personal">Meine Termine</option>
+                                <option value="group">Meine Gruppe</option>
+                                <option value="structure">Meine Struktur</option>
+                            </select>
                     </div>
-                </div>
-                <div class="w-full sm:w-auto">
-                    <label for="appointments-scope-filter" class="sr-only">Statistik anzeigen für</label>
-                    <select id="appointments-scope-filter" class="modern-select">
-                    <option value="personal">Meine Termine</option>
-                    <option value="group">Meine Gruppe</option>
-                    <option value="structure">Meine Struktur</option>
-                </select>
+                        <div id="appointments-group-filter-container" class="relative hidden w-full sm:w-auto">
+                            <button id="appointments-group-filter-btn" class="modern-select w-full text-left">Alle Gruppen</button>
+                            <div id="appointments-group-filter-panel" class="hidden absolute right-0 z-30 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 p-4">
+                                <!-- Checkboxen werden per JS gefüllt -->
+                            </div>
+                        </div>
                 </div>
             </div>
         </div>
@@ -58,27 +60,17 @@
                         <input type="text" id="appointments-search-filter" placeholder="Kunde, Bewerber oder Mitarbeiter..." class="modern-input w-full">
                     </div>
                 </div>
-                <div class="md:col-span-1">
+                <div class="md:col-span-2">
+                    <div class="grid grid-cols-2 gap-4">
+                    <div>
                     <label for="appointments-start-date" class="block text-sm font-medium text-gray-700 mb-1">Von</label>
                     <div class="input-wrapper"><input type="date" id="appointments-start-date" class="modern-input w-full"></div>
                 </div>
-                <div class="md:col-span-1">
-                    <label for="appointments-end-date" class="block text-sm font-medium text-gray-700 mb-1">Bis</label>
-                    <div class="input-wrapper"><input type="date" id="appointments-end-date" class="modern-input w-full"></div>
-                </div>
-                <div class="flex items-center space-x-3 self-center justify-self-start md:pt-6">
-                    <label for="appointments-show-past" class="toggle-switch">
-                        <input type="checkbox" id="appointments-show-past" class="sr-only peer">
-                        <div class="toggle-slider"></div>
-                    </label>
-                    <label for="appointments-show-past" class="text-sm font-medium text-gray-700">Vergangene anzeigen</label>
-                </div>
-                <div class="flex items-center space-x-3 self-center justify-self-start md:pt-6">
-                    <label for="appointments-show-cancelled" class="toggle-switch">
-                        <input type="checkbox" id="appointments-show-cancelled" class="sr-only peer">
-                        <div class="toggle-slider"></div>
-                    </label>
-                    <label for="appointments-show-cancelled" class="text-sm font-medium text-gray-700">Abgesagte einblenden</label>
+                        <div>
+                            <label for="appointments-end-date" class="block text-sm font-medium text-gray-700 mb-1">Bis</label>
+                            <div class="input-wrapper"><input type="date" id="appointments-end-date" class="modern-input w-full"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

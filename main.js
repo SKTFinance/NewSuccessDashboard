@@ -1278,7 +1278,7 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   const AT_STATUS_GEHALTEN = ["Gehalten"];
   const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
   // KORREKTUR: Falsche Status für "gehaltene" ETs entfernt (z.B. Storno, Ausgemacht).
-  const ET_STATUS_GEHALTEN = ["Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+  const ET_STATUS_GEHALTEN = ["Gehalten", "Info Eingeladen", "Weiterer ET", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
   // NEU: Definition für ausgemachte ETs, die "Ausgemacht" und alle "Gehalten"-Stati umfasst.
   const ET_STATUS_AUSGEMACHT = ["Ausgemacht", ...ET_STATUS_GEHALTEN];
 
@@ -3573,9 +3573,8 @@ class AppointmentsView {
         this.statsTab = document.getElementById('analysis-stats-tab');
         this.heatmapTab = document.getElementById('analysis-heatmap-tab');
         this.heatmapGrid = document.getElementById('heatmap-grid');
-        this.showPastToggle = document.getElementById('appointments-show-past');
-        this.showCancelledToggle = document.getElementById('appointments-show-cancelled'); // KORREKTUR: showCancelledToggle wiederherstellen
-        return this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.searchInput && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.statsTab && this.heatmapTab && this.heatmapGrid && this.statsScopeFilter && this.statsCategoryFilterBtn && this.statsCategoryFilterPanel && this.statsMonthTimeline && this.statsPeriodDisplay && this.statsNavPrevBtn && this.statsNavNextBtn && this.outstandingAppointmentsSection && this.outstandingAppointmentsList && this.statsViewCalendarBtn && this.statsViewTableBtn && this.statsCalendarView && this.statsTableView && this.showPastToggle && this.showCancelledToggle && this.statsViewInfoBtn && this.naechstesInfoView && this.groupFilterContainer && this.mainFilterContainer && this.analysisContainer;
+        // KORREKTUR: Das Element wird jetzt dynamisch im Filter-Panel erstellt, daher wird die Zuweisung hier entfernt.
+        return this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.searchInput && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.statsTab && this.heatmapTab && this.heatmapGrid && this.statsScopeFilter && this.statsCategoryFilterBtn && this.statsCategoryFilterPanel && this.statsMonthTimeline && this.statsPeriodDisplay && this.statsNavPrevBtn && this.statsNavNextBtn && this.outstandingAppointmentsSection && this.outstandingAppointmentsList && this.statsViewCalendarBtn && this.statsViewTableBtn && this.statsCalendarView && this.statsTableView && this.statsViewInfoBtn && this.naechstesInfoView && this.groupFilterContainer && this.mainFilterContainer && this.analysisContainer;
     }
 
     async init(userId) {
@@ -3611,10 +3610,10 @@ class AppointmentsView {
         this.statsScopeFilter.value = loadUiSetting('appointmentsScope', isLeader ? 'group' : 'personal');
 
         // NEU: Zeige den Gruppenfilter an, wenn die Strukturansicht standardmäßig geladen wird
-        // KORREKTUR: Gruppenfilter nur für Führungskräfte anzeigen, unabhängig vom Scope.
-        this.groupFilterContainer.classList.toggle('hidden', !isLeader);
+        // KORREKTUR: Gruppenfilter nur für Führungskräfte anzeigen UND nur wenn der Scope 'structure' ist.
+        this.groupFilterContainer.classList.toggle('hidden', !isLeader || this.statsScopeFilter.value !== 'structure');
         if (isLeader) {
-            this._populateGroupFilter();
+            this._populateGroupFilter(this.statsScopeFilter.value === 'structure');
             // NEU: Prüfe, ob eine Gruppe aus einer anderen Ansicht vorausgewählt werden soll.
             if (pendingAppointmentGroupFilter) {
                 this.groupFilterPanel.querySelectorAll('input:checked').forEach(cb => cb.checked = false);
@@ -3803,6 +3802,7 @@ class AppointmentsView {
         this._renderOutstandingAppointments();
         this._renderStatsChart();
         this._renderPrognosisDetails();
+        this._setupCategoryFilterButtons(); // NEU: Stellt sicher, dass die Buttons im Filter-Panel vorhanden sind.
         this._renderHeatmap();
         // NEU: Wenn die Info-Ansicht aktiv ist, muss sie ebenfalls neu gerendert werden,
         // da sie vom Haupt-Scope-Filter abhängt.
@@ -3837,21 +3837,31 @@ class AppointmentsView {
 
         // NEU: Event Listener für das Dropdown
         this.statsCategoryFilterBtn.addEventListener('click', (e) => {
+            // KORREKTUR: Der Hauptbutton öffnet/schließt nur noch das Menü.
             e.stopPropagation();
             this.statsCategoryFilterPanel.classList.toggle('hidden');
         });
-        document.addEventListener('click', (e) => { if (!this.statsCategoryFilterPanel.contains(e.target)) this.statsCategoryFilterPanel.classList.add('hidden'); });
+        document.addEventListener('click', (e) => {
+            if (!this.statsCategoryFilterPanel.classList.contains('hidden') && !this.statsCategoryFilterPanel.contains(e.target) && !this.statsCategoryFilterBtn.contains(e.target)) {
+                this.statsCategoryFilterPanel.classList.add('hidden');
+                this._renderAppointmentStats(); // Filter anwenden
+            }
+        });
         
         // NEU: Erweiterter Event-Listener für den Scope-Filter
         this.statsScopeFilter.addEventListener('change', () => {
             const scope = this.statsScopeFilter.value;
             saveUiSetting('appointmentsScope', scope); // Einstellung speichern
-            // Das Anzeigen/Verstecken des Gruppenfilters wird entfernt.
+            // KORREKTUR: Gruppenfilter nur bei 'structure' anzeigen und neu befüllen.
+            const showGroupFilter = scope === 'structure';
+            this.groupFilterContainer.classList.toggle('hidden', !showGroupFilter);
+            if (showGroupFilter) {
+                this._populateGroupFilter(true);
+            }
             this.fetchAndRender(); // Daten bei jeder Änderung neu laden
         });
 
-        this.showPastToggle.addEventListener('change', () => this.render()); // KORREKTUR: Ruft render() auf, um alle Filter neu anzuwenden
-        this.showCancelledToggle.addEventListener('change', () => this.render());
+        if (this.showCancelledToggle) this.showCancelledToggle.addEventListener('change', () => this.render());
 
         // KORREKTUR: Event-Listener für die Statistik-Chart-Umschaltung wiederhergestellt
         this.statsByEmployeeBtn.addEventListener('click', () => { this.statsChartMode = 'employee'; this._updateStatsToggleButtons(); this._renderStatsChart(); });
@@ -3999,12 +4009,39 @@ class AppointmentsView {
             this.statsCategoryFilterPanel.appendChild(wrapper);        };
 
         categories.filter(cat => relevantCategories.includes(cat)).forEach(cat => createCheckbox(cat, cat, true));
+
+        // Buttons für "Alle auswählen" und "Alle entfernen" wurden entfernt.
+        // NEU: "Abgesagte einblenden" Toggle hier hinzufügen
+        const cancelledToggleWrapper = document.createElement('div');
+        cancelledToggleWrapper.className = 'border-t border-gray-200 mt-4 pt-4';
+        cancelledToggleWrapper.innerHTML = `
+            <label for="appointments-show-cancelled" class="flex items-center space-x-3 cursor-pointer">
+                <div class="toggle-switch">
+                    <input type="checkbox" id="appointments-show-cancelled" class="sr-only peer">
+                    <div class="toggle-slider"></div>
+                </div>
+                <span class="text-sm font-medium text-gray-700">Abgesagte einblenden</span>
+            </label>
+        `;
+        this.statsCategoryFilterPanel.appendChild(cancelledToggleWrapper);
         
-        // KORREKTUR: Buttons für "Alle auswählen" und "Alle entfernen" mit verbessertem Design.
-        // Die Buttons werden jetzt direkt unter der Überschrift platziert.
+        // KORREKTUR: Der Event-Listener wird direkt hier gesetzt, um sicherzustellen, dass er immer existiert.
+        const cancelledToggle = document.getElementById('appointments-show-cancelled');
+        if (cancelledToggle) cancelledToggle.addEventListener('change', () => {
+            // Ruft die Haupt-Render-Funktion auf, die alle Filter (inkl. Kategorien) neu anwendet.
+            this._renderAppointmentStats();
+        });
+
         const headerWrapper = document.createElement('div');
         headerWrapper.className = 'flex justify-between items-center mb-2';
         headerWrapper.innerHTML = `<h4 class="font-semibold text-skt-blue">Kategorien</h4>`;
+
+        this.statsCategoryFilterPanel.insertBefore(headerWrapper, this.statsCategoryFilterPanel.firstChild);
+    }
+    _setupCategoryFilterButtons() {
+        // NEU: Buttons für "Alle auswählen" und "Alle entfernen" mit verbessertem Design.
+        const headerWrapper = this.statsCategoryFilterPanel.querySelector('.flex.justify-between.items-center');
+        if (!headerWrapper || headerWrapper.querySelector('#select-all-cats')) return; // Verhindert doppeltes Hinzufügen
 
         const actionsWrapper = document.createElement('div');
         actionsWrapper.className = 'flex items-center gap-2';
@@ -4017,22 +4054,17 @@ class AppointmentsView {
             </button>
         `;
         headerWrapper.appendChild(actionsWrapper);
-        this.statsCategoryFilterPanel.insertBefore(headerWrapper, this.statsCategoryFilterPanel.firstChild);
-
-        // Event Listeners für die neuen Buttons
-        document.getElementById('select-all-cats').addEventListener('click', () => {
-            this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true); this._renderAppointmentStats();
-        });
-        document.getElementById('deselect-all-cats').addEventListener('click', () => {
-            this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false); this._renderAppointmentStats();
-        });
+        document.getElementById('select-all-cats').addEventListener('click', () => { this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true); this._renderAppointmentStats(); });
+        document.getElementById('deselect-all-cats').addEventListener('click', () => { this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false); this._renderAppointmentStats(); });
     }
 
     // NEU: Funktion zum Befüllen des Gruppen-Filters
-    _populateGroupFilter() {
+    _populateGroupFilter(show = true) { // KORREKTUR: Event-Listener für das Dropdown hier neu initialisieren
         this.groupFilterPanel.innerHTML = '';
+        if (!show) return;
+
         const leaders = SKT_APP.getSubordinates(this.currentUserId, 'struktur');
-        if (leaders.length === 0) {
+        if (!leaders || leaders.length === 0) {
             this.groupFilterPanel.innerHTML = '<p class="text-xs text-gray-500 p-2">Keine Gruppen in deiner Struktur.</p>';
             return;
         }
@@ -4059,17 +4091,37 @@ class AppointmentsView {
 
         const headerWrapper = document.createElement('div');
         headerWrapper.className = 'flex justify-between items-center mb-2';
-        headerWrapper.innerHTML = `<h4 class="font-semibold text-skt-blue">Gruppen</h4>`;
+        headerWrapper.innerHTML = `
+            <h4 class="font-semibold text-skt-blue">Gruppen</h4>
+            <div class="flex items-center gap-2">
+                <button id="deselect-all-groups" class="p-1.5 h-7 w-7 flex items-center justify-center bg-red-100 text-skt-red-accent rounded-md hover:bg-red-200 transition-colors" title="Alle entfernen">
+                    <i class="fas fa-times"></i>
+                </button>
+                <button id="select-all-groups" class="p-1.5 h-7 w-7 flex items-center justify-center bg-green-100 text-skt-green-accent rounded-md hover:bg-green-200 transition-colors" title="Alle auswählen">
+                    <i class="fas fa-check"></i>
+                </button>
+            </div>
+        `;
         this.groupFilterPanel.insertBefore(headerWrapper, this.groupFilterPanel.firstChild);
 
-        // Event Listener für Dropdown-Steuerung
-        this.groupFilterBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.groupFilterPanel.classList.toggle('hidden');
-        });
-        document.addEventListener('click', (e) => {
-            if (!this.groupFilterPanel.contains(e.target)) this.groupFilterPanel.classList.add('hidden');
-        });
+        // NEU: Event-Listener für die neuen Buttons
+        document.getElementById('select-all-groups').addEventListener('click', () => { this.groupFilterPanel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true); this.fetchAndRender(); });
+        document.getElementById('deselect-all-groups').addEventListener('click', () => { this.groupFilterPanel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false); this.fetchAndRender(); });
+
+        // KORREKTUR: Event-Listener für das Dropdown-Menü werden hier neu initialisiert,
+        // um sicherzustellen, dass sie auch nach einem Ansichtswechsel funktionieren.
+        const groupFilterBtn = document.getElementById('appointments-group-filter-btn');
+        const groupFilterPanel = document.getElementById('appointments-group-filter-panel');
+        if (groupFilterBtn && groupFilterPanel) {
+            groupFilterBtn.onclick = (e) => { e.stopPropagation(); groupFilterPanel.classList.toggle('hidden'); };
+            // NEU: Klick-Listener für das Schließen und Anwenden des Filters
+            document.addEventListener('click', (e) => {
+                if (!groupFilterPanel.classList.contains('hidden') && !groupFilterPanel.contains(e.target) && !groupFilterBtn.contains(e.target)) {
+                    groupFilterPanel.classList.add('hidden');
+                    this.fetchAndRender(); // Filter anwenden
+                }
+            });
+        }
     }
 
     // NEU: Funktion zum Berechnen und Anzeigen der Termin-Statistiken
@@ -4077,36 +4129,28 @@ class AppointmentsView {
         const today = getCurrentDate();
         const { startDate: cycleStartDate, endDate: cycleEndDate } = getMonthlyCycleDates();
         this.statsPeriodDisplay.textContent = cycleStartDate.toLocaleString('de-DE', { month: 'long', year: 'numeric' });
-
-        const selectedCheckboxes = this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]:checked');
-        const selectedCategories = Array.from(selectedCheckboxes).map(cb => cb.value);
-
-        if (selectedCategories.length === 0) {
-            this.statsCategoryFilterBtn.textContent = 'Keine Auswahl';
-        } else if (selectedCategories.length === this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]').length) {
-            this.statsCategoryFilterBtn.textContent = 'Alle Kategorien';
-        } else {
-            this.statsCategoryFilterBtn.textContent = selectedCategories.join(', ');
-        }
+        this._updateCategoryButtonText();
 
         // --- Filter-Einstellungen ---
-        const showPast = this.showPastToggle.checked;
-        const showCancelled = this.showCancelledToggle ? this.showCancelledToggle.checked : false;
+        // KORREKTUR: Der Button existiert nicht mehr, der Wert wird aus dem dynamisch erstellten Element gelesen.
+        const showCancelledToggle = document.getElementById('appointments-show-cancelled');
+        const showCancelled = showCancelledToggle ? showCancelledToggle.checked : false;
         const todayForFilter = new Date(today);
         todayForFilter.setHours(0, 0, 0, 0);
 
         // --- Gemeinsame Filterfunktionen ---
+        const selectedCategories = Array.from(this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+        this._updateCategoryButtonText(); // KORREKTUR: Button-Text wird jetzt hier aktualisiert, direkt bevor die Ansicht neu gezeichnet wird.
         const categoryFilter = t => selectedCategories.includes(t.Kategorie) && t.Datum;
         const cancelledFilter = t => showCancelled || (t.Absage !== true && t.Status !== 'Storno');
-        const pastFilter = t => showPast || new Date(t.Datum) >= todayForFilter;
 
         // --- Daten für die Tabellenansicht vorbereiten ---
         // KORREKTUR: Beginnt mit `dateAndSearchFilteredAppointments`, um die Datumsauswahl zu berücksichtigen.
         let finalAppointmentsForTable = this.dateAndSearchFilteredAppointments
             .filter(categoryFilter)
             .filter(cancelledFilter)
-            .filter(pastFilter);
-
+            // NEU: Filtert alle Termine mit dem Status "Gehalten" oder "Info Eingeladen" aus der Tabellenansicht heraus.
+            .filter(t => t.Status !== 'Gehalten' && t.Status !== 'Info Eingeladen');
         // --- Table View Logic ---
         const sortedAppointments = this._sortStatsTableData(finalAppointmentsForTable);
         this._renderStatsTable(sortedAppointments);
@@ -4148,11 +4192,6 @@ class AppointmentsView {
         for (let d = new Date(viewStartDate); d <= viewEndDate; d.setDate(d.getDate() + 1)) {
             const dateString = toLocalISOString(d);
             
-            // KORREKTUR: Wenn "Vergangene anzeigen" AUS ist, überspringe das Rendern für vergangene Tage.
-            if (!showPast && d < todayForFilter) {
-                continue;
-            }
-
             let appointmentsForDay = (appointmentsByDay[dateString] || []);
             appointmentsForDay.sort((a,b) => new Date(a.Datum) - new Date(b.Datum));
 
@@ -4165,7 +4204,7 @@ class AppointmentsView {
             let appointmentsHtml = '';
             if (appointmentsForDay.length > 0) {
                 appointmentsHtml = appointmentsForDay.map(termin => {
-                    const color = categoryColors[termin.Kategorie] || categoryColors['default'];
+                    const color = categoryColors[termin.Kategorie] || 'bg-skt-grey-medium';
                     let mitarbeiterName = 'N/A';
                     if (termin.Mitarbeiter_ID && Array.isArray(termin.Mitarbeiter_ID) && termin.Mitarbeiter_ID[0]?.display_value) {
                         mitarbeiterName = termin.Mitarbeiter_ID[0].display_value;
@@ -4175,7 +4214,7 @@ class AppointmentsView {
                     const terminTime = termin.Datum ? new Date(termin.Datum).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
 
                     return `<div class="p-1.5 rounded ${color} text-white text-xs mb-1.5 cursor-pointer" data-id="${termin._id}">
-                                <div class="flex justify-between items-baseline"><p class="font-bold truncate">${termin.Terminpartner || 'Unbekannt'}</p><span class="font-normal opacity-90">${terminTime}</span></div>
+                                <div class="flex justify-between items-center"><p class="font-bold truncate">${termin.Terminpartner || 'Unbekannt'}</p><div class="flex items-center gap-2"><span class="font-normal opacity-90">${terminTime}</span><button class="add-to-calendar-btn text-white opacity-80 hover:opacity-100" data-termin-id="${termin._id}" title="Zum Kalender hinzufügen"><i class="fas fa-calendar-plus"></i></button></div></div>
                                 <p class="opacity-80">${mitarbeiterName}</p>
                             </div>`;
                 }).join('');
@@ -4187,7 +4226,13 @@ class AppointmentsView {
                 <div class="font-bold text-skt-blue mb-3">${d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })}</div>
                 <div class="flex-grow overflow-y-auto space-y-2 pr-1">${appointmentsHtml}</div>
             `;
-            dayCard.querySelectorAll('[data-id]').forEach(el => el.addEventListener('click', (e) => this.openModal(this.allAppointments.find(t => t._id === e.currentTarget.dataset.id))));
+            dayCard.querySelectorAll('[data-id]').forEach(el => {
+                el.addEventListener('click', (e) => {
+                    if (e.target.closest('.add-to-calendar-btn')) return;
+                    this.openModal(this.allAppointments.find(t => t._id === e.currentTarget.dataset.id));
+                });
+            });
+            dayCard.querySelectorAll('.add-to-calendar-btn').forEach(btn => btn.addEventListener('click', (e) => { e.stopPropagation(); this._addToCalendar(e.currentTarget.dataset.terminId); }));
             this.statsMonthTimeline.appendChild(dayCard);
         }
 
@@ -4196,6 +4241,57 @@ class AppointmentsView {
             this._scrollToTodayInTimeline('auto');
             this._updateCardScales();
         }, 150);
+    }
+    // NEU: Funktion zum Erstellen und Herunterladen einer .ics-Datei
+    _addToCalendar(terminId) {
+        const termin = this.allAppointments.find(t => t._id === terminId);
+        if (!termin) {
+            alert('Termin nicht gefunden.');
+            return;
+        }
+
+        const startDate = new Date(termin.Datum);
+        const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // Annahme: 1 Stunde Dauer
+
+        const toIcsDate = (date) => date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+        const icsContent = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'PRODID:-//SKT Success Dashboard//DE',
+            'BEGIN:VEVENT',
+            `UID:${termin._id}@skt-dashboard.app`,
+            `DTSTAMP:${toIcsDate(new Date())}`,
+            `DTSTART:${toIcsDate(startDate)}`,
+            `DTEND:${toIcsDate(endDate)}`,
+            `SUMMARY:Termin: ${termin.Terminpartner || 'Unbekannt'} (${termin.Kategorie})`,
+            `DESCRIPTION:Mitarbeiter: ${termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A'}\\nStatus: ${termin.Status}\\nHinweis: ${termin.Hinweis || ''}`,
+            'END:VEVENT',
+            'END:VCALENDAR'
+        ].join('\r\n');
+
+        const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Termin_${termin.Terminpartner || 'Unbekannt'}.ics`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    _updateCategoryButtonText() {
+        const selectedCheckboxes = this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]:checked');
+        const selectedCategories = Array.from(selectedCheckboxes).map(cb => cb.value);
+
+        if (selectedCategories.length === 0) {
+            this.statsCategoryFilterBtn.textContent = 'Keine Auswahl';
+        } else if (selectedCategories.length === this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]').length) {
+            this.statsCategoryFilterBtn.textContent = 'Filter (Alle)';
+        } else if (selectedCategories.length === 1) {
+            this.statsCategoryFilterBtn.textContent = `Filter (nur ${selectedCategories[0]})`;
+        } else {
+            this.statsCategoryFilterBtn.textContent = `Filter (${selectedCategories.length} Kat.)`;
+        }
     }
     _renderStatsTable(appointments) {
         const container = document.getElementById('stats-table-container');
@@ -4780,8 +4876,11 @@ class AppointmentsView {
                 title.textContent = 'Termin anlegen';
                 idInput.value = '';
                 userSelect.value = this.currentUserId;
-                // KORREKTUR: `datetime-local` erwartet das Format YYYY-MM-DDTHH:mm
-                this.form.querySelector('#appointment-date').value = new Date().toISOString().slice(0, 16);
+                // KORREKTUR: `toISOString()` konvertiert in UTC. Um die korrekte lokale Zeit zu erhalten,
+                // muss der Zeitzonen-Offset manuell korrigiert werden, bevor der String erzeugt wird.
+                const now = new Date();
+                now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+                this.form.querySelector('#appointment-date').value = now.toISOString().slice(0, 16);
 
                 // KORREKTUR: Veraltete `currentTab`-Logik entfernt.
                 // Die Logik wird jetzt durch den neuen Event-Listener in `_handleCategoryChange` gesteuert.
