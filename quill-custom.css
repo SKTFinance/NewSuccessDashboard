@@ -1,0 +1,43 @@
+/* quill-custom.css */
+
+/* Toolbar anpassen */
+.ql-toolbar.ql-snow {
+    border: 1px solid #d1d5db;
+    border-top-left-radius: 0.5rem;
+    border-top-right-radius: 0.5rem;
+    background-color: #f9fafb;
+    padding: 8px;
+}
+
+/* Editor-Container anpassen */
+.ql-container.ql-snow {
+    border: 1px solid #d1d5db;
+    border-bottom-left-radius: 0.5rem;
+    border-bottom-right-radius: 0.5rem;
+    background-color: white;
+    font-size: 1rem;
+    color: var(--color-skt-blue);
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* Wichtig für Flexbox-Wachstum in einem Flex-Container */
+}
+
+/* Fokus-Effekt wie bei den anderen Inputs */
+.ql-container.ql-snow:focus-within,
+.ql-toolbar.ql-snow:focus-within {
+    border-color: var(--color-skt-blue-main) !important;
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.3);
+}
+
+/* Platzhalter-Text anpassen */
+.ql-editor.ql-blank::before {
+    color: #9ca3af;
+    font-style: normal;
+}
+
+.ql-editor {
+    /* min-height: 250px; Entfernt, um flexibles Wachstum zu ermöglichen */
+    flex-grow: 1;
+    overflow-y: auto;
+}

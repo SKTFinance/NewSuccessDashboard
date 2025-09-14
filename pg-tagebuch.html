@@ -51,14 +51,44 @@
                         <label for="pg-titel" class="block text-sm font-medium text-gray-700">Titel</label>
                         <input type="text" id="pg-titel" required class="modern-input mt-1" placeholder="z.B. Wochengespräch KW 34">
                     </div>
+                    <!-- NEU: Timer-Anzeige -->
+                    <div class="text-right">
+                        <span class="text-sm text-gray-500">Dauer:</span>
+                        <span id="pg-timer" class="font-mono font-semibold text-skt-blue bg-gray-100 px-2 py-1 rounded-md">0:00:00</span>
+                    </div>
                     <div class="flex-grow flex flex-col space-y-6">
+                        <!-- NEU: Rich-Text-Editor -->
                         <div class="flex flex-col flex-grow">
-                            <label for="pg-text" class="block text-sm font-medium text-gray-700">Gesprächsnotizen</label>
-                            <textarea id="pg-text" class="modern-input mt-1 flex-grow w-full" style="min-height: 400px;" placeholder="Notizen zum Gespräch..."></textarea>
+                            <label class="block text-sm font-medium text-gray-700">Gesprächsnotizen</label>
+                            <div id="pg-text-editor-container" class="mt-1 flex-grow w-full flex flex-col min-h-0"></div>
                         </div>
                         <div class="flex flex-col">
-                            <label for="pg-aufgaben" class="block text-sm font-medium text-gray-700">Aufgaben & To-Dos</label>
-                            <textarea id="pg-aufgaben" class="modern-input mt-1 w-full" style="min-height: 200px;" placeholder="Aufgaben für die nächste Woche..."></textarea>
+                            <label for="pg-aufgaben-container" class="block text-sm font-medium text-gray-700">Aufgaben & To-Dos</label>
+                            <div id="pg-aufgaben-container" class="modern-input mt-1 w-full p-3" style="min-height: 200px; background-color: #f9fafb;"></div>
+                        </div>
+                        <!-- NEU: Bild- und Zeichen-Upload -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Bild</label>
+                                <div id="pg-image-preview-container" class="relative w-full h-48 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300 mb-2 group">
+                                    <span class="text-gray-500">Vorschau</span>
+                                    <button type="button" id="pg-delete-image-btn" class="hidden absolute top-2 right-2 bg-red-600 text-white rounded-full h-7 w-7 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" title="Bild entfernen">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <button type="button" id="pg-upload-image-btn" class="w-full bg-white border border-skt-blue text-skt-blue font-semibold py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors"><i class="fas fa-upload mr-2"></i>Bild hochladen</button>
+                                <input type="file" id="pg-image-input" class="hidden" accept="image/*">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Zeichnung</label>
+                                <div id="pg-drawing-preview-container" class="relative w-full h-48 bg-gray-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300 mb-2 group">
+                                    <span class="text-gray-500">Vorschau</span>
+                                    <button type="button" id="pg-delete-drawing-btn" class="hidden absolute top-2 right-2 bg-red-600 text-white rounded-full h-7 w-7 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" title="Zeichnung entfernen">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <button type="button" id="pg-open-drawing-btn" class="w-full bg-white border border-skt-blue text-skt-blue font-semibold py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors"><i class="fas fa-pencil-alt mr-2"></i>Zeichnen</button>
+                            </div>
                         </div>
                     </div>
                     <div class="pt-4 flex justify-end space-x-3">

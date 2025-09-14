@@ -422,6 +422,53 @@ async function seaTableQuery(tableName) {
   return [];
 }
 
+async function seaTableGetUploadLink() {
+    if (!seaTableAccessToken || !apiGatewayUrl) {
+        console.error("Cannot get upload link without access token and gateway URL.");
+        return null;
+    }
+    try {
+        // KORREKTUR: Der 'upload-link' Endpunkt liegt auf der Haupt-Domain, nicht auf dem dtable-server.
+        // Wir extrahieren die Basis-URL (z.B. https://cloud.seatable.io) aus der apiGatewayUrl.
+        const baseUrl = new URL(apiGatewayUrl).origin;
+        const url = `${baseUrl}/api/v2.1/dtables/${SEATABLE_DTABLE_UUID}/upload-link/`;
+        const response = await fetch(url, {
+            method: 'GET',
+            // KORREKTUR: Der Endpunkt für den Upload-Link auf der Hauptdomain
+            // scheint den API-Token anstelle des App-Access-Tokens zu benötigen.
+            headers: { Authorization: `Token ${SEATABLE_API_TOKEN}` }
+        });
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        return await response.json();
+    } catch (error) {
+        console.error("Error getting SeaTable upload link:", error);
+        return null;
+    }
+}
+
+async function seaTableUploadFile(uploadUrl, file) {
+    if (!uploadUrl || !file) {
+        console.error("Cannot upload file without upload URL and file object.");
+        return false;
+    }
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        // The 'parent_dir' is required by the API, even if it's just the root.
+        formData.append('parent_dir', '/');
+
+        const response = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: { Authorization: `Token ${SEATABLE_API_TOKEN}` },
+            body: formData
+        });
+        return response.ok;
+    } catch (error) {
+        console.error("Error uploading file to SeaTable:", error);
+        return false;
+    }
+}
+
 async function seaTableUpdateRow(tableName, rowId, rowData) {
   const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
   if (!tableMap) {
@@ -888,6 +935,7 @@ async function loadAllData() {
     COLUMN_MAPS = await fetchColumnMaps();
     if (Object.keys(COLUMN_MAPS).length === 0) return false;
     saveToCache("column_maps", { maps: COLUMN_MAPS, meta: METADATA.tables });
+    console.log('Geladene Tabellen-Metadaten:', METADATA.tables); // NEU: Log für Tabellenstruktur
   }
 
   setStatus("Lade Stammdaten...");
@@ -6212,7 +6260,7 @@ class UmsatzView {
 
     async handleFormSubmit(e) {
         e.preventDefault();
-
+        if (this.timerInterval) clearInterval(this.timerInterval);
         // NEU: Validierung, um EH=0 zu verhindern, bevor die Anfrage gesendet wird.
         const umsatzRowsForValidation = this.form.querySelectorAll('.umsatz-row');
         for (const row of umsatzRowsForValidation) {
@@ -6233,7 +6281,7 @@ class UmsatzView {
         const rowId = this.form.querySelector('#umsatz-id').value;
         const isEdit = !!rowId;
 
-        const kunde = this.form.querySelector('#umsatz-kunde').value;
+        const kunde = this.form.querySelector('#umsatz-kunde').value.trim();
         const mitarbeiterId = this.form.querySelector('#umsatz-mitarbeiter').value;
         const hinweisBO = this.form.querySelector('#umsatz-hinweis-bo').value;
         const statusOK = this.form.querySelector('#umsatz-status-ok').checked;
@@ -6243,7 +6291,7 @@ class UmsatzView {
 
         for (const row of umsatzRows) {
             const produktId = row.querySelector('.umsatz-produkt').value;
-            const gesellschaftId = row.querySelector('.umsatz-gesellschaft').value;
+            const gesellschaftId = row.querySelector('.umsatz-gesellschaft').value.trim();
             const eh = parseFloat(row.querySelector('.umsatz-eh').value) || null;
 
             if (!produktId || !gesellschaftId || !eh) {
@@ -8732,7 +8780,24 @@ class PGTagebuchView {
         this.allPgs = [];
         this.currentPgId = null;
         this.timerStartTime = null;
+        this.timerInterval = null;
         this.filterText = '';
+        this.quill = null;
+        this.signaturePad = null;
+        this.pendingImageFile = null;
+        this.pendingDrawingDataUrl = null;
+        this.imageDeleted = false; // NEU
+        this.drawingDeleted = false; // NEU
+    }
+
+    // KORREKTUR: Hilfsfunktion an den Anfang der Klasse verschoben, um `this`-Kontext-Fehler zu vermeiden.
+    _escapeHtml(str) {
+        if (typeof str !== 'string') {
+            return '';
+        }
+        const div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
     }
 
     _getDomElements() {
@@ -8744,7 +8809,21 @@ class PGTagebuchView {
         this.newEntryBtn = document.getElementById('pg-new-entry-btn');
         this.searchInput = document.getElementById('pg-search-input');
         this.searchContainer = document.getElementById('pg-search-container');
-        return this.listContainer && this.editorContainer && this.form && this.newEntryBtn && this.searchInput && this.searchContainer;
+        // NEU: Zusätzliche Elemente
+        this.timerDisplay = document.getElementById('pg-timer');
+        this.editorContainer = document.getElementById('pg-text-editor-container');
+        this.imagePreviewContainer = document.getElementById('pg-image-preview-container');
+        this.uploadImageBtn = document.getElementById('pg-upload-image-btn');
+        this.imageInput = document.getElementById('pg-image-input');
+        this.drawingPreviewContainer = document.getElementById('pg-drawing-preview-container');
+        this.openDrawingBtn = document.getElementById('pg-open-drawing-btn');
+        this.drawingModal = document.getElementById('drawing-modal');
+        this.drawingCanvas = document.getElementById('drawing-canvas');
+        // NEU: Löschen-Buttons
+        this.deleteImageBtn = document.getElementById('pg-delete-image-btn');
+        this.deleteDrawingBtn = document.getElementById('pg-delete-drawing-btn');
+
+        return this.listContainer && this.editorContainer && this.form && this.newEntryBtn && this.searchInput && this.searchContainer && this.deleteImageBtn && this.deleteDrawingBtn;
     }
 
     async init(userId) {
@@ -8754,6 +8833,22 @@ class PGTagebuchView {
         if (!this._getDomElements()) {
             pgLog('!!! FEHLER: Benötigte DOM-Elemente wurden nicht gefunden.');
             return;
+        }
+        
+        // Quill Editor initialisieren
+        if (this.editorContainer && !this.quill) {
+            // KORREKTUR: Initialisiere Quill direkt auf dem Container,
+            // um das Höhenproblem zu beheben.
+            this.quill = new Quill('#pg-text-editor-container', {
+                modules: {
+                    toolbar: [
+                        [{ 'header': [1, 2, false] }],
+                        ['bold', 'italic', 'underline'],
+                        [{ 'list': 'ordered' }, { 'list': 'bullet' }]
+                    ]
+                },
+                theme: 'snow'
+            });
         }
 
         // Die Event-Listener müssen bei jeder Initialisierung neu gesetzt werden,
@@ -8831,6 +8926,7 @@ class PGTagebuchView {
 
     renderEditor(pgId) {
         this.currentPgId = pgId;
+        if (this.timerInterval) clearInterval(this.timerInterval);
         // Warnhinweis standardmäßig ausblenden
         document.getElementById('pg-warning-message').classList.add('hidden');
 
@@ -8842,6 +8938,10 @@ class PGTagebuchView {
             this.timerStartTime = null;
             return;
         }
+    this.imageDeleted = false;
+    this.drawingDeleted = false;
+    this.pendingImageFile = null;
+    this.pendingDrawingDataUrl = null;
 
         const pg = this.allPgs.find(p => p._id === pgId);
         if (!pg) { // This can happen if a new entry is being created
@@ -8854,11 +8954,26 @@ class PGTagebuchView {
         this.timerStartTime = Date.now(); // Timer starten
 
         this.form.querySelector('#pg-id').value = pg._id;
-        const durationInSeconds = pg.Dauer || 0;
-        this.form.querySelector('#pg-duration-hidden').value = formatMinutesToDuration(Math.round(durationInSeconds / 60));
+        this._setupTimer(pg);
         this.form.querySelector('#pg-titel').value = pg.Titel || '';
-        this.form.querySelector('#pg-text').value = pg.Text || '';
-        this.form.querySelector('#pg-aufgaben').value = pg.Aufgaben || '';
+        
+        // Editor-Inhalt setzen
+        const textContent = pg.Text || '';
+        // Prüfen, ob der Inhalt Markdown ist (enthält **, *, # etc.) oder HTML
+        const isMarkdown = /(\*\*|__|\*|_|#|`)/.test(textContent) && !/<[a-z][\s\S]*>/i.test(textContent);
+        let htmlContent;
+        if (isMarkdown) {
+            htmlContent = marked.parse(textContent, { sanitize: false });
+        } else {
+            // KORREKTUR: Auch bestehender HTML-Inhalt wird über den sicheren Konverter geladen.
+            htmlContent = textContent;
+        }
+        const delta = this.quill.clipboard.convert(htmlContent);
+        this.quill.setContents(delta, 'silent');
+
+        this._displayPreview('image', pg.Bild?.[0]?.url);
+        this._displayPreview('drawing', pg.Zeichnung?.[0]?.url);
+        this._renderAufgaben(pg.Aufgaben || '');
 
         // Leiter-Feld (fest) befüllen
         const leiterNameP = this.form.querySelector('#pg-leiter-name');
@@ -8882,14 +8997,20 @@ class PGTagebuchView {
 
     openNewEntryForm() {
         this.currentPgId = `new-${Date.now()}`; // Temporäre ID für die Auswahl
+        if (this.timerInterval) clearInterval(this.timerInterval);
         this.timerStartTime = Date.now(); // Timer starten
         this.renderList();
+
+        this.imageDeleted = false;
+        this.drawingDeleted = false;
+        this.pendingImageFile = null;
+        this.pendingDrawingDataUrl = null;
 
         this.welcomeView.classList.add('hidden');
         this.editorView.classList.remove('hidden');
         this.form.reset();
         this.form.querySelector('#pg-id').value = '';
-        this.form.querySelector('#pg-duration-hidden').value = '0:00';
+        this._setupTimer(null);
 
         // Leiter-Feld (fest) befüllen
         const leiterNameP = this.form.querySelector('#pg-leiter-name');
@@ -8916,8 +9037,36 @@ class PGTagebuchView {
             warningMessage.classList.add('hidden');
         }
 
-        this.form.querySelector('#pg-text').value = `Ziel: Ursachen verstehen, gemeinsam Lösungen entwickeln, Entwicklung starten.\nAblauf:\n1. Offene Bestandsaufnahme (10 Min)\no Wie zufrieden bist du mit deiner letzten Woche?\no Was hat gut funktioniert, was nicht?\n2. Ursachenanalyse (15 Min)\no Quoten, Termine, Aktivitäten durchsprechen.\no Gemeinsame Bewertung: Was sind die größten Hebel?\n3. Zielklärung & Motivation (10 Min)\no Welches Hauptziel für nächste Woche ist realistisch und motivierend?\n4. Lösungsentwicklung (15 Min)\no 2–3 konkrete Maßnahmen festlegen.\no Rollenspiel oder Praxisbeispiele einbauen.\n5. Unterstützung sichern (5 Min)\no Was kann ich tun, um dir zu helfen?\no abfragen wann man den GP erreichen kann\n6. Motivation & Verabschiedung (5 Min)\no Positiver Ausblick, Termin fürs nächste Gespräch setzen.`;
-        this.form.querySelector('#pg-aufgaben').value = `Prio 1 ToDos:\n-\n-\n-\n\nSonstige ToDos:\n-\n-\n-\n-\n-`;
+        // NEU: Formatierter Standardtext für Gesprächsnotizen
+        const defaultText = `**Ziel:** Ursachen verstehen, gemeinsam Lösungen entwickeln, Entwicklung starten.
+
+**Ablauf:**
+1.  **Offene Bestandsaufnahme (10 Min)**
+    *   Wie zufrieden bist du mit deiner letzten Woche?
+    *   Was hat gut funktioniert, was nicht?
+2.  **Ursachenanalyse (15 Min)**
+    *   Quoten, Termine, Aktivitäten durchsprechen.
+    *   Gemeinsame Bewertung: Was sind die größten Hebel?
+3.  **Zielklärung & Motivation (10 Min)**
+    *   Welches Hauptziel für nächste Woche ist realistisch und motivierend?
+4.  **Lösungsentwicklung (15 Min)**
+    *   2–3 konkrete Maßnahmen festlegen.
+    *   Rollenspiel oder Praxisbeispiele einbauen.
+5.  **Unterstützung sichern (5 Min)**
+    *   Was kann ich tun, um dir zu helfen?
+    *   abfragen wann man den GP erreichen kann
+6.  **Motivation & Verabschiedung (5 Min)**
+    *   Positiver Ausblick, Termin fürs nächste Gespräch setzen.`;
+        const htmlContent = marked.parse(defaultText, { sanitize: false });
+        const delta = this.quill.clipboard.convert(htmlContent);
+        this.quill.setContents(delta, 'silent');
+        this._displayPreview('image', null);
+        this._displayPreview('drawing', null);
+
+        // KORREKTUR: Standardvorlage vereinfacht, um Parsing-Fehler zu vermeiden.
+        const defaultAufgaben = `Prio 1 ToDos:\n- \n- \n- \n\nSonstige ToDos:\n- \n- \n- `;
+        this._renderAufgaben(defaultAufgaben);
+
         this.form.querySelector('#pg-delete-btn').classList.add('hidden');
     }
 
@@ -8941,10 +9090,19 @@ class PGTagebuchView {
                 warningMessage.classList.add('hidden');
             }
         });
+
+        // NEU: Event-Listener für Bild- und Zeichen-Buttons
+        this.uploadImageBtn.addEventListener('click', () => this.imageInput.click());
+        this.imageInput.addEventListener('change', (e) => this._handleImageSelect(e));
+        this.openDrawingBtn.addEventListener('click', () => this._openDrawingModal());
+        // NEU: Listener für Löschen-Buttons
+        this.deleteImageBtn.addEventListener('click', () => this._deleteAttachment('image'));
+        this.deleteDrawingBtn.addEventListener('click', () => this._deleteAttachment('drawing'));
     }
 
     async handleFormSubmit(e) {
         e.preventDefault();
+        if (this.timerInterval) clearInterval(this.timerInterval);
         const saveBtn = this.form.querySelector('#pg-save-btn');
         saveBtn.disabled = true;
         saveBtn.textContent = 'Speichern...';
@@ -8952,8 +9110,8 @@ class PGTagebuchView {
         const rowId = this.form.querySelector('#pg-id').value;
         const isNew = !rowId;
 
-        let oldDurationString = this.form.querySelector('#pg-duration-hidden').value;
-        let totalMinutes = parseDurationToMinutes(oldDurationString);
+        const existingPg = isNew ? null : this.allPgs.find(p => p._id === rowId);
+        let totalMinutes = existingPg?.Dauer ? (existingPg.Dauer / 60) : 0;
 
         if (this.timerStartTime) {
             const elapsedMs = Date.now() - this.timerStartTime;
@@ -8961,18 +9119,39 @@ class PGTagebuchView {
             totalMinutes += elapsedMinutes;
         }
 
-        const existingPg = isNew ? null : this.allPgs.find(p => p._id === rowId);
         const dateValue = existingPg ? new Date(existingPg.Datum).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+
+        // NEU: Upload-Logik
+        const imageUploadPromise = this.pendingImageFile
+            ? this._uploadFile(this.pendingImageFile)
+            : Promise.resolve(null);
+
+        const drawingUploadPromise = this.pendingDrawingDataUrl
+            ? this._uploadFile(this._dataURLtoFile(this.pendingDrawingDataUrl, 'zeichnung.png'))
+            : Promise.resolve(null);
+
+        const [imagePath, drawingPath] = await Promise.all([imageUploadPromise, drawingUploadPromise]);
 
         const rowData = { // KORREKTUR: Spalten-Keys statt Property-Namen verwenden
             [COLUMN_MAPS.pg.Leiter]: [this.currentUserId],
             [COLUMN_MAPS.pg.Mitarbeiter]: [this.form.querySelector('#pg-mitarbeiter').value],
             [COLUMN_MAPS.pg.Datum]: dateValue,
             [COLUMN_MAPS.pg.Titel]: this.form.querySelector('#pg-titel').value,
-            [COLUMN_MAPS.pg.Text]: this.form.querySelector('#pg-text').value,
-            [COLUMN_MAPS.pg.Aufgaben]: this.form.querySelector('#pg-aufgaben').value,
+            [COLUMN_MAPS.pg.Text]: this.quill.root.innerHTML,
+            [COLUMN_MAPS.pg.Aufgaben]: this._serializeAufgaben(),
             [COLUMN_MAPS.pg.Dauer]: totalMinutes * 60 // KORREKTUR: Dauer in Sekunden speichern
         };
+
+        if (imagePath) {
+            rowData[COLUMN_MAPS.pg.Bild] = [{ name: this.pendingImageFile.name, url: imagePath }];
+        } else if (this.imageDeleted) {
+            rowData[COLUMN_MAPS.pg.Bild] = null;
+        }
+        if (drawingPath) {
+            rowData[COLUMN_MAPS.pg.Zeichnung] = [{ name: 'zeichnung.png', url: drawingPath }];
+        } else if (this.drawingDeleted) {
+            rowData[COLUMN_MAPS.pg.Zeichnung] = null;
+        }
 
         pgLog('Daten werden gespeichert:', JSON.parse(JSON.stringify(rowData)));
 
@@ -8992,7 +9171,10 @@ class PGTagebuchView {
 
     async handleDelete() {
         const rowId = this.form.querySelector('#pg-id').value;
-        if (rowId && confirm('Möchten Sie dieses Gespräch wirklich löschen?')) {
+        if (!rowId) return;
+
+        const confirmed = await showConfirmationModal('Möchten Sie dieses Gespräch wirklich löschen?', 'Löschen bestätigen', 'Ja, löschen');
+        if (confirmed) {
             const success = await seaTableDeleteRow('PG', rowId);
             if (success) {
                 localStorage.removeItem(CACHE_PREFIX + 'pg');
@@ -9002,6 +9184,236 @@ class PGTagebuchView {
                 alert('Fehler beim Löschen.');
             }
         }
+    }
+
+    _setupTimer(pg) {
+        if (this.timerInterval) clearInterval(this.timerInterval);
+
+        const initialDuration = pg ? (pg.Dauer || 0) : 0; // in seconds
+
+        const updateTimer = () => {
+            const elapsedSeconds = this.timerStartTime ? Math.floor((Date.now() - this.timerStartTime) / 1000) : 0;
+            const totalSeconds = initialDuration + elapsedSeconds;
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            this.timerDisplay.textContent = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        };
+
+        updateTimer(); // Initial call
+        this.timerInterval = setInterval(updateTimer, 1000);
+    }
+
+    _handleImageSelect(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        this.pendingImageFile = file;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            this._displayPreview('image', e.target.result);
+        };
+        reader.readAsDataURL(file);
+    }
+
+    _openDrawingModal() {
+        this.drawingModal.classList.add('visible');
+        const canvas = this.drawingCanvas;
+        // Resize canvas to fit container
+        const ratio = Math.max(window.devicePixelRatio || 1, 1);
+        canvas.width = canvas.offsetWidth * ratio;
+        canvas.height = canvas.offsetHeight * ratio;
+        canvas.getContext("2d").scale(ratio, ratio);
+
+        this.signaturePad = new SignaturePad(canvas, {
+            penColor: document.getElementById('drawing-color').value
+        });
+
+        document.getElementById('drawing-color').onchange = (e) => { this.signaturePad.penColor = e.target.value; };
+        document.getElementById('drawing-pen-width').oninput = (e) => { this.signaturePad.minWidth = e.target.value; this.signaturePad.maxWidth = e.target.value; };
+        document.getElementById('drawing-clear-btn').onclick = () => { this.signaturePad.clear(); };
+        document.getElementById('drawing-save-btn').onclick = () => this._saveDrawing();
+        // NEU: Event-Listener für den Undo-Button
+        document.getElementById('drawing-undo-btn').onclick = () => {
+            const data = this.signaturePad.toData();
+            if (data && data.length > 0) {
+                data.pop(); // Entfernt die letzte Aktion
+                this.signaturePad.fromData(data);
+            }
+        };
+    }
+
+    _saveDrawing() {
+        if (this.signaturePad.isEmpty()) {
+            alert("Bitte zeichnen Sie zuerst etwas.");
+            return;
+        }
+        this.pendingDrawingDataUrl = this.signaturePad.toDataURL('image/png');
+        this._displayPreview('drawing', this.pendingDrawingDataUrl);
+        this.drawingModal.classList.remove('visible');
+        this.signaturePad.off();
+        this.signaturePad = null;
+    }
+
+    _displayPreview(type, url) {
+        const container = type === 'image' ? this.imagePreviewContainer : this.drawingPreviewContainer;
+        const deleteBtn = type === 'image' ? this.deleteImageBtn : this.deleteDrawingBtn;
+
+        // Clear only the preview content (span or img)
+        const previewContent = container.querySelector('span, img');
+        if (previewContent) previewContent.remove();
+
+        if (url) {
+            const img = document.createElement('img');
+            img.src = url.startsWith('data:') ? url : `${apiGatewayUrl}thumbnail/${SEATABLE_DTABLE_UUID}/${url}`;
+            img.className = 'w-full h-full object-contain';
+            container.prepend(img);
+            deleteBtn.classList.remove('hidden');
+        } else {
+            const span = document.createElement('span');
+            span.className = 'text-gray-500';
+            span.textContent = 'Vorschau';
+            container.prepend(span);
+            deleteBtn.classList.add('hidden');
+        }
+    }
+
+    async _uploadFile(file) {
+        if (!file) return null;
+        pgLog(`Uploading file: ${file.name}`);
+        const uploadLinkData = await seaTableGetUploadLink();
+        if (!uploadLinkData || !uploadLinkData.upload_link) {
+            alert('Fehler: Upload-Link konnte nicht vom Server abgerufen werden.');
+            return null;
+        }
+
+        const success = await seaTableUploadFile(uploadLinkData.upload_link, file);
+        if (success) {
+            pgLog(`File uploaded successfully. Path: ${uploadLinkData.path}`);
+            return uploadLinkData.path;
+        } else {
+            alert('Fehler beim Hochladen der Datei.');
+            return null;
+        }
+    }
+
+    _dataURLtoFile(dataurl, filename) {
+        let arr = dataurl.split(','),
+            mime = arr[0].match(/:(.*?);/)[1],
+            bstr = atob(arr[1]),
+            n = bstr.length,
+            u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new File([u8arr], filename, { type: mime });
+    }
+
+    // NEU: Methode zum Löschen von Anhängen
+    _deleteAttachment(type) {
+        pgLog(`Lösche Anhang vom Typ: ${type}`);
+        if (type === 'image') {
+            this.pendingImageFile = null;
+            this.imageDeleted = true;
+            this._displayPreview('image', null);
+        } else if (type === 'drawing') {
+            this.pendingDrawingDataUrl = null;
+            this.drawingDeleted = true;
+            this._displayPreview('drawing', null);
+        }
+    }
+
+    // NEU: Rendert die interaktive To-Do-Liste aus einem Text-String
+    _renderAufgaben(text) {
+        const container = this.form.querySelector('#pg-aufgaben-container');
+        container.innerHTML = ''; // Clear previous content
+        const lines = text.split('\n');
+
+        lines.forEach(line => {
+            const trimmedLine = line.trim();
+            // Check for todo items: "- [x] text", "- [ ] text", or "- text"
+            if (trimmedLine.startsWith('-')) {
+                const isChecked = trimmedLine.startsWith('- [x]');
+                const isUnchecked = trimmedLine.startsWith('- [ ]');
+                
+                let todoText = '';
+                if (isChecked) todoText = line.substring(line.indexOf('] ') + 2);
+                else if (isUnchecked) todoText = line.substring(line.indexOf('] ') + 2);
+                else todoText = line.substring(line.indexOf('-') + 1).trim();
+
+                const todoItem = document.createElement('div');
+                todoItem.className = 'flex items-center gap-2 my-1 pg-todo-item group';
+                todoItem.innerHTML = `
+                    <input type="checkbox" class="h-5 w-5 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light pg-todo-checkbox" ${isChecked ? 'checked' : ''}>
+                    <input type="text" class="flex-grow bg-transparent border-b border-gray-200 focus:outline-none focus:border-skt-blue pg-todo-text" value="${this._escapeHtml(todoText)}">
+                    <button type="button" class="text-gray-400 hover:text-red-500 pg-todo-delete-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Löschen"><i class="fas fa-times"></i></button>
+                `;
+                container.appendChild(todoItem);
+                todoItem.querySelector('.pg-todo-delete-btn').addEventListener('click', () => todoItem.remove());
+            } else { // It's a heading or an empty line
+                const otherItem = document.createElement('div');
+                if (line.trim() === '') {
+                    otherItem.className = 'py-1 pg-empty-line';
+                    otherItem.innerHTML = '&nbsp;'; // Keep empty lines for spacing
+                    container.appendChild(otherItem);
+                } else {
+                    // KORREKTUR: Überschriften sind jetzt editierbare Input-Felder
+                    otherItem.className = 'py-1 pg-heading-item group';
+                    otherItem.innerHTML = `
+                        <input type="text" class="w-full bg-transparent font-bold text-skt-blue mt-2 border-b border-transparent focus:outline-none focus:border-skt-blue pg-heading-text" value="${this._escapeHtml(line)}">
+                    `;
+                    container.appendChild(otherItem);
+                }
+            }
+        });
+
+        // Add a button to add new todos
+        const addTodoBtn = document.createElement('button');
+        addTodoBtn.type = 'button';
+        addTodoBtn.className = 'mt-2 text-skt-blue hover:underline text-sm';
+        addTodoBtn.innerHTML = '<i class="fas fa-plus mr-1"></i> Aufgabe hinzufügen';
+        addTodoBtn.addEventListener('click', () => {
+            const todoItem = document.createElement('div');
+            todoItem.className = 'flex items-center gap-2 my-1 pg-todo-item group';
+            todoItem.innerHTML = `
+                <input type="checkbox" class="h-5 w-5 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light pg-todo-checkbox">
+                <input type="text" class="flex-grow bg-transparent border-b border-gray-200 focus:outline-none focus:border-skt-blue pg-todo-text" value="">
+                <button type="button" class="text-gray-400 hover:text-red-500 pg-todo-delete-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Löschen"><i class="fas fa-times"></i></button>
+            `;
+            container.insertBefore(todoItem, addTodoBtn);
+            todoItem.querySelector('.pg-todo-delete-btn').addEventListener('click', () => todoItem.remove());
+            todoItem.querySelector('.pg-todo-text').focus();
+        });
+        container.appendChild(addTodoBtn);
+
+        // Helper to escape HTML
+        if (!this._escapeHtml) {
+            this._escapeHtml = (str) => {
+                const div = document.createElement('div');
+                div.appendChild(document.createTextNode(str));
+                return div.innerHTML;
+            };
+        }
+    }
+ 
+    // NEU: Serialisiert die interaktive To-Do-Liste zurück in einen Text-String
+    _serializeAufgaben() {
+        const container = this.form.querySelector('#pg-aufgaben-container');
+        const lines = [];
+        Array.from(container.children).forEach(child => {
+            if (child.classList.contains('pg-todo-item')) {
+                const checkbox = child.querySelector('.pg-todo-checkbox');
+                const textInput = child.querySelector('.pg-todo-text');
+                const marker = checkbox.checked ? '- [x]' : '- [ ]';
+                lines.push(`${marker} ${textInput.value}`);
+            } else if (child.classList.contains('pg-heading-item')) {
+                const textInput = child.querySelector('.pg-heading-text');
+                lines.push(textInput.value);
+            } else if (child.classList.contains('pg-empty-line')) {
+                lines.push('');
+            }
+            // Ignore the button container
+        });
+        return lines.join('\n');
     }
 }
 
