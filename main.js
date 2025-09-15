@@ -517,16 +517,17 @@ async function seaTableUpdateRow(tableName, rowId, rowData) {
 
       if (!colName || colName === "_id") continue;
 
-      if (colName === "Mitarbeiter_ID") {
-        const mitarbeiterRowId = value && value[0] ? value[0] : null;
-        const success = await seaTableUpdateLinkField(rowId, mitarbeiterRowId);
+      const colMeta = tableMeta.columns.find(c => c.key === key);
+
+      if (colMeta && colMeta.type === 'link') {
+        const linkRowId = value && value[0] ? value[0] : null;
+        const success = await updateSingleLink(tableName, rowId, colName, linkRowId ? [linkRowId] : []);
         if (!success) {
           console.error(`[API-LINK-UPDATE] Failed to update field: ${colName}`);
           allUpdatesSucceeded = false;
           break;
         }
       } else {
-        const colMeta = tableMeta.columns.find(c => c.key === key);
         let formattedValue;
         if (value === null || value === undefined || value === '') {
             formattedValue = "NULL";
@@ -606,19 +607,26 @@ async function seaTableAddRow(tableName, rowData) {
   }
 
   // --- SCHRITT 1: Daten vorbereiten (Link trennen, Keys in Namen umwandeln) ---
-  const mitarbeiterIdKey = SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID;
-  const mitarbeiterRowId = rowData[mitarbeiterIdKey] ? rowData[mitarbeiterIdKey][0] : null;
-  
-  const rowDataForCreation = { ...rowData };
-  delete rowDataForCreation[mitarbeiterIdKey];
-
-  // KORREKTUR: Der 'rows' Endpunkt erwartet Spalten-NAMEN, nicht Spalten-Keys.
-  // Wir müssen die Keys (z.B. '0000') in Namen (z.B. 'Terminpartner') umwandeln.
   const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
   if (!tableMap) {
       console.error(`[ADD-ROW-NEW] Column map for table '${tableName}' not found.`);
       return false;
   }
+  const tableMeta = METADATA.tables.find(t => t.name.toLowerCase() === tableName.toLowerCase());
+  const linkColumns = tableMeta ? tableMeta.columns.filter(c => c.type === 'link') : [];
+
+  const linkData = {};
+  const rowDataForCreation = { ...rowData };
+
+  linkColumns.forEach(col => {
+      if (rowDataForCreation[col.key]) {
+          linkData[col.name] = rowDataForCreation[col.key][0]; // Store by name for updateSingleLink
+          delete rowDataForCreation[col.key];
+      }
+  });
+
+  // KORREKTUR: Der 'rows' Endpunkt erwartet Spalten-NAMEN, nicht Spalten-Keys.
+  // Wir müssen die Keys (z.B. '0000') in Namen (z.B. 'Terminpartner') umwandeln.
   const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
 
   const rowDataWithNames = {};
@@ -670,15 +678,17 @@ async function seaTableAddRow(tableName, rowData) {
     return false;
   }
 
-  // --- SCHRITT 3: Mitarbeiter verknüpfen ---
-  if (mitarbeiterRowId) {
-    console.log(`[ADD-ROW-NEW] Step 2: Linking Mitarbeiter_ID ${mitarbeiterRowId} to new Termin ${newRowId}.`);
-    const linkSuccess = await seaTableUpdateLinkField(newRowId, mitarbeiterRowId);
-    if (!linkSuccess) {
-      console.error("[ADD-ROW-NEW] Step 2 FAILED: Could not link employee to the new row.");
-      return false; // Fehler, wenn die Verknüpfung fehlschlägt.
+  // --- SCHRITT 3: Verknüpfungen setzen ---
+  for (const colName in linkData) {
+    if (linkData[colName]) {
+        console.log(`[ADD-ROW-NEW] Step 2: Linking ${colName} ${linkData[colName]} to new row ${newRowId}.`);
+        const linkSuccess = await updateSingleLink(tableName, newRowId, colName, [linkData[colName]]);
+        if (!linkSuccess) {
+            console.error(`[ADD-ROW-NEW] Step 2 FAILED: Could not link ${colName} to the new row.`);
+            return false; // Fehler, wenn die Verknüpfung fehlschlägt.
+        }
+        console.log(`[ADD-ROW-NEW] Step 2 Success: ${colName} linked.`);
     }
-    console.log("[ADD-ROW-NEW] Step 2 Success: Employee linked.");
   }
 
   console.log(`[ADD-ROW-NEW] Process finished successfully. Returning new row ID: ${newRowId}`);
@@ -823,6 +833,167 @@ async function seaTableAddUmsatzRow(tableName, rowData) {
     return allLinksSuccess;
 }
 // --- DATA NORMALIZATION & MAPPING ---
+
+async function seaTableUpdateTermin(rowId, rowData) {
+    const tableName = 'Termine';
+    const terminLog = (message, ...data) => console.log(`%c[UpdateTermin] %c${message}`, 'color: #4f46e5; font-weight: bold;', 'color: black;', ...data);
+    terminLog(`Starte Update für Termin ID: ${rowId}`);
+
+    const tableMap = COLUMN_MAPS.termine;
+    if (!tableMap) {
+        terminLog('!!! FEHLER: Spalten-Map für Termine nicht gefunden.');
+        return false;
+    }
+    const tableMeta = METADATA.tables.find(t => t.name.toLowerCase() === tableName.toLowerCase());
+    if (!tableMeta) {
+        terminLog('!!! FEHLER: Metadaten für Termine nicht gefunden.');
+        return false;
+    }
+    const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
+
+    const linkColumnKeys = [
+        tableMap.Mitarbeiter_ID,
+        tableMap.Eingeladener
+    ].filter(Boolean);
+
+    const dataUpdates = {};
+    const linkUpdates = {};
+
+    // 1. Trenne Link-Daten von anderen Daten
+    for (const key in rowData) {
+        if (linkColumnKeys.includes(key)) {
+            linkUpdates[key] = rowData[key];
+        } else {
+            dataUpdates[key] = rowData[key];
+        }
+    }
+    terminLog('Getrennte Daten:', { dataUpdates, linkUpdates });
+
+    // 2. Aktualisiere Nicht-Link-Daten mit einer einzigen SQL-Abfrage
+    const setClauses = [];
+    for (const key in dataUpdates) {
+        const value = dataUpdates[key];
+        const colName = reversedMap[key];
+        if (!colName || colName === '_id') continue;
+
+        const colMeta = tableMeta.columns.find(c => c.key === key);
+        let formattedValue;
+        if (value === null || value === undefined || value === '') {
+            formattedValue = "NULL";
+        } else if (colMeta && colMeta.type === 'date') {
+            const formattedDate = String(value).replace('T', ' ');
+            formattedValue = `'${escapeSql(formattedDate)}'`;
+        } else if (colMeta && (colMeta.type === 'number' || colMeta.type === 'duration')) {
+            const numValue = parseFloat(value);
+            formattedValue = isNaN(numValue) ? "NULL" : numValue;
+        } else if (typeof value === "boolean") {
+            formattedValue = value ? "true" : "false";
+        } else {
+            formattedValue = `'${escapeSql(String(value))}'`;
+        }
+        setClauses.push(`\`${colName}\` = ${formattedValue}`);
+    }
+
+    if (setClauses.length > 0) {
+        const sql = `UPDATE \`${tableName}\` SET ${setClauses.join(', ')} WHERE \`_id\` = '${rowId}'`;
+        terminLog('Führe SQL-Update für Datenfelder aus:', sql);
+        const result = await seaTableSqlQuery(sql, false);
+        if (result === null) {
+            terminLog('!!! FEHLER: SQL-Update fehlgeschlagen.');
+            return false;
+        }
+        terminLog('SQL-Update erfolgreich.');
+    }
+
+    // 3. Aktualisiere Link-Daten separat am Ende
+    for (const key in linkUpdates) {
+        const colName = reversedMap[key];
+        const linkRowId = linkUpdates[key] && linkUpdates[key][0] ? linkUpdates[key][0] : null;
+        terminLog(`Aktualisiere Link-Feld '${colName}' mit ID: ${linkRowId}`);
+        const success = await updateSingleLink(tableName, rowId, colName, linkRowId ? [linkRowId] : []);
+        if (!success) {
+            terminLog(`!!! FEHLER: Update für Link-Feld '${colName}' fehlgeschlagen.`);
+            return false;
+        }
+        terminLog(`Link-Feld '${colName}' erfolgreich aktualisiert.`);
+    }
+
+    terminLog(`Update für Termin ID ${rowId} erfolgreich abgeschlossen.`);
+    return rowId;
+}
+
+async function seaTableAddTermin(rowData) {
+    const tableName = 'Termine';
+    const terminLog = (message, ...data) => console.log(`%c[AddTermin] %c${message}`, 'color: #4f46e5; font-weight: bold;', 'color: black;', ...data);
+    terminLog('Starte Anlegen eines neuen Termins.');
+
+    const tableMap = COLUMN_MAPS.termine;
+    if (!tableMap) {
+        terminLog('!!! FEHLER: Spalten-Map für Termine nicht gefunden.');
+        return false;
+    }
+    const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
+
+    const linkColumnKeys = [
+        tableMap.Mitarbeiter_ID,
+        tableMap.Eingeladener
+    ].filter(Boolean);
+
+    const rowDataForCreation = {};
+    const linkUpdates = {};
+
+    // 1. Trenne Link-Daten von anderen Daten und konvertiere Keys zu Namen
+    for (const key in rowData) {
+        const colName = reversedMap[key];
+        if (!colName || colName === '_id') continue;
+
+        if (linkColumnKeys.includes(key)) {
+            linkUpdates[colName] = rowData[key];
+        } else {
+            const value = rowData[key];
+            rowDataForCreation[colName] = (value === undefined || value === '') ? null : value;
+        }
+    }
+    terminLog('Getrennte Daten:', { rowDataForCreation, linkUpdates });
+
+    // 2. Zeile mit den meisten Daten anlegen
+    let newRowId = null;
+    try {
+        const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+        const body = { table_name: tableName, rows: [rowDataForCreation] };
+        terminLog('Schritt 1: Erstelle Zeile mit Body:', body);
+        terminLog('Schritt 1: Erstelle Zeile mit Body:', body);
+        const response = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${seaTableAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        const result = await response.json();
+        if (!response.ok || !result.row_ids || result.row_ids.length === 0) {
+            throw new Error(`Create failed: ${result.error_message || 'No row ID returned'}`);
+        }
+        newRowId = result.row_ids[0]?._id;
+        if (!newRowId) throw new Error("Could not get new row ID");
+        terminLog(`Schritt 1 erfolgreich: Neue Zeile mit ID ${newRowId} erstellt.`);
+    } catch (error) {
+        terminLog('!!! FEHLER: Schritt 1 (Zeile erstellen) fehlgeschlagen.', error);
+        return false;
+    }
+
+    // 3. Aktualisiere Link-Daten separat am Ende
+    for (const colName in linkUpdates) {
+        const linkRowId = linkUpdates[colName] && linkUpdates[colName][0] ? linkUpdates[colName][0] : null;
+        if (linkRowId) {
+            terminLog(`Schritt 2: Aktualisiere Link-Feld '${colName}' mit ID: ${linkRowId}`);
+            const success = await updateSingleLink(tableName, newRowId, colName, [linkRowId]);
+            if (!success) {
+                terminLog(`!!! FEHLER: Update für Link-Feld '${colName}' fehlgeschlagen.`);
+                // Hier könnte man überlegen, die gerade erstellte Zeile wieder zu löschen.
+                return false;
+            }
+            terminLog(`Link-Feld '${colName}' erfolgreich aktualisiert.`);
+        }
+    }
+
+    terminLog(`Anlegen des Termins mit ID ${newRowId} erfolgreich abgeschlossen.`);
+    return newRowId;
+}
 
 // NEU: Generische Funktion zum Hinzufügen einer Zeile, die von `addPlanningRowToDatabase` verwendet wird.
 async function genericSeaTableAddRow(tableName, rowDataWithNames) {
@@ -3933,13 +4104,15 @@ class AppointmentsView {
                 const userNamesSql = userNameChunk.map(name => `'${SKT_APP.escapeSql(name)}'`).join(',');
 
                 // KORREKTUR: Lade den gesamten benötigten Datumsbereich auf einmal, anstatt in Monats-Schritten.
-                const query = `SELECT *, Mitarbeiter_ID FROM \`Termine\` WHERE \`Datum\` >= '${overallStartDateIso}' AND \`Datum\` <= '${overallEndDateIso}' AND \`Mitarbeiter_ID\` IN (${userNamesSql})`;
+                // NEU: Lade auch Termine, bei denen der Benutzer eingeladen ist.
+                const query = `SELECT *, Mitarbeiter_ID, Eingeladener FROM \`Termine\` WHERE \`Datum\` >= '${overallStartDateIso}' AND \`Datum\` <= '${overallEndDateIso}' AND (\`Mitarbeiter_ID\` IN (${userNamesSql}) OR \`Eingeladener\` IN (${userNamesSql}))`;
                 promises.push(SKT_APP.seaTableSqlQuery(query, true));
 
                 // KORREKTUR: Lade zusätzlich alle überfälligen Termine, um die Diskrepanz zur Dashboard-Anzeige zu beheben.
                 const today = new Date(getCurrentDate());
                 const todayIso = today.toISOString().split('T')[0];
-                const outstandingQuery = `SELECT *, Mitarbeiter_ID FROM \`Termine\` WHERE \`Datum\` < '${todayIso}' AND \`Status\` = 'Ausgemacht' AND \`Mitarbeiter_ID\` IN (${userNamesSql})`;
+                // NEU: Auch hier nach eingeladenen Terminen suchen.
+                const outstandingQuery = `SELECT *, Mitarbeiter_ID, Eingeladener FROM \`Termine\` WHERE \`Datum\` < '${todayIso}' AND \`Status\` = 'Ausgemacht' AND (\`Mitarbeiter_ID\` IN (${userNamesSql}) OR \`Eingeladener\` IN (${userNamesSql}))`;
                 promises.push(SKT_APP.seaTableSqlQuery(outstandingQuery, true));
             }
 
@@ -4030,7 +4203,6 @@ class AppointmentsView {
         
         this.statsViewCalendarBtn.addEventListener('click', () => this._switchStatsView('calendar'));
         this.statsViewTableBtn.addEventListener('click', () => this._switchStatsView('table'));
-
 
         // NEU: Event Listener für das Dropdown
         this.statsCategoryFilterBtn.addEventListener('click', (e) => {
@@ -4187,6 +4359,7 @@ class AppointmentsView {
         const categories = categoryColumn.data.options.map(o => o.name);
         
         const relevantCategories = ['AT', 'BT', 'ST', 'ET', 'Immo', 'NT'];
+        const specialCategories = ['PG', 'Sonstiges'];
 
         const createCheckbox = (label, value, isChecked = false) => {
             const wrapper = document.createElement('label');
@@ -4205,7 +4378,10 @@ class AppointmentsView {
             wrapper.appendChild(span);
             this.statsCategoryFilterPanel.appendChild(wrapper);        };
 
-        categories.filter(cat => relevantCategories.includes(cat)).forEach(cat => createCheckbox(cat, cat, true));
+        categories.filter(cat => [...relevantCategories, ...specialCategories].includes(cat)).forEach(cat => {
+            const isDefaultVisible = relevantCategories.includes(cat);
+            createCheckbox(cat, cat, isDefaultVisible);
+        });
 
         // Buttons für "Alle auswählen" und "Alle entfernen" wurden entfernt.
         // NEU: "Abgesagte einblenden" Toggle hier hinzufügen
@@ -4369,6 +4545,7 @@ class AppointmentsView {
         const calendarAppointments = this.searchFilteredAppointments
             .filter(categoryFilter)
             .filter(cancelledFilter)
+            .filter(heldFilter)
             .filter(t => {
                 const terminDate = new Date(t.Datum);
                 return terminDate >= cycleStartDate && terminDate <= cycleEndDate;
@@ -4413,23 +4590,24 @@ class AppointmentsView {
             let appointmentsHtml = '';
             if (appointmentsForDay.length > 0) {
                 appointmentsHtml = appointmentsForDay.map(termin => {
-                    const color = categoryColors[termin.Kategorie] || 'bg-skt-grey-medium';
-                    let mitarbeiterName = 'N/A';
-                    if (termin.Mitarbeiter_ID && Array.isArray(termin.Mitarbeiter_ID) && termin.Mitarbeiter_ID[0]?.display_value) {
-                        mitarbeiterName = termin.Mitarbeiter_ID[0].display_value;
-                    } else if (typeof termin.Mitarbeiter_ID === 'string') {
-                        mitarbeiterName = SKT_APP.findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
-                    }
+                    const mitarbeiterName = termin.Mitarbeiter_ID?.[0]?.display_value || SKT_APP.findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
                     const terminTime = termin.Datum ? new Date(termin.Datum).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
 
                     // NEU: Logik für Status-Farben und Kategorie-Bereich
                     const statusColorClass = this._getStatusColorClass(termin).replace('border-l-4', 'border-').replace('bg-', 'border-');
                     const categoryPillColor = categoryColors[termin.Kategorie] || 'bg-gray-400';
 
+                    // NEU: Logik für "+1"-Icon
+                    const ownerId = termin.Mitarbeiter_ID?.[0]?.row_id;
+                    const inviteeId = termin.Eingeladener?.[0]?.row_id;
+                    // NEU: +1 wird angezeigt, wenn der aktuell angezeigte Benutzer der Eingeladene ist, aber nicht der Besitzer.
+                    const isInvitee = inviteeId === this.currentUserId && ownerId !== this.currentUserId;
+                    const inviteeHtml = isInvitee ? `<span class="ml-2 text-xs font-bold text-white bg-skt-blue rounded-full h-5 w-5 inline-flex items-center justify-center" title="Du bist eingeladen">+1</span>` : '';
+
                     return `<div class="rounded-lg shadow-sm bg-white text-skt-blue text-xs mb-1.5 flex overflow-hidden border border-gray-200 border-l-4 ${statusColorClass}" data-id="${termin._id}">
                                 <div class="flex-shrink-0 ${categoryPillColor} text-white font-bold flex items-center justify-center p-2 w-12 text-center">${termin.Kategorie}</div>
                                 <div class="flex-grow p-2 min-w-0 cursor-pointer">
-                                    <p class="font-bold truncate">${termin.Terminpartner || 'Unbekannt'}</p>
+                                    <p class="font-bold truncate flex items-center">${termin.Terminpartner || 'Unbekannt'}${inviteeHtml}</p>
                                     <p class="text-gray-500">${mitarbeiterName}</p>
                                 </div>
                                 <div class="add-to-calendar-btn flex flex-col items-center justify-center flex-shrink-0 p-2 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors" data-termin-id="${termin._id}" title="Zum Kalender hinzufügen">
@@ -4463,28 +4641,60 @@ class AppointmentsView {
         }, 150);
     }
     // NEU: Funktion zum Erstellen und Herunterladen einer .ics-Datei
+    _escapeIcsString(str) {
+        // HINWEIS: Diese Funktion wurde aus der vorherigen Version übernommen und scheint korrekt zu sein.
+        // Sie maskiert Sonderzeichen für das ICS-Format.
+        if (!str) return '';
+        return str.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+    }
+
     _addToCalendar(terminId) {
+        const icsLog = (message, ...data) => console.log(`%c[iCal] %c${message}`, 'color: #9b59b6; font-weight: bold;', 'color: black;', ...data);
+        icsLog(`Erstelle iCal für Termin-ID: ${terminId}`);
         const termin = this.allAppointments.find(t => t._id === terminId);
         if (!termin) {
+            icsLog('!!! FEHLER: Termin nicht gefunden.');
             alert('Termin nicht gefunden.');
             return;
         }
 
         const startDate = new Date(termin.Datum);
-        const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // Annahme: 1 Stunde Dauer
+        // NEU: Dauer aus dem Termin verwenden, Fallback auf 1 Stunde
+        const durationInSeconds = termin.Dauer || 3600;
+        const endDate = new Date(startDate.getTime() + durationInSeconds * 1000);
 
         const toIcsDate = (date) => date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+        // NEU: Eingeladenen als Teilnehmer hinzufügen
+        let attendeeIcs = '';
+        icsLog('Suche nach Eingeladenem im Termin-Objekt:', termin);
+        const inviteeLink = termin.Eingeladener;
+        if (inviteeLink && Array.isArray(inviteeLink) && inviteeLink.length > 0) {
+            const inviteeId = inviteeLink[0].row_id;
+            icsLog(`Eingeladener gefunden. Row-ID: ${inviteeId}`);
+            const inviteeUser = SKT_APP.findRowById('mitarbeiter', inviteeId);
+            icsLog('Gefundener Mitarbeiter-Datensatz für Eingeladenen:', inviteeUser);
+            if (inviteeUser && inviteeUser.Email) {
+                attendeeIcs = `ATTENDEE;CN="${this._escapeIcsString(inviteeUser.Name)}";ROLE=REQ-PARTICIPANT:mailto:${inviteeUser.Email}`;
+                icsLog(`E-Mail gefunden: ${inviteeUser.Email}. Erstellter ATTENDEE-String:`, attendeeIcs);
+            } else {
+                icsLog(`Keine E-Mail für den eingeladenen Benutzer (${inviteeUser?.Name}) gefunden.`);
+            }
+        } else {
+            icsLog('Kein oder ungültiges "Eingeladener"-Feld im Termin gefunden.');
+        }
 
         const icsContent = [
             'BEGIN:VCALENDAR',
             'VERSION:2.0',
             'PRODID:-//SKT Success Dashboard//DE',
+            'METHOD:REQUEST', // NEU: Fügt die Methode hinzu, um eine Einladung zu signalisieren.
             'BEGIN:VEVENT',
             `UID:${termin._id}@skt-dashboard.app`,
             `DTSTAMP:${toIcsDate(new Date())}`,
             `DTSTART:${toIcsDate(startDate)}`,
             `DTEND:${toIcsDate(endDate)}`,
-            `SUMMARY:${(() => {
+            `SUMMARY:${this._escapeIcsString((() => {
                 let summary = `${termin.Kategorie} ${termin.Terminpartner || 'Unbekannt'}`;
                 const terminOwnerId = termin.Mitarbeiter_ID?.[0]?.row_id || termin.Mitarbeiter_ID;
                 if (terminOwnerId && terminOwnerId !== SKT_APP.authenticatedUserData._id) {
@@ -4492,11 +4702,15 @@ class AppointmentsView {
                     summary += ` (${ownerName})`;
                 }
                 return summary;
-            })()}`,
-            `DESCRIPTION:Mitarbeiter: ${termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A'}\\nStatus: ${termin.Status}\\nHinweis: ${termin.Hinweis || ''}`,
+            })())}`,
+            `LOCATION:${this._escapeIcsString(termin.Ort)}`,
+            `DESCRIPTION:Mitarbeiter: ${this._escapeIcsString(termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A')}\\nStatus: ${this._escapeIcsString(termin.Status)}\\nHinweis: ${this._escapeIcsString(termin.Hinweis || '')}`,
+            attendeeIcs,
             'END:VEVENT',
             'END:VCALENDAR'
-        ].join('\r\n');
+        ].filter(Boolean).join('\r\n');
+
+        icsLog('Finaler iCal Inhalt:', icsContent);
 
         const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
         const link = document.createElement('a');
@@ -4569,9 +4783,20 @@ class AppointmentsView {
             const mitarbeiterName = termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
             // NEU: Status-Text basierend auf den neuen Regeln einfärben
             const statusTextColorClass = this._getStatusTextColorClass(termin.Status);
+
+            // NEU: Logik für "+1"-Icon, identisch zur Kalenderansicht
+            const ownerId = termin.Mitarbeiter_ID?.[0]?.row_id;
+            const inviteeId = termin.Eingeladener?.[0]?.row_id;
+            // NEU: +1 wird angezeigt, wenn der aktuell angezeigte Benutzer der Eingeladene ist, aber nicht der Besitzer.
+            const isInvitee = inviteeId === this.currentUserId && ownerId !== this.currentUserId;
+            let inviteeHtml = '';
+            if (isInvitee) {
+                inviteeHtml = `<span class="ml-2 text-xs font-bold text-white bg-skt-blue rounded-full h-5 w-5 inline-flex items-center justify-center" title="Du bist eingeladen">+1</span>`;
+            }
+
             tr.innerHTML = `
                 <td>${new Date(termin.Datum).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
-                <td>${termin.Terminpartner || '-'}</td>
+                <td><div class="flex items-center">${termin.Terminpartner || '-'}${inviteeHtml}</div></td>
                 <td>${termin.Kategorie || '-'}</td>
                 <td><span class="${statusTextColorClass}">${termin.Status || '-'}</span></td>
                 <td>${mitarbeiterName}</td>
@@ -5057,23 +5282,19 @@ class AppointmentsView {
         this.form.querySelector('#appointment-infoabend-container').classList.toggle('hidden', category !== 'ET');
 
         // NEU: Logik für das Empfehlungsfeld
-        const partnerContainer = this.form.querySelector('#appointment-partner-container');
         const referralsSingleContainer = this.form.querySelector('#appointment-referrals-container-single');
         const referralsPairedContainer = this.form.querySelector('#appointment-referrals-container-paired');
 
         if (['AT', 'NT'].includes(category)) {
-            // Zeige Empfehlungen neben dem Partner an
-            partnerContainer.classList.remove('col-span-2');
+            // Zeige Empfehlungen im Haupt-Grid an
             referralsSingleContainer.classList.remove('hidden');
             referralsPairedContainer.classList.add('hidden');
         } else if (category === 'ET') {
             // Blende beide Empfehlungsfelder aus
-            partnerContainer.classList.add('col-span-2');
             referralsSingleContainer.classList.add('hidden');
             referralsPairedContainer.classList.add('hidden');
         } else { // BT, ST, Immo
             // Zeige Empfehlungen neben der Prognose an
-            partnerContainer.classList.add('col-span-2');
             referralsSingleContainer.classList.add('hidden');
             referralsPairedContainer.classList.remove('hidden');
         }
@@ -5088,14 +5309,35 @@ class AppointmentsView {
             const title = this.modal.querySelector('#appointment-modal-title');
             const idInput = this.modal.querySelector('#appointment-id');
             const userSelect = this.modal.querySelector('#appointment-user');
+            const inviteeSelect = this.modal.querySelector('#appointment-invitee');
             const categorySelect = this.modal.querySelector('#appointment-category');
             appointmentsLog('Modal elements found.');
 
-            // Dropdowns befüllen
-            const allRelevantUsers = [SKT_APP.authenticatedUserData, ...this.downline].filter(Boolean);
+            // NEU: Logik für Dropdowns getrennt und um Vorgesetzten erweitert
+            const currentUserForDropdowns = SKT_APP.currentlyViewedUserData;
+            const downlineForDropdowns = SKT_APP.getAllSubordinatesRecursive(currentUserForDropdowns._id);
+
+            // Für 'Mitarbeiter' Dropdown (Besitzer des Termins)
+            const usersForAppointmentOwner = [currentUserForDropdowns, ...downlineForDropdowns].filter(Boolean).sort((a, b) => a.Name.localeCompare(b.Name));
+
+            // Für 'Eingeladener' Dropdown (Struktur + direkter, aktiver Vorgesetzter)
+            const usersForInviteeSet = new Set(usersForAppointmentOwner);
+            const managerId = currentUserForDropdowns.Werber;
+            if (managerId) {
+                const manager = SKT_APP.findRowById('mitarbeiter', managerId);
+                if (manager && manager.Status !== 'Ausgeschieden') {
+                    usersForInviteeSet.add(manager);
+                }
+            }
+            const sortedUsersForInvitee = Array.from(usersForInviteeSet).sort((a, b) => a.Name.localeCompare(b.Name));
+
             userSelect.innerHTML = '';
-            allRelevantUsers.forEach(u => userSelect.add(new Option(u.Name, u._id)));
-            appointmentsLog('User dropdown populated.');
+            usersForAppointmentOwner.forEach(u => userSelect.add(new Option(u.Name, u._id)));
+
+            inviteeSelect.innerHTML = '<option value="">-- Kein --</option>';
+            sortedUsersForInvitee.forEach(u => inviteeSelect.add(new Option(u.Name, u._id)));
+
+            appointmentsLog('User dropdowns populated.');
 
             if (!METADATA || !METADATA.tables) {
                 throw new Error("METADATA or METADATA.tables is not available.");
@@ -5118,8 +5360,18 @@ class AppointmentsView {
                 appointmentsLog('Entering edit mode for termin:', termin);
                 title.textContent = 'Termin bearbeiten';
                 idInput.value = termin._id;
-                const user = allRelevantUsers.find(u => u.Name === termin.Mitarbeiter_ID?.[0]?.display_value);
-                if (user) userSelect.value = user._id;
+                const mitarbeiterId = termin.Mitarbeiter_ID?.[0]?.row_id;
+                if (mitarbeiterId) {
+                    // Stelle sicher, dass die Option existiert, bevor du sie setzt
+                    if (userSelect.querySelector(`option[value="${mitarbeiterId}"]`)) {
+                        userSelect.value = mitarbeiterId;
+                    } else {
+                        const mitarbeiterName = termin.Mitarbeiter_ID?.[0]?.display_value || 'Unbekannter Mitarbeiter';
+                        userSelect.add(new Option(mitarbeiterName, mitarbeiterId));
+                        userSelect.value = mitarbeiterId;
+                        console.warn(`Mitarbeiter ${mitarbeiterName} (${mitarbeiterId}) war nicht im Dropdown und wurde temporär hinzugefügt.`);
+                    }
+                }
                 
                 // KORREKTUR: `datetime-local` erwartet das Format YYYY-MM-DDTHH:mm
                 // `toISOString()` konvertiert in UTC, was zu Zeitzonenfehlern führt.
@@ -5133,6 +5385,23 @@ class AppointmentsView {
                     this.form.querySelector('#appointment-date').value = '';
                 }
                 categorySelect.value = termin.Kategorie || '';
+                // NEU: Neue Felder befüllen
+                this.form.querySelector('#appointment-location').value = termin.Ort || '';
+                // KORREKTUR: Dauer von Sekunden in Minuten umrechnen
+                const durationInSeconds = termin.Dauer;
+                if (durationInSeconds) {
+                    this.form.querySelector('#appointment-duration').value = Math.round(durationInSeconds / 60);
+                } else {
+                    this.form.querySelector('#appointment-duration').value = '';
+                }
+                // KORREKTUR: Korrekte ID aus dem Link-Objekt auslesen
+                const inviteeLink = termin.Eingeladener;
+                const inviteeId = inviteeLink && Array.isArray(inviteeLink) && inviteeLink.length > 0 ? inviteeLink[0].row_id : null;
+                if (inviteeId) {
+                    inviteeSelect.value = inviteeId;
+                } else {
+                    inviteeSelect.value = '';
+                }
                 this.form.querySelector('#appointment-partner').value = termin.Terminpartner || '';
                 this.form.querySelector('#appointment-prognose').value = termin.Umsatzprognose || '';
                 // NEU: Wert in beide Empfehlungsfelder schreiben
@@ -5157,6 +5426,11 @@ class AppointmentsView {
                 const now = new Date();
                 now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
                 this.form.querySelector('#appointment-date').value = now.toISOString().slice(0, 16);
+
+                // NEU: Neue Felder leeren
+                this.form.querySelector('#appointment-location').value = '';
+                this.form.querySelector('#appointment-duration').value = '';
+                inviteeSelect.value = '';
 
                 // KORREKTUR: Veraltete `currentTab`-Logik entfernt.
                 // Die Logik wird jetzt durch den neuen Event-Listener in `_handleCategoryChange` gesteuert.
@@ -5224,6 +5498,9 @@ class AppointmentsView {
             const kategorie = this.form.querySelector('#appointment-category').value;
             const status = this.form.querySelector('#appointment-status').value;
             const terminpartner = this.form.querySelector('#appointment-partner').value;
+            const location = this.form.querySelector('#appointment-location').value;
+            const duration = this.form.querySelector('#appointment-duration').value;
+            const inviteeId = this.form.querySelector('#appointment-invitee').value;
             const prognoseRaw = this.form.querySelector('#appointment-prognose').value;
             // NEU: Wert aus dem sichtbaren Empfehlungsfeld lesen
             const empfehlungenRaw = this.form.querySelector('#appointment-referrals-container-single').classList.contains('hidden')
@@ -5270,25 +5547,41 @@ class AppointmentsView {
                     }
                 }
             }
-
+            
+            const terminMap = SKT_APP.COLUMN_MAPS.termine;
             const rowData = {
-                [SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID]: [mitarbeiterId],
-                [SKT_APP.COLUMN_MAPS.termine.Datum]: datum,
-                [SKT_APP.COLUMN_MAPS.termine.Kategorie]: kategorie,
-                // KORREKTUR: Der Status wird nicht mehr auf "Storno" geändert. Die Absage wird nur über das "Absage"-Feld und den Grund gesteuert.
-                [SKT_APP.COLUMN_MAPS.termine.Status]: status,
-                [SKT_APP.COLUMN_MAPS.termine.Terminpartner]: terminpartner,
-                [SKT_APP.COLUMN_MAPS.termine.Umsatzprognose]: parseFloat(prognoseRaw) || null,
-                [SKT_APP.COLUMN_MAPS.termine.Empfehlungen]: parseInt(empfehlungenRaw) || null,
-                [SKT_APP.COLUMN_MAPS.termine.Hinweis]: hinweis,
-                [SKT_APP.COLUMN_MAPS.termine.Absage]: isCancellation,
-                [SKT_APP.COLUMN_MAPS.termine.Absagegrund]: isCancellation ? absagegrund : '',
-                [SKT_APP.COLUMN_MAPS.termine.Infoabend]: kategorie === 'ET' ? infoabend : null,
+                [terminMap.Mitarbeiter_ID]: [mitarbeiterId],
+                [terminMap.Datum]: datum,
+                [terminMap.Kategorie]: kategorie,
+                [terminMap.Status]: status,
+                [terminMap.Terminpartner]: terminpartner,
+                [terminMap.Umsatzprognose]: parseFloat(prognoseRaw) || null,
+                [terminMap.Empfehlungen]: parseInt(empfehlungenRaw) || null,
+                [terminMap.Hinweis]: hinweis,
+                [terminMap.Absage]: isCancellation,
+                [terminMap.Absagegrund]: isCancellation ? absagegrund : '',
+                [terminMap.Infoabend]: kategorie === 'ET' ? infoabend : null,
             };
 
+            // NEU: Neue Felder sicher hinzufügen, um Fehler bei veraltetem Cache zu vermeiden
+            if (terminMap.Ort) {
+                rowData[terminMap.Ort] = location || null;
+            } else { appointmentsLog('WARNUNG: Spalte "Ort" nicht in COLUMN_MAPS gefunden. Feld wird nicht gespeichert.'); }
+            if (terminMap.Dauer) {
+                const durationInMinutes = parseInt(duration);
+                if (!isNaN(durationInMinutes) && durationInMinutes > 0) {
+                    rowData[terminMap.Dauer] = durationInMinutes * 60; // In Sekunden umrechnen
+                } else {
+                    rowData[terminMap.Dauer] = null;
+                }
+            } else { appointmentsLog('WARNUNG: Spalte "Dauer" nicht in COLUMN_MAPS gefunden. Feld wird nicht gespeichert.'); }
+            if (terminMap.Eingeladener) {
+                rowData[terminMap.Eingeladener] = inviteeId ? [inviteeId] : null;
+            } else { appointmentsLog('WARNUNG: Spalte "Eingeladener" nicht in COLUMN_MAPS gefunden. Feld wird nicht gespeichert.'); }
+
             const terminId = rowId 
-                ? await SKT_APP.seaTableUpdateRow('Termine', rowId, rowData)
-                : await SKT_APP.seaTableAddRow('Termine', rowData);
+                ? await SKT_APP.seaTableUpdateTermin(rowId, rowData)
+                : await SKT_APP.seaTableAddTermin(rowData);
 
             appointmentsLog(`API call finished. Termin ID: ${terminId}`);
 
@@ -10427,6 +10720,8 @@ window.SKT_APP = {
   seaTableSqlQuery,
   seaTableAddRow,
   seaTableUpdateRow,
+  seaTableUpdateTermin,
+  seaTableAddTermin,
   seaTableDeleteRow, // NEU: Funktion global verfügbar machen
   mapSqlResults,
   findRowById,
