@@ -428,43 +428,69 @@ async function seaTableGetUploadLink() {
         return null;
     }
     try {
-        // KORREKTUR: Der 'upload-link' Endpunkt liegt auf der Haupt-Domain, nicht auf dem dtable-server.
-        // Wir extrahieren die Basis-URL (z.B. https://cloud.seatable.io) aus der apiGatewayUrl.
+        const log = (message, ...data) => pgLog(`[API-GetUploadLink] ${message}`, ...data);
+        log('Starte Abruf des App-Upload-Links...');
+        if (!apiGatewayUrl) {
+            log("!!! FEHLER: API Gateway URL fehlt.");
+            return null;
+        }
+
         const baseUrl = new URL(apiGatewayUrl).origin;
-        const url = `${baseUrl}/api/v2.1/dtables/${SEATABLE_DTABLE_UUID}/upload-link/`;
+        const url = `${baseUrl}/api/v2.1/dtable/app-upload-link/?dtable_uuid=${SEATABLE_DTABLE_UUID}`;
+        log(`Sende GET-Anfrage an: ${url}`);
         const response = await fetch(url, {
             method: 'GET',
-            // KORREKTUR: Der Endpunkt für den Upload-Link auf der Hauptdomain
-            // scheint den API-Token anstelle des App-Access-Tokens zu benötigen.
             headers: { Authorization: `Token ${SEATABLE_API_TOKEN}` }
         });
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        return await response.json();
+        log(`Antwort-Status: ${response.status}`);
+        const responseText = await response.text();
+        log('Antwort-Text vom Server:', responseText);
+
+        if (!response.ok) {
+            log(`!!! FEHLER: HTTP-Fehler!`, responseText);
+            throw new Error(`HTTP error! status: ${response.status}, message: ${responseText}`);
+        }
+        
+        const data = JSON.parse(responseText);
+        log('Erfolgreiche Antwort erhalten:', data);
+        // Erwartet: { upload_link, parent_path, path }
+        if (!data.path) {
+            log('!!! WARNUNG: Die Server-Antwort enthält keinen "path". Upload wird wahrscheinlich fehlschlagen.');
+        }
+        return data;
     } catch (error) {
+        pgLog(`!!! KRITISCHER FEHLER beim Abrufen des Upload-Links:`, error);
         console.error("Error getting SeaTable upload link:", error);
         return null;
     }
 }
 
-async function seaTableUploadFile(uploadUrl, file) {
-    if (!uploadUrl || !file) {
-        console.error("Cannot upload file without upload URL and file object.");
-        return false;
-    }
+async function seaTableUploadFile(uploadLink, file, parentDir) {
+    const log = (message, ...data) => pgLog(`[API-UploadFile] ${message}`, ...data);
+    log(`Starte Upload für Datei: ${file.name} in Verzeichnis: ${parentDir}`);
     try {
         const formData = new FormData();
-        formData.append('file', file);
-        // The 'parent_dir' is required by the API, even if it's just the root.
-        formData.append('parent_dir', '/');
+        formData.append('parent_dir', parentDir);
+        formData.append('file', file, file.name);
+        log('FormData erstellt:', { parent_dir: parentDir, filename: file.name, size: file.size });
 
-        const response = await fetch(uploadUrl, {
+        const response = await fetch(uploadLink, {
             method: 'POST',
-            headers: { Authorization: `Token ${SEATABLE_API_TOKEN}` },
             body: formData
         });
-        return response.ok;
+        log(`Antwort-Status vom Upload-Server: ${response.status}`);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            log(`!!! FEHLER: Upload fehlgeschlagen.`, errorText);
+            throw new Error(`Datei-Upload fehlgeschlagen: ${response.status} ${errorText}`);
+        }
+
+        log('Datei erfolgreich hochgeladen (Status 2xx).');
+        return true;
     } catch (error) {
-        console.error("Error uploading file to SeaTable:", error);
+        log(`!!! KRITISCHER FEHLER beim Datei-Upload:`, error);
+        console.error("Fehler beim Hochladen der Datei zu SeaTable:", error);
         return false;
     }
 }
@@ -1314,13 +1340,35 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
       return terminDate >= startDate && terminDate <= endDate;
   });
 
-  // Die Abfrage für den aktuellen Monat ist schnell genug und wird immer frisch geladen.
-  const ehQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`ehIst\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' GROUP BY \`Mitarbeiter_ID\``;
-  const ehResultRaw = await seaTableSqlQuery(ehQuery, false);
-  
-  const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
-  // const totalEhResults = mapSqlResults(totalEhResultRaw || [], "Umsatz"); // ALT: Wurde hier geladen
+  // NEU: Capitalbank-ID für den Filter holen
+  const capitalbank = db.gesellschaften.find(g => g.Gesellschaft === 'Capitalbank');
+  const capitalbankId = capitalbank ? capitalbank._id : null;
+  let capitalbankFilter = '';
+  const dashboardLog = (message, ...data) => console.log(`%c[DASHBOARD_DATA_DEBUG] %c${message}`, 'color: #007bff; font-weight: bold;', 'color: black;', ...data);
+  dashboardLog(`Lade Monats-EH für ${users.length} Mitarbeiter...`);
 
+  // Lade alle relevanten Umsätze und filtere in JS, um SQL-Probleme zu umgehen.
+  const userNames = users.map(u => u.Name).filter(Boolean);
+  const userNamesSql = userNames.map(name => `'${escapeSql(name)}'`).join(',');
+
+  const ehQuery = `SELECT Mitarbeiter_ID, Gesellschaft_ID, EH FROM Umsatz WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}' AND Mitarbeiter_ID IN (${userNamesSql})`;
+  dashboardLog('Sende Abfrage für Monats-EH:', ehQuery);
+  const ehResultRaw = await seaTableSqlQuery(ehQuery, true);
+  const allEhRows = mapSqlResults(ehResultRaw || [], "Umsatz");
+  dashboardLog(`Habe ${allEhRows.length} Umsatz-Zeilen für den Monat erhalten.`);
+
+  // Für die Standard-EH-Anzeige werden ALLE Umsätze gezählt. Die Filterung für die Geld-Ansicht
+  // geschieht in der `calculateAllStructureEarnings`-Funktion, die für die Euro-Werte zuständig ist.
+  const ehByMitarbeiter = _.groupBy(allEhRows, row => row.Mitarbeiter_ID?.[0]?.row_id);
+  const ehResults = Object.entries(ehByMitarbeiter).map(([mitarbeiterId, umsaetze]) => {
+      const totalEh = umsaetze.reduce((sum, u) => sum + (u.EH || 0), 0);
+      return {
+          Mitarbeiter_ID: [{ row_id: mitarbeiterId }],
+          ehIst: totalEh
+      };
+  });
+  dashboardLog('Aggregierte Monats-EH (ungefiltert):', ehResults);
+  
   // Definitionen für Termin-Status
   // "Gehalten" zählt nur Termine mit Status 'Gehalten'.
   const AT_STATUS_GEHALTEN = ["Gehalten"];
@@ -1980,18 +2028,20 @@ function updateMonthlyPlanningView(data) {
       }
     }
 
-    animateValue(dom.ehCenterCurrent, 0, earningsToShow || 0, 1000, true);
-    dom.ehCenterGoal.textContent = (earningsGoal || 0).toLocaleString("de-DE", { maximumFractionDigits: 0 });
+    // NEU: 15% Abzug auf alle angezeigten Euro-Beträge anwenden
+    animateValue(dom.ehCenterCurrent, 0, (earningsToShow || 0) * 0.85, 1000, true);
+    dom.ehCenterGoal.textContent = ((earningsGoal || 0) * 0.85).toLocaleString("de-DE", { maximumFractionDigits: 0 });
     dom.ehCenterUnitLabel.textContent = "Ist €";
     dom.ehSollUnitLabel.textContent = "Soll €";
 
+    // Die prozentuale Erreichung bleibt gleich, da Ist und Soll gleichermaßen reduziert werden.
     const moneyPercentage = earningsGoal > 0 ? (earningsToShow / earningsGoal) * 100 : 0;
     updateCircleProgress(dom.ehProgressCircle, 45, moneyPercentage);
 
     updateCircleProgress(dom.prognosisCircleEh, 35, timeElapsedPercentage);
 
     const sollValue = Math.round(earningsGoal * (timeElapsedPercentage / 100));
-    animateValue(dom.ehSollValue, 0, sollValue, 1000, true);
+    animateValue(dom.ehSollValue, 0, sollValue * 0.85, 1000, true);
 
     // Segmente in Geld-Ansicht ausblenden, da sie auf Wochen basieren
     clearChildren(dom.segmentDividersEh);
@@ -2288,6 +2338,7 @@ function renderTeamMemberCards(members) {
 function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
     // NEU: Berechnungen für alle Fortschrittsbalken und die Soll-Markierung
     const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
+    const atSollIndicatorPercentage = Math.max(50, timeElapsedPercentage); // NEU: AT-Soll-Indikator startet bei 50%
     
     // NEU: Eigene Soll-Berechnung für ET basierend auf dem 3-Wochen-Infoabend-Zyklus
     const today = getCurrentDate();
@@ -2312,7 +2363,7 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
             </div>
         `;
     }
-    const ehValue = isMoneyView ? (member.earnings?.structure || 0) : member.ehCurrent;
+    const ehValue = isMoneyView ? (member.earnings?.structure || 0) * 0.85 : member.ehCurrent; // NEU: 15% Abzug
     const ehGoal = isMoneyView ? 0 : member.ehGoal;
     const ehUnit = isMoneyView ? "Verdienst" : "Einheiten";
     const ehDisplayValue = isMoneyView ?
@@ -2379,7 +2430,7 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
                     </div>
                     <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1 relative">
                         <div class="h-full bg-skt-yellow-accent" style="width: ${Math.min(atPercentage, 100)}%;"></div>
-                        <div class="absolute top-[-2px] h-4 w-[2px] ml-[-1px] bg-skt-red-accent" style="left: ${timeElapsedPercentage}%;" data-tooltip="Soll-Fortschritt"></div>
+                        <div class="absolute top-[-2px] h-4 w-[2px] ml-[-1px] bg-skt-red-accent" style="left: ${atSollIndicatorPercentage}%;" data-tooltip="Soll-Fortschritt"></div>
                     </div>
                 </div>
                 <!-- ET Bar -->
@@ -2492,9 +2543,7 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
     const etPercentage =
         member.etGoal > 0 ? (member.etCurrent / member.etGoal) * 100 : 0;
 
-    const ehValue = isMoneyView
-        ? member.earnings?.structure || 0
-        : member.ehCurrent;
+    const ehValue = isMoneyView ? (member.earnings?.structure || 0) * 0.85 : member.ehCurrent; // NEU: 15% Abzug
     const ehGoal = isMoneyView ? 0 : member.ehGoal;
     const ehUnit = isMoneyView ? "Verdienst" : "Einheiten (EH)";
     const ehDisplayValue = isMoneyView
@@ -2531,6 +2580,7 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
 
     // NEU: Berechnungen für Soll-Markierung und AT-Balken
     const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
+    const atSollIndicatorPercentage = Math.max(50, timeElapsedPercentage); // NEU: AT-Soll-Indikator startet bei 50%
     
     // NEU: Eigene Soll-Berechnung für ET basierend auf dem 3-Wochen-Infoabend-Zyklus
     const today = getCurrentDate();
@@ -2558,7 +2608,7 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
         </div>
         <div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1 relative">
             <div class="h-full bg-skt-yellow-accent" style="width: ${Math.min(atPercentage, 100)}%;"></div>
-            <div class="absolute top-[-2px] h-4 w-[2px] ml-[-1px] bg-skt-red-accent" style="left: ${timeElapsedPercentage}%;" data-tooltip="Soll-Fortschritt"></div>
+            <div class="absolute top-[-2px] h-4 w-[2px] ml-[-1px] bg-skt-red-accent" style="left: ${atSollIndicatorPercentage}%;" data-tooltip="Soll-Fortschritt"></div>
         </div>
     </div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">ET Termine</p><p class="text-xs font-semibold text-skt-blue">${
         member.etCurrent
@@ -2767,6 +2817,20 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
       "struktur",
       augmentedDataStore
     );
+
+    // NEU: Eigene Gruppe zur Strukturansicht hinzufügen, damit sie als erste Karte erscheint.
+    const ownGroupCardData = {
+        ...teamData, // Enthält bereits die aggregierten Werte für die Gruppe
+        id: user._id,
+        name: user.Name,
+        position: user.Karrierestufe,
+        originalPosition: user.Karrierestufe,
+        leaderName: user.Name, // Für die Kartenanzeige
+        // WICHTIG: Die 'members' Eigenschaft für den Drilldown muss die volle Liste inkl. Leader enthalten.
+        members: groupDataForCalc 
+    };
+    // Füge die eigene Gruppe an den Anfang der Liste der Strukturkarten.
+    structureData.members.unshift(ownGroupCardData);
 
   }
 
@@ -3685,15 +3749,21 @@ class AppointmentsView {
         const isLeader = SKT_APP.isUserLeader(SKT_APP.authenticatedUserData);
         this.statsScopeFilter.classList.toggle('hidden', !isLeader);
         
-        // NEU: Lade gespeicherte Einstellung für den Scope-Filter
-        this.statsScopeFilter.value = loadUiSetting('appointmentsScope', isLeader ? 'group' : 'personal');
+        // KORREKTUR: Logik überarbeitet, um zuerst den Scope zu bestimmen und dann die UI zu aktualisieren.
+        // 1. Bestimme den finalen Scope (aus Pending-Wert oder aus LocalStorage)
+        if (pendingAppointmentScope) {
+            this.statsScopeFilter.value = pendingAppointmentScope;
+            pendingAppointmentScope = null;
+        } else {
+            this.statsScopeFilter.value = loadUiSetting('appointmentsScope', isLeader ? 'group' : 'personal');
+        }
+        const finalScope = this.statsScopeFilter.value;
 
-        // NEU: Zeige den Gruppenfilter an, wenn die Strukturansicht standardmäßig geladen wird
-        // KORREKTUR: Gruppenfilter nur für Führungskräfte anzeigen UND nur wenn der Scope 'structure' ist.
-        this.groupFilterContainer.classList.toggle('hidden', !isLeader || this.statsScopeFilter.value !== 'structure');
-        if (isLeader) {
-            this._populateGroupFilter(this.statsScopeFilter.value === 'structure');
-            // NEU: Prüfe, ob eine Gruppe aus einer anderen Ansicht vorausgewählt werden soll.
+        // 2. Aktualisiere die UI basierend auf dem finalen Scope
+        this.groupFilterContainer.classList.toggle('hidden', !isLeader || finalScope !== 'structure');
+        if (isLeader && finalScope === 'structure') {
+            this._populateGroupFilter(true);
+            // Prüfe, ob eine Gruppe aus einer anderen Ansicht vorausgewählt werden soll.
             if (pendingAppointmentGroupFilter) {
                 this.groupFilterPanel.querySelectorAll('input:checked').forEach(cb => cb.checked = false);
                 const checkbox = this.groupFilterPanel.querySelector(`input[value="${pendingAppointmentGroupFilter}"]`);
@@ -3704,7 +3774,7 @@ class AppointmentsView {
             }
         }
         
-        // NEU: Prüft, ob ein Filter aus einer anderen Ansicht übergeben wurde.
+        // 3. Verarbeite andere Pending-Werte
         if (pendingAppointmentFilter) {
             this.filterText = pendingAppointmentFilter;
             if (this.searchInput) {
@@ -3719,12 +3789,6 @@ class AppointmentsView {
         if (pendingAppointmentViewMode) {
             this._switchStatsView(pendingAppointmentViewMode);
             pendingAppointmentViewMode = null;
-        }
-        if (pendingAppointmentScope) {
-            if (this.statsScopeFilter) {
-                this.statsScopeFilter.value = pendingAppointmentScope;
-            }
-            pendingAppointmentScope = null;
         }
         this._populateCategoryFilter(); // KORREKTUR: Reihenfolge getauscht
 
@@ -3978,8 +4042,8 @@ class AppointmentsView {
             allowedStati.push('AV Termin', 'Besichtigung', 'Kredittermin');
         }
         
-        const finalStati = allStatuses.filter(s => allowedStati.includes(s) || s === 'Storno');
-
+        // KORREKTUR: Der Status "Storno" wird nicht mehr zur Auswahl angeboten, da dies über die "Absage"-Checkbox gehandhabt wird.
+        const finalStati = allStatuses.filter(s => allowedStati.includes(s));
         finalStati.forEach(stat => statusSelect.add(new Option(stat, stat)));
 
         if (finalStati.includes(oldValue)) {
@@ -4608,20 +4672,8 @@ class AppointmentsView {
 
     // --- NEU: Methoden für "Nächstes Info", hierher verschoben ---
     async renderNaechstesInfo(repopulateDates = false) {
-        if (repopulateDates) {
-            this.infoabendDateSelect.innerHTML = '';
-            let currentDate = new Date();
-            for (let i = 0; i < 5; i++) {
-                const infoDate = findNextInfoDateAfter(currentDate);
-                const dateString = infoDate.toISOString().split('T')[0];
-                this.infoabendDateSelect.add(new Option(infoDate.toLocaleDateString('de-DE'), dateString));
-                currentDate = new Date(infoDate.getTime() + 24 * 60 * 60 * 1000);
-            }
-        }
-
         this.infoabendListContainer.innerHTML = '<div class="loader mx-auto"></div>';
         const selectedDate = this.infoabendDateSelect.value;
-        const showCancelled = this.infoabendShowCancelled.checked;
         const scope = this.statsScopeFilter.value; // NEU: Der Scope wird vom Haupt-Dropdown der Termin-Ansicht übernommen.
 
         let userIds = new Set([this.currentUserId]);
@@ -4630,15 +4682,21 @@ class AppointmentsView {
 
         const allETs = db.termine.filter(t => t.Kategorie === 'ET');
         
-        let filteredTermine = allETs.filter(t => {
+        // NEU: Erst alle Termine für den Infoabend holen, dann filtern
+        const allTermineForInfoabend = allETs.filter(t => {
             const userMatch = userIds.has(t.Mitarbeiter_ID);
             const dateMatch = t.Infoabend && t.Infoabend.startsWith(selectedDate);
-            const cancelledMatch = showCancelled || (t.Status !== 'Storno' && !t.Absage);
-            return userMatch && dateMatch && cancelledMatch;
+            return userMatch && dateMatch;
         });
 
-        this.renderInfoabendTable(filteredTermine);
-        this.renderFunnelChart(filteredTermine);
+        const showCancelled = this.infoabendShowCancelled.checked;
+        let filteredTermineForDisplay = allTermineForInfoabend.filter(t => {
+            return showCancelled || (t.Status !== 'Storno' && !t.Absage);
+        });
+
+        this.renderInfoabendTable(filteredTermineForDisplay);
+        // NEU: Übergebe die komplette Liste an die Trichter-Funktion für die Quotenberechnung
+        this.renderFunnelChart(allTermineForInfoabend);
     }
 
     renderInfoabendTable(termine) {
@@ -4717,14 +4775,19 @@ class AppointmentsView {
 
     renderFunnelChart(termine) {
         this.funnelChartContainer.innerHTML = '';
+        const quotasContainer = document.getElementById('funnel-quotas-container');
+        if (quotasContainer) quotasContainer.innerHTML = '';
+
+        // Filter out cancelled appointments for the funnel display
+        const displayTermine = termine.filter(t => t.Status !== 'Storno' && !t.Absage);
 
         const stats = {
-            'Ausgemacht': termine.length,
-            'Gehalten': termine.filter(t => t.Status === 'Gehalten').length,
-            'Eingeladen': termine.filter(t => t.Status === 'Info Eingeladen').length,
-            'Bestätigt': termine.filter(t => t.Status === 'Info Bestätigt').length,
-            'Anwesend': termine.filter(t => t.Status === 'Info Anwesend').length,
-            'Wird Mitarbeiter': termine.filter(t => t.Status === 'Wird Mitarbeiter').length,
+            'Ausgemacht': displayTermine.length,
+            'Gehalten': displayTermine.filter(t => t.Status === 'Gehalten').length,
+            'Eingeladen': displayTermine.filter(t => t.Status === 'Info Eingeladen').length,
+            'Bestätigt': displayTermine.filter(t => t.Status === 'Info Bestätigt').length,
+            'Anwesend': displayTermine.filter(t => t.Status === 'Info Anwesend').length,
+            'Wird Mitarbeiter': displayTermine.filter(t => t.Status === 'Wird Mitarbeiter').length,
         };
 
         const funnelSteps = [
@@ -4751,6 +4814,30 @@ class AppointmentsView {
             funnelContainer.appendChild(stepEl);
         });
         this.funnelChartContainer.appendChild(funnelContainer);
+
+        // --- NEU: Quotenberechnung ---
+        if (quotasContainer) {
+            const totalAusgemacht = termine.length; // Use the full list for total
+            const totalGehalten = termine.filter(t => t.Status === 'Gehalten').length;
+            const totalWirdMitarbeiter = termine.filter(t => t.Status === 'Wird Mitarbeiter').length;
+            const totalStorniert = termine.filter(t => t.Status === 'Storno' || t.Absage === true).length;
+
+            const quoteGehaltenZuWM = totalGehalten > 0 ? (totalWirdMitarbeiter / totalGehalten) * 100 : 0;
+            const quoteAusgemachtZuWM = totalAusgemacht > 0 ? (totalWirdMitarbeiter / totalAusgemacht) * 100 : 0;
+            const quoteStorno = totalAusgemacht > 0 ? (totalStorniert / totalAusgemacht) * 100 : 0;
+
+            const createQuotaCard = (title, value) => `
+                <div class="bg-gray-100 p-3 rounded-lg shadow-inner">
+                    <p class="text-sm font-semibold text-skt-blue-light">${title}</p>
+                    <p class="text-2xl font-bold text-skt-blue mt-1">${value.toFixed(0)}%</p>
+                </div>
+            `;
+
+            quotasContainer.innerHTML = 
+                createQuotaCard('ET Gehalten -> WM', quoteGehaltenZuWM) +
+                createQuotaCard('ET Ausgemacht -> WM', quoteAusgemachtZuWM) +
+                createQuotaCard('Stornoquote', quoteStorno);
+        }
     }
 
     _renderPrognosisDetails() {
@@ -5092,6 +5179,16 @@ class AppointmentsView {
             const absagegrund = this.form.querySelector('#appointment-cancellation-reason').value;
             const infoabend = this.form.querySelector('#appointment-infoabend-date').value;
 
+            // NEU: Validierung für Absagegrund
+            if (isCancellation && !absagegrund.trim()) {
+                alert('Bitte geben Sie einen Absagegrund an.');
+                saveBtn.disabled = false;
+                saveBtnText.classList.remove('hidden');
+                saveBtnLoader.classList.add('hidden');
+                this.form.querySelector('#appointment-cancellation-reason').focus();
+                return;
+            }
+
             // NEU: Duplikatsprüfung beim Anlegen eines neuen Termins
             if (isNewAppointment && terminpartner) {
                 const newAppointmentDate = new Date(datum).toISOString().split('T')[0]; // Nur das Datum vergleichen
@@ -5124,7 +5221,8 @@ class AppointmentsView {
                 [SKT_APP.COLUMN_MAPS.termine.Mitarbeiter_ID]: [mitarbeiterId],
                 [SKT_APP.COLUMN_MAPS.termine.Datum]: datum,
                 [SKT_APP.COLUMN_MAPS.termine.Kategorie]: kategorie,
-                [SKT_APP.COLUMN_MAPS.termine.Status]: isCancellation ? 'Storno' : status,
+                // KORREKTUR: Der Status wird nicht mehr auf "Storno" geändert. Die Absage wird nur über das "Absage"-Feld und den Grund gesteuert.
+                [SKT_APP.COLUMN_MAPS.termine.Status]: status,
                 [SKT_APP.COLUMN_MAPS.termine.Terminpartner]: terminpartner,
                 [SKT_APP.COLUMN_MAPS.termine.Umsatzprognose]: parseFloat(prognoseRaw) || null,
                 [SKT_APP.COLUMN_MAPS.termine.Empfehlungen]: parseInt(empfehlungenRaw) || null,
@@ -6108,9 +6206,13 @@ class UmsatzView {
         const table = document.createElement('table');
         table.className = 'appointments-table';
         const headers = [
-            { key: 'Kunde', label: 'Kunde' }, { key: 'Mitarbeiter_ID', label: 'Mitarbeiter' },
-            { key: 'EH', label: 'EH' }, { key: 'Gesellschaft_ID', label: 'Gesellschaft' },
-            { key: 'Produkt_ID', label: 'Produkt' }
+            { key: 'Kunde', label: 'Kunde' }, 
+            { key: 'Mitarbeiter_ID', label: 'Mitarbeiter' },
+            { key: 'EH', label: 'EH' }, 
+            { key: 'Gesellschaft_ID', label: 'Gesellschaft' },
+            { key: 'Produkt_ID', label: 'Produkt' },
+            { key: 'Status_OK', label: 'Status' },
+            { key: 'Hinweis_BO', label: 'Hinweis BO' }
         ];
         table.innerHTML = `<thead><tr>${headers.map(h => `<th data-sort-key="${h.key}">${h.label} <i class="fas fa-sort sort-icon"></i></th>`).join('')}</tr></thead>`;
         const tbody = document.createElement('tbody');
@@ -6118,12 +6220,17 @@ class UmsatzView {
             const tr = document.createElement('tr');
             tr.className = 'cursor-pointer';
             tr.dataset.id = u._id;
+            const statusOkHtml = u.Status_OK 
+                ? '<i class="fas fa-check-circle text-skt-green-accent text-lg"></i>' 
+                : '<i class="fas fa-times-circle text-skt-red-accent text-lg"></i>';
             tr.innerHTML = `
                 <td>${u.Kunde || '-'}</td>
                 <td>${u.Mitarbeiter_ID?.[0]?.display_value || '-'}</td>
                 <td>${u.EH || '-'}</td>
                 <td>${u.Gesellschaft_ID?.[0]?.display_value || '-'}</td>
                 <td>${u.Produkt_ID?.[0]?.display_value || '-'}</td>
+                <td class="text-center">${statusOkHtml}</td>
+                <td>${u.Hinweis_BO || '-'}</td>
             `;
             tbody.appendChild(tr);
         });
@@ -6608,9 +6715,33 @@ class AuswertungView {
         const startDateIso = startDate.toISOString().split('T')[0];
         const endDateIso = endDate.toISOString().split('T')[0];
 
-        const query = `SELECT Mitarbeiter_ID, SUM(EH) as TotalEH FROM Umsatz WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}' GROUP BY Mitarbeiter_ID HAVING SUM(EH) >= 1`;
-        const activeUsersRaw = await seaTableSqlQuery(query, true);
-        const activeUsersData = mapSqlResults(activeUsersRaw || [], 'Umsatz');
+        const ranglisteLog = (message, ...data) => console.log(`%c[RANGLISTE_DEBUG] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
+
+        const capitalbank = db.gesellschaften.find(g => g.Gesellschaft === 'Capitalbank');
+        const capitalbankId = capitalbank ? capitalbank._id : null;
+        ranglisteLog(`Capitalbank ID: ${capitalbankId}`);
+
+        const query = `SELECT Mitarbeiter_ID, Gesellschaft_ID, EH FROM Umsatz WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+        ranglisteLog('Lade alle Umsätze für Rangliste...', query);
+        const allUmsatzRowsRaw = await seaTableSqlQuery(query, true);
+        const allUmsatzRows = mapSqlResults(allUmsatzRowsRaw || [], 'Umsatz');
+        ranglisteLog(`Habe ${allUmsatzRows.length} Umsatz-Zeilen für Rangliste erhalten.`);
+
+        const filteredRows = allUmsatzRows.filter(row => {
+            if (!capitalbankId) return true;
+            const gesellschaftLinks = row.Gesellschaft_ID;
+            if (!gesellschaftLinks || !Array.isArray(gesellschaftLinks) || gesellschaftLinks.length === 0) return true;
+            const hasCapitalbank = gesellschaftLinks.some(link => link.row_id === capitalbankId);
+            if (hasCapitalbank) {
+                ranglisteLog(`FILTERED OUT (Rangliste): Umsatz für ${row.Mitarbeiter_ID?.[0]?.display_value} mit Capitalbank.`, row);
+            }
+            return !hasCapitalbank;
+        });
+
+        const umsatzByMitarbeiter = _.groupBy(filteredRows, row => row.Mitarbeiter_ID?.[0]?.row_id);
+        const activeUsersData = Object.entries(umsatzByMitarbeiter)
+            .map(([mitarbeiterId, umsaetze]) => ({ Mitarbeiter_ID: [{ row_id: mitarbeiterId, display_value: umsaetze[0].Mitarbeiter_ID[0].display_value }], TotalEH: umsaetze.reduce((sum, u) => sum + (u.EH || 0), 0) }))
+            .filter(u => u.TotalEH >= 1);
 
         const enrichedUsers = activeUsersData.map(u => {
             const mitarbeiterName = u.Mitarbeiter_ID?.[0]?.display_value;
@@ -6902,7 +7033,14 @@ class AuswertungView {
         const endDateIso = endDate.toISOString().split('T')[0];
 
         // 1. Lade alle EH-Daten für den Zeitraum
-        const ehQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`ehIst\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' GROUP BY \`Mitarbeiter_ID\``;
+        // KORREKTUR: Capitalbank-Filter hinzufügen.
+        const capitalbank = db.gesellschaften.find(g => g.Gesellschaft === 'Capitalbank');
+        const capitalbankId = capitalbank ? capitalbank._id : null;
+        let capitalbankFilter = '';
+        if (capitalbankId) {
+            capitalbankFilter = ` AND NOT (\`Gesellschaft_ID\` IS NOT NULL AND \`Gesellschaft_ID\` LIKE '%${capitalbankId}%')`;
+        }
+        const ehQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`ehIst\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}'${capitalbankFilter} GROUP BY \`Mitarbeiter_ID\``;
         const ehResultRaw = await seaTableSqlQuery(ehQuery, true); // KORREKTUR: convert_link_id auf true setzen, um konsistente Datenobjekte zu erhalten.
         const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
 
@@ -7688,7 +7826,7 @@ function setupSwipeToBack() {
 
 async function loadAndCacheTotalEh() {
     const totalEhCacheKey = 'total-eh-results-v2'; // Neuer Cache-Key, um alte Formate zu invalidieren
-    let cachedResults = loadFromCache(totalEhCacheKey, 240); // Cache für 4 Stunden
+    let cachedResults = loadFromCache(totalEhCacheKey, 240); // Cache für 4 Stunden. HINWEIS: Manuelles Löschen des Caches kann für Tests nötig sein.
 
     if (cachedResults) {
         console.log('%c[DATENLADEN] %cGesamt-EH aus dem Cache geladen.', 'color: #17a2b8; font-weight: bold;', 'color: black;');
@@ -7696,8 +7834,6 @@ async function loadAndCacheTotalEh() {
         return true;
     }
 
-    // NEUER, ROBUSTER ANSATZ:
-    // 1. Lade die gesamte Umsatz-Tabelle. seaTableQuery nutzt Paging und ist daher stabil.
     console.log(`%c[DATENLADEN] %cGesamte Umsatz-Tabelle wird von der API geladen (langsame, aber stabile Abfrage)...`, 'color: #17a2b8; font-weight: bold;', 'color: red;');
     console.time('[DATENLADEN] Dauer für Gesamt-Umsatz-Tabellenabfrage');
     const allUmsatzRowsRaw = await seaTableQuery('Umsatz');
@@ -7709,8 +7845,20 @@ async function loadAndCacheTotalEh() {
         return false;
     }
 
-    // 2. Berechne die Summen lokal im Browser. Das ist sehr schnell.
-    const umsatzByMitarbeiter = _.groupBy(allUmsatzRowsRaw, row => row[COLUMN_MAPS.umsatz.Mitarbeiter_ID]?.[0]?.row_id);
+    // KORREKTUR: Capitalbank-Umsätze vor der Aggregation herausfiltern.
+    const capitalbank = db.gesellschaften.find(g => g.Gesellschaft === 'Capitalbank');
+    const capitalbankId = capitalbank ? capitalbank._id : null;
+
+    const filteredUmsatzRows = allUmsatzRowsRaw.filter(row => {
+        if (!capitalbankId) return true;
+        const gesellschaftIdLink = row[COLUMN_MAPS.umsatz.Gesellschaft_ID];
+        if (!gesellschaftIdLink || !Array.isArray(gesellschaftIdLink) || gesellschaftIdLink.length === 0) {
+            return true; // Umsätze ohne Gesellschaft behalten
+        }
+        return !gesellschaftIdLink.some(link => link.row_id === capitalbankId);
+    });
+
+    const umsatzByMitarbeiter = _.groupBy(filteredUmsatzRows, row => row[COLUMN_MAPS.umsatz.Mitarbeiter_ID]?.[0]?.row_id);
     const calculatedResults = Object.entries(umsatzByMitarbeiter).map(([mitarbeiterId, umsaetze]) => {
         const totalEh = umsaetze.reduce((sum, u) => sum + (u[COLUMN_MAPS.umsatz.EH] || 0), 0);
         return { Mitarbeiter_ID: [{ row_id: mitarbeiterId }], totalEh: totalEh };
@@ -7726,7 +7874,6 @@ async function loadAndCacheTotalEh() {
         setStatus("Kritischer Fehler: Die Gesamtumsätze konnten nicht geladen werden. Bitte versuchen Sie es später erneut.", true);
         return false; // Signal failure
     }
-
 }
 
 let isInitializing = false;
@@ -7945,16 +8092,52 @@ function getVerdienstForPosition(position) {
 }
 
 async function calculateAllStructureEarnings(memberIds, startDate, endDate) {
+    const earningsLog = (message, ...data) => console.log(`%c[EARNINGS_DEBUG] %c${message}`, 'color: #f97316; font-weight: bold;', 'color: black;', ...data);
     const earningsMap = {};
     if (memberIds.length === 0) return earningsMap;
 
     const startDateIso = startDate.toISOString().split("T")[0];
     const endDateIso = endDate.toISOString().split("T")[0];
 
-    const turnoverQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`turnover\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}' GROUP BY \`Mitarbeiter_ID\``;
+    const capitalbank = db.gesellschaften.find(g => g.Gesellschaft === 'Capitalbank');
+    const capitalbankId = capitalbank ? capitalbank._id : null;
+    earningsLog(`Capitalbank ID: ${capitalbankId}`);
 
-    const turnoverResultsRaw = await seaTableSqlQuery(turnoverQuery, false);
-    const allTurnovers = mapSqlResults(turnoverResultsRaw, "Umsatz");
+    const memberNames = memberIds.map(id => findRowById('mitarbeiter', id)?.Name).filter(Boolean);
+    if (memberNames.length === 0) {
+        earningsLog('Keine gültigen Mitarbeiter für die Abfrage gefunden.');
+        return earningsMap;
+    }
+    const memberNamesSql = memberNames.map(name => `'${escapeSql(name)}'`).join(',');
+
+    const allTurnoverQuery = `SELECT Mitarbeiter_ID, Gesellschaft_ID, EH FROM Umsatz WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}' AND Mitarbeiter_ID IN (${memberNamesSql})`;
+    earningsLog('Lade alle Umsätze für den Zeitraum...', allTurnoverQuery);
+    const allTurnoverRowsRaw = await seaTableSqlQuery(allTurnoverQuery, true);
+    if (!allTurnoverRowsRaw) {
+        earningsLog('!!! FEHLER: Konnte keine Umsatzdaten laden.');
+        return earningsMap;
+    }
+    const allTurnoverRows = mapSqlResults(allTurnoverRowsRaw, "Umsatz");
+    earningsLog(`Habe ${allTurnoverRows.length} Umsatz-Zeilen vom Server erhalten.`);
+
+    const filteredTurnoverRows = allTurnoverRows.filter(row => {
+        if (!capitalbankId) return true;
+        const gesellschaftLinks = row.Gesellschaft_ID;
+        if (!gesellschaftLinks || !Array.isArray(gesellschaftLinks) || gesellschaftLinks.length === 0) return true;
+        const hasCapitalbank = gesellschaftLinks.some(link => link.row_id === capitalbankId);
+        if (hasCapitalbank) {
+            earningsLog(`FILTERED OUT (Verdienst): Umsatz für ${row.Mitarbeiter_ID?.[0]?.display_value} mit Capitalbank (EH: ${row.EH})`, row);
+        }
+        return !hasCapitalbank;
+    });
+    earningsLog(`${filteredTurnoverRows.length} Umsatz-Zeilen nach Filterung übrig.`);
+
+    const turnoverByMitarbeiter = _.groupBy(filteredTurnoverRows, row => row.Mitarbeiter_ID?.[0]?.row_id);
+    const allTurnovers = Object.entries(turnoverByMitarbeiter).map(([mitarbeiterId, umsaetze]) => ({
+        Mitarbeiter_ID: [{ row_id: mitarbeiterId }],
+        turnover: umsaetze.reduce((sum, u) => sum + (u.EH || 0), 0)
+    }));
+    earningsLog('Aggregierte Umsätze pro Mitarbeiter:', allTurnovers);
 
     const getTurnoverForMember = (memberId) => {
         const result = allTurnovers.find(
@@ -8807,6 +8990,7 @@ class PGTagebuchView {
         this.pendingDrawingDataUrl = null;
         this.imageDeleted = false; // NEU
         this.drawingDeleted = false; // NEU
+        this.aufgabenContainer = null; // NEU: Referenz auf den Aufgaben-Container
     }
 
     // KORREKTUR: Hilfsfunktion an den Anfang der Klasse verschoben, um `this`-Kontext-Fehler zu vermeiden.
@@ -8841,6 +9025,7 @@ class PGTagebuchView {
         // NEU: Löschen-Buttons
         this.deleteImageBtn = document.getElementById('pg-delete-image-btn');
         this.deleteDrawingBtn = document.getElementById('pg-delete-drawing-btn');
+        this.aufgabenContainer = document.getElementById('pg-aufgaben-container');
 
         return this.listContainer && this.editorContainer && this.form && this.newEntryBtn && this.searchInput && this.searchContainer && this.deleteImageBtn && this.deleteDrawingBtn;
     }
@@ -9149,7 +9334,7 @@ class PGTagebuchView {
             ? this._uploadFile(this._dataURLtoFile(this.pendingDrawingDataUrl, 'zeichnung.png'))
             : Promise.resolve(null);
 
-        const [imagePath, drawingPath] = await Promise.all([imageUploadPromise, drawingUploadPromise]);
+        const [imageObject, drawingObject] = await Promise.all([imageUploadPromise, drawingUploadPromise]);
 
         const rowData = { // KORREKTUR: Spalten-Keys statt Property-Namen verwenden
             [COLUMN_MAPS.pg.Leiter]: [this.currentUserId],
@@ -9161,13 +9346,13 @@ class PGTagebuchView {
             [COLUMN_MAPS.pg.Dauer]: totalMinutes * 60 // KORREKTUR: Dauer in Sekunden speichern
         };
 
-        if (imagePath) {
-            rowData[COLUMN_MAPS.pg.Bild] = [{ name: this.pendingImageFile.name, url: imagePath }];
+        if (imageObject) {
+            rowData[COLUMN_MAPS.pg.Bild] = [imageObject];
         } else if (this.imageDeleted) {
             rowData[COLUMN_MAPS.pg.Bild] = null;
         }
-        if (drawingPath) {
-            rowData[COLUMN_MAPS.pg.Zeichnung] = [{ name: 'zeichnung.png', url: drawingPath }];
+        if (drawingObject) {
+            rowData[COLUMN_MAPS.pg.Zeichnung] = [drawingObject];
         } else if (this.drawingDeleted) {
             rowData[COLUMN_MAPS.pg.Zeichnung] = null;
         }
@@ -9274,6 +9459,9 @@ class PGTagebuchView {
     }
 
     _displayPreview(type, url) {
+        const log = (message, ...data) => pgLog(`[PG-DisplayPreview] ${message}`, ...data);
+        log(`Zeige Vorschau für Typ '${type}' mit URL:`, url);
+
         const container = type === 'image' ? this.imagePreviewContainer : this.drawingPreviewContainer;
         const deleteBtn = type === 'image' ? this.deleteImageBtn : this.deleteDrawingBtn;
 
@@ -9283,11 +9471,25 @@ class PGTagebuchView {
 
         if (url) {
             const img = document.createElement('img');
-            img.src = url.startsWith('data:') ? url : `${apiGatewayUrl}thumbnail/${SEATABLE_DTABLE_UUID}/${url}`;
+            let finalSrc = '';
+            // KORREKTUR: Die URL aus der DB ist relativ, wir brauchen die Basis-URL des Servers.
+            if (url.startsWith('http')) {
+                finalSrc = url; // Already a full URL from the DB
+                log(`URL ist bereits absolut: ${finalSrc}`);
+            } else if (url.startsWith('data:')) {
+                finalSrc = url; // Data URL for a pending upload
+                log(`URL ist eine data-URL.`);
+            } else {
+                const baseUrl = new URL(apiGatewayUrl).origin;
+                finalSrc = baseUrl + url; // Relative path, needs base URL
+                log(`URL ist relativ. Konstruierte finale URL: ${finalSrc}`);
+            }
+            img.src = finalSrc;
             img.className = 'w-full h-full object-contain';
             container.prepend(img);
             deleteBtn.classList.remove('hidden');
         } else {
+            log('Keine URL vorhanden, zeige Platzhalter.');
             const span = document.createElement('span');
             span.className = 'text-gray-500';
             span.textContent = 'Vorschau';
@@ -9297,19 +9499,32 @@ class PGTagebuchView {
     }
 
     async _uploadFile(file) {
+        const log = (message, ...data) => pgLog(`[PG-UploadFile] ${message}`, ...data);
         if (!file) return null;
-        pgLog(`Uploading file: ${file.name}`);
+        log(`Starte Upload-Prozess für Datei: ${file.name}`);
+
+        // Schritt 1: Upload-Link und Pfad vom Server holen.
+        log('Schritt 1: Rufe Upload-Link und Pfad ab...');
         const uploadLinkData = await seaTableGetUploadLink();
-        if (!uploadLinkData || !uploadLinkData.upload_link) {
-            alert('Fehler: Upload-Link konnte nicht vom Server abgerufen werden.');
+        if (!uploadLinkData || !uploadLinkData.upload_link || !uploadLinkData.parent_path || !uploadLinkData.path) {
+            log('!!! FEHLER: Ungültige Antwort von seaTableGetUploadLink. "path" fehlt!', uploadLinkData);
+            alert('Fehler: Upload-Link oder Upload-Verzeichnis/Pfad konnte nicht vom Server abgerufen werden.');
             return null;
         }
+        log('Schritt 1 erfolgreich. Link-Daten:', uploadLinkData);
 
-        const success = await seaTableUploadFile(uploadLinkData.upload_link, file);
+        // Schritt 2: Datei hochladen.
+        log('Schritt 2: Lade Datei zum Server hoch...');
+        const success = await seaTableUploadFile(uploadLinkData.upload_link, file, uploadLinkData.parent_path);
+        
+        // Schritt 3: Ergebnis auswerten.
+        log('Schritt 3: Werte Upload-Ergebnis aus...');
         if (success) {
-            pgLog(`File uploaded successfully. Path: ${uploadLinkData.path}`);
-            return uploadLinkData.path;
+            const relativePath = uploadLinkData.path;
+            log(`Schritt 3 erfolgreich. Relativer Pfad ist: ${relativePath}`);
+            return { url: relativePath, name: file.name, size: file.size };
         } else {
+            log('!!! FEHLER: seaTableUploadFile meldete einen Fehler.');
             alert('Fehler beim Hochladen der Datei.');
             return null;
         }
@@ -9457,53 +9672,65 @@ async function addOrUpdatePgEntry(rowId, rowDataWithKeys) {
         pgLog(`[UPDATE-PG] Aktualisiere PG-Eintrag mit ID: ${rowId}`);
         const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
         const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
-        let allUpdatesSucceeded = true;
- 
+        const tableMeta = METADATA.tables.find(t => t.name.toLowerCase() === tableName.toLowerCase());
+
+        const fileColumnsData = {};
+        const otherColumnsData = {};
+
+        // 1. Trenne Dateispalten von anderen Spalten
         for (const key in rowDataWithKeys) {
             if (!Object.prototype.hasOwnProperty.call(rowDataWithKeys, key)) continue;
- 
-            const value = rowDataWithKeys[key];
+            const colMeta = tableMeta.columns.find(c => c.key === key);
             const colName = reversedMap[key];
- 
-            pgLog(`  [UPDATE-LOOP] Processing key: ${key}, colName: ${colName}, value:`, value);
- 
-            if (!colName || colName === '_id') {
-                pgLog(`  [UPDATE-LOOP] Skipping key: ${key}`);
-                continue;
-            }
- 
-            if (linkColumnNames.includes(colName)) {
-                pgLog(`  [UPDATE-LOOP] Treating '${colName}' as a LINK column.`);
-                const linkRowId = value && value[0] ? value[0] : null;
-                pgLog(`  [UPDATE-LOOP] Calling updateSingleLink with linkRowId: ${linkRowId}`);
-                const success = await updateSingleLink(tableName, rowId, colName, linkRowId ? [linkRowId] : []);
-                pgLog(`  [UPDATE-LOOP] updateSingleLink result: ${success}`);
-                if (!success) {
-                    pgLog(`  [UPDATE-LOOP] !!! Link update for '${colName}' FAILED.`);
-                    allUpdatesSucceeded = false;
-                    break;
-                }
+            if (colMeta && colMeta.type === 'file' && colName) {
+                fileColumnsData[colName] = rowDataWithKeys[key];
             } else {
-                pgLog(`  [UPDATE-LOOP] Treating '${colName}' as a regular column.`);
-                const colMeta = METADATA.tables.find(t => t.name.toLowerCase() === tableName.toLowerCase())?.columns.find(c => c.key === key);
+                otherColumnsData[key] = rowDataWithKeys[key];
+            }
+        }
+
+        let allUpdatesSucceeded = true;
+
+        // 2. Aktualisiere Nicht-Datei-Spalten (und Verknüpfungen) mit der SQL-Logik
+        for (const key in otherColumnsData) {
+            if (!Object.prototype.hasOwnProperty.call(otherColumnsData, key)) continue;
+            const value = otherColumnsData[key];
+            const colName = reversedMap[key];
+            if (!colName || colName === '_id') continue;
+
+            if (linkColumnNames.includes(colName)) {
+                const linkRowId = value && value[0] ? value[0] : null;
+                if (!(await updateSingleLink(tableName, rowId, colName, linkRowId ? [linkRowId] : []))) { allUpdatesSucceeded = false; break; }
+            } else {
+                const colMeta = tableMeta.columns.find(c => c.key === key);
                 let formattedValue;
                 if (value === null || value === undefined || value === '') { formattedValue = "NULL"; }
                 else if (colMeta && (colMeta.type === 'number' || colMeta.type === 'duration')) { const numValue = parseFloat(value); formattedValue = isNaN(numValue) ? "NULL" : numValue; }
                 else if (typeof value === 'boolean') { formattedValue = value ? "true" : "false"; }
                 else { formattedValue = `'${escapeSql(String(value))}'`; }
- 
+                
                 const sql = `UPDATE \`${tableName}\` SET \`${colName}\` = ${formattedValue} WHERE \`_id\` = '${rowId}'`;
-                pgLog(`  [UPDATE-LOOP] Executing SQL: ${sql}`);
-                const result = await seaTableSqlQuery(sql, false);
-                pgLog(`  [UPDATE-LOOP] SQL query result:`, result);
-                if (result === null) {
-                    pgLog(`  [UPDATE-LOOP] !!! SQL update for '${colName}' FAILED.`);
-                    allUpdatesSucceeded = false;
-                    break;
-                }
+                if (await seaTableSqlQuery(sql, false) === null) { allUpdatesSucceeded = false; break; }
             }
         }
-        pgLog(`[UPDATE-PG] Finished update loop. Overall success: ${allUpdatesSucceeded}`);
+
+        if (!allUpdatesSucceeded) {
+            pgLog(`[UPDATE-PG] Fehler beim Aktualisieren von Nicht-Datei-Spalten. Breche ab.`);
+            return false;
+        }
+
+        // 3. Aktualisiere Dateispalten mit einem separaten REST-API-Aufruf
+        if (Object.keys(fileColumnsData).length > 0) {
+            pgLog(`[UPDATE-PG] Aktualisiere Dateispalten via REST API:`, fileColumnsData);
+            const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+            const body = { table_name: tableName, row_id: rowId, row: fileColumnsData };
+            const response = await fetch(url, { method: 'PUT', headers: { Authorization: `Bearer ${seaTableAccessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            if (!response.ok) {
+                console.error('[UPDATE-PG] Fehler beim Aktualisieren der Dateispalten:', await response.text());
+                allUpdatesSucceeded = false;
+            }
+        }
+
         return allUpdatesSucceeded;
 
     } else { // Add-Logik, die Verknüpfungen korrekt behandelt
