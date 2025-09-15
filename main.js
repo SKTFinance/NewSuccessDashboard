@@ -1367,12 +1367,19 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
       atVereinbart = 0,
       etAusgemacht = 0;
     userTermine.forEach((t) => {
-      if (t.Kategorie === "AT") {
-        if (AT_STATUS_GEHALTEN.includes(t.Status)) atIst++;
-        if (AT_STATUS_AUSGEMACHT.includes(t.Status)) atVereinbart++;
-      } else if (t.Kategorie === "ET") {
-        if (ET_STATUS_AUSGEMACHT.includes(t.Status)) etAusgemacht++;
-      }
+        // NEU: Ein Termin zählt als Analysetermin, wenn es ein AT ist,
+        // oder ein ST mit einer Umsatzprognose > 1 EH.
+        const isAnalysisAppointment = t.Kategorie === "AT" || (t.Kategorie === "ST" && t.Umsatzprognose > 1);
+
+        if (isAnalysisAppointment) {
+          if (AT_STATUS_GEHALTEN.includes(t.Status)) atIst++;
+          if (AT_STATUS_AUSGEMACHT.includes(t.Status)) atVereinbart++;
+        } else if (t.Kategorie === "ET") {
+          // NEU: Jeder ET, der nicht "Offen" oder "Storno" ist, wird gezählt.
+          if (t.Status !== 'Offen' && t.Status !== 'Storno') {
+              etAusgemacht++;
+          }
+        }
     });
 
     const ehZiel = plan["EH_Ziel"] || 0,
@@ -4084,9 +4091,9 @@ class AppointmentsView {
 
         // Buttons für "Alle auswählen" und "Alle entfernen" wurden entfernt.
         // NEU: "Abgesagte einblenden" Toggle hier hinzufügen
-        const cancelledToggleWrapper = document.createElement('div');
-        cancelledToggleWrapper.className = 'border-t border-gray-200 mt-4 pt-4';
-        cancelledToggleWrapper.innerHTML = `
+        const togglesWrapper = document.createElement('div');
+        togglesWrapper.className = 'border-t border-gray-200 mt-4 pt-4 space-y-3';
+        togglesWrapper.innerHTML = `
             <label for="appointments-show-cancelled" class="flex items-center space-x-3 cursor-pointer">
                 <div class="toggle-switch">
                     <input type="checkbox" id="appointments-show-cancelled" class="sr-only peer">
@@ -4094,8 +4101,15 @@ class AppointmentsView {
                 </div>
                 <span class="text-sm font-medium text-gray-700">Abgesagte einblenden</span>
             </label>
+            <label for="appointments-show-held" class="flex items-center space-x-3 cursor-pointer">
+                <div class="toggle-switch">
+                    <input type="checkbox" id="appointments-show-held" class="sr-only peer">
+                    <div class="toggle-slider"></div>
+                </div>
+                <span class="text-sm font-medium text-gray-700">Gehaltene anzeigen</span>
+            </label>
         `;
-        this.statsCategoryFilterPanel.appendChild(cancelledToggleWrapper);
+        this.statsCategoryFilterPanel.appendChild(togglesWrapper);
         
         // KORREKTUR: Der Event-Listener wird direkt hier gesetzt, um sicherzustellen, dass er immer existiert.
         const cancelledToggle = document.getElementById('appointments-show-cancelled');
@@ -4103,6 +4117,9 @@ class AppointmentsView {
             // Ruft die Haupt-Render-Funktion auf, die alle Filter (inkl. Kategorien) neu anwendet.
             this._renderAppointmentStats();
         });
+
+        const heldToggle = document.getElementById('appointments-show-held');
+        if (heldToggle) heldToggle.addEventListener('change', () => this._renderAppointmentStats());
 
         const headerWrapper = document.createElement('div');
         headerWrapper.className = 'flex justify-between items-center mb-2';
@@ -4207,6 +4224,8 @@ class AppointmentsView {
         // KORREKTUR: Der Button existiert nicht mehr, der Wert wird aus dem dynamisch erstellten Element gelesen.
         const showCancelledToggle = document.getElementById('appointments-show-cancelled');
         const showCancelled = showCancelledToggle ? showCancelledToggle.checked : false;
+        const showHeldToggle = document.getElementById('appointments-show-held');
+        const showHeld = showHeldToggle ? showHeldToggle.checked : false;
         const todayForFilter = new Date(today);
         todayForFilter.setHours(0, 0, 0, 0);
 
@@ -4215,14 +4234,14 @@ class AppointmentsView {
         this._updateCategoryButtonText(); // KORREKTUR: Button-Text wird jetzt hier aktualisiert, direkt bevor die Ansicht neu gezeichnet wird.
         const categoryFilter = t => selectedCategories.includes(t.Kategorie) && t.Datum;
         const cancelledFilter = t => showCancelled || (t.Absage !== true && t.Status !== 'Storno');
+        const heldFilter = t => showHeld || (t.Status !== 'Gehalten' && t.Status !== 'Info Eingeladen');
 
         // --- Daten für die Tabellenansicht vorbereiten ---
         // KORREKTUR: Beginnt mit `dateAndSearchFilteredAppointments`, um die Datumsauswahl zu berücksichtigen.
         let finalAppointmentsForTable = this.dateAndSearchFilteredAppointments
             .filter(categoryFilter)
             .filter(cancelledFilter)
-            // NEU: Filtert alle Termine mit dem Status "Gehalten" oder "Info Eingeladen" aus der Tabellenansicht heraus.
-            .filter(t => t.Status !== 'Gehalten' && t.Status !== 'Info Eingeladen');
+            .filter(heldFilter);
         // --- Table View Logic ---
         const sortedAppointments = this._sortStatsTableData(finalAppointmentsForTable);
         this._renderStatsTable(sortedAppointments);
