@@ -1392,6 +1392,23 @@ function getMonthlyCycleDates() {
   endDate.setHours(23, 59, 59, 999);
   return { startDate, endDate };
 }
+function isDateValidInfoabend(dateToCheck) {
+    // Klonen, um das Original nicht zu verändern
+    const checkDate = new Date(dateToCheck);
+    checkDate.setHours(12, 0, 0, 0); // Zeit auf Mittag setzen, um Zeitzonenprobleme zu vermeiden
+
+    if (checkDate.getDay() !== 3) { // Muss ein Mittwoch sein (Sonntag=0, Mittwoch=3)
+        return false;
+    }
+    const referenceDate = new Date('2025-09-17T12:00:00Z'); // Referenz-Infoabend, ebenfalls auf Mittag gesetzt
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const diffInMs = checkDate.getTime() - referenceDate.getTime();
+    const diffInDays = Math.round(diffInMs / msPerDay);
+
+    // Die Differenz in Tagen muss durch 21 (3 Wochen) teilbar sein.
+    return diffInDays % 21 === 0;
+}
+
 
 function getPreviousMonthlyCycleDates() {
     const { startDate: currentCycleStart } = getMonthlyCycleDates();
@@ -1500,7 +1517,7 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   const endDateIso = endDate.toISOString().split("T")[0];
   const currentMonthName = startDate.toLocaleString("de-DE", { month: "long" });
   const currentYear = startDate.getFullYear();
-  
+
   // Plandaten aus dem vorgeladenen und normalisierten Cache laden.
   const planResults = db.monatsplanung.filter(p => p.Monat === currentMonthName && p.Jahr === currentYear);
 
@@ -4951,6 +4968,22 @@ class AppointmentsView {
 
     // --- NEU: Methoden für "Nächstes Info", hierher verschoben ---
     async renderNaechstesInfo(repopulateDates = false) {
+        if (repopulateDates) {
+            const allETs = db.termine.filter(t => t.Kategorie === 'ET' && t.Infoabend);
+            const uniqueDates = [...new Set(allETs.map(t => t.Infoabend.split('T')[0]))];
+            uniqueDates.sort((a, b) => new Date(b) - new Date(a)); // Newest first
+
+            this.infoabendDateSelect.innerHTML = '';
+            if (uniqueDates.length === 0) {
+                this.infoabendDateSelect.add(new Option('Keine Infoabende gefunden', ''));
+            } else {
+                uniqueDates.forEach(dateStr => {
+                    const date = new Date(dateStr);
+                    const optionText = date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                    this.infoabendDateSelect.add(new Option(optionText, dateStr));
+                });
+            }
+        }
         this.infoabendListContainer.innerHTML = '<div class="loader mx-auto"></div>';
         const selectedDate = this.infoabendDateSelect.value;
         const scope = this.statsScopeFilter.value; // NEU: Der Scope wird vom Haupt-Dropdown der Termin-Ansicht übernommen.
@@ -5519,6 +5552,19 @@ class AppointmentsView {
                 this.form.querySelector('#appointment-cancellation-reason').focus();
                 return;
             }
+            
+            // NEU: Validierung für Infoabend-Datum
+            if (kategorie === 'ET' && infoabend) {
+                const infoabendDate = new Date(infoabend);
+                if (!isDateValidInfoabend(infoabendDate)) {
+                    alert('Das ausgewählte Datum ist kein gültiger Infoabend-Termin. Infoabende finden alle 3 Wochen an einem Mittwoch statt.');
+                    // Reset save button state
+                    saveBtn.disabled = false;
+                    saveBtnText.classList.remove('hidden');
+                    saveBtnLoader.classList.add('hidden');
+                    return; // Stop submission
+                }
+            }
 
             // NEU: Duplikatsprüfung beim Anlegen eines neuen Termins
             if (isNewAppointment && terminpartner) {
@@ -5545,6 +5591,8 @@ class AppointmentsView {
                         saveBtn.disabled = false; saveBtnText.classList.remove('hidden'); saveBtnLoader.classList.add('hidden');
                         return; // Stop the submission
                     }
+
+
                 }
             }
             
@@ -10728,6 +10776,7 @@ window.SKT_APP = {
   getMonthlyCycleDates,
   escapeSql,
   getCurrentDate,
+  isDateValidInfoabend,
   getSubordinates,
   getAllSubordinatesRecursive,
   isUserLeader,

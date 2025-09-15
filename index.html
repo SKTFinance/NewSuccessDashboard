@@ -71,66 +71,68 @@
                     <p id="user-position" class="text-lg text-gold font-bold"></p>
                     <p class="text-lg sm:text-xl text-white mt-2">Dein persönliches Dashboard für Erfolg und Karriereplanung.</p>
                 </div>
-                <div class="relative self-start sm:self-center flex items-center space-x-2">
-                    <button id="back-button" class="hidden bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Zurück">
-                        <i class="fas fa-arrow-left"></i>
-                    </button>
-                    <button id="dashboard-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Dashboard">
-                        <i class="fas fa-tachometer-alt"></i>
-                    </button>
-                    <button id="einarbeitung-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Einarbeitung">
-                        <i class="fas fa-graduation-cap"></i>
-                    </button>
-                    <!-- NEU: Termin-Button im Header -->
-                    <button id="appointments-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Termine verwalten">
-                        <i class="fas fa-calendar-alt"></i>
-                    </button>
-                    <!-- NEU: Umsatz-Button im Header -->
-                    <button id="umsatz-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Umsätze">
-                        <i class="fas fa-chart-line"></i>
-                    </button>
-                    <!-- Folgende Buttons werden auf kleinen Bildschirmen in einem Menü zusammengefasst -->
-                    <button id="pg-tagebuch-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="PG-Tagebuch">
-                        <i class="fas fa-comments"></i>
-                    </button>
-                    <button id="potential-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Potentialbearbeitung">
-                        <i class="fas fa-users"></i>
-                    </button>
-                    <button id="auswertung-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Auswertungen">
-                        <i class="fas fa-trophy"></i>
-                    </button>
-                    <button id="strukturbaum-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Strukturbaum">
-                        <i class="fas fa-sitemap"></i>
-                    </button>
-                    <!-- NEU: "Mehr"-Menü für kleine Bildschirme -->
-                    <div class="relative sm:hidden">
-                        <button id="more-tools-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Weitere Werkzeuge">
-                            <i class="fas fa-ellipsis-v"></i>
+                <!-- KORREKTUR: Wrapper für Buttons und Video, um Überlappung zu verhindern -->
+                <!-- KORREKTUR: Button-Container mit Rechtsabstand, um Überlappung mit dem Video zu vermeiden -->
+                <div class="relative self-start sm:self-center flex items-center space-x-2 lg:mr-44">
+                        <button id="back-button" class="hidden bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Zurück">
+                            <i class="fas fa-arrow-left"></i>
                         </button>
-                        <div id="more-tools-menu" class="dropdown-menu hidden">
-                             <a href="#" id="pg-tagebuch-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-comments w-5 mr-2"></i>PG-Tagebuch</a>
-                             <a href="#" id="potential-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-users w-5 mr-2"></i>Potential</a>
-                             <a href="#" id="auswertung-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-trophy w-5 mr-2"></i>Auswertung</a>
-                             <a href="#" id="strukturbaum-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sitemap w-5 mr-2"></i>Strukturbaum</a>
-                        </div>
-                    </div>
-                    <div class="relative">
-                        <button id="settings-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Einstellungen">
-                            <i class="fas fa-cog"></i>
+                        <button id="dashboard-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Dashboard">
+                            <i class="fas fa-tachometer-alt"></i>
                         </button>
-                        <div id="settings-menu" class="dropdown-menu hidden">
-                             <a href="#" id="superuser-btn" class="hidden block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-users-cog w-5 mr-2"></i>Gesamtansicht</a>
-                             <a href="#" id="money-view-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-euro-sign w-5 mr-2"></i>Geld-Ansicht</a>
-                             <a href="#" id="edit-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-edit w-5 mr-2"></i>Personendaten</a>
-                             <a href="#" id="planning-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-tasks w-5 mr-2"></i>Planung</a>
-                             <a href="#" id="add-new-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-plus w-5 mr-2"></i>Neuer Nutzer</a>
-                             <a href="#" id="datenschutz-header-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-shield-alt w-5 mr-2"></i>Datenschutz</a>                             <a href="#" id="time-travel-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-clock-rotate-left w-5 mr-2"></i>Zeitreise</a>
-                             <a href="#" id="clear-cache-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-right-from-bracket w-5 mr-2"></i>Logout</a>
+                        <button id="einarbeitung-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Einarbeitung">
+                            <i class="fas fa-graduation-cap"></i>
+                        </button>
+                        <!-- NEU: Termin-Button im Header -->
+                        <button id="appointments-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Termine verwalten">
+                            <i class="fas fa-calendar-alt"></i>
+                        </button>
+                        <!-- NEU: Umsatz-Button im Header -->
+                        <button id="umsatz-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Umsätze">
+                            <i class="fas fa-chart-line"></i>
+                        </button>
+                        <!-- Folgende Buttons werden auf kleinen Bildschirmen in einem Menü zusammengefasst -->
+                        <button id="pg-tagebuch-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="PG-Tagebuch">
+                            <i class="fas fa-comments"></i>
+                        </button>
+                        <button id="potential-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Potentialbearbeitung">
+                            <i class="fas fa-users"></i>
+                        </button>
+                        <button id="auswertung-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Auswertungen">
+                            <i class="fas fa-trophy"></i>
+                        </button>
+                        <button id="strukturbaum-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Strukturbaum">
+                            <i class="fas fa-sitemap"></i>
+                        </button>
+                        <!-- NEU: "Mehr"-Menü für kleine Bildschirme -->
+                        <div class="relative sm:hidden">
+                            <button id="more-tools-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Weitere Werkzeuge">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <div id="more-tools-menu" class="dropdown-menu hidden">
+                                 <a href="#" id="pg-tagebuch-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-comments w-5 mr-2"></i>PG-Tagebuch</a>
+                                 <a href="#" id="potential-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-users w-5 mr-2"></i>Potential</a>
+                                 <a href="#" id="auswertung-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-trophy w-5 mr-2"></i>Auswertung</a>
+                                 <a href="#" id="strukturbaum-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sitemap w-5 mr-2"></i>Strukturbaum</a>
+                            </div>
                         </div>
-                    </div>
+                        <div class="relative">
+                            <button id="settings-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Einstellungen">
+                                <i class="fas fa-cog"></i>
+                            </button>
+                            <div id="settings-menu" class="dropdown-menu hidden">
+                                 <a href="#" id="superuser-btn" class="hidden block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-users-cog w-5 mr-2"></i>Gesamtansicht</a>
+                                 <a href="#" id="money-view-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-euro-sign w-5 mr-2"></i>Geld-Ansicht</a>
+                                 <a href="#" id="edit-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-edit w-5 mr-2"></i>Personendaten</a>
+                                 <a href="#" id="planning-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-tasks w-5 mr-2"></i>Planung</a>
+                                 <a href="#" id="add-new-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-plus w-5 mr-2"></i>Neuer Nutzer</a>
+                                 <a href="#" id="datenschutz-header-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-shield-alt w-5 mr-2"></i>Datenschutz</a>                             <a href="#" id="time-travel-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-clock-rotate-left w-5 mr-2"></i>Zeitreise</a>
+                                 <a href="#" id="clear-cache-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-right-from-bracket w-5 mr-2"></i>Logout</a>
+                            </div>
+                        </div>
                 </div>
             </div>
-            <!-- NEU: Maskottchen-Animation, als direktes Kind des Headers positioniert -->
+            <!-- KORREKTUR: Video wieder absolut positioniert, um die volle Höhe zu nutzen -->
             <div id="header-animation-container" class="hidden lg:block absolute right-16 top-0 h-full z-0 cursor-pointer" title="Frag den Adler">
                 <video id="header-animation-video" autoplay muted playsinline class="h-full w-auto video-filter-normal">
                     <source id="header-animation-source" src="./Normal.mp4" type="video/mp4">
