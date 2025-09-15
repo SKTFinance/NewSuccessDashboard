@@ -1990,6 +1990,57 @@ function updateWeeklyProgress() {
             createLabel('100%', endDate.toLocaleDateString('de-DE', dateOptions), 'translateX(-50%)');
         }
 
+ function updateHeaderAnimation(data) {
+     const videoContainer = document.getElementById('header-animation-container');
+     // KORREKTUR: Führe die Funktion nur aus, wenn der Video-Container sichtbar ist (d.h. nicht auf Mobilgeräten).
+     if (!videoContainer || videoContainer.offsetParent === null) {
+        return;
+     }
+     const video = document.getElementById('header-animation-video');
+     const source = document.getElementById('header-animation-source');
+     if (!video || !source) return;
+     let videoSrc = './Normal.mp4'; // Standard-Video
+     const shouldLoop = false; // Kein Video soll sich wiederholen.
+ 
+     const ehCurrent = data.ehCurrent || 0;
+     const ehGoal = data.ehGoal || 0;
+     const etCurrent = data.etCurrent || 0;
+     const etGoal = data.etGoal || 0;
+ 
+     // NEU: EH-Soll für den aktuellen Tag berechnen
+     const { startDate, endDate } = getMonthlyCycleDates();
+     const today = getCurrentDate();
+     const totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
+     const daysPassedInCycle = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24));
+     const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
+     const ehSoll = Math.round((ehGoal || 0) * (timeElapsedPercentage / 100));
+ 
+     // Logik für die Videoauswahl mit korrekter Priorisierung
+     // Priorität 1 (höchste): EH-Soll für den Tag erreicht
+     if (ehGoal > 0 && ehCurrent >= ehSoll) {
+         videoSrc = './Pokal.mp4';
+     } 
+     // Priorität 2: EH-Ziel < 30% (überschreibt ET-Bedingung)
+     else if (ehGoal > 0 && (ehCurrent / ehGoal) < 0.3) {
+         videoSrc = './EHbitte.mp4';
+     } 
+     // Priorität 3: ET-Ziel < 30%
+     else if (etGoal > 0 && (etCurrent / etGoal) < 0.3) {
+         videoSrc = './ETswanted.mp4';
+     }
+ 
+     // NEU: Dynamische Zuweisung der Filter-Klassen
+     video.classList.remove('video-filter-normal', 'video-filter-eh-et', 'video-filter-pokal');
+     if (videoSrc === './Normal.mp4') { video.classList.add('video-filter-normal'); } 
+     else if (videoSrc === './EHbitte.mp4' || videoSrc === './ETswanted.mp4') { video.classList.add('video-filter-eh-et'); } 
+     else if (videoSrc === './Pokal.mp4') { video.classList.add('video-filter-pokal'); }
+ 
+     video.loop = shouldLoop;
+     if (source.getAttribute('src') !== videoSrc) {
+         source.setAttribute('src', videoSrc);
+         video.load();
+     }
+ }
 function updateMonthlyPlanningView(data) {
   updateWeeklyProgress();
 
@@ -2770,6 +2821,9 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
     mitarbeiterId,
     personalData.totalCurrentEh
   );
+
+  // NEU: Header-Animation basierend auf den Leistungsdaten aktualisieren
+  updateHeaderAnimation(personalData);
 
   currentlyViewedUserData = user;
   dom.welcomeHeader.textContent = `Willkommen, ${user.Name}`;
@@ -7246,6 +7300,7 @@ class AuswertungView {
                 werberId: user.Werber,
                 ehGoal: plan?.EH_Ziel ?? 0,
                 etGoal: plan?.ET_Ziel ?? 0,
+                ursprungsEhGoal: plan?.Ursprungsziel_EH ?? 0,
                 pqq: pqqDataMap[user._id] ?? 0,
                 hasPlan: !!plan
             };
@@ -7269,10 +7324,18 @@ class AuswertungView {
             // A group is passive if every member has 0 for both EH and ET goals.
             const isGroupPassive = groupMembersData.every(m => m.ehGoal === 0 && m.etGoal === 0);
 
+            const groupSums = groupMembersData.reduce((acc, member) => {
+                acc.ehGoal += member.ehGoal;
+                acc.etGoal += member.etGoal;
+                acc.ursprungsEhGoal += member.ursprungsEhGoal;
+                return acc;
+            }, { ehGoal: 0, etGoal: 0, ursprungsEhGoal: 0 });
+
             const groupObject = {
                 leader: leader,
                 members: groupMembersData.sort((a,b) => a.name.localeCompare(b.name)),
-                isPassive: isGroupPassive
+                isPassive: isGroupPassive,
+                sums: groupSums
             };
 
             if (isGroupPassive) {
@@ -7283,23 +7346,41 @@ class AuswertungView {
         });
 
         const headerHtml = `
-            <div class="grid grid-cols-4 gap-4 items-center py-2 px-4 bg-gray-100 rounded-t-md sticky top-0 z-10">
-                <div class="col-span-1 font-bold">Name</div>
+            <div class="grid grid-cols-7 gap-4 items-center py-2 px-4 bg-gray-100 rounded-t-md sticky top-0 z-10">
+                <div class="col-span-2 font-bold">Name</div>
                 <div class="text-center font-bold">ET Ziel</div>
-                <div class="text-center font-bold">EH Ziel</div>
+                <div class="text-center font-bold">Ursprungs-EH</div>
+                <div class="text-center font-bold">Ziel-EH</div>
+                <div class="text-center font-bold">Plan-Änd.</div>
                 <div class="text-center font-bold">PQQ</div>
             </div>`;
 
         const renderUserRow = (user) => {
             const pqq = user.pqq || 0;
             const pqqColor = pqq > 120 ? 'text-skt-green-accent' : pqq >= 80 ? 'text-skt-yellow-accent' : 'text-skt-red-accent';
+            
             const ehGoalClass = user.ehGoal === 0 ? 'zero-goal' : '';
             const etGoalClass = user.etGoal === 0 ? 'zero-goal' : '';
+            const ursprungsEhGoalClass = user.ursprungsEhGoal === 0 ? 'zero-goal' : '';
+
+            let planChangeHtml = '-';
+            let planChangeColor = '';
+            if (user.ursprungsEhGoal > 0) {
+                const planChangePercent = (user.ehGoal / user.ursprungsEhGoal) * 100;
+                planChangeColor = planChangePercent >= 100 ? 'text-skt-green-accent' : 'text-skt-red-accent';
+                planChangeHtml = `${planChangePercent.toFixed(0)}%`;
+            } else if (user.ehGoal > 0) {
+                planChangeColor = 'text-skt-green-accent';
+                planChangeHtml = 'Neu';
+            }
+
             return `
-                <div class="grid grid-cols-4 gap-4 items-center py-2 px-4 cursor-pointer hover:bg-gray-100 rounded-md" data-userid="${user.id}">
-                    <div class="col-span-1 font-semibold text-skt-blue">${user.name}</div>
+                <div class="grid grid-cols-7 gap-4 items-center py-2 px-4 cursor-pointer hover:bg-gray-100 rounded-md" data-userid="${user.id}">
+                    <div class="col-span-2 font-semibold text-skt-blue">${user.name}</div>
                     <div class="text-center ${etGoalClass}">${user.etGoal}</div>
+                    <div class="text-center ${ursprungsEhGoalClass}">${user.ursprungsEhGoal}</div>
                     <div class="text-center ${ehGoalClass}">${user.ehGoal}</div>
+                    <div class="text-center font-bold ${planChangeColor}">${planChangeHtml}</div>
                     <div class="text-center font-bold ${pqqColor}">${pqq.toFixed(0)}%</div>
                 </div>
             `;
@@ -7308,12 +7389,36 @@ class AuswertungView {
         const renderGroup = (group) => {
             const groupContainer = document.createElement('div');
             groupContainer.className = 'mb-8';
+
+            let sumPlanChangeHtml = '-';
+            let sumPlanChangeColorClass = 'text-white';
+            if (group.sums.ursprungsEhGoal > 0) {
+                const sumPlanChangePercent = (group.sums.ehGoal / group.sums.ursprungsEhGoal) * 100;
+                sumPlanChangeColorClass = sumPlanChangePercent >= 100 ? 'text-green-400' : 'text-red-400';
+                sumPlanChangeHtml = `${sumPlanChangePercent.toFixed(0)}%`;
+            } else if (group.sums.ehGoal > 0) {
+                sumPlanChangeColorClass = 'text-green-400';
+                sumPlanChangeHtml = 'Neu';
+            }
+
+            const sumRowHtml = `
+                <div class="grid grid-cols-7 gap-4 items-center py-2 px-4 bg-skt-blue-light text-white rounded-b-md">
+                    <div class="col-span-2 font-bold">SUMME</div>
+                    <div class="text-center font-bold">${group.sums.etGoal}</div>
+                    <div class="text-center font-bold">${group.sums.ursprungsEhGoal}</div>
+                    <div class="text-center font-bold">${group.sums.ehGoal}</div>
+                    <div class="text-center font-bold ${sumPlanChangeColorClass}">${sumPlanChangeHtml}</div>
+                    <div class="text-center font-bold"></div>
+                </div>
+            `;
+
             let groupHtml = `<h4 class="text-xl font-bold text-skt-blue mb-2">${group.leader.Name}</h4>`;
             groupHtml += '<div class="bg-white rounded-lg shadow">';
             groupHtml += headerHtml;
             group.members.forEach(member => {
                 groupHtml += renderUserRow(member);
             });
+            groupHtml += sumRowHtml;
             groupHtml += '</div>';
             groupContainer.innerHTML = groupHtml;
             return groupContainer;
@@ -7718,7 +7823,11 @@ function setupEventListeners() {
     }
   });
 
-  dom.aiAssistantBtn.addEventListener("click", handleAIAssistantClick);
+  // NEU: Event-Listener für das Video anstelle des AI-Buttons
+  const headerAnimationContainer = document.getElementById('header-animation-container');
+  if (headerAnimationContainer) {
+      headerAnimationContainer.addEventListener('click', handleAIAssistantClick);
+  }
 
   dom.editUserForm.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -8343,7 +8452,7 @@ async function applyAutomaticPromotionToDatabase(mitarbeiterId) {
 }
 
 async function handleAIAssistantClick() {
-  dom.hinweisModalTitle.textContent = "KI-Assistent";
+  dom.hinweisModalTitle.textContent = "Frag den Adler";
   dom.hinweisModalContent.innerHTML = '<div class="loader mx-auto"></div>';
   dom.hinweisModal.classList.add("visible");
   document.body.classList.add("modal-open");

@@ -481,6 +481,17 @@ details[open] > summary::before { transform: rotate(180deg); }
     opacity: 1;
     visibility: visible;
 }
+
+/* NEU: Animation für den Modal-Inhalt */
+.modal-box {
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transform: scale(0.8) translateY(50px);
+}
+.modal-overlay.visible .modal-box {
+    transform: scale(1) translateY(0);
+}
+
+
 /* NEU: Scrollen für langes Modal-Inhalt ermöglichen */
 #hinweis-modal-content {
     max-height: 70vh; /* Maximale Höhe auf 70% der Bildschirmhöhe begrenzen */
@@ -1100,4 +1111,17 @@ details[open] > summary::before { transform: rotate(180deg); }
 .zero-goal {
     color: var(--color-accent-red);
     font-weight: 700;
+}
+
+/* NEU: Farbkorrektur für das Header-Video */
+.video-filter-normal {
+    filter: brightness(87%) contrast(105%); /* Für normal.mp4 */
+}
+
+.video-filter-eh-et {
+    filter: brightness(84%) contrast(97%); /* Für EHbitte.mp4 und ETswanted.mp4 */
+}
+
+.video-filter-pokal {
+    filter: brightness(95%) contrast(100%); /* Für Pokal.mp4 */
 }

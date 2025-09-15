@@ -64,8 +64,8 @@
 
     <!-- Dashboard-Container -->
     <div id="dashboard-content" class="hidden flex-col min-h-screen">
-        <header class="w-full p-6 md:p-8 bg-skt-blue relative rounded-b-3xl z-50">
-            <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-x-8 gap-y-4 relative">
+        <header class="w-full bg-skt-blue relative rounded-b-3xl z-50">
+            <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-x-8 gap-y-4 relative z-10 p-4 md:p-6">
                 <div class="flex flex-col">
                     <h1 class="text-4xl sm:text-5xl font-bold font-times-new-roman text-white mb-2" id="welcome-header">Willkommen,</h1>
                     <p id="user-position" class="text-lg text-gold font-bold"></p>
@@ -102,9 +102,6 @@
                     <button id="strukturbaum-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Strukturbaum">
                         <i class="fas fa-sitemap"></i>
                     </button>
-                    <button id="ai-assistant-btn" class="hidden sm:flex bg-accent-purple text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-purple-700 transition-colors h-10 w-10 items-center justify-center" title="KI-Assistent">
-                        <i class="fas fa-robot"></i>
-                    </button>
                     <!-- NEU: "Mehr"-Menü für kleine Bildschirme -->
                     <div class="relative sm:hidden">
                         <button id="more-tools-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Weitere Werkzeuge">
@@ -115,7 +112,6 @@
                              <a href="#" id="potential-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-users w-5 mr-2"></i>Potential</a>
                              <a href="#" id="auswertung-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-trophy w-5 mr-2"></i>Auswertung</a>
                              <a href="#" id="strukturbaum-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sitemap w-5 mr-2"></i>Strukturbaum</a>
-                             <a href="#" id="ai-assistant-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-robot w-5 mr-2"></i>KI-Assistent</a>
                         </div>
                     </div>
                     <div class="relative">
@@ -133,6 +129,12 @@
                         </div>
                     </div>
                 </div>
+            </div>
+            <!-- NEU: Maskottchen-Animation, als direktes Kind des Headers positioniert -->
+            <div id="header-animation-container" class="hidden lg:block absolute right-16 top-0 h-full z-0 cursor-pointer" title="Frag den Adler">
+                <video id="header-animation-video" autoplay muted playsinline class="h-full w-auto video-filter-normal">
+                    <source id="header-animation-source" src="./Normal.mp4" type="video/mp4">
+                </video>
             </div>
         </header>
 
@@ -429,7 +431,7 @@
     <!-- Modals -->
     <!-- Modal zum Bearbeiten/Hinzufügen von Terminen (zunächst verborgen) -->
     <div id="appointment-modal" class="modal-overlay">
-        <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-2xl w-full relative max-h-[90vh] overflow-y-auto">
+        <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-2xl w-full relative max-h-[90vh] overflow-y-auto">
             <button id="close-appointment-modal-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
             <h3 id="appointment-modal-title" class="text-2xl font-bold text-skt-blue mb-6">Termin anlegen</h3>
             <form id="appointment-form" class="space-y-4">
@@ -467,7 +469,7 @@
         </div>
     </div>
     <div id="ios-instructions-modal" class="modal-overlay">
-        <div class="bg-white rounded-lg shadow-xl p-6 m-4 max-w-sm text-center">
+        <div class="modal-box bg-white rounded-lg shadow-xl p-6 m-4 max-w-sm text-center">
             <h3 class="text-xl font-bold text-skt-blue mb-2">Benachrichtigungen aktivieren</h3>
             <p class="text-gray-600 mb-4">Um Benachrichtigungen auf einem iPhone zu erhalten, füge diese App bitte zuerst zu deinem Home-Bildschirm hinzu:</p>
             <ol class="text-left text-gray-600 space-y-2 mb-4">
@@ -480,7 +482,7 @@
     </div>
     
     <div id="hinweis-modal" class="modal-overlay">
-        <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-md relative">
+        <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-md relative">
             <button id="close-hinweis-modal-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
             <h3 id="hinweis-modal-title" class="text-xl font-bold text-skt-blue mb-4">Hinweis</h3>
             <div id="hinweis-modal-content" class="text-gray-700"></div>
@@ -489,7 +491,7 @@
 
     <!-- NEU: Modal zum Bearbeiten von Benutzerdaten -->
     <div id="edit-user-modal" class="modal-overlay">
-        <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative">
+        <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative">
              <button id="cancel-edit-user-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
              <h3 class="text-2xl font-bold text-skt-blue mb-6">Personendaten bearbeiten</h3>
              <form id="edit-user-form" class="space-y-4">
@@ -552,7 +554,7 @@
     </div>
     <!-- NEU: Modal zum Hinzufügen von Benutzern -->
     <div id="add-user-modal" class="modal-overlay">
-        <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative">
+        <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative">
              <button id="cancel-add-user-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
              <h3 class="text-2xl font-bold text-skt-blue mb-6">Neuen Nutzer anlegen</h3>
              <form id="add-user-form" class="space-y-4">
@@ -588,7 +590,7 @@
     </div>
     <!-- NEU: Modal für die Monatsplanung -->
     <div id="planning-modal" class="modal-overlay">
-        <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative">
+        <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative">
              <button id="cancel-planning-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
              <h3 id="planning-modal-title" class="text-2xl font-bold text-skt-blue mb-6">Monatsplanung hinzufügen/bearbeiten</h3>
              <form id="planning-form" class="space-y-4">
@@ -630,7 +632,7 @@
     </div>
     <!-- NEU: Modal für die Zeitreise -->
     <div id="time-travel-modal" class="modal-overlay">
-        <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative">
+        <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative">
              <button id="cancel-time-travel-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
              <h3 class="text-2xl font-bold text-skt-blue mb-6">Zeitreise</h3>
              <p class="text-gray-600 mb-6">Wähle ein Datum in der Vergangenheit, um das Dashboard so anzuzeigen, als wärst du in diesem Monat.</p>
@@ -654,7 +656,7 @@
     </div>
     <!-- NEU: Benutzerdefiniertes Bestätigungs-Modal -->
     <div id="confirm-modal" class="modal-overlay">
-        <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-md w-full text-center">
+        <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-md w-full text-center">
             <h3 id="confirm-modal-title" class="text-xl font-bold text-skt-blue mb-4">Bestätigung</h3>
             <p id="confirm-modal-text" class="text-gray-600 mb-6">Möchten Sie diese Aktion wirklich durchführen?</p>
             <div class="flex justify-center space-x-4">
@@ -665,7 +667,7 @@
     </div>
     <!-- NEU: Modal für die BT-Folgeplanung nach einem gehaltenen AT -->
     <div id="bt-follow-up-modal" class="modal-overlay">
-        <div class="bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative max-h-[90vh] overflow-y-auto">
+        <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative max-h-[90vh] overflow-y-auto">
             <h3 class="text-2xl font-bold text-skt-blue mb-6">Nächster Schritt: Beratungstermin</h3>
             <form id="bt-follow-up-form" class="space-y-4">
                 <input type="hidden" id="bt-follow-up-original-at-id">
@@ -708,7 +710,7 @@
     </div>
     <!-- NEU: Modal für die Zeichenfunktion -->
     <div id="drawing-modal" class="modal-overlay">
-        <div class="bg-white rounded-lg shadow-xl p-6 m-4 max-w-4xl w-full relative flex flex-col h-[85vh]">
+        <div class="modal-box bg-white rounded-lg shadow-xl p-6 m-4 max-w-4xl w-full relative flex flex-col h-[85vh]">
             <h3 class="text-2xl font-bold text-skt-blue mb-4">Zeichnung erstellen</h3>
             <div class="flex-grow border border-gray-300 rounded-md overflow-hidden" style="min-height: 0;">
                 <canvas id="drawing-canvas" class="w-full h-full bg-white"></canvas>
