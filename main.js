@@ -4969,20 +4969,9 @@ class AppointmentsView {
     // --- NEU: Methoden für "Nächstes Info", hierher verschoben ---
     async renderNaechstesInfo(repopulateDates = false) {
         if (repopulateDates) {
-            const allETs = db.termine.filter(t => t.Kategorie === 'ET' && t.Infoabend);
-            const uniqueDates = [...new Set(allETs.map(t => t.Infoabend.split('T')[0]))];
-            uniqueDates.sort((a, b) => new Date(b) - new Date(a)); // Newest first
-
-            this.infoabendDateSelect.innerHTML = '';
-            if (uniqueDates.length === 0) {
-                this.infoabendDateSelect.add(new Option('Keine Infoabende gefunden', ''));
-            } else {
-                uniqueDates.forEach(dateStr => {
-                    const date = new Date(dateStr);
-                    const optionText = date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                    this.infoabendDateSelect.add(new Option(optionText, dateStr));
-                });
-            }
+            // KORREKTUR: Setzt das Datum standardmäßig auf den nächsten Infoabend.
+            const nextInfoDate = findNextInfoDateAfter(getCurrentDate());
+            this.infoabendDateSelect.value = nextInfoDate.toISOString().split('T')[0];
         }
         this.infoabendListContainer.innerHTML = '<div class="loader mx-auto"></div>';
         const selectedDate = this.infoabendDateSelect.value;
