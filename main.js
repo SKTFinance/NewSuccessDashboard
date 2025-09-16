@@ -7250,27 +7250,29 @@ class AuswertungView {
         // KORREKTUR: Abgesagte/stornierte Termine aus der Zählung ausschließen.
         termineData = termineData.filter(t => t.Absage !== true && t.Status !== 'Storno');
 
+        // KORREKTUR: Verwende die exakt gleiche Zähl-Logik wie auf dem Dashboard für Konsistenz.
+        const AT_STATUS_GEHALTEN = ["Gehalten"];
+        const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
+        const ET_STATUS_GEHALTEN = ["Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+        const ET_STATUS_AUSGEMACHT = ["Ausgemacht", ...ET_STATUS_GEHALTEN];
+
         const { startDate: monthStartDate } = getMonthlyCycleDates();
         const currentMonthName = monthStartDate.toLocaleString("de-DE", { month: "long" });
         const currentYear = monthStartDate.getFullYear();
         const planResults = db.monatsplanung.filter(p => p.Monat === currentMonthName && p.Jahr === currentYear);
 
-        const AT_STATUS_GEHALTEN = ["Gehalten"];
-        const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"]; // KORREKTUR: "Verschoben" zählt nicht mehr als ausgemacht.
-        const ET_STATUS_GEHALTEN = ["Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
-        const ET_STATUS_AUSGEMACHT = ["Ausgemacht", ...ET_STATUS_GEHALTEN];
-
         const statsByMitarbeiter = {};
 
         termineData.forEach(t => {
-            const mitarbeiterId = t.Mitarbeiter_ID; // KORREKTUR: Nach der Normalisierung ist dies eine direkte ID.
+            const mitarbeiterId = t.Mitarbeiter_ID;
             if (!mitarbeiterId) return;
 
             if (!statsByMitarbeiter[mitarbeiterId]) {
                 statsByMitarbeiter[mitarbeiterId] = { atAusgemacht: 0, atGehalten: 0, etAusgemacht: 0, etGehalten: 0, atSoll: 0 };
             }
 
-            if (t.Kategorie === 'AT') {
+            const isAnalysisAppointment = t.Kategorie === "AT" || (t.Kategorie === "ST" && t.Umsatzprognose > 1);
+            if (isAnalysisAppointment) {
                 if (AT_STATUS_AUSGEMACHT.includes(t.Status)) statsByMitarbeiter[mitarbeiterId].atAusgemacht++;
                 if (AT_STATUS_GEHALTEN.includes(t.Status)) statsByMitarbeiter[mitarbeiterId].atGehalten++;
             } else if (t.Kategorie === 'ET') {
@@ -7438,9 +7440,9 @@ class AuswertungView {
         });
         // KORREKTUR: Abgesagte/stornierte Termine aus der Zählung ausschließen.
         termineResults = termineResults.filter(t => t.Absage !== true && t.Status !== 'Storno');
-        // KORREKTUR: Definitionen angepasst
-        const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"]; // KORREKTUR: "Verschoben" zählt nicht mehr als ausgemacht.
-        const ET_STATUS_GEHALTEN = ["Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter", "Ausgemacht", "Verschoben"]; // Diese Definition ist für "Gesamt ETs" in dieser Ansicht korrekt
+        // KORREKTUR: Verwende die exakt gleiche Zähl-Logik wie auf dem Dashboard für Konsistenz.
+        const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
+        const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Info Eingeladen", "Weiterer ET", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
 
         // 3. Gruppiere Daten nach Mitarbeiter für schnellen Zugriff
         // KORREKTUR: Greife auf die `row_id` aus dem verknüpften Objekt zu, das durch `convert_link_id=true` zurückgegeben wird.
@@ -7464,8 +7466,12 @@ class AuswertungView {
 
                 const memberTermine = termineByMitarbeiter[member._id] || [];
                 memberTermine.forEach(t => {
-                    if (t.Kategorie === "AT" && AT_STATUS_AUSGEMACHT.includes(t.Status)) at++;
-                    else if (t.Kategorie === "ET" && ET_STATUS_GEHALTEN.includes(t.Status)) et++;
+                    const isAnalysisAppointment = t.Kategorie === "AT" || (t.Kategorie === "ST" && t.Umsatzprognose > 1);
+                    if (isAnalysisAppointment && AT_STATUS_AUSGEMACHT.includes(t.Status)) {
+                        at++;
+                    } else if (t.Kategorie === "ET" && ET_STATUS_AUSGEMACHT.includes(t.Status)) {
+                        et++;
+                    }
                 });
 
                 const plan = planResults.find(p => p.Mitarbeiter_ID === member._id);
