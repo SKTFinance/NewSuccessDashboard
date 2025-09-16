@@ -1294,6 +1294,24 @@ function findRowById(tableName, id) {
   return db[tableName.toLowerCase()].find((row) => row._id === id);
 }
 
+// NEU: Funktion, um die Hierarchie nach oben zu durchlaufen
+function getAncestors(userId, levels = 3) {
+    const ancestors = [];
+    let currentUser = findRowById('mitarbeiter', userId);
+    let currentLevel = 0;
+    while (currentUser && currentUser.Werber && currentLevel < levels) {
+        const manager = findRowById('mitarbeiter', currentUser.Werber);
+        if (manager && manager.Status !== 'Ausgeschieden') {
+            ancestors.push(manager);
+            currentUser = manager;
+            currentLevel++;
+        } else {
+            // Stop if manager not found or is inactive
+            break;
+        }
+    }
+    return ancestors;
+}
 function escapeSql(str) {
   if (typeof str !== "string") return str;
   return str.replace(/'/g, "''");
@@ -5793,29 +5811,22 @@ class AppointmentsView {
             const categorySelect = this.modal.querySelector('#appointment-category');
             appointmentsLog('Modal elements found.');
 
-            // NEU: Logik für Dropdowns getrennt und um Vorgesetzten erweitert
+            // NEU: Logik für Dropdowns überarbeitet, um 3 Ebenen Vorgesetzte einzuschließen
             const currentUserForDropdowns = SKT_APP.currentlyViewedUserData;
             const downlineForDropdowns = SKT_APP.getAllSubordinatesRecursive(currentUserForDropdowns._id);
+            const ancestors = getAncestors(currentUserForDropdowns._id, 3);
 
-            // Für 'Mitarbeiter' Dropdown (Besitzer des Termins)
-            const usersForAppointmentOwner = [currentUserForDropdowns, ...downlineForDropdowns].filter(Boolean).sort((a, b) => a.Name.localeCompare(b.Name));
+            const availableUsersSet = new Set([currentUserForDropdowns, ...downlineForDropdowns, ...ancestors]);
+            const sortedAvailableUsers = Array.from(availableUsersSet)
+                .filter(Boolean) // Filtert eventuelle null/undefined-Einträge
+                .sort((a, b) => a.Name.localeCompare(b.Name));
 
-            // Für 'Eingeladener' Dropdown (Struktur + direkter, aktiver Vorgesetzter)
-            const usersForInviteeSet = new Set(usersForAppointmentOwner);
-            const managerId = currentUserForDropdowns.Werber;
-            if (managerId) {
-                const manager = SKT_APP.findRowById('mitarbeiter', managerId);
-                if (manager && manager.Status !== 'Ausgeschieden') {
-                    usersForInviteeSet.add(manager);
-                }
-            }
-            const sortedUsersForInvitee = Array.from(usersForInviteeSet).sort((a, b) => a.Name.localeCompare(b.Name));
-
+            // Beide Dropdowns mit der gleichen Benutzerliste befüllen
             userSelect.innerHTML = '';
-            usersForAppointmentOwner.forEach(u => userSelect.add(new Option(u.Name, u._id)));
+            sortedAvailableUsers.forEach(u => userSelect.add(new Option(u.Name, u._id)));
 
             inviteeSelect.innerHTML = '<option value="">-- Kein --</option>';
-            sortedUsersForInvitee.forEach(u => inviteeSelect.add(new Option(u.Name, u._id)));
+            sortedAvailableUsers.forEach(u => inviteeSelect.add(new Option(u.Name, u._id)));
 
             appointmentsLog('User dropdowns populated.');
 
