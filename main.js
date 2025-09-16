@@ -7882,8 +7882,8 @@ class BildschirmView {
 
         this.zoomBtn.addEventListener('click', () => this.toggleZoom());
 
-        await this.fetchAndRender();
-        this.startDataRefresh();
+        await this.fetchAndRenderRankings();
+        this.startScheduledDataRefresh();
         this.startSlideshow(); // NEU
         this.initialized = true;
     }
@@ -7907,56 +7907,43 @@ class BildschirmView {
         return { startDate, endDate };
     }
 
-    async fetchAndRender() {
-        console.log('[Bildschirm] Daten werden geladen und berechnet...');
+    async fetchAndRenderRankings() {
+        console.log('[Bildschirm] Lade Ranglisten-Daten via SQL...');
         try {
             const { startDate: monthStartDate, endDate: monthEndDate } = this._getMonthlyDates();
             const { startDate: weekStartDate, endDate: weekEndDate } = this._getWeeklyDates();
 
-            // Fetch all data for the month
             const monthStartDateIso = monthStartDate.toISOString().split('T')[0];
             const monthEndDateIso = monthEndDate.toISOString().split('T')[0];
+            const weekStartDateIso = weekStartDate.toISOString().split('T')[0];
+            const weekEndDateIso = weekEndDate.toISOString().split('T')[0];
 
-            const umsatzQuery = `SELECT Mitarbeiter_ID, EH, Datum FROM Umsatz WHERE Datum >= '${monthStartDateIso}' AND Datum <= '${monthEndDateIso}'`;
-            const etQuery = `SELECT Mitarbeiter_ID, Datum FROM Termine WHERE Kategorie = 'ET' AND (Absage IS NULL OR Absage = false) AND Status != 'Storno' AND Datum >= '${monthStartDateIso}' AND Datum <= '${monthEndDateIso}'`;
-
-            const [umsatzDataRaw, etDataRaw] = await Promise.all([
-                seaTableSqlQuery(umsatzQuery, true),
-                seaTableSqlQuery(etQuery, true)
-            ]);
-
-            const allUmsaetze = mapSqlResults(umsatzDataRaw || [], 'Umsatz');
-            const allETs = mapSqlResults(etDataRaw || [], 'Termine');
-
-            // Filter for week
-            const weeklyUmsaetze = allUmsaetze.filter(u => {
-                const d = new Date(u.Datum);
-                return d >= weekStartDate && d <= weekEndDate;
-            });
-            const weeklyETs = allETs.filter(t => {
-                const d = new Date(t.Datum);
-                return d >= weekStartDate && d <= weekEndDate;
-            });
-
-            // Calculate rankings
-            const calculateRanking = (data, groupByKey, valueKey = null) => {
-                const grouped = _.groupBy(data, item => item[groupByKey]?.[0]?.row_id);
-                return Object.entries(grouped)
-                    .map(([mitarbeiterId, items]) => {
-                        const mitarbeiter = findRowById('mitarbeiter', mitarbeiterId);
-                        if (!mitarbeiter || mitarbeiter.Status === 'Ausgeschieden') return null;
-                        const value = valueKey ? _.sumBy(items, valueKey) : items.length;
-                        return { name: mitarbeiter.Name, value };
-                    })
-                    .filter(Boolean)
-                    .sort((a, b) => b.value - a.value)
-                    .slice(0, 3);
+            // Helper function to build and run a query
+            const getRanking = async (dateFilter, table, aggregation, categoryFilter = "") => {
+                const query = `SELECT Mitarbeiter_ID, ${aggregation} as value FROM \`${table}\` WHERE ${dateFilter} ${categoryFilter} GROUP BY Mitarbeiter_ID ORDER BY value DESC LIMIT 3`;
+                const resultRaw = await seaTableSqlQuery(query, true);
+                const results = mapSqlResults(resultRaw || [], table);
+                return results.map(item => {
+                    const mitarbeiter = findRowById('mitarbeiter', item.Mitarbeiter_ID?.[0]?.row_id);
+                    if (!mitarbeiter || mitarbeiter.Status === 'Ausgeschieden') return null;
+                    return { name: mitarbeiter.Name, value: item.value };
+                }).filter(Boolean);
             };
 
-            const wochenEhRanking = calculateRanking(weeklyUmsaetze, 'Mitarbeiter_ID', 'EH');
-            const wochenEtRanking = calculateRanking(weeklyETs, 'Mitarbeiter_ID');
-            const monatsEhRanking = calculateRanking(allUmsaetze, 'Mitarbeiter_ID', 'EH');
-            const monatsEtRanking = calculateRanking(allETs, 'Mitarbeiter_ID');
+            const etCategoryFilter = "AND Kategorie = 'ET' AND (Absage IS NULL OR Absage = false) AND Status != 'Storno'";
+
+            // Execute all 4 queries in parallel
+            const [
+                wochenEhRanking,
+                wochenEtRanking,
+                monatsEhRanking,
+                monatsEtRanking
+            ] = await Promise.all([
+                getRanking(`Datum >= '${weekStartDateIso}' AND Datum <= '${weekEndDateIso}'`, 'Umsatz', 'SUM(EH)'),
+                getRanking(`Datum >= '${weekStartDateIso}' AND Datum <= '${weekEndDateIso}'`, 'Termine', 'COUNT(_id)', etCategoryFilter),
+                getRanking(`Datum >= '${monthStartDateIso}' AND Datum <= '${monthEndDateIso}'`, 'Umsatz', 'SUM(EH)'),
+                getRanking(`Datum >= '${monthStartDateIso}' AND Datum <= '${monthEndDateIso}'`, 'Termine', 'COUNT(_id)', etCategoryFilter)
+            ]);
 
             // NEU: Slides erstellen und befüllen
             const rankings = [
@@ -7981,7 +7968,7 @@ class BildschirmView {
             this.lastUpdatedTime.textContent = new Date().toLocaleTimeString('de-DE');
 
         } catch (error) {
-            console.error('[Bildschirm] Fehler beim Laden der Daten:', error);
+            console.error('[Bildschirm] Fehler beim Laden der Ranglisten-Daten:', error);
         }
     }
 
@@ -8024,10 +8011,32 @@ class BildschirmView {
         });
     }
 
-    startDataRefresh() {
+    async refreshDataAndRender() {
+        console.log('[Bildschirm] Geplante Aktualisierung: Lade neue Ranglisten-Daten von der API...');
+        // This function now just calls the main fetching function.
+        await this.fetchAndRenderRankings();
+    }
+
+    startScheduledDataRefresh() {
         if (this.refreshInterval) clearInterval(this.refreshInterval);
-        // Refresh every 5 minutes
-        this.refreshInterval = setInterval(() => this.fetchAndRender(), 5 * 60 * 1000);
+
+        const refreshTimes = ['10:00', '12:00', '15:00', '18:00', '20:00', '22:00'];
+        let lastRefreshTime = null;
+
+        const checkAndRefresh = async () => {
+            const now = new Date();
+            const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+
+            if (refreshTimes.includes(currentTime) && lastRefreshTime !== currentTime) {
+                console.log(`[Bildschirm] Geplante Aktualisierung um ${currentTime} wird ausgeführt.`);
+                lastRefreshTime = currentTime;
+                await this.refreshDataAndRender();
+            }
+        };
+
+        // Check every minute
+        this.refreshInterval = setInterval(checkAndRefresh, 60 * 1000);
+        console.log('[Bildschirm] Geplante Aktualisierung eingerichtet für:', refreshTimes);
     }
 
     // NEU: Slideshow-Logik
@@ -8097,12 +8106,12 @@ async function initializeBildschirmView() {
         }
     }
     
-    // We only need Mitarbeiter, Umsatz, Termine
-    const tablesToLoad = ["Mitarbeiter", "Umsatz", "Termine"];
+    // We only need Mitarbeiter for mapping IDs to names.
+    const tablesToLoad = ["Mitarbeiter"];
     for (const tableName of tablesToLoad) {
         const key = tableName.toLowerCase();
-        db[key] = loadFromCache(key, 5) || await seaTableQuery(tableName);
-        saveToCache(key, db[key]);
+        db[key] = await seaTableQuery(tableName); // Load fresh to ensure new employees are included
+        saveToCache(key, db[key]); // Cache für andere Ansichten aktualisieren
     }
     normalizeAllData();
     setStatus("");
