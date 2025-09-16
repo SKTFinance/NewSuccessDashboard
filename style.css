@@ -1213,3 +1213,45 @@ details[open] > summary::before { transform: rotate(180deg); }
     background-color: rgba(0, 0, 0, 0.1);
     cursor: default;
 }
+
+/* NEU: Stile für den detaillierten Wochenkalender */
+.week-calendar-header-grid {
+    display: grid;
+    grid-template-columns: 60px repeat(7, minmax(0, 1fr));
+    background-color: var(--color-skt-grey-light);
+}
+
+.week-calendar-body-grid {
+    display: grid;
+    grid-template-columns: 60px repeat(7, minmax(0, 1fr));
+    /* 18 Stunden (6-24) * 2 Slots/Stunde = 36 Zeilen. Jeder Slot ist 40px hoch. */
+    grid-template-rows: repeat(36, 40px); 
+}
+
+.week-calendar-day-col {
+    position: relative;
+    border-left: 1px solid #e5e7eb; /* border-gray-200 */
+}
+
+.week-calendar-time-slot {
+    border-top: 1px dotted #e5e7eb; /* border-gray-200 */
+}
+.week-calendar-time-slot.full-hour {
+    border-top-style: solid;
+}
+
+.week-calendar-time-label {
+    position: absolute;
+    transform: translateY(-50%);
+    right: 8px;
+    background-color: white;
+    padding: 0 4px;
+}
+
+.week-calendar-appointment {
+    position: absolute; /* KORREKTUR: Positionierung für Überlappung */
+    z-index: 10;
+    overflow: hidden;
+    transition: all 0.2s ease;
+    border-left: 4px solid; /* Wird für die Statusfarbe verwendet */
+}

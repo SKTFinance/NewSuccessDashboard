@@ -2022,23 +2022,22 @@ async function calculateGesamtansichtData() {
     fetchBulkDashboardData(Array.from(allMemberIds)),
     calculateAllStructureEarnings(Array.from(allMemberIds), startDate, endDate),
   ]);
-  
-
-  // NEU: Speichere die Daten der Untergebenen für jede FK im Cache für schnelles Ausklappen.
-  führungskräfte.forEach(fk => {
-      const subordinates = getSubordinates(fk._id, 'gruppe');
-      const subordinateIds = new Set(subordinates.map(s => s._id));
-      const dataForCache = augmentedMemberData.filter(d => subordinateIds.has(d.id));
-      // KORREKTUR: Der Cache-Key muss mit dem in `getSubordinateDataWithCache` übereinstimmen.
-      saveToCache(`subordinate-data-${fk._id}-grandchildren`, dataForCache);
-  });
   const targetEarningsMap = await calculateAllStructureTargetEarnings(Array.from(allMemberIds), allMemberData);
 
+  // KORREKTUR: Die Deklaration von augmentedMemberData wurde verschoben, um den "Cannot declare a const variable twice" Fehler zu beheben.
   const augmentedMemberData = allMemberData.map((data) => ({
     ...data,
     earnings: earningsMap[data.id] || { personal: 0, group: 0, structure: 0 },
     targetEarnings: targetEarningsMap[data.id] || { personal: 0, group: 0, structure: 0 },
   }));
+
+  // KORREKTUR: Dieser Block muss nach der Deklaration von augmentedMemberData kommen.
+  führungskräfte.forEach(fk => {
+      const subordinates = getSubordinates(fk._id, 'gruppe');
+      const subordinateIds = new Set(subordinates.map(s => s._id));
+      const dataForCache = augmentedMemberData.filter(d => subordinateIds.has(d.id));
+      saveToCache(`subordinate-data-${fk._id}-grandchildren`, dataForCache);
+  });
 
 
   // OPTIMIERUNG: Anstatt `calculateGroupOrStructureData` für jede FK einzeln aufzurufen,
@@ -3014,6 +3013,22 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
     earnings: earningsMap[data.id] || { personal: 0, group: 0, structure: 0 },
     targetEarnings: targetEarningsMap[data.id] || { personal: 0, group: 0, structure: 0 },
   }));
+
+  // Definiere die Führungskräfte im aktuellen Kontext, um deren Untergebenen-Daten zu cachen.
+  const führungskräfte = [user, ...allDownline].filter(isUserLeader);
+  // Speichere die Daten der Untergebenen für jede FK im Cache für schnelles Ausklappen.
+  führungskräfte.forEach(fk => {
+      const subordinates = getSubordinates(fk._id, 'gruppe');
+      const subordinateIds = new Set(subordinates.map(s => s._id));
+      const dataForCache = augmentedDataStore.filter(d => subordinateIds.has(d.id));
+      // KORREKTUR: Der Cache-Key muss mit dem in `getSubordinateDataWithCache` übereinstimmen.
+      saveToCache(`subordinate-data-${fk._id}-grandchildren`, dataForCache);
+  });
+
+
+
+
+
   // --- ENDE OPTIMIERTER DATENABRUF ---
 
   personalData = augmentedDataStore.find((d) => d.id === mitarbeiterId) || {};
@@ -3804,9 +3819,6 @@ class AppointmentsView {
     constructor() {
         // Der Konstruktor ist absichtlich schlank. DOM-Elemente werden in init() geholt.
         this.listContainer = null;
-        this.umsatzTab = null;
-        this.immoTab = null; // NEU
-        this.netzwerkTab = null;
         this.statsChartTitle = null;
         this.statsPieChartContainer = null;
         this.statsPieChartLegend = null;
@@ -3819,20 +3831,30 @@ class AppointmentsView {
         this.groupFilterPanel = null;
         this.statsCategoryFilterBtn = null;
         this.statsCategoryFilterPanel = null;
-        this.statsMonthTimeline = null;
+        this.statsMonthTimeline = null; // Timeline-Ansicht
+        this.statsTimelineView = null;
+        this.statsViewTimelineBtn = null;
+        // NEU: Wochenkalender-Ansicht
+        this.statsWeekView = null;
+        this.statsViewWeekBtn = null;
+        this.weekNavPrevBtn = null;
+        this.weekNavNextBtn = null;
+        this.weekPeriodDisplay = null;
+        this.weekCalendarScopeSelect = null;
+        this.weekCalendarViewModeSelect = null;
+        this.weekCalendarUserSelectContainer = null;
+        this.weekCalendarUserSelect = null;
+        this.weekCalendarBody = null;
+        this.weekCalendarHeader = null;
         this.statsPeriodDisplay = null; // Beibehalten für die Wochenanzeige
         this.statsNavPrevBtn = null;    // Beibehalten für die Navigation
         this.statsNavNextBtn = null;    // Beibehalten für die Navigation
-        this.statsViewCalendarBtn = null;
         this.statsViewTableBtn = null;
         this.statsViewInfoBtn = null; // NEU
 
-        this.statsCalendarView = null;
         this.statsTableView = null;
         this.naechstesInfoView = null; // NEU
         this.infoabendDateSelect = null;
-        this.infoabendScopeFilter = null;
-        this.statsCalendarView = null;
         this.statsTableView = null;
         this.statsByStatusBtn = null;
         this.outstandingAppointmentsSection = null;
@@ -3943,10 +3965,12 @@ class AppointmentsView {
         this.statsPeriodDisplay = document.getElementById('stats-period-display');
         this.statsNavPrevBtn = document.getElementById('stats-nav-prev-btn');
         this.statsNavNextBtn = document.getElementById('stats-nav-next-btn');
-        this.statsViewCalendarBtn = document.getElementById('stats-view-calendar-btn');
+        this.statsViewTimelineBtn = document.getElementById('stats-view-timeline-btn');
+        this.statsViewWeekBtn = document.getElementById('stats-view-week-btn');
         this.statsViewTableBtn = document.getElementById('stats-view-table-btn');
         this.statsViewInfoBtn = document.getElementById('stats-view-info-btn'); // NEU
-        this.statsCalendarView = document.getElementById('stats-calendar-view');
+        this.statsTimelineView = document.getElementById('stats-timeline-view');
+        this.statsWeekView = document.getElementById('stats-week-view');
         this.statsTableView = document.getElementById('stats-table-view');
         this.naechstesInfoView = document.getElementById('naechstes-info-view'); // NEU
         this.infoabendDateSelect = document.getElementById('infoabend-date-select');
@@ -3970,8 +3994,17 @@ class AppointmentsView {
         this.statsTab = document.getElementById('analysis-stats-tab');
         this.heatmapTab = document.getElementById('analysis-heatmap-tab');
         this.heatmapGrid = document.getElementById('heatmap-grid');
+        // NEU: Wochenkalender
+        this.weekNavPrevBtn = document.getElementById('week-nav-prev-btn');
+        this.weekNavNextBtn = document.getElementById('week-nav-next-btn');
+        this.weekPeriodDisplay = document.getElementById('week-period-display');
+        this.weekCalendarViewModeSelect = document.getElementById('week-calendar-view-mode-select');
+        this.weekCalendarUserSelectContainer = document.getElementById('week-calendar-user-select-container');
+        this.weekCalendarUserSelect = document.getElementById('week-calendar-user-select');
+        this.weekCalendarBody = document.getElementById('week-calendar-body');
+        this.weekCalendarHeader = document.getElementById('week-calendar-header');
         // KORREKTUR: Das Element wird jetzt dynamisch im Filter-Panel erstellt, daher wird die Zuweisung hier entfernt.
-        return this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.searchInput && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.statsTab && this.heatmapTab && this.heatmapGrid && this.statsScopeFilter && this.statsCategoryFilterBtn && this.statsCategoryFilterPanel && this.statsMonthTimeline && this.statsPeriodDisplay && this.statsNavPrevBtn && this.statsNavNextBtn && this.outstandingAppointmentsSection && this.outstandingAppointmentsList && this.statsViewCalendarBtn && this.statsViewTableBtn && this.statsCalendarView && this.statsTableView && this.statsViewInfoBtn && this.naechstesInfoView && this.groupFilterContainer && this.mainFilterContainer && this.analysisContainer;
+        return this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.searchInput && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.statsTab && this.heatmapTab && this.heatmapGrid && this.statsScopeFilter && this.statsCategoryFilterBtn && this.statsCategoryFilterPanel && this.statsMonthTimeline && this.statsPeriodDisplay && this.statsNavPrevBtn && this.statsNavNextBtn && this.outstandingAppointmentsSection && this.outstandingAppointmentsList && this.statsViewTimelineBtn && this.statsViewTableBtn && this.statsTimelineView && this.statsTableView && this.statsViewInfoBtn && this.naechstesInfoView && this.groupFilterContainer && this.mainFilterContainer && this.analysisContainer && this.statsWeekView && this.weekCalendarViewModeSelect;
     }
 
     async init(userId) {
@@ -4000,10 +4033,30 @@ class AppointmentsView {
         this.endDateInput.value = endDate.toISOString().split('T')[0];
 
         this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
+
+        // KORREKTUR: Das zweite Dropdown wird jetzt ausgeblendet, da es nicht mehr benötigt wird.
+        if (this.weekCalendarViewModeSelect) this.weekCalendarViewModeSelect.parentElement.classList.add('hidden');
+
+        // KORREKTUR: Das Haupt-Dropdown wird jetzt dynamisch befüllt, um "Kalender von..." zu integrieren.
         const isLeader = SKT_APP.isUserLeader(SKT_APP.authenticatedUserData);
-        this.statsScopeFilter.classList.toggle('hidden', !isLeader);
+        const savedScope = loadUiSetting('appointmentsScope', isLeader ? 'group' : 'personal');
+        this.statsScopeFilter.innerHTML = '';
+        const scopeOptions = [
+            { value: 'personal', text: 'Meine Termine' },
+            { value: 'group', text: 'Meine Gruppe' },
+            { value: 'structure', text: 'Meine Struktur' },
+            { value: 'user_select', text: 'Kalender von...' }
+        ];
+        scopeOptions.forEach(opt => {
+            if (opt.value === 'personal' || opt.value === 'user_select' || isLeader) {
+                this.statsScopeFilter.add(new Option(opt.text, opt.value));
+            }
+        });
+        this.statsScopeFilter.value = savedScope;
+
+        this.statsScopeFilter.classList.toggle('hidden', !isLeader); // isLeader ist bereits oben deklariert
         
-        // KORREKTUR: Logik überarbeitet, um zuerst den Scope zu bestimmen und dann die UI zu aktualisieren.
+        // KORREKTUR: Logik überarbeitet, um zuerst den Scope zu bestimmen und dann die UI zu aktualisieren
         // 1. Bestimme den finalen Scope (aus Pending-Wert oder aus LocalStorage)
         if (pendingAppointmentScope) {
             this.statsScopeFilter.value = pendingAppointmentScope;
@@ -4012,7 +4065,7 @@ class AppointmentsView {
             this.statsScopeFilter.value = loadUiSetting('appointmentsScope', isLeader ? 'group' : 'personal');
         }
         const finalScope = this.statsScopeFilter.value;
-
+        
         // 2. Aktualisiere die UI basierend auf dem finalen Scope
         this.groupFilterContainer.classList.toggle('hidden', !isLeader || finalScope !== 'structure');
         if (isLeader && finalScope === 'structure') {
@@ -4027,7 +4080,11 @@ class AppointmentsView {
                 pendingAppointmentGroupFilter = null;
             }
         }
-        
+        // KORREKTUR: Zeige das "Benutzer auswählen"-Dropdown, wenn "Kalender von..." ausgewählt ist.
+        if (this.weekCalendarUserSelectContainer) {
+            this.weekCalendarUserSelectContainer.classList.toggle('hidden', finalScope !== 'user_select');
+        }
+
         // 3. Verarbeite andere Pending-Werte
         if (pendingAppointmentFilter) {
             this.filterText = pendingAppointmentFilter;
@@ -4043,6 +4100,7 @@ class AppointmentsView {
         if (pendingAppointmentViewMode) {
             this._switchStatsView(pendingAppointmentViewMode);
             pendingAppointmentViewMode = null;
+
         }
         this._populateCategoryFilter(); // KORREKTUR: Reihenfolge getauscht
 
@@ -4055,6 +4113,7 @@ class AppointmentsView {
             if (titleElement) {
                 titleElement.textContent = `Terminübersicht`;
             }
+
         }
 
         await this.fetchAndRender();
@@ -4067,8 +4126,18 @@ class AppointmentsView {
             const scope = this.statsScopeFilter.value;
             let userIds = new Set();
 
-            // NEU: Logik zur Sammlung von Benutzer-IDs basierend auf Scope und Gruppenfilter
-            if (scope === 'structure') {
+            // NEU: Logik zur Sammlung von Benutzer-IDs basierend auf Scope und Gruppenfilter.
+            // 'user_select' muss zuerst behandelt werden, da es alle potenziellen Benutzer für den Wochenkalender laden muss.
+            if (scope === 'user_select') {
+                const me = SKT_APP.authenticatedUserData;
+                const myStructure = SKT_APP.getAllSubordinatesRecursive(me._id);
+                const manager = me.Werber ? SKT_APP.findRowById('mitarbeiter', me.Werber) : null;
+                userIds.add(me._id);
+                myStructure.forEach(u => userIds.add(u._id));
+                if (manager && manager.Status !== 'Ausgeschieden') {
+                    userIds.add(manager._id);
+                }
+            } else if (scope === 'structure') {
                 const selectedLeaderIds = Array.from(this.groupFilterPanel.querySelectorAll('input:checked')).map(cb => cb.value);
                 if (selectedLeaderIds.length > 0) {
                     // Wenn bestimmte Gruppen ausgewählt sind, nur deren Mitglieder laden
@@ -4162,7 +4231,22 @@ class AppointmentsView {
             this.render();
         } catch (error) {
             appointmentsLog('!!! FEHLER in fetchAndRender !!!', error);
-            this.listContainer.innerHTML = `<div class="text-center py-16"><i class="fas fa-exclamation-triangle fa-4x text-red-400 mb-4"></i><h3 class="text-xl font-semibold text-skt-blue">Ein Fehler ist aufgetreten</h3><p class="text-gray-500 mt-2">${error.message}</p></div>`;
+            const errorHtml = `<div class="text-center py-16"><i class="fas fa-exclamation-triangle fa-4x text-red-400 mb-4"></i><h3 class="text-xl font-semibold text-skt-blue">Ein Fehler ist aufgetreten</h3><p class="text-gray-500 mt-2">${error.message}</p></div>`;
+            
+            // Display error in the currently active view container
+            if (this.statsTimelineView && !this.statsTimelineView.classList.contains('hidden')) {
+                this.statsTimelineView.innerHTML = errorHtml;
+            } else if (this.statsWeekView && !this.statsWeekView.classList.contains('hidden')) {
+                this.statsWeekView.innerHTML = errorHtml;
+            } else if (this.statsTableView && !this.statsTableView.classList.contains('hidden')) {
+                this.statsTableView.innerHTML = errorHtml;
+            } else if (this.naechstesInfoView && !this.naechstesInfoView.classList.contains('hidden')) {
+                this.naechstesInfoView.innerHTML = errorHtml;
+            } else {
+                // Fallback if no view is active (should not happen)
+                if (this.statsTimelineView) this.statsTimelineView.innerHTML = errorHtml;
+                console.error("Could not find an active view to display the error in.");
+            }
         }
         appointmentsLog('--- ENDE: fetchAndRender ---');
     }
@@ -4219,7 +4303,7 @@ class AppointmentsView {
         this.searchInput.addEventListener('input', _.debounce(e => {
             this.filterText = e.target.value; this.render();
         }, 350));
-        // KORREKTUR: Navigation auf "Tag für Tag" umgestellt
+        // KORREKTUR: Navigation für Timeline
         this.statsNavPrevBtn.addEventListener('click', () => this._navigateStats(-1));
         this.statsNavNextBtn.addEventListener('click', () => this._navigateStats(1));
         this.statsPeriodDisplay.addEventListener('click', () => this._scrollToTodayInTimeline());
@@ -4230,7 +4314,8 @@ class AppointmentsView {
             this._updateCardScales();
         }, 50));
         
-        this.statsViewCalendarBtn.addEventListener('click', () => this._switchStatsView('calendar'));
+        this.statsViewTimelineBtn.addEventListener('click', () => this._switchStatsView('timeline'));
+        this.statsViewWeekBtn.addEventListener('click', () => this._switchStatsView('week'));
         this.statsViewTableBtn.addEventListener('click', () => this._switchStatsView('table'));
 
         // NEU: Event Listener für das Dropdown
@@ -4251,10 +4336,14 @@ class AppointmentsView {
             const scope = this.statsScopeFilter.value;
             saveUiSetting('appointmentsScope', scope); // Einstellung speichern
             // KORREKTUR: Gruppenfilter nur bei 'structure' anzeigen und neu befüllen.
-            const showGroupFilter = scope === 'structure';
-            this.groupFilterContainer.classList.toggle('hidden', !showGroupFilter);
-            if (showGroupFilter) {
+            const isLeader = SKT_APP.isUserLeader(SKT_APP.authenticatedUserData);
+            this.groupFilterContainer.classList.toggle('hidden', !isLeader || scope !== 'structure');
+            if (isLeader && scope === 'structure') {
                 this._populateGroupFilter(true);
+            }
+            // KORREKTUR: Zeige das "Benutzer auswählen"-Dropdown, wenn "Kalender von..." ausgewählt ist.
+            if (this.weekCalendarUserSelectContainer) {
+                this.weekCalendarUserSelectContainer.classList.toggle('hidden', scope !== 'user_select');
             }
             this.fetchAndRender(); // Daten bei jeder Änderung neu laden
         });
@@ -4276,6 +4365,13 @@ class AppointmentsView {
         // NEU: Event-Listener für die "Nächstes Info"-Ansicht
         this.infoabendDateSelect.addEventListener('change', () => this.renderNaechstesInfo());
         this.infoabendShowCancelled.addEventListener('change', () => this.renderNaechstesInfo());
+
+        // NEU: Event-Listener für den Wochenkalender (einmalig hier setzen)
+        this.weekNavPrevBtn.addEventListener('click', () => this._navigateWeekCalendar(-7));
+        this.weekNavNextBtn.addEventListener('click', () => this._navigateWeekCalendar(7));
+        this.weekPeriodDisplay.addEventListener('click', () => this._resetWeekCalendarToToday());
+        // Der `weekCalendarViewModeSelect` wird nicht mehr verwendet, der Listener ist am Haupt-Scope-Filter.
+        this.weekCalendarUserSelect.addEventListener('change', () => this._renderWeekCalendar());
     }
 
     _updateStatusDropdown(category, currentStatus = null) {
@@ -4355,28 +4451,67 @@ class AppointmentsView {
     }
 
     _switchStatsView(view) {
-        this.statsCalendarView.classList.toggle('hidden', view !== 'calendar');
+        this.statsTimelineView.classList.toggle('hidden', view !== 'timeline');
+        this.statsWeekView.classList.toggle('hidden', view !== 'week');
         this.statsTableView.classList.toggle('hidden', view !== 'table');
         this.naechstesInfoView.classList.toggle('hidden', view !== 'info');
 
         // NEU: Hauptfilter-Maske ausblenden, wenn die Info-Ansicht aktiv ist.
         if (this.mainFilterContainer) {
-            this.mainFilterContainer.classList.toggle('hidden', view === 'info');
+            this.mainFilterContainer.classList.toggle('hidden', view === 'info' || view === 'week');
         }
 
         // NEU: Analyse-Container ausblenden, wenn die Info-Ansicht aktiv ist.
         if (this.analysisContainer) {
-            this.analysisContainer.classList.toggle('hidden', view === 'info');
+            this.analysisContainer.classList.toggle('hidden', view === 'info' || view === 'week');
         }
 
-        this.statsViewCalendarBtn.classList.toggle('active', view === 'calendar');
+        this.statsViewTimelineBtn.classList.toggle('active', view === 'timeline');
+        this.statsViewWeekBtn.classList.toggle('active', view === 'week');
         this.statsViewTableBtn.classList.toggle('active', view === 'table');
         this.statsViewInfoBtn.classList.toggle('active', view === 'info');
 
+        // NEU: "Kalender von..."-Option nur in der Wochenansicht anzeigen.
+        const userSelectOption = this.statsScopeFilter.querySelector('option[value="user_select"]');
+        if (userSelectOption) {
+            userSelectOption.hidden = (view !== 'week');
+        }
+
+        // Wenn die Ansicht gewechselt wird und "Kalender von..." ausgewählt war, auf "Meine Termine" zurücksetzen.
+        if (view !== 'week' && this.statsScopeFilter.value === 'user_select') {
+            this.statsScopeFilter.value = 'personal';
+            this.statsScopeFilter.dispatchEvent(new Event('change')); // Stellt sicher, dass die Daten neu geladen werden.
+        }
+
         if (view === 'info') {
             this.renderNaechstesInfo(true); // true to repopulate dates
+        } else if (view === 'week') {
+            this._populateWeekCalendarViewModeSelect();
+            this._populateWeekCalendarUserSelect();
+            this._handleViewModeChange(); // Setzt die initiale Sichtbarkeit und rendert den Kalender
+
+            // Event-Listener für den neuen Kalender
+            this.weekNavPrevBtn.addEventListener('click', () => this._navigateWeekCalendar(-7));
+            this.weekNavNextBtn.addEventListener('click', () => this._navigateWeekCalendar(7));
+            this.weekPeriodDisplay.addEventListener('click', () => this._resetWeekCalendarToToday());
+            this.weekCalendarViewModeSelect.addEventListener('change', () => this._handleViewModeChange());
+            this.weekCalendarUserSelect.addEventListener('change', () => this._renderWeekCalendar());
         }
     }
+
+    // NEU: Hilfsfunktion, die auf Änderungen im Haupt-Kalender-Dropdown reagiert.
+    _handleViewModeChange() {
+        const selectedMode = this.weekCalendarViewModeSelect.value;
+        saveUiSetting('weekCalendarViewMode', selectedMode); // Präferenz speichern
+
+        const showUserSelect = selectedMode === 'user_select';
+        this.weekCalendarUserSelectContainer.classList.toggle('hidden', !showUserSelect);
+
+        // Kalender nach jeder Änderung neu rendern
+            this._renderWeekCalendar();
+    }
+
+
     _populateCategoryFilter() {
         const terminMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'termine');
         if (!terminMeta) return;
@@ -4540,6 +4675,7 @@ class AppointmentsView {
     _renderAppointmentStats() {
         const today = getCurrentDate();
         const { startDate: cycleStartDate, endDate: cycleEndDate } = getMonthlyCycleDates();
+        const scope = this.statsScopeFilter.value;
         this.statsPeriodDisplay.textContent = cycleStartDate.toLocaleString('de-DE', { month: 'long', year: 'numeric' });
         this._updateCategoryButtonText();
 
@@ -4568,6 +4704,7 @@ class AppointmentsView {
         // --- Table View Logic ---
         const sortedAppointments = this._sortStatsTableData(finalAppointmentsForTable);
         this._renderStatsTable(sortedAppointments);
+        this._renderWeekCalendar();
 
         // --- Calendar View Logic ---
         // Der Kalender arbeitet mit den Zyklusdaten, ignoriert aber die Datumsauswahl-Filter.
@@ -4613,7 +4750,7 @@ class AppointmentsView {
             const isToday = d.toDateString() === today.toDateString();
 
             const dayCard = document.createElement('div');
-            dayCard.className = `day-card flex-shrink-0 w-72 h-full bg-white rounded-xl p-3 flex flex-col border-2 ${isToday ? 'border-skt-green-accent' : 'border-gray-200'}`; dayCard.dataset.date = dateString;
+            dayCard.className = `day-card flex-shrink-0 w-72 h-full bg-white rounded-xl p-3 flex flex-col border-2 ${isToday ? 'border-skt-blue' : 'border-gray-200'}`; dayCard.dataset.date = dateString;
             if (isToday) dayCard.classList.add('is-today');
 
             let appointmentsHtml = '';
@@ -4622,15 +4759,18 @@ class AppointmentsView {
                     const mitarbeiterName = termin.Mitarbeiter_ID?.[0]?.display_value || SKT_APP.findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
                     const terminTime = termin.Datum ? new Date(termin.Datum).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
 
-                    // NEU: Logik für Status-Farben und Kategorie-Bereich
-                    const statusColorClass = this._getStatusColorClass(termin).replace('border-l-4', 'border-').replace('bg-', 'border-');
+                    // KORREKTUR: Verwende die neue, robustere Farb-Logik
+                    const { border: statusColorClass } = this._getAppointmentColorClasses(termin);
                     const categoryPillColor = categoryColors[termin.Kategorie] || 'bg-gray-400';
 
                     // NEU: Logik für "+1"-Icon
                     const ownerId = termin.Mitarbeiter_ID?.[0]?.row_id;
                     const inviteeId = termin.Eingeladener?.[0]?.row_id;
-                    // NEU: +1 wird angezeigt, wenn der aktuell angezeigte Benutzer der Eingeladene ist, aber nicht der Besitzer.
-                    const isInvitee = inviteeId === this.currentUserId && ownerId !== this.currentUserId;
+                    // KORREKTUR: +1 nur in der persönlichen Ansicht anzeigen
+                    let isInvitee = false;
+                    if (scope === 'personal') {
+                        isInvitee = inviteeId === this.currentUserId && ownerId !== this.currentUserId;
+                    }
                     const inviteeHtml = isInvitee ? `<span class="ml-2 text-xs font-bold text-white bg-skt-blue rounded-full h-5 w-5 inline-flex items-center justify-center" title="Du bist eingeladen">+1</span>` : '';
 
                     return `<div class="rounded-lg shadow-sm bg-white text-skt-blue text-xs mb-1.5 flex overflow-hidden border border-gray-200 border-l-4 ${statusColorClass}" data-id="${termin._id}">
@@ -4669,7 +4809,328 @@ class AppointmentsView {
             this._updateCardScales();
         }, 150);
     }
+    
+    // NEU: Hilfsfunktion, die auf Änderungen im Haupt-Kalender-Dropdown reagiert.
+    _handleViewModeChange() {
+        const selectedMode = this.weekCalendarViewModeSelect.value;
+        saveUiSetting('weekCalendarViewMode', selectedMode); // Präferenz speichern
+
+        const showUserSelect = selectedMode === 'user_select';
+        this.weekCalendarUserSelectContainer.classList.toggle('hidden', !showUserSelect);
+
+        // Kalender nach jeder Änderung neu rendern
+        this._renderWeekCalendar();
+    }
+
+    // NEU: Hilfsfunktion zur Berechnung von überlappenden Terminen für einen Tag
+    _calculateOverlaps(dayAppointments) {
+        // 1. Events mit Start/End-Zeitstempel erstellen und sortieren
+        const events = dayAppointments.map((termin, index) => ({
+            id: index,
+            termin,
+            start: new Date(termin.Datum).getTime(),
+            end: new Date(termin.Datum).getTime() + (termin.Dauer || 3600) * 1000,
+            column: -1,
+            max_cols: 1
+        })).sort((a, b) => a.start - b.start);
+
+        if (events.length === 0) return [];
+
+        const processedEvents = [];
+
+        // 2. Events gierig in Spalten platzieren
+        for (const event of events) {
+            let col = 0;
+            while (true) {
+                const collidingEvent = processedEvents.find(
+                    p => p.column === col && event.start < p.end && event.end > p.start
+                );
+                if (!collidingEvent) {
+                    event.column = col;
+                    break;
+                }
+                col++;
+            }
+            processedEvents.push(event);
+        }
+
+        // 3. Maximale Anzahl an Spalten für jede Überlappungsgruppe bestimmen
+        for (const event of events) {
+            let max_cols = 0;
+            for (const other of events) {
+                if (event.start < other.end && event.end > other.start) {
+                    max_cols = Math.max(max_cols, other.column + 1);
+                }
+            }
+            event.max_cols = max_cols;
+        }
+
+        // 4. Finale Layout-Informationen zurückgeben
+        return events.map(e => ({
+            termin: e.termin,
+            column: e.column,
+            totalColumns: e.max_cols
+        }));
+    }
+
     // NEU: Funktion zum Erstellen und Herunterladen einer .ics-Datei
+    _populateWeekCalendarViewModeSelect() {
+        let select = this.weekCalendarViewModeSelect;
+        if (!select) return;
+
+        select.innerHTML = "";
+        const options = [
+            { value: 'personal', text: 'Meine Termine' },
+            { value: 'group', text: 'Meine Gruppe' },
+            { value: 'structure', text: 'Meine Struktur' },
+            { value: 'user_select', text: 'Kalender von...' }
+        ];
+
+        const isLeader = SKT_APP.isUserLeader(SKT_APP.authenticatedUserData)
+
+        options.forEach(opt => {
+            // Gruppen-/Strukturansicht nur für Führungskräfte
+            if (opt.value === 'personal' || opt.value === 'user_select' || isLeader) {
+                select.add(new Option(opt.text, opt.value));
+            }
+        })
+
+        // Gespeicherte Ansicht wiederherstellen oder Standard setzen
+        const savedMode = loadUiSetting('weekCalendarViewMode', 'personal');
+        if (Array.from(select.options).some(opt => opt.value === savedMode)) {
+            select.value = savedMode;
+        } else {
+            select.value = 'personal';
+        }
+    }    
+
+    async _populateWeekCalendarUserSelect() {
+         const select = this.weekCalendarUserSelect;
+         if (!select) return;
+ 
+         const currentVal = select.value; // Wert merken
+         select.innerHTML = '';
+ 
+         // Lade den eingeloggten Benutzer, seine Struktur und seinen direkten Vorgesetzten
+         const me = SKT_APP.authenticatedUserData;
+         const myStructure = await SKT_APP.getAllSubordinatesRecursive(me._id);
+         const manager = me.Werber ? SKT_APP.findRowById('mitarbeiter', me.Werber) : null;
+ 
+
+         const userSet = new Set([me, ...myStructure]);
+         if (manager && manager.Status !== 'Ausgeschieden') {
+
+             userSet.add(manager);
+         }
+ 
+
+         Array.from(userSet)
+             .sort((a, b) => a.Name.localeCompare(b.Name))
+             .forEach(user => {
+                 select.add(new Option(user.Name, user._id));
+             });
+ 
+         // Gespeicherten Wert wiederherstellen oder Standard setzen
+         
+         if (Array.from(select.options).some(opt => opt.value === currentVal)) {
+             select.value = currentVal;
+         } else {
+             select.value = me._id; // Standardmäßig den eingeloggten Benutzer auswählen
+         }
+    }
+
+    // KORREKTUR: Komplette Neugestaltung der Kalender-Render-Logik
+    _renderWeekCalendar() {
+        if (!this.weekCalendarBody || this.statsWeekView.classList.contains('hidden')) return;
+
+        const viewMode = this.statsScopeFilter.value;
+        let userIds = new Set();
+        // ... (Logik zur Sammlung von userIds bleibt gleich) ...
+
+        const weekStart = new Date(this.calendarWeekStartDate);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        weekEnd.setHours(23, 59, 59, 999);
+
+        // KORREKTUR: Die Logik zur Sammlung der Benutzer-IDs muss hier wiederholt werden,
+        // da sie für die Filterung der Termine benötigt wird.
+        if (viewMode === 'user_select') {
+            const selectedUserId = this.weekCalendarUserSelect.value;
+            if (selectedUserId) userIds.add(selectedUserId);
+        } else if (viewMode === 'personal') {
+            userIds.add(this.currentUserId);
+        } else if (viewMode === 'group') {
+            userIds.add(this.currentUserId);
+            SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
+        } else if (viewMode === 'structure') {
+            userIds.add(this.currentUserId);
+            this.downline.forEach(u => userIds.add(u._id));
+        }
+
+        this.weekPeriodDisplay.textContent = `${weekStart.toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit'})} - ${weekEnd.toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit', year:'numeric'})}`;
+
+        // NEU: Filterlogik aus der Timeline-Ansicht übernehmen
+        const showCancelledToggle = document.getElementById('appointments-show-cancelled');
+        const showCancelled = showCancelledToggle ? showCancelledToggle.checked : false;
+        const showHeldToggle = document.getElementById('appointments-show-held');
+        const showHeld = showHeldToggle ? showHeldToggle.checked : false;
+        const selectedCategories = Array.from(this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+
+        // Filter all appointments for the current week and selected users
+        const appointmentsForWeek = this.allAppointments.filter(t => {
+            if (!t.Datum) return false;
+            const terminDate = new Date(t.Datum);
+            const ownerId = t.Mitarbeiter_ID?.[0]?.row_id || t.Mitarbeiter_ID;
+            const inviteeId = t.Eingeladener?.[0]?.row_id;
+            const isParticipant = userIds.has(ownerId) || userIds.has(inviteeId);
+            const isInCategory = selectedCategories.includes(t.Kategorie);
+            const isCancelledOk = showCancelled || (t.Absage !== true && t.Status !== 'Storno');
+            const isHeldOk = showHeld || (t.Status !== 'Gehalten' && t.Status !== 'Info Eingeladen');
+            return isParticipant && terminDate >= weekStart && terminDate <= weekEnd && isInCategory && isCancelledOk && isHeldOk;
+        });
+
+        // Group appointments by day index (0=Mon, 1=Tue, ...)
+        const appointmentsByDay = Array.from({ length: 7 }, () => []);
+        appointmentsForWeek.forEach(termin => {
+            const dayIndex = new Date(termin.Datum).getDay() === 0 ? 6 : new Date(termin.Datum).getDay() - 1;
+            if (dayIndex >= 0 && dayIndex < 7) {
+                appointmentsByDay[dayIndex].push(termin);
+            }
+        });
+
+        this.weekCalendarHeader.innerHTML = '';
+        this.weekCalendarBody.innerHTML = '';
+
+        // --- Render Header ---
+        const headerGrid = document.createElement('div');
+        headerGrid.className = 'week-calendar-header-grid';
+        headerGrid.innerHTML += `<div class="p-2 border-b border-gray-200"></div>`; // Empty corner
+        const headerDays = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+        const today = getCurrentDate();
+        headerDays.forEach((day, i) => {
+            const dayDate = new Date(weekStart);
+            dayDate.setDate(weekStart.getDate() + i);
+            const isToday = dayDate.toDateString() === today.toDateString();
+            headerGrid.innerHTML += `<div class="p-2 text-center font-semibold text-skt-blue-light border-r border-b border-gray-200 text-sm ${isToday ? 'bg-blue-100' : ''}">${day} <span class="font-normal text-gray-500">${dayDate.getDate()}.</span></div>`;
+        });
+        this.weekCalendarHeader.appendChild(headerGrid);
+
+        // --- Render Body ---
+        const bodyContainer = document.createElement('div');
+        bodyContainer.className = 'relative'; // Main container for positioning
+        bodyContainer.style.height = `${36 * 40}px`; // 18 hours * 2 slots/hr * 40px/slot
+
+        // Render time labels and grid lines in the background
+        const gridAndTimes = document.createElement('div');
+        gridAndTimes.className = 'absolute inset-0';
+        
+        const timeColumn = document.createElement('div');
+        timeColumn.className = 'absolute top-0 left-0 w-[60px] h-full';
+        for (let hour = 6; hour < 24; hour++) {
+            const timeLabelCell = document.createElement('div');
+            timeLabelCell.className = 'relative h-[80px] text-right text-xs text-gray-400'; // 2 slots high
+            timeLabelCell.innerHTML = `<span class="week-calendar-time-label">${String(hour).padStart(2, '0')}:00</span>`;
+            timeColumn.appendChild(timeLabelCell);
+        }
+        gridAndTimes.appendChild(timeColumn);
+
+        const dayGrid = document.createElement('div');
+        dayGrid.className = 'absolute top-0 left-[60px] right-0 bottom-0 grid grid-cols-7';
+        for (let i = 0; i < 7; i++) {
+            const dayCol = document.createElement('div');
+            dayCol.className = 'week-calendar-day-col'; // has position: relative and border-left
+            for (let j = 0; j < 36; j++) {
+                const slot = document.createElement('div');
+                slot.className = 'h-[40px] border-t border-dotted border-gray-200';
+                if (j % 2 === 0) slot.classList.replace('border-dotted', 'border-solid');
+                dayCol.appendChild(slot);
+            }
+            dayGrid.appendChild(dayCol);
+        }
+        gridAndTimes.appendChild(dayGrid);
+        bodyContainer.appendChild(gridAndTimes);
+
+        // --- Render Appointments on top ---
+        const appointmentsContainer = document.createElement('div');
+        appointmentsContainer.className = 'absolute top-0 left-[60px] right-0 bottom-0 grid grid-cols-7';
+
+        appointmentsByDay.forEach((dayAppointments, dayIndex) => {
+            if (dayAppointments.length === 0) return;
+
+            const dayColumnContainer = document.createElement('div');
+            dayColumnContainer.className = 'relative h-full'; // Container for one day's appointments
+            dayColumnContainer.style.gridColumn = `${dayIndex + 1} / span 1`;
+
+            const layoutData = this._calculateOverlaps(dayAppointments);
+
+            layoutData.forEach(layoutInfo => {
+                const termin = layoutInfo.termin;
+                const terminDate = new Date(termin.Datum);
+                const startHour = terminDate.getHours();
+                const startMinute = terminDate.getMinutes();
+
+                if (startHour < 6) return;
+
+                const durationMinutes = termin.Dauer ? termin.Dauer / 60 : 60;
+                const startOffsetMinutes = (startHour - 6) * 60 + startMinute;
+                
+                const top = (startOffsetMinutes / 30) * 40; // 40px per 30-min slot
+                const height = Math.max(40, (durationMinutes / 30) * 40); // Min height of one slot
+
+                const width = 100 / layoutInfo.totalColumns;
+                const left = layoutInfo.column * width;
+
+                const terminEl = document.createElement('a');
+                terminEl.href = '#';
+                terminEl.dataset.id = termin._id;
+                const { border, bg, text } = this._getAppointmentColorClasses(termin, 'category');
+
+                const ownerId = termin.Mitarbeiter_ID?.[0]?.row_id;
+                const inviteeId = termin.Eingeladener?.[0]?.row_id;
+                let isInvitee = false;
+                if (viewMode === 'personal') {
+                    if (inviteeId === this.currentUserId && ownerId !== this.currentUserId) isInvitee = true;
+                } else if (viewMode === 'user_select') {
+                    const selectedUserId = this.weekCalendarUserSelect.value;
+                    if (inviteeId === selectedUserId && ownerId !== selectedUserId) isInvitee = true;
+                }
+                const inviteeIcon = isInvitee ? '<i class="fas fa-user-plus fa-xs ml-1" title="Du bist eingeladen"></i>' : '';
+                const terminTime = terminDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+
+                terminEl.className = `week-calendar-appointment p-2 rounded-md flex flex-col ${bg} ${text} ${border}`;
+                terminEl.style.top = `${top}px`;
+                terminEl.style.height = `${height - 2}px`; // -2 for a small gap
+                terminEl.style.left = `calc(${left}% + 2px)`;
+                terminEl.style.width = `calc(${width}% - 4px)`;
+                terminEl.innerHTML = `
+                    <strong class="text-sm font-bold truncate">${termin.Terminpartner || 'Unbekannt'}</strong>
+                    <span class="text-xs opacity-90">${terminTime}</span>
+                    <span class="text-xs opacity-90 truncate mt-auto">${termin.Mitarbeiter_ID?.[0]?.display_value || ''} ${inviteeIcon}</span>
+                `;
+                terminEl.addEventListener('click', (e) => { e.preventDefault(); this.openModal(this.allAppointments.find(t => t._id === e.currentTarget.dataset.id)); });
+                dayColumnContainer.appendChild(terminEl);
+            });
+            appointmentsContainer.appendChild(dayColumnContainer);
+        });
+
+        bodyContainer.appendChild(appointmentsContainer);
+        this.weekCalendarBody.appendChild(bodyContainer);
+    }
+
+    _navigateWeekCalendar(days) {
+        this.calendarWeekStartDate.setDate(this.calendarWeekStartDate.getDate() + days);
+        this._renderWeekCalendar();
+    }
+
+    _resetWeekCalendarToToday() {
+        const today = getCurrentDate();
+        const day = today.getDay();
+        const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+        this.calendarWeekStartDate = new Date(today.setDate(diff));
+        this.calendarWeekStartDate.setHours(0, 0, 0, 0);
+        this._renderWeekCalendar();
+    }
+
     _escapeIcsString(str) {
         // HINWEIS: Diese Funktion wurde aus der vorherigen Version übernommen und scheint korrekt zu sein.
         // Sie maskiert Sonderzeichen für das ICS-Format.
@@ -4804,14 +5265,12 @@ class AppointmentsView {
         appointments.forEach(termin => {
             const tr = document.createElement('tr');
             tr.className = 'cursor-pointer';
-            tr.dataset.id = termin._id;
-            const categoryColorClass = this._getCategoryColorClass(termin.Kategorie); // KORREKTUR: Rand prominenter machen
-            tr.className = `border-l-8 ${categoryColorClass} cursor-pointer`; // Behält die linke Randfarbe bei
+            tr.dataset.id = termin._id; // KORREKTUR: Randfarbe basierend auf Status, nicht Kategorie
+            const { border: statusColorClass, text: statusTextColorClass } = this._getAppointmentColorClasses(termin);
+            tr.className = `border-l-8 ${statusColorClass} cursor-pointer`;
             
             // KORREKTUR: Der Mitarbeitername wird aus dem verknüpften Objekt ausgelesen, das von der API kommt.
             const mitarbeiterName = termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
-            // NEU: Status-Text basierend auf den neuen Regeln einfärben
-            const statusTextColorClass = this._getStatusTextColorClass(termin.Status);
 
             // NEU: Logik für "+1"-Icon, identisch zur Kalenderansicht
             const ownerId = termin.Mitarbeiter_ID?.[0]?.row_id;
@@ -4916,65 +5375,52 @@ class AppointmentsView {
         this.render();
     }
 
-    _getStatusColorClass(termin) {
-        if (termin.Kategorie === 'Immo') {
-            return 'border-immo-accent';
-        }
-        if (termin.Absage === true || termin.Status === 'Storno') {
-            return 'border-skt-red-accent';
-        }
-        switch (termin.Status) {
-            case 'Ausgemacht': return 'border-skt-green-accent'; // Grün
-            case 'Verschoben':
-            case 'offen': return 'border-skt-red-accent'; // Rot
-            case 'weiterer BT':
-            case 'weiterer ET': return 'border-skt-blue-accent'; // Blau
-            case 'Wird Mitarbeiter': return 'border-skt-gold-accent'; // Gold
-            case 'Info Eingeladen': return 'border-skt-yellow-accent'; // Gelb
-            case 'Info Bestätigt':
-            case 'Info Anwesend': return 'border-accent-purple'; // Lila
-            case 'Gehalten': return 'border-skt-grey-medium'; // Neutrales Grau für erledigt
-            default: return 'border-gray-300'; // Standard
-        }
-    }
-
-    // NEU: Gibt die Tailwind-CSS-Klasse für die Randfarbe der Termin-Kategorie zurück.
-    _getCategoryColorClass(category) {
-        const colorMap = {
-            'AT': 'border-skt-green-accent',
-            'BT': 'border-skt-blue-accent',
-            'ST': 'border-skt-red-accent',
-            'ET': 'border-accent-gold',
-            'Immo': 'border-immo-accent',
-            'NT': 'border-accent-purple',
+    _getAppointmentColorClasses(termin, mode = 'status') {
+        // Tailwind JIT compiler needs to see the full class names, so we can't construct them dynamically.
+        // We define them fully here.
+        const baseColors = {
+            red:    { border: 'border-skt-red-accent',   bg: 'bg-red-100',   text: 'text-red-800' },
+            green:  { border: 'border-skt-green-accent', bg: 'bg-green-100', text: 'text-green-800' },
+            blue:   { border: 'border-skt-blue-accent',  bg: 'bg-blue-100',  text: 'text-blue-800' },
+            gold:   { border: 'border-accent-gold',      bg: 'bg-yellow-100',text: 'text-yellow-800' },
+            yellow: { border: 'border-skt-yellow-accent',bg: 'bg-yellow-100',text: 'text-yellow-800' },
+            purple: { border: 'border-accent-purple',    bg: 'bg-purple-100',text: 'text-purple-800' },
+            immo:   { border: 'border-immo-accent',      bg: 'bg-teal-100',  text: 'text-teal-800' },
+            grey:   { border: 'border-skt-grey-medium',  bg: 'bg-gray-100',  text: 'text-gray-800' },
+            default:{ border: 'border-gray-300',         bg: 'bg-gray-100',  text: 'text-gray-800' }
         };
-        return colorMap[category] || 'border-gray-300';
-    }
 
-    // NEU: Gibt die Tailwind-CSS-Klasse für die Textfarbe des Termin-Status zurück.
-    _getStatusTextColorClass(status) {
-        switch (status) {
-            case 'Offen':
-            case 'Storno':
-                return 'text-skt-red-accent font-semibold';
-            case 'Weiterer BT':
-            case 'Weiterer ET':
-            case 'Verschoben':
-                return 'text-orange-500 font-semibold';
-            case 'Ausgemacht':
-                return 'text-skt-green-accent font-semibold';
-            case 'Gehalten':
-                return 'text-gold font-semibold';
-            case 'Info Eingeladen':
-                return 'text-skt-yellow-accent font-semibold';
-            case 'Info Bestätigt':
-                return 'text-blue-600 font-semibold';
-            case 'Info Anwesend':
-                return 'text-purple-600 font-semibold';
-            case 'Wird Mitarbeiter':
-                return 'text-pink-500 font-semibold';
-            default:
-                return '';
+        if (termin.Absage === true || termin.Status === 'Storno') {
+            return baseColors.red;
+        }
+
+        if (mode === 'category') {
+            switch (termin.Kategorie) {
+                case 'AT': return baseColors.green;
+                case 'BT': return baseColors.blue;
+                case 'ST': return baseColors.red;
+                case 'ET': return baseColors.gold;
+                case 'Immo': return baseColors.immo;
+                case 'NT': return baseColors.purple;
+                case 'PG':
+                case 'Sonstiges':
+                default: return baseColors.grey;
+            }
+        } else { // Default mode is 'status'
+            if (termin.Kategorie === 'Immo') return baseColors.immo;
+            switch (termin.Status) {
+                case 'Ausgemacht': return baseColors.green;
+                case 'Verschoben':
+                case 'Offen': return baseColors.red;
+                case 'Weiterer BT':
+                case 'Weiterer ET': return baseColors.blue;
+                case 'Wird Mitarbeiter': return baseColors.gold;
+                case 'Info Eingeladen': return baseColors.yellow;
+                case 'Info Bestätigt':
+                case 'Info Anwesend': return baseColors.purple;
+                case 'Gehalten': return baseColors.grey;
+                default: return baseColors.default;
+            }
         }
     }
 
