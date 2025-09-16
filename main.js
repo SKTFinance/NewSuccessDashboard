@@ -7855,6 +7855,9 @@ class BildschirmView {
     constructor() {
         this.initialized = false;
         this.refreshInterval = null;
+        // NEU: Zoom-Stufen
+        this.zoomLevels = [1, 0.9, 0.8, 0.7, 0.6];
+        this.currentZoomIndex = 0;
     }
 
     _getDomElements() {
@@ -7863,7 +7866,10 @@ class BildschirmView {
         this.monatsEhList = document.getElementById('monats-eh-list');
         this.monatsEtList = document.getElementById('monats-et-list');
         this.lastUpdatedTime = document.getElementById('last-updated-time');
-        return this.wochenEhList && this.wochenEtList && this.monatsEhList && this.monatsEtList && this.lastUpdatedTime;
+        // NEU: Zoom-Button und Grid-Container
+        this.zoomBtn = document.getElementById('zoom-toggle-btn');
+        this.grid = document.getElementById('leaderboard-grid');
+        return this.wochenEhList && this.wochenEtList && this.monatsEhList && this.monatsEtList && this.lastUpdatedTime && this.zoomBtn && this.grid;
     }
 
     async init() {
@@ -7872,6 +7878,10 @@ class BildschirmView {
             return;
         }
         console.log('[Bildschirm] Ansicht wird initialisiert.');
+
+        // NEU: Event Listener für Zoom-Button
+        this.zoomBtn.addEventListener('click', () => this.toggleZoom());
+
         await this.fetchAndRender();
         this.startAutoRefresh();
         this.initialized = true;
@@ -8003,6 +8013,17 @@ class BildschirmView {
         if (this.refreshInterval) clearInterval(this.refreshInterval);
         // Refresh every 5 minutes
         this.refreshInterval = setInterval(() => this.fetchAndRender(), 5 * 60 * 1000);
+    }
+
+    // NEU: Funktion zum Umschalten des Zooms
+    toggleZoom() {
+        this.currentZoomIndex = (this.currentZoomIndex + 1) % this.zoomLevels.length;
+        const scale = this.zoomLevels[this.currentZoomIndex];
+        
+        if (this.grid) {
+            this.grid.style.transform = `scale(${scale})`;
+        }
+        this.zoomBtn.innerHTML = `<i class="fas fa-search-plus mr-1"></i> ${Math.round(scale * 100)}%`;
     }
 }
 
