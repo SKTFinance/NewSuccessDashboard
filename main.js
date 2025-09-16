@@ -45,6 +45,7 @@ let umsatzViewInstance = null;
 let auswertungViewInstance = null;
 let strukturbaumViewInstance = null;
 let pgTagebuchViewInstance = null;
+let bildschirmViewInstance = null; // NEU
 let datenschutzViewInstance = null; // NEU
 let pendingAppointmentFilter = null;
 let pendingAppointmentViewMode = null;
@@ -7850,6 +7851,211 @@ async function loadAndInitAuswertungView() {
     }
 }
 
+class BildschirmView {
+    constructor() {
+        this.initialized = false;
+        this.refreshInterval = null;
+    }
+
+    _getDomElements() {
+        this.wochenEhList = document.getElementById('wochen-eh-list');
+        this.wochenEtList = document.getElementById('wochen-et-list');
+        this.monatsEhList = document.getElementById('monats-eh-list');
+        this.monatsEtList = document.getElementById('monats-et-list');
+        this.lastUpdatedTime = document.getElementById('last-updated-time');
+        return this.wochenEhList && this.wochenEtList && this.monatsEhList && this.monatsEtList && this.lastUpdatedTime;
+    }
+
+    async init() {
+        if (!this._getDomElements()) {
+            console.error('[Bildschirm] Benötigte DOM-Elemente wurden nicht gefunden.');
+            return;
+        }
+        console.log('[Bildschirm] Ansicht wird initialisiert.');
+        await this.fetchAndRender();
+        this.startAutoRefresh();
+        this.initialized = true;
+    }
+
+    _getWeeklyDates() {
+        const today = new Date();
+        const day = today.getDay();
+        const diff = today.getDate() - day + (day === 0 ? -6 : 1); // Monday is 1
+        const startDate = new Date(today.setDate(diff));
+        startDate.setHours(0, 0, 0, 0);
+        const endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 6);
+        endDate.setHours(23, 59, 59, 999);
+        return { startDate, endDate };
+    }
+
+    _getMonthlyDates() {
+        const today = new Date();
+        const startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        const endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+        return { startDate, endDate };
+    }
+
+    async fetchAndRender() {
+        console.log('[Bildschirm] Daten werden geladen und berechnet...');
+        try {
+            const { startDate: monthStartDate, endDate: monthEndDate } = this._getMonthlyDates();
+            const { startDate: weekStartDate, endDate: weekEndDate } = this._getWeeklyDates();
+
+            // Fetch all data for the month
+            const monthStartDateIso = monthStartDate.toISOString().split('T')[0];
+            const monthEndDateIso = monthEndDate.toISOString().split('T')[0];
+
+            const umsatzQuery = `SELECT Mitarbeiter_ID, EH, Datum FROM Umsatz WHERE Datum >= '${monthStartDateIso}' AND Datum <= '${monthEndDateIso}'`;
+            const etQuery = `SELECT Mitarbeiter_ID, Datum FROM Termine WHERE Kategorie = 'ET' AND (Absage IS NULL OR Absage = false) AND Status != 'Storno' AND Datum >= '${monthStartDateIso}' AND Datum <= '${monthEndDateIso}'`;
+
+            const [umsatzDataRaw, etDataRaw] = await Promise.all([
+                seaTableSqlQuery(umsatzQuery, true),
+                seaTableSqlQuery(etQuery, true)
+            ]);
+
+            const allUmsaetze = mapSqlResults(umsatzDataRaw || [], 'Umsatz');
+            const allETs = mapSqlResults(etDataRaw || [], 'Termine');
+
+            // Filter for week
+            const weeklyUmsaetze = allUmsaetze.filter(u => {
+                const d = new Date(u.Datum);
+                return d >= weekStartDate && d <= weekEndDate;
+            });
+            const weeklyETs = allETs.filter(t => {
+                const d = new Date(t.Datum);
+                return d >= weekStartDate && d <= weekEndDate;
+            });
+
+            // Calculate rankings
+            const calculateRanking = (data, groupByKey, valueKey = null) => {
+                const grouped = _.groupBy(data, item => item[groupByKey]?.[0]?.row_id);
+                return Object.entries(grouped)
+                    .map(([mitarbeiterId, items]) => {
+                        const mitarbeiter = findRowById('mitarbeiter', mitarbeiterId);
+                        if (!mitarbeiter || mitarbeiter.Status === 'Ausgeschieden') return null;
+                        const value = valueKey ? _.sumBy(items, valueKey) : items.length;
+                        return { name: mitarbeiter.Name, value };
+                    })
+                    .filter(Boolean)
+                    .sort((a, b) => b.value - a.value)
+                    .slice(0, 3);
+            };
+
+            const wochenEhRanking = calculateRanking(weeklyUmsaetze, 'Mitarbeiter_ID', 'EH');
+            const wochenEtRanking = calculateRanking(weeklyETs, 'Mitarbeiter_ID');
+            const monatsEhRanking = calculateRanking(allUmsaetze, 'Mitarbeiter_ID', 'EH');
+            const monatsEtRanking = calculateRanking(allETs, 'Mitarbeiter_ID');
+
+            // Render
+            this._renderList(this.wochenEhList, wochenEhRanking, 'EH');
+            this._renderList(this.wochenEtList, wochenEtRanking, 'ETs');
+            this._renderList(this.monatsEhList, monatsEhRanking, 'EH');
+            this._renderList(this.monatsEtList, monatsEtRanking, 'ETs');
+
+            this.lastUpdatedTime.textContent = new Date().toLocaleTimeString('de-DE');
+
+        } catch (error) {
+            console.error('[Bildschirm] Fehler beim Laden der Daten:', error);
+        }
+    }
+
+    _renderList(container, data, unit) {
+        container.innerHTML = '';
+
+        const displayData = [...data];
+        while (displayData.length < 3) {
+            displayData.push(null); // Platzhalter für leere Felder hinzufügen
+        }
+
+        displayData.forEach((item, index) => {
+            const rank = index + 1;
+            let icon = '';
+            if (rank === 1) icon = '<i class="fas fa-crown text-gold mr-3"></i>';
+            else if (rank === 2) icon = '<i class="fas fa-medal text-gray-300 mr-3"></i>';
+            else if (rank === 3) icon = '<i class="fas fa-award text-yellow-600 mr-3"></i>';
+
+            const itemEl = document.createElement('div');
+            itemEl.className = `leaderboard-item ${!item ? 'leaderboard-item-empty' : ''}`;
+
+            if (item) {
+                itemEl.innerHTML = `
+                    <div class="flex items-center">
+                        ${icon}
+                        <span>${item.name}</span>
+                    </div>
+                    <span class="font-bold text-lg">${item.value.toLocaleString('de-DE', { maximumFractionDigits: unit === 'EH' ? 2 : 0 })} ${unit}</span>
+                `;
+            } else {
+                itemEl.innerHTML = `
+                    <div class="flex items-center opacity-50">
+                        ${icon}
+                        <span>-</span>
+                    </div>
+                    <span class="font-bold text-lg opacity-50">-</span>
+                `;
+            }
+            container.appendChild(itemEl);
+        });
+    }
+
+    startAutoRefresh() {
+        if (this.refreshInterval) clearInterval(this.refreshInterval);
+        // Refresh every 5 minutes
+        this.refreshInterval = setInterval(() => this.fetchAndRender(), 5 * 60 * 1000);
+    }
+}
+
+async function initializeBildschirmView() {
+    console.log('[Bildschirm] Initialisiere Bildschirm-Ansicht...');
+    // Hide other main containers
+    document.getElementById('user-select-screen').classList.add('hidden');
+    document.getElementById('dashboard-content').classList.add('hidden');
+
+    const container = document.getElementById('bildschirm-view');
+    container.classList.remove('hidden');
+
+    // Load basic data needed for the view
+    setStatus("Lade Bildschirm-Daten...");
+    await getSeaTableAccessToken();
+    if (!seaTableAccessToken) return false;
+
+    let cachedColumnMaps = loadFromCache("column_maps", 60);
+    if (cachedColumnMaps) {
+        COLUMN_MAPS = cachedColumnMaps.maps;
+        METADATA.tables = cachedColumnMaps.meta;
+    } else {
+        COLUMN_MAPS = await fetchColumnMaps();
+        if (Object.keys(COLUMN_MAPS).length > 0) {
+            saveToCache("column_maps", { maps: COLUMN_MAPS, meta: METADATA.tables });
+        }
+    }
+    
+    // We only need Mitarbeiter, Umsatz, Termine
+    const tablesToLoad = ["Mitarbeiter", "Umsatz", "Termine"];
+    for (const tableName of tablesToLoad) {
+        const key = tableName.toLowerCase();
+        db[key] = loadFromCache(key, 5) || await seaTableQuery(tableName);
+        saveToCache(key, db[key]);
+    }
+    normalizeAllData();
+    setStatus("");
+
+    try {
+        const response = await fetch("./bildschirm.html");
+        if (!response.ok) throw new Error(`Die Datei 'bildschirm.html' konnte nicht gefunden werden.`);
+        container.innerHTML = await response.text();
+
+        if (!bildschirmViewInstance) {
+            bildschirmViewInstance = new BildschirmView();
+        }
+        await bildschirmViewInstance.init();
+    } catch (error) {
+        console.error("[Bildschirm] Fehler beim Laden der Ansicht:", error);
+        container.innerHTML = `<div class="text-center p-8 bg-red-900 text-white rounded-lg"><h3 class="text-xl font-bold">Fehler beim Laden</h3><p class="mt-2">${error.message}</p></div>`;
+    }
+}
+
 // --- INITIALISIERUNG & EVENT LISTENERS ---
 
 function setupEventListeners() {
@@ -8323,6 +8529,13 @@ async function loadAndCacheTotalEh() {
 
 let isInitializing = false;
 async function initializeDashboard() {
+  // NEU: Routing für die Bildschirm-Ansicht
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('view') === 'bildschirm') {
+      initializeBildschirmView();
+      return;
+  }
+
   if (isInitializing) {
     console.warn("Initialisierung bereits im Gange. Überspringe.");
     return;
@@ -10655,6 +10868,7 @@ function switchView(viewName) {
   dom.auswertungView.classList.toggle("hidden", viewName !== "auswertung");
   dom.strukturbaumView.classList.toggle("hidden", viewName !== "strukturbaum");
   dom.pgTagebuchView.classList.toggle('hidden', viewName !== 'pg-tagebuch');
+  document.getElementById('bildschirm-view').classList.add('hidden'); // Sicherstellen, dass die Bildschirm-Ansicht immer ausgeblendet ist
   updateBackButtonVisibility();
 
   // NEU: Logik für goldenen Rahmen um den aktiven Button/Menüpunkt
@@ -10792,7 +11006,7 @@ window.SKT_APP = {
   seaTableUpdateRow,
   seaTableUpdateTermin,
   seaTableAddTermin,
-  seaTableDeleteRow, // NEU: Funktion global verfügbar machen
+  seaTableDeleteRow,
   mapSqlResults,
   findRowById,
   getMonthlyCycleDates,

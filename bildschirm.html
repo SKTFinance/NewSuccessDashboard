@@ -1,0 +1,45 @@
+<!-- Ansicht für den öffentlichen Bildschirm -->
+<div id="bildschirm-module-root" class="bg-skt-blue text-white min-h-screen p-8">
+    <header class="text-center mb-12">
+        <h1 class="text-5xl font-bold text-gold">SKT Finance Leaderboard</h1>
+        <p class="text-xl text-gray-300 mt-2">Live-Erfolge unserer Top-Berater</p>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Wochen-Statistiken -->
+        <div class="space-y-8">
+            <div id="wochen-eh-container" class="leaderboard-card">
+                <h2 class="leaderboard-title"><i class="fas fa-bolt mr-3 text-yellow-400"></i>Wochenbeste Eigen-EH</h2>
+                <div id="wochen-eh-list" class="leaderboard-list">
+                    <!-- Inhalt wird per JS gefüllt -->
+                </div>
+            </div>
+            <div id="wochen-et-container" class="leaderboard-card">
+                <h2 class="leaderboard-title"><i class="fas fa-user-plus mr-3 text-blue-400"></i>Wochenbeste Recruiter (ETs)</h2>
+                <div id="wochen-et-list" class="leaderboard-list">
+                    <!-- Inhalt wird per JS gefüllt -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Monats-Statistiken -->
+        <div class="space-y-8">
+            <div id="monats-eh-container" class="leaderboard-card">
+                <h2 class="leaderboard-title"><i class="fas fa-crown mr-3 text-gold"></i>Monatsbeste Eigen-EH</h2>
+                <div id="monats-eh-list" class="leaderboard-list">
+                    <!-- Inhalt wird per JS gefüllt -->
+                </div>
+            </div>
+            <div id="monats-et-container" class="leaderboard-card">
+                <h2 class="leaderboard-title"><i class="fas fa-trophy mr-3 text-yellow-300"></i>Monatsbeste Recruiter (ETs)</h2>
+                <div id="monats-et-list" class="leaderboard-list">
+                    <!-- Inhalt wird per JS gefüllt -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="text-center mt-12 text-gray-400">
+        <p>Daten werden automatisch aktualisiert. Letzte Aktualisierung: <span id="last-updated-time">...</span></p>
+    </footer>
+</div>

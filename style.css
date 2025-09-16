@@ -1137,3 +1137,52 @@ details[open] > summary::before { transform: rotate(180deg); }
     background-color: var(--color-accent-gold-light);
     font-weight: 600;
 }
+
+/* NEU: Stile für die Bildschirm-Ansicht */
+.leaderboard-card {
+    background-color: var(--color-skt-blue-light);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.leaderboard-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--color-accent-gold);
+    padding-bottom: 0.75rem;
+}
+
+.leaderboard-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.leaderboard-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: rgba(0, 0, 0, 0.2);
+    padding: 0.75rem 1.25rem;
+    border-radius: 0.5rem;
+    font-size: 1.125rem;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+}
+.leaderboard-item:hover {
+    transform: scale(1.02);
+    background-color: rgba(0, 0, 0, 0.3);
+}
+
+.leaderboard-item-empty {
+    background-color: rgba(0, 0, 0, 0.1);
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+}
+.leaderboard-item-empty:hover {
+    transform: none;
+    background-color: rgba(0, 0, 0, 0.1);
+    cursor: default;
+}
