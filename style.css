@@ -1125,3 +1125,15 @@ details[open] > summary::before { transform: rotate(180deg); }
 .video-filter-pokal {
     filter: brightness(95%) contrast(100%); /* Für Pokal.mp4 */
 }
+
+/* NEU: Goldener Rahmen für den aktiven Ansichts-Button im Header */
+.active-view-button {
+    border: 2px solid var(--color-accent-gold) !important;
+    box-shadow: 0 0 8px rgba(212, 175, 55, 0.4);
+}
+
+/* NEU: Hervorhebung für den aktiven Menüpunkt im "Mehr"-Dropdown */
+.active-menu-item {
+    background-color: var(--color-accent-gold-light);
+    font-weight: 600;
+}

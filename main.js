@@ -8392,6 +8392,7 @@ async function initializeDashboard() {
         viewHistory = [loggedInUserId];
         document.getElementById("user-select-screen").classList.add("hidden");
         document.getElementById("dashboard-content").classList.remove("hidden");
+            switchView('dashboard'); // NEU: Setzt die initiale Ansicht und den aktiven Button-Rahmen
         await fetchAndRenderDashboard(loggedInUserId);
     }
   } else {
@@ -10660,6 +10661,32 @@ function switchView(viewName) {
   dom.strukturbaumView.classList.toggle("hidden", viewName !== "strukturbaum");
   dom.pgTagebuchView.classList.toggle('hidden', viewName !== 'pg-tagebuch');
   updateBackButtonVisibility();
+
+  // NEU: Logik für goldenen Rahmen um den aktiven Button/Menüpunkt
+  const viewButtonMap = {
+      'dashboard': [dom.dashboardHeaderBtn],
+      'einarbeitung': [dom.einarbeitungBtn],
+      'appointments': [dom.appointmentsHeaderBtn],
+      'umsatz': [dom.umsatzHeaderBtn],
+      'pg-tagebuch': [dom.pgTagebuchHeaderBtn, document.getElementById('pg-tagebuch-menu-item')],
+      'potential': [dom.potentialHeaderBtn, document.getElementById('potential-menu-item')],
+      'auswertung': [dom.auswertungHeaderBtn, document.getElementById('auswertung-menu-item')],
+      'strukturbaum': [dom.strukturbaumHeaderBtn, document.getElementById('strukturbaum-menu-item')],
+      'datenschutz': [dom.datenschutzHeaderBtn],
+  };
+
+  // Alle aktiven Stile entfernen
+  Object.values(viewButtonMap).flat().forEach(el => {
+      if (el) el.classList.remove('active-view-button', 'active-menu-item');
+  });
+
+  // Aktiven Stil für die aktuelle Ansicht setzen
+  const currentElements = viewButtonMap[viewName];
+  if (currentElements) {
+      currentElements.forEach(el => {
+          if (el) el.classList.add(el.tagName === 'BUTTON' ? 'active-view-button' : 'active-menu-item');
+      });
+  }
 
   // KORREKTUR: Sicherheitsprüfung für die Umsatz-Ansicht hinzugefügt.
   if (viewName === 'umsatz' && !isUserLeader(authenticatedUserData)) {
