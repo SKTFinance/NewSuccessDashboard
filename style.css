@@ -1138,6 +1138,33 @@ details[open] > summary::before { transform: rotate(180deg); }
     font-weight: 600;
 }
 
+/* NEU: Stile für die Bildschirm-Diashow */
+#leaderboard-slideshow-container .leaderboard-card {
+    position: absolute;
+    width: 90%;
+    max-width: 800px; /* Maximale Breite für eine einzelne Kachel */
+    height: auto;
+    opacity: 0;
+    transform: scale(0.95) translateY(20px);
+    transition: opacity 0.8s ease-in-out, transform 0.8s ease-in-out;
+    pointer-events: none;
+}
+
+#leaderboard-slideshow-container .leaderboard-card.active {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    pointer-events: auto;
+}
+
+#slideshow-progress-bar {
+    width: 0%;
+    background-color: var(--color-accent-gold);
+}
+.progress-bar-animate {
+    animation: progressBarAnimation 7s linear forwards;
+}
+@keyframes progressBarAnimation { from { width: 0%; } to { width: 100%; } }
+
 /* NEU: Stile für die Bildschirm-Ansicht */
 .leaderboard-card {
     background-color: var(--color-skt-blue-light);

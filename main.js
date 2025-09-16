@@ -7855,21 +7855,22 @@ class BildschirmView {
     constructor() {
         this.initialized = false;
         this.refreshInterval = null;
-        // NEU: Zoom-Stufen
         this.zoomLevels = [1, 0.9, 0.8, 0.7, 0.6];
         this.currentZoomIndex = 0;
+        // NEU: Slideshow-Properties
+        this.slideshowInterval = null;
+        this.slides = [];
+        this.currentSlideIndex = 0;
     }
 
     _getDomElements() {
-        this.wochenEhList = document.getElementById('wochen-eh-list');
-        this.wochenEtList = document.getElementById('wochen-et-list');
-        this.monatsEhList = document.getElementById('monats-eh-list');
-        this.monatsEtList = document.getElementById('monats-et-list');
+        // KORREKTUR: Elemente für die Diashow holen
+        this.slideshowContainer = document.getElementById('leaderboard-slideshow-container');
+        this.progressBar = document.getElementById('slideshow-progress-bar');
         this.lastUpdatedTime = document.getElementById('last-updated-time');
-        // NEU: Zoom-Button und Grid-Container
         this.zoomBtn = document.getElementById('zoom-toggle-btn');
-        this.grid = document.getElementById('leaderboard-grid');
-        return this.wochenEhList && this.wochenEtList && this.monatsEhList && this.monatsEtList && this.lastUpdatedTime && this.zoomBtn && this.grid;
+        this.zoomWrapper = document.getElementById('leaderboard-zoom-wrapper');
+        return this.slideshowContainer && this.progressBar && this.lastUpdatedTime && this.zoomBtn && this.zoomWrapper;
     }
 
     async init() {
@@ -7879,11 +7880,11 @@ class BildschirmView {
         }
         console.log('[Bildschirm] Ansicht wird initialisiert.');
 
-        // NEU: Event Listener für Zoom-Button
         this.zoomBtn.addEventListener('click', () => this.toggleZoom());
 
         await this.fetchAndRender();
-        this.startAutoRefresh();
+        this.startDataRefresh();
+        this.startSlideshow(); // NEU
         this.initialized = true;
     }
 
@@ -7957,11 +7958,25 @@ class BildschirmView {
             const monatsEhRanking = calculateRanking(allUmsaetze, 'Mitarbeiter_ID', 'EH');
             const monatsEtRanking = calculateRanking(allETs, 'Mitarbeiter_ID');
 
-            // Render
-            this._renderList(this.wochenEhList, wochenEhRanking, 'EH');
-            this._renderList(this.wochenEtList, wochenEtRanking, 'ETs');
-            this._renderList(this.monatsEhList, monatsEhRanking, 'EH');
-            this._renderList(this.monatsEtList, monatsEtRanking, 'ETs');
+            // NEU: Slides erstellen und befüllen
+            const rankings = [
+                { title: '<i class="fas fa-bolt mr-3 text-yellow-400"></i>Wochenbeste Eigen-EH', data: wochenEhRanking, unit: 'EH' },
+                { title: '<i class="fas fa-user-plus mr-3 text-blue-400"></i>Wochenbeste Recruiter (ETs)', data: wochenEtRanking, unit: 'ETs' },
+                { title: '<i class="fas fa-crown mr-3 text-gold"></i>Monatsbeste Eigen-EH', data: monatsEhRanking, unit: 'EH' },
+                { title: '<i class="fas fa-trophy mr-3 text-yellow-300"></i>Monatsbeste Recruiter (ETs)', data: monatsEtRanking, unit: 'ETs' }
+            ];
+
+            this.slideshowContainer.innerHTML = '';
+            this.slides = [];
+
+            rankings.forEach(ranking => {
+                const slide = document.createElement('div');
+                slide.className = 'leaderboard-card flex flex-col';
+                slide.innerHTML = `<h2 class="leaderboard-title">${ranking.title}</h2><div class="leaderboard-list flex-grow flex flex-col justify-around"></div>`;
+                this._renderList(slide.querySelector('.leaderboard-list'), ranking.data, ranking.unit);
+                this.slideshowContainer.appendChild(slide);
+                this.slides.push(slide);
+            });
 
             this.lastUpdatedTime.textContent = new Date().toLocaleTimeString('de-DE');
 
@@ -8009,19 +8024,49 @@ class BildschirmView {
         });
     }
 
-    startAutoRefresh() {
+    startDataRefresh() {
         if (this.refreshInterval) clearInterval(this.refreshInterval);
         // Refresh every 5 minutes
         this.refreshInterval = setInterval(() => this.fetchAndRender(), 5 * 60 * 1000);
     }
 
-    // NEU: Funktion zum Umschalten des Zooms
+    // NEU: Slideshow-Logik
+    startSlideshow() {
+        if (this.slideshowInterval) clearInterval(this.slideshowInterval);
+        if (this.slides.length === 0) return;
+
+        this.currentSlideIndex = -1; // Start at -1 to show the first slide immediately
+        this._showNextSlide();
+
+        this.slideshowInterval = setInterval(() => this._showNextSlide(), 7000);
+    }
+
+    _showNextSlide() {
+        if (this.slides.length === 0) return;
+
+        // Hide current slide
+        if (this.currentSlideIndex >= 0) {
+            this.slides[this.currentSlideIndex].classList.remove('active');
+        }
+
+        // Increment index
+        this.currentSlideIndex = (this.currentSlideIndex + 1) % this.slides.length;
+
+        // Show next slide
+        this.slides[this.currentSlideIndex].classList.add('active');
+        
+        // Reset and start progress bar animation
+        this.progressBar.classList.remove('progress-bar-animate');
+        void this.progressBar.offsetWidth; // Trick to restart CSS animation
+        this.progressBar.classList.add('progress-bar-animate');
+    }
+
     toggleZoom() {
         this.currentZoomIndex = (this.currentZoomIndex + 1) % this.zoomLevels.length;
         const scale = this.zoomLevels[this.currentZoomIndex];
         
-        if (this.grid) {
-            this.grid.style.transform = `scale(${scale})`;
+        if (this.zoomWrapper) {
+            this.zoomWrapper.style.transform = `scale(${scale})`;
         }
         this.zoomBtn.innerHTML = `<i class="fas fa-search-plus mr-1"></i> ${Math.round(scale * 100)}%`;
     }

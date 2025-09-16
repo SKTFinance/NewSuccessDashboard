@@ -1,52 +1,27 @@
 <!-- Ansicht für den öffentlichen Bildschirm -->
 <div id="bildschirm-module-root" class="bg-skt-blue text-white h-screen flex flex-col p-4 md:p-8">
-    <header class="text-center mb-6 flex-shrink-0">
+    <header class="text-center mb-4 flex-shrink-0">
         <h1 class="text-5xl font-bold text-gold">SKT Finance Leaderboard</h1>
         <p class="text-xl text-gray-300 mt-2">Live-Erfolge unserer Top-Berater</p>
         <!-- NEU: Zoom-Button -->
         <div class="relative h-8">
-            <button id="zoom-toggle-btn" class="absolute left-1/2 -translate-x-1/2 mt-2 px-4 py-1 bg-skt-blue-light text-white rounded-full text-xs opacity-20 hover:opacity-100 focus:opacity-100 transition-opacity duration-300">
+            <button id="zoom-toggle-btn" class="absolute left-1/2 -translate-x-1/2 mt-2 px-4 py-1 bg-skt-blue-light text-white rounded-full text-xs opacity-20 hover:opacity-100 focus:opacity-100 transition-opacity duration-300" title="Zoom umschalten">
                 <i class="fas fa-search-plus mr-1"></i> Zoom
             </button>
         </div>
     </header>
 
     <!-- KORREKTUR: `flex-grow` sorgt dafür, dass dieser Container den verfügbaren Platz ausfüllt -->
-    <div id="leaderboard-grid" class="flex-grow grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 min-h-0 transition-transform duration-300 ease-in-out">
-        <!-- Wochen-Statistiken -->
-        <div class="flex flex-col gap-6 md:gap-8 min-h-0">
-            <div id="wochen-eh-container" class="leaderboard-card flex flex-col">
-                <h2 class="leaderboard-title"><i class="fas fa-bolt mr-3 text-yellow-400"></i>Wochenbeste Eigen-EH</h2>
-                <div id="wochen-eh-list" class="leaderboard-list flex-grow flex flex-col justify-around">
-                    <!-- Inhalt wird per JS gefüllt -->
-                </div>
-            </div>
-            <div id="wochen-et-container" class="leaderboard-card flex flex-col">
-                <h2 class="leaderboard-title"><i class="fas fa-user-plus mr-3 text-blue-400"></i>Wochenbeste Recruiter (ETs)</h2>
-                <div id="wochen-et-list" class="leaderboard-list flex-grow flex flex-col justify-around">
-                    <!-- Inhalt wird per JS gefüllt -->
-                </div>
-            </div>
-        </div>
-
-        <!-- Monats-Statistiken -->
-        <div class="flex flex-col gap-6 md:gap-8 min-h-0">
-            <div id="monats-eh-container" class="leaderboard-card flex flex-col">
-                <h2 class="leaderboard-title"><i class="fas fa-crown mr-3 text-gold"></i>Monatsbeste Eigen-EH</h2>
-                <div id="monats-eh-list" class="leaderboard-list flex-grow flex flex-col justify-around">
-                    <!-- Inhalt wird per JS gefüllt -->
-                </div>
-            </div>
-            <div id="monats-et-container" class="leaderboard-card flex flex-col">
-                <h2 class="leaderboard-title"><i class="fas fa-trophy mr-3 text-yellow-300"></i>Monatsbeste Recruiter (ETs)</h2>
-                <div id="monats-et-list" class="leaderboard-list flex-grow flex flex-col justify-around">
-                    <!-- Inhalt wird per JS gefüllt -->
-                </div>
-            </div>
+    <div id="leaderboard-zoom-wrapper" class="flex-grow min-h-0 transition-transform duration-300 ease-in-out flex items-center justify-center">
+        <div id="leaderboard-slideshow-container" class="relative w-full h-full flex items-center justify-center">
+            <!-- Slides werden hier per JS eingefügt -->
         </div>
     </div>
 
-    <footer class="text-center mt-6 flex-shrink-0">
+    <footer class="text-center mt-4 flex-shrink-0">
+        <div id="slideshow-progress-bar-container" class="w-full max-w-2xl mx-auto h-1.5 bg-skt-blue-light rounded-full overflow-hidden mb-2">
+            <div id="slideshow-progress-bar" class="h-full bg-gold"></div>
+        </div>
         <p>Daten werden automatisch aktualisiert. Letzte Aktualisierung: <span id="last-updated-time">...</span></p>
     </footer>
 </div>
