@@ -5003,7 +5003,7 @@ class AppointmentsView {
             const isParticipant = userIds.has(ownerId) || userIds.has(inviteeId);
             const isInCategory = selectedCategories.includes(t.Kategorie);
             const isCancelledOk = showCancelled || (t.Absage !== true && t.Status !== 'Storno');
-            const isHeldOk = showHeld || (t.Status !== 'Gehalten' && t.Status !== 'Info Eingeladen');
+            const isHeldOk = showHeld || (t.Status !== 'Gehalten');
             return isParticipant && terminDate >= weekStart && terminDate <= weekEnd && isInCategory && isCancelledOk && isHeldOk;
         });
 
@@ -8401,14 +8401,27 @@ class BildschirmView {
     }
 
     _getWeeklyDates() {
+        // KORREKTUR: Die Wochenberechnung muss von Donnerstag bis Mittwoch erfolgen,
+        // identisch zur Logik in `getWeeklyCycleDates`.
         const today = new Date();
-        const day = today.getDay();
-        const diff = today.getDate() - day + (day === 0 ? -6 : 1); // Monday is 1
-        const startDate = new Date(today.setDate(diff));
-        startDate.setHours(0, 0, 0, 0);
+        today.setHours(0, 0, 0, 0);
+        const dayOfWeek = today.getDay(); // Sunday = 0, ..., Thursday = 4, ...
+
+        // Finde den letzten Donnerstag. Donnerstag ist Tag 4.
+        const diff = dayOfWeek - 4;
+        const startDate = new Date(today);
+        startDate.setDate(today.getDate() - diff);
+
+        // Wenn der berechnete Start in der Zukunft liegt (z.B. heute ist Di, diff=-2, start=heute+2),
+        // bedeutet das, die aktuelle Woche hat letzte Woche begonnen.
+        if (startDate > today) {
+            startDate.setDate(startDate.getDate() - 7);
+        }
+
         const endDate = new Date(startDate);
-        endDate.setDate(startDate.getDate() + 6);
+        endDate.setDate(startDate.getDate() + 6); // 6 Tage nach Donnerstag ist Mittwoch
         endDate.setHours(23, 59, 59, 999);
+
         return { startDate, endDate };
     }
 
