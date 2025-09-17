@@ -5516,13 +5516,11 @@ class AppointmentsView {
          termine.forEach(t => {
              const tr = document.createElement('tr');
              // NEU: Zeilen nach Status einfärben
-             const statusBorderClass = this._getStatusColorClass(t); // KORREKTUR: Rand prominenter machen
+             const { border: statusBorderClass, text: statusTextColorClass } = this._getAppointmentColorClasses(t);
              tr.className = `border-l-8 ${statusBorderClass} cursor-pointer`;
              tr.dataset.id = t._id;
  
              const mitarbeiter = db.mitarbeiter.find(m => m._id === t.Mitarbeiter_ID);
-             // NEU: Status-Text ebenfalls einfärben
-             const statusTextColorClass = this._getStatusTextColorClass(t.Status);
              
              tr.innerHTML = `<td>${t.Terminpartner}</td><td><span class="${statusTextColorClass}">${t.Status}</span></td><td>${mitarbeiter?.Name || '-'}</td><td>${t.Hinweis || '-'}</td>`;
              tr.addEventListener('click', () => {
