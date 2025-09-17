@@ -7383,6 +7383,7 @@ class AuswertungView {
         this.downline = [];
         this.currentTab = 'rangliste'; // Wird in init() aus dem Speicher geladen
         this.currentFkRennlisteScope = 'group'; // NEU
+        this.currentRanglisteTimespan = 'monat'; // NEU
         this.currentAktivitaetenTimespan = 'woche';
         this.sortConfig = {
             rangliste: { column: 'eh', direction: 'desc' },
@@ -7397,6 +7398,9 @@ class AuswertungView {
         this.aktivitaetenTab = document.getElementById('aktivitaeten-tab');
         this.fkRennlisteTab = document.getElementById('fk-rennliste-tab');
         this.ranglisteView = document.getElementById('rangliste-view');
+        this.ranglisteListContainer = document.getElementById('rangliste-list-container'); // NEU
+        this.ranglisteWocheBtn = document.getElementById('rangliste-woche-btn'); // NEU
+        this.ranglisteMonatBtn = document.getElementById('rangliste-monat-btn'); // NEU
         this.aktivitaetenView = document.getElementById('aktivitaeten-view');
         this.aktivitaetenListContainer = document.getElementById('aktivitaeten-list-container');
         this.aktivitaetenRoleFilter = document.getElementById('aktivitaeten-role-filter');
@@ -7446,6 +7450,7 @@ class AuswertungView {
         this.currentTab = loadUiSetting('auswertungTab', 'rangliste');
         this.currentAktivitaetenTimespan = loadUiSetting('aktivitaetenTimespan', 'woche');
         this.currentAktivitaetenRole = loadUiSetting('aktivitaetenRole', 'individual');
+        this.currentRanglisteTimespan = loadUiSetting('ranglisteTimespan', 'monat'); // NEU
 
         if (!this._getDomElements()) {
             auswertungLog('!!! FEHLER: Benötigte DOM-Elemente wurden nicht gefunden.');
@@ -7461,6 +7466,9 @@ class AuswertungView {
         // NEU: UI basierend auf geladenen Einstellungen aktualisieren
         document.querySelectorAll('.aktivitaeten-timespan-btn').forEach(b => b.classList.toggle('active', b.dataset.timespan === this.currentAktivitaetenTimespan));
         this.aktivitaetenRoleFilter.value = this.currentAktivitaetenRole;
+        // NEU: UI für Rangliste-Toggle aktualisieren
+        this.ranglisteWocheBtn.classList.toggle('active', this.currentRanglisteTimespan === 'woche');
+        this.ranglisteMonatBtn.classList.toggle('active', this.currentRanglisteTimespan === 'monat');
 
         // NEU: Scope für FK-Rennliste laden und UI aktualisieren
         this.currentFkRennlisteScope = loadUiSetting('fkRennlisteScope', 'group');
@@ -7479,6 +7487,17 @@ class AuswertungView {
                 saveUiSetting('auswertungTab', this.currentTab); // NEU
                 this.updateTabs();
                 this.renderCurrentView();
+            });
+        });
+
+        // NEU: Event Listener für Rangliste-Zeitraum
+        document.querySelectorAll('.rangliste-timespan-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.currentRanglisteTimespan = e.currentTarget.dataset.timespan;
+                saveUiSetting('ranglisteTimespan', this.currentRanglisteTimespan);
+                document.querySelectorAll('.rangliste-timespan-btn').forEach(b => b.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+                this.renderRangliste();
             });
         });
 
@@ -7563,8 +7582,10 @@ class AuswertungView {
     }
 
     async renderRangliste() {
-        this.ranglisteView.innerHTML = '<div class="loader mx-auto"></div>';
-        const { startDate, endDate } = getMonthlyCycleDates();
+        this.ranglisteListContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        const { startDate, endDate } = this.currentRanglisteTimespan === 'woche'
+            ? getWeeklyCycleDates()
+            : getMonthlyCycleDates();
         const startDateIso = startDate.toISOString().split('T')[0];
         const endDateIso = endDate.toISOString().split('T')[0];
 
@@ -7638,7 +7659,7 @@ class AuswertungView {
         const sortConfig = this.sortConfig.rangliste;
         const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
 
-        this.ranglisteView.innerHTML = '';
+        this.ranglisteListContainer.innerHTML = '';
         const tableWrapper = document.createElement('div');
         tableWrapper.className = 'overflow-x-auto';
         const table = document.createElement('table');
@@ -7686,7 +7707,7 @@ class AuswertungView {
         table.appendChild(tbody);
         table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('rangliste', e.currentTarget.dataset.sortKey)));
         tableWrapper.appendChild(table);
-        this.ranglisteView.appendChild(tableWrapper);
+        this.ranglisteListContainer.appendChild(tableWrapper);
     }
 
     async renderAktivitaeten() {
@@ -7750,6 +7771,26 @@ class AuswertungView {
             }
         });
 
+        // NEU: EH-Daten für den Zeitraum laden
+        const capitalbank = db.gesellschaften.find(g => g.Gesellschaft === 'Capitalbank');
+        const capitalbankId = capitalbank ? capitalbank._id : null;
+        const umsatzQuery = `SELECT Mitarbeiter_ID, Gesellschaft_ID, EH FROM Umsatz WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+        const allUmsatzRowsRaw = await seaTableSqlQuery(umsatzQuery, true);
+        const allUmsatzRows = mapSqlResults(allUmsatzRowsRaw || [], 'Umsatz');
+
+        const filteredUmsatzRows = allUmsatzRows.filter(row => {
+            if (!capitalbankId) return true;
+            const gesellschaftLinks = row.Gesellschaft_ID;
+            if (!gesellschaftLinks || !Array.isArray(gesellschaftLinks) || gesellschaftLinks.length === 0) return true;
+            return !gesellschaftLinks.some(link => link.row_id === capitalbankId);
+        });
+
+        const ehByMitarbeiter = _.groupBy(filteredUmsatzRows, row => row.Mitarbeiter_ID?.[0]?.row_id);
+        const ehData = Object.entries(ehByMitarbeiter).reduce((acc, [mitarbeiterId, umsaetze]) => {
+            acc[mitarbeiterId] = umsaetze.reduce((sum, u) => sum + (u.EH || 0), 0);
+            return acc;
+        }, {});
+
         let allActiveUsers = db.mitarbeiter.filter(m => m.Status !== 'Ausgeschieden');
 
         // NEU: Filter by structure if selected
@@ -7764,7 +7805,8 @@ class AuswertungView {
             const plan = planResults.find(p => p.Mitarbeiter_ID === mitarbeiterId);
             const ehZiel = plan?.EH_Ziel || 0;
             const atTotalGoal = mitarbeiter.EHproATQuote && ehZiel > 0 ? Math.round(ehZiel / mitarbeiter.EHproATQuote) : 0;
-            return { id: mitarbeiterId, name: mitarbeiter.Name, rang: mitarbeiter.Karrierestufe || 'N/A', atTotalGoal, ...stats };
+            const eh = ehData[mitarbeiterId] || 0; // NEU
+            return { id: mitarbeiterId, name: mitarbeiter.Name, rang: mitarbeiter.Karrierestufe || 'N/A', atTotalGoal, eh, ...stats };
         });
 
         const filterValue = this.aktivitaetenRoleFilter.value;
@@ -7787,8 +7829,9 @@ class AuswertungView {
                     acc.etAusgemacht += member.etAusgemacht;
                     acc.etGehalten += member.etGehalten;
                     acc.atTotalGoal += member.atTotalGoal;
+                    acc.eh += member.eh; // NEU
                     return acc;
-                }, { atAusgemacht: 0, atGehalten: 0, etAusgemacht: 0, etGehalten: 0, atTotalGoal: 0 });
+                }, { atAusgemacht: 0, atGehalten: 0, etAusgemacht: 0, etGehalten: 0, atTotalGoal: 0, eh: 0 });
 
                 aggregatedStats.atSoll = Math.round(aggregatedStats.atTotalGoal * (effectiveTimePercentageForSoll / 100));
 
@@ -7836,6 +7879,7 @@ class AuswertungView {
         const headers = [
             { key: 'name', label: 'Name' },
             { key: 'rang', label: 'Rang' },
+            { key: 'eh', label: 'EH' }, // NEU
             { key: 'atSoll', label: 'AT Soll' },
             { key: 'atAusgemacht', label: 'AT Ausgem.' },
             { key: 'atGehalten', label: 'AT Gehalt.' },
@@ -7850,7 +7894,7 @@ class AuswertungView {
 
         const tbody = document.createElement('tbody');
         usersToDisplay.forEach(user => {
-            tbody.innerHTML += `<tr><td>${user.name}</td><td>${user.rang}</td><td>${user.atSoll}</td><td>${user.atAusgemacht}</td><td>${user.atGehalten}</td><td>${user.etAusgemacht}</td><td>${user.etGehalten}</td></tr>`;
+            tbody.innerHTML += `<tr><td>${user.name}</td><td>${user.rang}</td><td>${(user.eh || 0).toFixed(2)}</td><td>${user.atSoll}</td><td>${user.atAusgemacht}</td><td>${user.atGehalten}</td><td>${user.etAusgemacht}</td><td>${user.etGehalten}</td></tr>`;
         });
         table.appendChild(tbody);
         table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('aktivitaeten', e.currentTarget.dataset.sortKey)));

@@ -19,8 +19,16 @@
 
         <!-- Rangliste View -->
         <div id="rangliste-view" class="auswertung-view-content space-y-6">
-            <!-- Inhalt wird per JS generiert -->
-            <div class="loader mx-auto"></div>
+            <!-- NEU: Filter für Rangliste -->
+            <div class="flex justify-end items-center">
+                <div class="view-toggle flex space-x-2">
+                    <button id="rangliste-woche-btn" data-timespan="woche" class="rangliste-timespan-btn">Woche</button>
+                    <button id="rangliste-monat-btn" data-timespan="monat" class="rangliste-timespan-btn active">Monat</button>
+                </div>
+            </div>
+            <div id="rangliste-list-container">
+                <div class="loader mx-auto"></div>
+            </div>
         </div>
 
         <!-- Aktivitäten View -->
