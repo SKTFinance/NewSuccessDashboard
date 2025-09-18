@@ -1540,13 +1540,15 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   const currentYear = startDate.getFullYear();
 
   // Plandaten aus dem vorgeladenen und normalisierten Cache laden.
-  const planResults = db.monatsplanung.filter(p => p.Monat === currentMonthName && p.Jahr === currentYear);
+  const planResults = db.monatsplanung.filter(
+    (p) => p.Monat === currentMonthName && p.Jahr === currentYear
+  );
 
-  // Termindaten ebenfalls aus dem Cache laden und nach Datum filtern.
-  const termineResults = db.termine.filter(t => {
-      if (!t.Datum) return false;
-      const terminDate = new Date(t.Datum);
-      return terminDate >= startDate && terminDate <= endDate;
+  // Termindaten für den aktuellen Monatszyklus laden (für ATs)
+  const termineImMonat = db.termine.filter((t) => {
+    if (!t.Datum) return false;
+    const terminDate = new Date(t.Datum);
+    return terminDate >= startDate && terminDate <= endDate;
   });
 
   // NEU: Capitalbank-ID für den Filter holen
@@ -1585,10 +1587,10 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   // KORREKTUR: Falsche Status für "gehaltene" ETs entfernt (z.B. Storno, Ausgemacht).
   const ET_STATUS_GEHALTEN = ["Gehalten", "Info Eingeladen", "Weiterer ET", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
   // NEU: Definition für ausgemachte ETs, die "Ausgemacht" und alle "Gehalten"-Stati umfasst.
-  const ET_STATUS_AUSGEMACHT = ["Ausgemacht", ...ET_STATUS_GEHALTEN];
+  const ET_STATUS_AUSGEMACHT = ["Ausgemacht", ...ET_STATUS_GEHALTEN].filter(s => s !== 'Storno');
 
   return users.map((user) => {
-    // Plandaten kommen aus dem Cache und sind normalisiert.
+    // 1. Plandaten und EH-Daten holen
     const plan = planResults.find((p) => p.Mitarbeiter_ID === user._id) || {};
     const eh =
       ehResults.find(
@@ -1607,23 +1609,11 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
           te.Mitarbeiter_ID[0].row_id === user._id
       ) || {};
     // Termindaten aus dem Cache nach Benutzer filtern.
-    // KORREKTUR: Robusterer Filter, der inkonsistente Datenstrukturen (string vs. link-Objekt) abfängt.
-    // Dies stellt sicher, dass Termine korrekt zugeordnet werden, auch wenn die Normalisierung fehlschlägt.
-    const userTermine = termineResults.filter((t) => {
-        const terminMitarbeiterId = t.Mitarbeiter_ID;
-        if (typeof terminMitarbeiterId === 'string') {
-            return terminMitarbeiterId === user._id;
-        }
-        if (Array.isArray(terminMitarbeiterId) && terminMitarbeiterId.length > 0 && terminMitarbeiterId[0]?.row_id) {
-            return terminMitarbeiterId[0].row_id === user._id;
-        }
-        return false;
-    });
+    const userTermineImMonat = termineImMonat.filter((t) => t.Mitarbeiter_ID === user._id);
 
-    let atIst = 0,
-      atVereinbart = 0,
-      etAusgemacht = 0;
-    userTermine.forEach((t) => {
+    // 2. ATs für den aktuellen Monat berechnen
+    let atIst = 0, atVereinbart = 0;
+    userTermineImMonat.forEach((t) => {
         // NEU: Ein Termin zählt als Analysetermin, wenn es ein AT ist,
         // oder ein ST mit einer Umsatzprognose > 1 EH.
         const isAnalysisAppointment = t.Kategorie === "AT" || (t.Kategorie === "ST" && t.Umsatzprognose > 1);
@@ -1631,13 +1621,19 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
         if (isAnalysisAppointment) {
           if (AT_STATUS_GEHALTEN.includes(t.Status)) atIst++;
           if (AT_STATUS_AUSGEMACHT.includes(t.Status)) atVereinbart++;
-        } else if (t.Kategorie === "ET") {
-          // NEU: Jeder ET, der nicht "Offen" oder "Storno" ist, wird gezählt.
-          if (t.Status !== 'Offen' && t.Status !== 'Storno') {
-              etAusgemacht++;
-          }
         }
     });
+
+    // 3. ETs für den nächsten Infoabend berechnen
+    const nextInfoDate = findNextInfoDateAfter(getCurrentDate());
+    const nextInfoDateString = nextInfoDate.toISOString().split('T')[0];
+    
+    const etAusgemacht = db.termine.filter(t => 
+        t.Mitarbeiter_ID === user._id &&
+        t.Kategorie === 'ET' &&
+        t.Infoabend && t.Infoabend.startsWith(nextInfoDateString) &&
+        ET_STATUS_AUSGEMACHT.includes(t.Status)
+    ).length;
 
     const ehZiel = plan["EH_Ziel"] || 0,
       etZiel = plan["ET_Ziel"] || 0,
@@ -3321,44 +3317,79 @@ async function renderLeaderOnboardingView(teamMembers) {
   container.className = "space-y-4";
 
   const progressPromises = teamMembers.map((member) =>
-    getOnboardingProgressForTrainee(member._id).then((data) => ({
-      member,
-      data,
-    }))
+    getOnboardingProgressForTrainee(member._id).then((data) => ({ member, data }))
   );
   const results = await Promise.all(progressPromises);
 
-  for (const { member, data: progressData } of results) {
-    if (progressData.totalSteps > 0) {
-      const card = document.createElement("div");
-      card.className =
-        "bg-skt-grey-light p-4 rounded-lg shadow-md cursor-pointer hover:bg-gray-200 transition-colors";
-      card.dataset.traineeId = member._id;
-      
-      // NEU: Warnsymbol für kritische, überfällige Schritte
-      const warningIcon = progressData.hasOverdueCriticalStep
-          ? '<i class="fas fa-exclamation-triangle text-skt-red-accent ml-2" title="Kritischer Schritt überfällig!"></i>'
-          : '';
+  // Trenne die Mitarbeiter in "in Ausbildung" und "abgeschlossen".
+  const inProgressTrainees = results.filter(r => r.data.percentage < 100 && r.data.totalSteps > 0);
+  const completedTrainees = results.filter(r => r.data.percentage >= 100 && r.data.totalSteps > 0);
 
-      card.innerHTML = `
-                           <div class="flex justify-between items-center mb-1">
-                               <p class="font-bold text-skt-blue flex items-center">${member.Name}${warningIcon}</p>
-                               <p class="font-semibold text-skt-blue-light">${progressData.percentage.toFixed(
-                                 0
-                               )}%</p>
-                           </div>
-                           <div class="w-full bg-gray-200 rounded-full h-4 shadow-inner relative">
-                               <div class="bg-skt-red-accent h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${progressData.sollPercentage.toFixed(
-                                 0
-                               )}%; z-index: 1;" data-tooltip="Soll-Fortschritt"></div>
-                               <div class="bg-skt-green-accent h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${progressData.percentage.toFixed(
-                                 0
-                               )}%; z-index: 2;" data-tooltip="Ist-Fortschritt"></div>
-                           </div>
-                       `;
-      card.addEventListener("click", () => showTraineeDetailView(member._id));
-      container.appendChild(card);
-    }
+  // Rendere die Mitarbeiter, die noch in Ausbildung sind.
+  inProgressTrainees.forEach(({ member, data: progressData }) => {
+    const card = document.createElement("div");
+    card.className = "bg-skt-grey-light p-4 rounded-lg shadow-md cursor-pointer hover:bg-gray-200 transition-colors";
+    card.dataset.traineeId = member._id;
+    
+    const warningIcon = progressData.hasOverdueCriticalStep
+        ? '<i class="fas fa-exclamation-triangle text-skt-red-accent ml-2" title="Kritischer Schritt überfällig!"></i>'
+        : '';
+
+    card.innerHTML = `
+        <div class="flex justify-between items-center mb-1">
+            <p class="font-bold text-skt-blue flex items-center">${member.Name}${warningIcon}</p>
+            <p class="font-semibold text-skt-blue-light">${progressData.percentage.toFixed(0)}%</p>
+        </div>
+        <div class="w-full bg-gray-200 rounded-full h-4 shadow-inner relative">
+            <div class="bg-skt-red-accent h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${progressData.sollPercentage.toFixed(0)}%; z-index: 1;" data-tooltip="Soll-Fortschritt"></div>
+            <div class="bg-skt-green-accent h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${progressData.percentage.toFixed(0)}%; z-index: 2;" data-tooltip="Ist-Fortschritt"></div>
+        </div>
+    `;
+    card.addEventListener("click", () => showTraineeDetailView(member._id));
+    container.appendChild(card);
+  });
+
+  // Erstelle den einklappbaren Bereich für abgeschlossene Mitarbeiter.
+  if (completedTrainees.length > 0) {
+    const details = document.createElement("details");
+    details.className = "bg-green-50 border border-green-200 rounded-xl shadow-lg mt-6";
+    
+    const summary = document.createElement("summary");
+    summary.className = "p-4 font-semibold text-skt-green-accent cursor-pointer flex justify-between items-center";
+    summary.innerHTML = `
+        <span><i class="fas fa-check-circle mr-2"></i>Abgeschlossene Einarbeitungen (${completedTrainees.length})</span>
+        <i class="fas fa-chevron-down transition-transform duration-300"></i>
+    `;
+    details.appendChild(summary);
+
+    const completedContainer = document.createElement("div");
+    completedContainer.className = "p-4 pt-0 space-y-3 max-h-96 overflow-y-auto";
+
+    completedTrainees.forEach(({ member }) => {
+      const completedCard = document.createElement("div");
+      completedCard.className = "p-3 bg-white rounded-lg cursor-pointer hover:bg-gray-100 transition-colors flex justify-between items-center";
+      completedCard.dataset.traineeId = member._id;
+      completedCard.innerHTML = `
+          <div>
+              <p class="font-bold text-skt-blue">${member.Name}</p>
+              <p class="text-sm text-gray-500">Einarbeitung abgeschlossen</p>
+          </div>
+          <i class="fas fa-eye text-skt-blue-light"></i>
+      `;
+      completedCard.addEventListener("click", () => showTraineeDetailView(member._id));
+      completedContainer.appendChild(completedCard);
+    });
+
+    details.appendChild(completedContainer);
+    container.appendChild(details);
+
+    // Sorge dafür, dass sich der Pfeil dreht
+    details.addEventListener('toggle', () => {
+        const icon = summary.querySelector('.fa-chevron-down');
+        if (icon) {
+            icon.classList.toggle('rotate-180', details.open);
+        }
+    });
   }
 
   clearChildren(dom.leaderOnboardingView);
@@ -3548,32 +3579,41 @@ async function renderTraineeOnboardingView(
 
           newCompleteBtn.addEventListener('click', async () => {
               const confirmed = await showConfirmationModal(
-                  `Möchten Sie die Einarbeitung für ${user.Name} wirklich abschließen? Alle zugehörigen Einarbeitungseinträge werden gelöscht.`,
+                  `Möchten Sie die Einarbeitung für ${user.Name} wirklich abschließen? Alle offenen Schritte werden als erledigt markiert.`,
                   'Einarbeitung abschließen?',
                   'Ja, abschließen'
               );
               if (confirmed) {
-                  const entriesToDelete = db.einarbeitung.filter(e => e.Mitarbeiter_ID === mitarbeiterId);
-                  if (entriesToDelete.length > 0) {
-                      newCompleteBtn.disabled = true;
-                      newCompleteBtn.innerHTML = '<div class="loader-small mx-auto"></div>';
+                  newCompleteBtn.disabled = true;
+                  newCompleteBtn.innerHTML = '<div class="loader-small mx-auto"></div>';
 
-                      const deletePromises = entriesToDelete.map(entry => seaTableDeleteRow('Einarbeitung', entry._id));
-                      const results = await Promise.all(deletePromises);
-                      
+                  // Finde alle Schritte, die für diesen Mitarbeiter noch nicht erledigt sind.
+                  const completedStepIds = new Set(db.einarbeitung.filter(e => e.Mitarbeiter_ID === mitarbeiterId).map(e => e.Schritt_ID));
+                  const allStepsForUser = db.einarbeitungsschritte;
+                  const stepsToComplete = allStepsForUser.filter(step => !completedStepIds.has(step._id));
+
+                  if (stepsToComplete.length > 0) {
+                      const addPromises = stepsToComplete.map(step => addOnboardingEntry(mitarbeiterId, step._id));
+                      const results = await Promise.all(addPromises);
+
                       if (results.every(res => res === true)) {
-                          alert('Einarbeitung erfolgreich abgeschlossen.');
+                          alert('Einarbeitung erfolgreich abgeschlossen. Alle offenen Schritte wurden als erledigt markiert.');
+                          // Cache leeren und Daten neu laden, um die Änderungen zu übernehmen
                           localStorage.removeItem(CACHE_PREFIX + 'einarbeitung');
-                          await loadAllData();
+                          db.einarbeitung = await seaTableQuery('Einarbeitung');
+                          normalizeAllData();
+                          // Zurück zur Leader-Ansicht
                           fetchAndRenderOnboarding(authenticatedUserData._id);
                       } else {
-                          alert('Ein Fehler ist beim Löschen der Einarbeitungsschritte aufgetreten.');
-                          newCompleteBtn.disabled = false;
-                          newCompleteBtn.innerHTML = '<i class="fas fa-power-off mr-2"></i>Einarbeitung abschließen';
+                          alert('Ein Fehler ist beim Abschließen der Einarbeitung aufgetreten.');
                       }
                   } else {
-                      alert('Für diesen Mitarbeiter gibt es keine Einarbeitungsschritte zum Löschen.');
+                      alert('Die Einarbeitung war bereits vollständig abgeschlossen.');
                   }
+                  // KORREKTUR: Setze den Button-Zustand immer zurück, egal was passiert.
+                  // Die Ansicht wird bei Erfolg ohnehin neu geladen.
+                  newCompleteBtn.disabled = false;
+                  newCompleteBtn.innerHTML = '<i class="fas fa-power-off mr-2"></i>Einarbeitung abschließen';
               }
           });
       }
@@ -3686,11 +3726,11 @@ function renderTimelineSection(
 
     let checkboxHtml = '';
     if (isEditable) {
-        // Die Standard-Checkbox wird durch eine benutzerdefinierte, gestylte Checkbox ersetzt.
+        // KORREKTUR: Die Checkbox wird jetzt als runder Button unten rechts positioniert.
         checkboxHtml = `
-            <div class="onboarding-step-toggle custom-checkbox ${step.completed ? 'checked' : ''}" data-step-id="${step._id}" data-trainee-id="${traineeId}" title="Status ändern">
-                <div class="custom-checkbox-tick"></div>
-            </div>
+            <button class="onboarding-step-toggle absolute -bottom-2 -right-2 h-8 w-8 rounded-full flex items-center justify-center shadow-md transition-transform hover:scale-110 ${step.completed ? 'bg-skt-green-accent text-white' : 'bg-white text-gray-400'}" data-step-id="${step._id}" data-trainee-id="${traineeId}" title="Status ändern">
+                <i class="fas fa-check"></i>
+            </button>
         `;
     }
 
@@ -3756,7 +3796,6 @@ function renderTimelineSection(
                             <div class="flex items-center gap-4">
                                 ${warningIconHtml}
                                 ${pdfIconHtml}
-                                ${checkboxHtml}
                             </div>
                         </div>
                     </div>
@@ -3765,10 +3804,11 @@ function renderTimelineSection(
     // Klick-Listener aufteilen: Klick auf Checkbox ändert Status, Klick auf Rest öffnet Modal.
     const contentArea = stepEl.querySelector(".timeline-content");
     contentArea.addEventListener("click", (e) => {
-        // Verhindert, dass das Modal aufgeht, wenn auf die Checkbox geklickt wird.
+        // Verhindert, dass das Modal aufgeht, wenn auf einen Button geklickt wird.
         if (e.target.closest('.onboarding-step-toggle') || e.target.closest('a')) { // KORREKTUR: Klick auf PDF-Link ignorieren
             return;
         }
+        // ...
         const contentToShow = isEditable ? (step.Tipps || "Keine Tipps verfügbar.") : (step.Hinweis || "Kein Hinweis verfügbar.");
         // NEU: Titel dynamisch setzen, je nachdem, ob es die Trainee- oder Führungskraft-Ansicht ist.
         dom.hinweisModalTitle.textContent = isEditable ? "Tipps für die Führungskraft" : "Was dich erwartet 👀";
@@ -3778,14 +3818,19 @@ function renderTimelineSection(
         document.documentElement.classList.add("modal-open");
     });
 
+    // Füge den Checkbox-Button außerhalb des klickbaren Bereichs hinzu
+    const header = stepEl.querySelector('.timeline-header');
+    header.insertAdjacentHTML('afterend', checkboxHtml);
+
+    // KORREKTUR: Der Event-Listener muss direkt hier auf den neu erstellten Button gesetzt werden.
+    if (isEditable) {
+        const toggleBtn = stepEl.querySelector('.onboarding-step-toggle');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', handleOnboardingStepToggle);
+        }
+    }
     container.appendChild(stepEl);
   });
-
-  if (isEditable) {
-    container.querySelectorAll('.onboarding-step-toggle').forEach(toggle => {
-        toggle.addEventListener('click', handleOnboardingStepToggle);
-    });
-  }
 }
 
 function renderDateMarkers(container, startDate, endDate) {
@@ -3821,16 +3866,17 @@ function renderDateMarkers(container, startDate, endDate) {
 
 async function handleOnboardingStepToggle(event) {
     const checkboxElement = event.currentTarget;
+    // KORREKTUR: `classList.contains('bg-skt-green-accent')` ist die zuverlässigere Prüfung, ob der Button "checked" ist.
+    const isCurrentlyCompleted = checkboxElement.classList.contains('bg-skt-green-accent');
     const stepId = checkboxElement.dataset.stepId;
     const traineeId = checkboxElement.dataset.traineeId;
-    const isCompleted = !checkboxElement.classList.contains('checked'); // Der neue Status ist das Gegenteil vom aktuellen
 
     // UI sofort aktualisieren und Interaktion sperren
     checkboxElement.style.pointerEvents = 'none';
     checkboxElement.style.opacity = '0.5';
 
     let success = false;
-    if (isCompleted) {
+    if (!isCurrentlyCompleted) { // If it's not currently completed, we want to add an entry.
         success = await addOnboardingEntry(traineeId, stepId);
     } else {
         // KORREKTUR: Die ID des zu löschenden Eintrags muss zuerst gefunden werden.
@@ -3847,6 +3893,10 @@ async function handleOnboardingStepToggle(event) {
         db.einarbeitung = await seaTableQuery('Einarbeitung'); // Nur Einarbeitungsdaten neu laden
         normalizeAllData();
         await renderTraineeOnboardingView(traineeId);
+        // NEU: Nach der Aktualisierung prüfen, ob der Banner für kritische Schritte
+        // ausgeblendet werden muss, falls der letzte kritische Schritt erledigt wurde.
+        // Dies stellt sicher, dass die Dashboard-Ansicht konsistent ist.
+        await checkAndRenderCriticalOnboardingBanner();
     } else {
         alert('Fehler beim Aktualisieren des Schritts.');
         // UI-Änderung bei Fehler rückgängig machen
@@ -3959,8 +4009,8 @@ async function genericAddRowWithLinks(tableName, rowDataWithKeys, linkColumnName
 }
 
 function getWeekDates(date = new Date()) {
-    const current = new Date(date);
-    current.setHours(0, 0, 0, 0);
+    const current = new Date(date.getTime()); // KORREKTUR: Erstelle eine saubere Kopie des Datums, um Seiteneffekte zu vermeiden.
+    current.setHours(0, 0, 0, 0); // Zeit zurücksetzen, um konsistente Berechnungen zu gewährleisten.
     const day = current.getDay();
     const diff = current.getDate() - day + (day === 0 ? -6 : 1); // Monday is the first day of the week
     const startDate = new Date(current.setDate(diff));
@@ -5417,15 +5467,21 @@ class AppointmentsView {
     }
 
     _navigateWeekCalendar(days) {
-        this.calendarWeekStartDate.setDate(this.calendarWeekStartDate.getDate() + days);
+        // KORREKTUR V2: Erstelle zuerst eine saubere Kopie des Datums.
+        // Modifiziere dann die Kopie und weise sie zu. Dies verhindert den "Doppelsprung"-Fehler zuverlässig,
+        // da das Originalobjekt (`this.calendarWeekStartDate`) nicht mehr verändert wird, bevor das neue Datum erstellt wird.
+        const newDate = new Date(this.calendarWeekStartDate);
+        newDate.setDate(newDate.getDate() + days);
+        this.calendarWeekStartDate = newDate;
         this._renderWeekCalendar();
     }
 
     _resetWeekCalendarToToday() {
-        const today = getCurrentDate();
+        const today = new Date(getCurrentDate()); // KORREKTUR: Kopie erstellen, um Seiteneffekte zu vermeiden.
         const day = today.getDay();
         const diff = today.getDate() - day + (day === 0 ? -6 : 1);
-        this.calendarWeekStartDate = new Date(today.setDate(diff));
+        const monday = new Date(today.setDate(diff));
+        this.calendarWeekStartDate = monday;
         this.calendarWeekStartDate.setHours(0, 0, 0, 0);
         this._renderWeekCalendar();
     }
