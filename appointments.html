@@ -87,12 +87,17 @@
             <div id="stats-month-timeline" class="flex overflow-x-auto gap-4 pb-4 hide-scrollbar" style="height: 500px;"></div>
         </div>
         <!-- NEU: Ansicht für den Wochenkalender -->
-        <div id="stats-week-view" class="hidden flex flex-col" style="height: 600px;">
+        <div id="stats-week-view" class="hidden flex flex-col" style="height: 800px;">
             <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4 flex-shrink-0">
                 <div class="flex items-center gap-4">
                     <button id="week-nav-prev-btn" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors" title="Vorherige Woche"><i class="fas fa-chevron-left"></i></button>
                     <h4 id="week-period-display" class="font-semibold text-skt-blue text-lg text-center cursor-pointer" title="Zur aktuellen Woche springen"></h4>
                     <button id="week-nav-next-btn" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors" title="Nächste Woche"><i class="fas fa-chevron-right"></i></button>
+                    <!-- NEU: Zoom-Buttons für den Kalender -->
+                    <div class="ml-4 flex items-center gap-2">
+                        <button id="week-zoom-out-btn" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors" title="Herauszoomen"><i class="fas fa-search-minus"></i></button>
+                        <button id="week-zoom-in-btn" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors" title="Hineinzoomen"><i class="fas fa-search-plus"></i></button>
+                    </div>
                 </div>
                 <!-- NEU: Container für die Kalender-Filter -->
                 <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">

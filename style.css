@@ -1255,3 +1255,14 @@ details[open] > summary::before { transform: rotate(180deg); }
     transition: all 0.2s ease;
     border-left: 4px solid; /* Wird für die Statusfarbe verwendet */
 }
+
+/* NEU: Priorisierung der Inhalte in kleinen Kalendereinträgen */
+/* Bei mittlerer Höhe (unter 60px): Uhrzeit ausblenden */
+.week-calendar-appointment.content-priority-low .appointment-time {
+    display: none;
+}
+
+/* Bei geringer Höhe (unter 40px): Auch Mitarbeitername ausblenden */
+.week-calendar-appointment.content-priority-medium .appointment-employee-name {
+    display: none;
+}

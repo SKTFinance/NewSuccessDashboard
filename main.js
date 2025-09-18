@@ -51,6 +51,7 @@ let pendingAppointmentFilter = null;
 let pendingAppointmentViewMode = null;
 let pendingAppointmentScope = null;
 let pendingAppointmentGroupFilter = null; // NEU
+let pendingPgIdToOpen = null; // NEU
 let HIERARCHY_CACHE = null;
 
 // --- NEU: Gekapselte Instanzen für jede Ansicht ---
@@ -1148,6 +1149,7 @@ async function loadAllData() {
     "Produkte",
     "PG",
     "Bürostandorte",
+    "Umsatz", // NEU: Umsatzdaten global laden, um Hinweise im Kalender zu ermöglichen
   ];
 
   console.log('%c[DATENLADEN] %cStarte das Laden der Stammdaten...', 'color: #17a2b8; font-weight: bold;', 'color: black;');
@@ -1651,7 +1653,8 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
     const outstandingAppointmentsCount = db.termine.filter(t =>
         t.Mitarbeiter_ID === user._id &&
         t.Status === 'Ausgemacht' &&
-        t.Datum && new Date(t.Datum) < today
+        t.Datum && new Date(t.Datum) < today &&
+        t.Absage !== true // NEU: Stornierte Termine ausschließen
     ).length;
     const anzahlGeworbenerMA = db.mitarbeiter.filter( // KORREKTUR: Zähle nur aktive Mitarbeiter
       (m) => m.Werber === user._id && m.Status !== 'Ausgeschieden'
@@ -3174,6 +3177,14 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
   } else {
       dom.timeTravelBanner.classList.add('hidden');
   }
+
+  // NEU: Banner für kritische Einarbeitungsschritte anzeigen
+  if (isUserLeader(user)) {
+      checkAndRenderCriticalOnboardingBanner();
+  } else {
+      const banner = document.getElementById('critical-onboarding-banner');
+      if (banner) banner.classList.add('hidden');
+  }
 }
 
 async function renderSuperuserView() {
@@ -3208,6 +3219,50 @@ async function renderSuperuserView() {
 }
 
 // --- Einarbeitung (Onboarding) Logic ---
+async function checkAndRenderCriticalOnboardingBanner() {
+    const banner = document.getElementById('critical-onboarding-banner');
+    const listContainer = document.getElementById('critical-onboarding-list');
+    if (!banner || !listContainer) return;
+
+    // We only care about trainees in the leader's group for this banner
+    const trainees = getSubordinates(currentlyViewedUserData._id, 'gruppe');
+    if (trainees.length === 0) {
+        banner.classList.add('hidden');
+        return;
+    }
+
+    const progressPromises = trainees.map(trainee => 
+        getOnboardingProgressForTrainee(trainee._id).then(progress => ({
+            name: trainee.Name,
+            id: trainee._id,
+            hasOverdueCriticalStep: progress.hasOverdueCriticalStep
+        }))
+    );
+
+    const results = await Promise.all(progressPromises);
+    const usersWithOverdueSteps = results.filter(r => r.hasOverdueCriticalStep);
+
+    if (usersWithOverdueSteps.length > 0) {
+        listContainer.innerHTML = '';
+        usersWithOverdueSteps.forEach(user => {
+            const userElement = document.createElement('div');
+            userElement.className = 'bg-red-200 p-2 rounded-md flex justify-between items-center cursor-pointer hover:bg-red-300 transition-colors';
+            userElement.innerHTML = `
+                <span class="font-semibold">${user.name}</span>
+                <i class="fas fa-arrow-right"></i>
+            `;
+            userElement.addEventListener('click', () => {
+                switchView('einarbeitung');
+                showTraineeDetailView(user.id);
+            });
+            listContainer.appendChild(userElement);
+        });
+        banner.classList.remove('hidden');
+    } else {
+        banner.classList.add('hidden');
+    }
+}
+
 async function fetchAndRenderOnboarding(mitarbeiterId) {
   const user = findRowById("mitarbeiter", mitarbeiterId);
   if (!user) return;
@@ -3279,11 +3334,15 @@ async function renderLeaderOnboardingView(teamMembers) {
       card.className =
         "bg-skt-grey-light p-4 rounded-lg shadow-md cursor-pointer hover:bg-gray-200 transition-colors";
       card.dataset.traineeId = member._id;
+      
+      // NEU: Warnsymbol für kritische, überfällige Schritte
+      const warningIcon = progressData.hasOverdueCriticalStep
+          ? '<i class="fas fa-exclamation-triangle text-skt-red-accent ml-2" title="Kritischer Schritt überfällig!"></i>'
+          : '';
+
       card.innerHTML = `
                            <div class="flex justify-between items-center mb-1">
-                               <p class="font-bold text-skt-blue">${
-                                 member.Name
-                               }</p>
+                               <p class="font-bold text-skt-blue flex items-center">${member.Name}${warningIcon}</p>
                                <p class="font-semibold text-skt-blue-light">${progressData.percentage.toFixed(
                                  0
                                )}%</p>
@@ -3313,7 +3372,7 @@ async function renderLeaderOnboardingView(teamMembers) {
 async function getOnboardingProgressForTrainee(traineeId) {
   const user = findRowById("mitarbeiter", traineeId);
   if (!user || !user.Name)
-    return { percentage: 0, sollPercentage: 0, totalSteps: 0 };
+    return { percentage: 0, sollPercentage: 0, totalSteps: 0, hasOverdueCriticalStep: false }; // NEU
 
   // Daten aus dem Cache verwenden statt einer neuen SQL-Abfrage
   const userEinarbeitung = db.einarbeitung.filter(e => e.Mitarbeiter_ID === traineeId);
@@ -3330,7 +3389,7 @@ async function getOnboardingProgressForTrainee(traineeId) {
     : allSteps;
 
   if (visibleSteps.length === 0)
-    return { percentage: 0, sollPercentage: 0, totalSteps: 0 };
+    return { percentage: 0, sollPercentage: 0, totalSteps: 0, hasOverdueCriticalStep: false }; // NEU
 
   const completedStepIds = new Set(
     userEinarbeitung.map((e) => e["Schritt_ID"])
@@ -3342,29 +3401,35 @@ async function getOnboardingProgressForTrainee(traineeId) {
 
   const userStartDate = user.Startdatum;
   let sollPercentage = 0;
+  let hasOverdueCriticalStep = false; // NEU
   if (userStartDate) {
-    // KORREKTUR: Die Soll-Prozentzahl wird nun basierend auf der Anzahl der bis heute fälligen Schritte berechnet,
-    // anstatt auf der reinen Zeitspanne. Das spiegelt den tatsächlichen Soll-Fortschritt wider.
     const startDate = new Date(userStartDate);
     const today = getCurrentDate();
-    today.setHours(23, 59, 59, 999); // Stelle sicher, dass der gesamte heutige Tag einbezogen wird.
+    today.setHours(0, 0, 0, 0); // KORREKTUR: Auf Mitternacht setzen für konsistenten Vergleich
 
     const dueStepsCount = visibleSteps.filter(step => {
         let dueDate;
-        // Diese Logik muss identisch sein mit der in `renderTraineeOnboardingView`, um Konsistenz zu gewährleisten.
         if (step.Schritt && step.Schritt.toLowerCase().includes("infoabend")) {
             dueDate = findNextInfoDateAfter(startDate);
         } else {
             dueDate = new Date(startDate);
             dueDate.setDate(startDate.getDate() + (step.Tag || 0));
         }
+        dueDate.setHours(23, 59, 59, 999); // KORREKTUR: Ein Schritt ist am Ende des Fälligkeitstages überfällig.
+
+        // NEU: Prüfung auf kritische, überfällige Schritte
+        const isOverdue = dueDate < today && !completedStepIds.has(step._id);
+        if (isOverdue && step.Kritisch === true) {
+            hasOverdueCriticalStep = true;
+        }
+
         return dueDate <= today;
     }).length;
 
     sollPercentage = visibleSteps.length > 0 ? (dueStepsCount / visibleSteps.length) * 100 : 0;
   }
 
-  return { percentage, sollPercentage, totalSteps: visibleSteps.length };
+  return { percentage, sollPercentage, totalSteps: visibleSteps.length, hasOverdueCriticalStep }; // NEU
 }
 
 async function showTraineeDetailView(traineeId) {
@@ -3470,6 +3535,49 @@ async function renderTraineeOnboardingView(
     isEditable, // KORREKTUR: Bearbeitung immer erlauben, wenn die Berechtigung da ist.
     mitarbeiterId
   );
+
+  // NEU: Button zum Abschließen der Einarbeitung für Führungskräfte anzeigen
+  const actionsContainer = document.getElementById('onboarding-actions-container');
+  if (actionsContainer) {
+      actionsContainer.classList.toggle('hidden', !isEditable);
+      if (isEditable) {
+          const completeBtn = actionsContainer.querySelector('#complete-onboarding-btn');
+          // Klonen, um alte Listener zu entfernen und neue sicher hinzuzufügen
+          const newCompleteBtn = completeBtn.cloneNode(true);
+          completeBtn.parentNode.replaceChild(newCompleteBtn, completeBtn);
+
+          newCompleteBtn.addEventListener('click', async () => {
+              const confirmed = await showConfirmationModal(
+                  `Möchten Sie die Einarbeitung für ${user.Name} wirklich abschließen? Alle zugehörigen Einarbeitungseinträge werden gelöscht.`,
+                  'Einarbeitung abschließen?',
+                  'Ja, abschließen'
+              );
+              if (confirmed) {
+                  const entriesToDelete = db.einarbeitung.filter(e => e.Mitarbeiter_ID === mitarbeiterId);
+                  if (entriesToDelete.length > 0) {
+                      newCompleteBtn.disabled = true;
+                      newCompleteBtn.innerHTML = '<div class="loader-small mx-auto"></div>';
+
+                      const deletePromises = entriesToDelete.map(entry => seaTableDeleteRow('Einarbeitung', entry._id));
+                      const results = await Promise.all(deletePromises);
+                      
+                      if (results.every(res => res === true)) {
+                          alert('Einarbeitung erfolgreich abgeschlossen.');
+                          localStorage.removeItem(CACHE_PREFIX + 'einarbeitung');
+                          await loadAllData();
+                          fetchAndRenderOnboarding(authenticatedUserData._id);
+                      } else {
+                          alert('Ein Fehler ist beim Löschen der Einarbeitungsschritte aufgetreten.');
+                          newCompleteBtn.disabled = false;
+                          newCompleteBtn.innerHTML = '<i class="fas fa-power-off mr-2"></i>Einarbeitung abschließen';
+                      }
+                  } else {
+                      alert('Für diesen Mitarbeiter gibt es keine Einarbeitungsschritte zum Löschen.');
+                  }
+              }
+          });
+      }
+  }
 }
 
 function renderTimelineSection(
@@ -3551,6 +3659,31 @@ function renderTimelineSection(
       : "other";
     const isMajor = stepType === "meilenstein" || stepType === "seminar";
 
+    // NEU: PDF-Download-Icon für Führungskräfte
+    let pdfIconHtml = '';
+    if (isEditable && step.PDF && Array.isArray(step.PDF) && step.PDF.length > 0 && step.PDF[0].url) {
+        let pdfUrl = step.PDF[0].url;
+        let fullPdfUrl;
+
+        // KORREKTUR: Behandelt fehlerhafte URLs aus der API (z.B. "https//..." statt "https://...")
+        if (pdfUrl.startsWith('https//')) {
+            pdfUrl = 'https:' + pdfUrl.substring(5);
+        }
+
+        // KORREKTUR: Prüft, ob die URL bereits absolut ist, bevor die Basis-URL hinzugefügt wird, um doppelte URLs zu vermeiden.
+        if (pdfUrl.startsWith('http')) {
+            fullPdfUrl = pdfUrl;
+        } else {
+            const baseUrl = new URL(apiGatewayUrl).origin;
+            fullPdfUrl = baseUrl + pdfUrl;
+        }
+        pdfIconHtml = `
+            <a href="${fullPdfUrl}" target="_blank" download class="text-skt-red-accent hover:text-red-700 transition-colors" title="PDF herunterladen">
+                <i class="fas fa-file-pdf fa-lg"></i>
+            </a>
+        `;
+    }
+
     let checkboxHtml = '';
     if (isEditable) {
         // Die Standard-Checkbox wird durch eine benutzerdefinierte, gestylte Checkbox ersetzt.
@@ -3569,6 +3702,13 @@ function renderTimelineSection(
       : step.dueDate < threeDaysAgo // KORREKTUR: Erst nach 3 Tagen als "due" markieren
       ? "due"
       : "future";
+
+    // NEU: Prüfen, ob ein kritischer Schritt überfällig ist und Icon separat erstellen
+    const isCriticalOverdue = statusClass === 'due' && step.Kritisch === true;
+    const warningIconHtml = isCriticalOverdue
+        ? `<i class="fas fa-exclamation-triangle text-skt-red-accent fa-lg" title="Kritischer Schritt überfällig!"></i>`
+        : '';
+    let titleHtml = `<p class="timeline-title">${step.Schritt}</p>`;
 
     let iconClass = "fa-question";
     switch (stepType) {
@@ -3610,10 +3750,14 @@ function renderTimelineSection(
                                 <i class="fas ${iconClass}"></i>
                             </div>
                             <div class="timeline-info">
-                                <p class="timeline-title">${step.Schritt}</p>
+                                ${titleHtml}
                                 <p class="timeline-duedate">Fällig bis: ${formattedDate}</p>
                             </div>
-                            ${checkboxHtml}
+                            <div class="flex items-center gap-4">
+                                ${warningIconHtml}
+                                ${pdfIconHtml}
+                                ${checkboxHtml}
+                            </div>
                         </div>
                     </div>
                 `;
@@ -3622,10 +3766,13 @@ function renderTimelineSection(
     const contentArea = stepEl.querySelector(".timeline-content");
     contentArea.addEventListener("click", (e) => {
         // Verhindert, dass das Modal aufgeht, wenn auf die Checkbox geklickt wird.
-        if (e.target.closest('.onboarding-step-toggle')) {
+        if (e.target.closest('.onboarding-step-toggle') || e.target.closest('a')) { // KORREKTUR: Klick auf PDF-Link ignorieren
             return;
         }
-        dom.hinweisModalContent.textContent = step.Hinweis || "Kein Hinweis verfügbar.";
+        const contentToShow = isEditable ? (step.Tipps || "Keine Tipps verfügbar.") : (step.Hinweis || "Kein Hinweis verfügbar.");
+        // NEU: Titel dynamisch setzen, je nachdem, ob es die Trainee- oder Führungskraft-Ansicht ist.
+        dom.hinweisModalTitle.textContent = isEditable ? "Tipps für die Führungskraft" : "Was dich erwartet 👀";
+        dom.hinweisModalContent.innerHTML = marked.parse(contentToShow);
         dom.hinweisModal.classList.add("visible");
         document.body.classList.add("modal-open");
         document.documentElement.classList.add("modal-open");
@@ -3906,6 +4053,7 @@ class AppointmentsView {
         this.sortDirection = 'desc';
         this.filterText = '';
         this.statsChartMode = 'employee';
+        this.weekCalendarSlotHeight = 40; // Default slot height in pixels
         this.showCancelled = false;
         // NEU: Sortierkonfiguration für die Infoabend-Tabelle
         this.infoabendSortConfig = {
@@ -4021,8 +4169,10 @@ class AppointmentsView {
         this.weekCalendarUserSelect = document.getElementById('week-calendar-user-select');
         this.weekCalendarBody = document.getElementById('week-calendar-body');
         this.weekCalendarHeader = document.getElementById('week-calendar-header');
-        // KORREKTUR: Das Element wird jetzt dynamisch im Filter-Panel erstellt, daher wird die Zuweisung hier entfernt.
-        return this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.searchInput && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.statsTab && this.heatmapTab && this.heatmapGrid && this.statsScopeFilter && this.statsCategoryFilterBtn && this.statsCategoryFilterPanel && this.statsMonthTimeline && this.statsPeriodDisplay && this.statsNavPrevBtn && this.statsNavNextBtn && this.outstandingAppointmentsSection && this.outstandingAppointmentsList && this.statsViewTimelineBtn && this.statsViewTableBtn && this.statsTimelineView && this.statsTableView && this.statsViewInfoBtn && this.naechstesInfoView && this.groupFilterContainer && this.mainFilterContainer && this.analysisContainer && this.statsWeekView && this.weekCalendarViewModeSelect;
+        // NEU: Zoom-Buttons
+        this.weekZoomInBtn = document.getElementById('week-zoom-in-btn');
+        this.weekZoomOutBtn = document.getElementById('week-zoom-out-btn');
+        return this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.searchInput && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.statsTab && this.heatmapTab && this.heatmapGrid && this.statsScopeFilter && this.statsCategoryFilterBtn && this.statsCategoryFilterPanel && this.statsMonthTimeline && this.statsPeriodDisplay && this.statsNavPrevBtn && this.statsNavNextBtn && this.outstandingAppointmentsSection && this.outstandingAppointmentsList && this.statsViewTimelineBtn && this.statsViewTableBtn && this.statsTimelineView && this.statsTableView && this.statsViewInfoBtn && this.naechstesInfoView && this.groupFilterContainer && this.mainFilterContainer && this.analysisContainer && this.statsWeekView && this.weekCalendarViewModeSelect && this.weekZoomInBtn && this.weekZoomOutBtn;
     }
 
     async init(userId) {
@@ -4037,6 +4187,8 @@ class AppointmentsView {
         // NEU: Startdatum für die Statistik-Ansicht initialisieren
         this.statsCurrentDate = getCurrentDate();
         this.statsCurrentDate.setHours(0, 0, 0, 0);
+        // NEU: Lade die gespeicherte Slot-Höhe oder verwende den Standardwert
+        this.weekCalendarSlotHeight = loadUiSetting('weekCalendarSlotHeight', 40);
         // NEU: Kalender auf die aktuelle Woche initialisieren
         const today = getCurrentDate();
         const startOfWeek = new Date(today);
@@ -4156,6 +4308,8 @@ class AppointmentsView {
                     userIds.add(manager._id);
                 }
             } else if (scope === 'structure') {
+                // NEU: Stelle sicher, dass die eigenen Termine immer in der Strukturansicht enthalten sind.
+                userIds.add(this.currentUserId);
                 const selectedLeaderIds = Array.from(this.groupFilterPanel.querySelectorAll('input:checked')).map(cb => cb.value);
                 if (selectedLeaderIds.length > 0) {
                     // Wenn bestimmte Gruppen ausgewählt sind, nur deren Mitglieder laden
@@ -4165,7 +4319,6 @@ class AppointmentsView {
                     });
                 } else {
                     // Wenn keine Gruppe ausgewählt ist, die gesamte Struktur laden
-                    userIds.add(this.currentUserId);
                     this.downline.forEach(u => userIds.add(u._id));
                 }
             } else if (scope === 'group') {
@@ -4212,37 +4365,33 @@ class AppointmentsView {
             const overallEndDate = new Date(Math.max(cycleEndDate, filterEndDate));
             const overallStartDateIso = overallStartDate.toISOString().split('T')[0];
             const overallEndDateIso = overallEndDate.toISOString().split('T')[0];
-
-            for (let i = 0; i < userNamesArray.length; i += chunkSize) {
-                const userNameChunk = userNamesArray.slice(i, i + chunkSize);
-                if (userNameChunk.length === 0) continue;
-
-                const userNamesSql = userNameChunk.map(name => `'${SKT_APP.escapeSql(name)}'`).join(',');
-
-                // KORREKTUR: Lade den gesamten benötigten Datumsbereich auf einmal, anstatt in Monats-Schritten.
-                // NEU: Lade auch Termine, bei denen der Benutzer eingeladen ist.
-                const query = `SELECT *, Mitarbeiter_ID, Eingeladener FROM \`Termine\` WHERE \`Datum\` >= '${overallStartDateIso}' AND \`Datum\` <= '${overallEndDateIso}' AND (\`Mitarbeiter_ID\` IN (${userNamesSql}) OR \`Eingeladener\` IN (${userNamesSql}))`;
-                promises.push(SKT_APP.seaTableSqlQuery(query, true));
-
-                // KORREKTUR: Lade zusätzlich alle überfälligen Termine, um die Diskrepanz zur Dashboard-Anzeige zu beheben.
-                const today = new Date(getCurrentDate());
-                const todayIso = today.toISOString().split('T')[0];
-                // NEU: Auch hier nach eingeladenen Terminen suchen.
-                const outstandingQuery = `SELECT *, Mitarbeiter_ID, Eingeladener FROM \`Termine\` WHERE \`Datum\` < '${todayIso}' AND \`Status\` = 'Ausgemacht' AND (\`Mitarbeiter_ID\` IN (${userNamesSql}) OR \`Eingeladener\` IN (${userNamesSql}))`;
-                promises.push(SKT_APP.seaTableSqlQuery(outstandingQuery, true));
-            }
-
-            const results = await Promise.all(promises);
-            results.forEach(result => {
-                if (result && Array.isArray(result)) {
-                    allFetchedAppointments.push(...result);
-                }
-            });
             
-            // KORREKTUR: Duplikate entfernen (da sich die Abfragen überschneiden können) und nach Datum sortieren.
-            const uniqueAppointments = _.uniqBy(allFetchedAppointments, '_id').sort((a, b) => new Date(b.Datum) - new Date(a.Datum));
+            // KORREKTUR: `userAppointments` war nicht definiert. Filtere die global geladenen Termine nach den relevanten Benutzern.
+            // KORREKTUR: Auch Termine, bei denen der Benutzer eingeladen ist, müssen berücksichtigt werden.
+            const userAppointments = db.termine.filter(t => userIds.has(t.Mitarbeiter_ID) || userIds.has(t.Eingeladener));
 
-            this.allAppointments = SKT_APP.mapSqlResults(uniqueAppointments, 'Termine');
+            // 4. Filter by date range
+            const dateFilteredAppointments = userAppointments.filter(t => {
+                if (!t.Datum) return false;
+                const terminDate = new Date(t.Datum);
+                return terminDate >= overallStartDate && terminDate <= overallEndDate;
+            });
+
+            // 5. Find outstanding appointments that might be outside the date range
+            const today = new Date(getCurrentDate());
+            today.setHours(0, 0, 0, 0);
+            const outstandingAppointments = userAppointments.filter(t => {
+                if (!t.Datum || t.Status !== 'Ausgemacht' || t.Absage === true) return false;
+                const terminDate = new Date(t.Datum);
+                return terminDate < today;
+            });
+
+            // 6. Combine, deduplicate, and sort
+            const combinedAppointments = _.uniqBy([...dateFilteredAppointments, ...outstandingAppointments], '_id');
+            this.allAppointments = combinedAppointments.sort((a, b) => new Date(b.Datum) - new Date(a.Datum));
+
+            // NEU: Wiederkehrende Termine generieren
+            this.allAppointments = this._generateRecurringAppointments(this.allAppointments, overallStartDate, overallEndDate);
             appointmentsLog(`5. Antwort in ${this.allAppointments.length} Termin-Objekte umgewandelt.`);
 
             appointmentsLog('6. Rufe render() auf, um die Termine anzuzeigen.');
@@ -4359,6 +4508,11 @@ class AppointmentsView {
             if (isLeader && scope === 'structure') {
                 this._populateGroupFilter(true);
             }
+            // NEU: Wenn "Kalender von..." ausgewählt wird, zur Wochenansicht wechseln.
+            if (scope === 'user_select') {
+                this._switchStatsView('week');
+            }
+            
             // KORREKTUR: Zeige das "Benutzer auswählen"-Dropdown, wenn "Kalender von..." ausgewählt ist.
             if (this.weekCalendarUserSelectContainer) {
                 this.weekCalendarUserSelectContainer.classList.toggle('hidden', scope !== 'user_select');
@@ -4390,6 +4544,10 @@ class AppointmentsView {
         this.weekPeriodDisplay.addEventListener('click', () => this._resetWeekCalendarToToday());
         // Der `weekCalendarViewModeSelect` wird nicht mehr verwendet, der Listener ist am Haupt-Scope-Filter.
         this.weekCalendarUserSelect.addEventListener('change', () => this._renderWeekCalendar());
+
+        // NEU: Event-Listener für Zoom-Buttons
+        this.weekZoomInBtn.addEventListener('click', () => this._zoomWeekCalendar(5));
+        this.weekZoomOutBtn.addEventListener('click', () => this._zoomWeekCalendar(-5));
     }
 
     _updateStatusDropdown(category, currentStatus = null) {
@@ -4627,8 +4785,16 @@ class AppointmentsView {
     _populateGroupFilter(show = true) { // KORREKTUR: Event-Listener für das Dropdown hier neu initialisieren
         this.groupFilterPanel.innerHTML = '';
         if (!show) return;
+        
+        // KORREKTUR: Die eigene Gruppe zur Auswahl hinzufügen, wenn man eine Führungskraft ist.
+        let leaders = SKT_APP.getSubordinates(this.currentUserId, 'struktur');
+        const currentUser = SKT_APP.findRowById('mitarbeiter', this.currentUserId);
+        if (SKT_APP.isUserLeader(currentUser)) {
+            if (!leaders.some(l => l._id === currentUser._id)) {
+                leaders.unshift(currentUser);
+            }
+        }
 
-        const leaders = SKT_APP.getSubordinates(this.currentUserId, 'struktur');
         if (!leaders || leaders.length === 0) {
             this.groupFilterPanel.innerHTML = '<p class="text-xs text-gray-500 p-2">Keine Gruppen in deiner Struktur.</p>';
             return;
@@ -4711,7 +4877,8 @@ class AppointmentsView {
         this._updateCategoryButtonText(); // KORREKTUR: Button-Text wird jetzt hier aktualisiert, direkt bevor die Ansicht neu gezeichnet wird.
         const categoryFilter = t => selectedCategories.includes(t.Kategorie) && t.Datum;
         const cancelledFilter = t => showCancelled || (t.Absage !== true && t.Status !== 'Storno');
-        const heldFilter = t => showHeld || (t.Status !== 'Gehalten' && t.Status !== 'Info Eingeladen');
+        const heldStatuses = ['Gehalten', 'Info Eingeladen', 'Info Bestätigt', 'Info Anwesend'];
+        const heldFilter = t => showHeld || !heldStatuses.includes(t.Status);
 
         // --- Daten für die Tabellenansicht vorbereiten ---
         // KORREKTUR: Beginnt mit `dateAndSearchFilteredAppointments`, um die Datumsauswahl zu berücksichtigen.
@@ -4774,16 +4941,16 @@ class AppointmentsView {
             let appointmentsHtml = '';
             if (appointmentsForDay.length > 0) {
                 appointmentsHtml = appointmentsForDay.map(termin => {
-                    const mitarbeiterName = termin.Mitarbeiter_ID?.[0]?.display_value || SKT_APP.findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
+                    const mitarbeiterName = SKT_APP.findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
                     const terminTime = termin.Datum ? new Date(termin.Datum).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
 
                     // KORREKTUR: Verwende die neue, robustere Farb-Logik
                     const { border: statusColorClass } = this._getAppointmentColorClasses(termin);
                     const categoryPillColor = categoryColors[termin.Kategorie] || 'bg-gray-400';
 
-                    // NEU: Logik für "+1"-Icon
-                    const ownerId = termin.Mitarbeiter_ID?.[0]?.row_id;
-                    const inviteeId = termin.Eingeladener?.[0]?.row_id;
+                    // KORREKTUR: Logik für "+1"-Icon mit normalisierten Daten
+                    const ownerId = termin.Mitarbeiter_ID;
+                    const inviteeId = termin.Eingeladener;
                     // KORREKTUR: +1 nur in der persönlichen Ansicht anzeigen
                     let isInvitee = false;
                     if (scope === 'personal') {
@@ -4830,9 +4997,9 @@ class AppointmentsView {
     
     // NEU: Hilfsfunktion, die auf Änderungen im Haupt-Kalender-Dropdown reagiert.
     _handleViewModeChange() {
-        const selectedMode = this.weekCalendarViewModeSelect.value;
-        saveUiSetting('weekCalendarViewMode', selectedMode); // Präferenz speichern
-
+        // KORREKTUR: Lese den Wert aus dem Haupt-Scope-Filter, nicht aus dem alten, versteckten Dropdown.
+        const selectedMode = this.statsScopeFilter.value;
+        saveUiSetting('appointmentsScope', selectedMode); // Speichere die Einstellung unter dem korrekten Schlüssel.
         const showUserSelect = selectedMode === 'user_select';
         this.weekCalendarUserSelectContainer.classList.toggle('hidden', !showUserSelect);
 
@@ -4890,6 +5057,58 @@ class AppointmentsView {
             totalColumns: e.max_cols
         }));
     }
+
+    // NEU: Funktion zum Generieren von wiederkehrenden Terminen für die Anzeige
+    _generateRecurringAppointments(appointments, startDate, endDate) {
+        const recurringAppointments = [];
+        appointments.forEach(originalAppointment => {
+            if (originalAppointment.Wiederholung && originalAppointment.Datum) {
+                const recurrenceRule = originalAppointment.Wiederholung;
+                let currentDate = new Date(originalAppointment.Datum);
+    
+                while (currentDate <= endDate) {
+                    // Gehe zum nächsten Vorkommen
+                    switch (recurrenceRule) {
+                        case 'täglich':
+                            currentDate.setDate(currentDate.getDate() + 1);
+                            break;
+                        case 'wöchentlich':
+                            currentDate.setDate(currentDate.getDate() + 7);
+                            break;
+                        case 'zweiwöchentlich':
+                            currentDate.setDate(currentDate.getDate() + 14);
+                            break;
+                        case 'monatlich':
+                            currentDate.setMonth(currentDate.getMonth() + 1);
+                            break;
+                        default:
+                            // Ungültige Regel, Schleife abbrechen
+                            currentDate = new Date(endDate.getTime() + 1);
+                            continue;
+                    }
+    
+                    if (currentDate >= startDate && currentDate <= endDate) {
+                        const newAppointment = { ...originalAppointment };
+                        newAppointment.Datum = currentDate.toISOString();
+                        // Eindeutige ID für den virtuellen Termin, um Schlüsselkonflikte zu vermeiden, aber Original-ID behalten
+                        newAppointment._id = `${originalAppointment._id}-recur-${currentDate.getTime()}`;
+                        newAppointment.originalId = originalAppointment._id;
+                        newAppointment.isRecurringInstance = true;
+                        recurringAppointments.push(newAppointment);
+                    }
+                }
+            }
+        });
+        return [...appointments, ...recurringAppointments];
+    }
+
+    // NEU: Funktion zum Ändern des Kalender-Zooms
+    _zoomWeekCalendar(delta) {
+        this.weekCalendarSlotHeight = Math.max(10, this.weekCalendarSlotHeight + delta); // Mindesthöhe 10px
+        saveUiSetting('weekCalendarSlotHeight', this.weekCalendarSlotHeight); // NEU: Zoom-Level speichern
+        this._renderWeekCalendar();
+    }
+
 
     // NEU: Funktion zum Erstellen und Herunterladen einer .ics-Datei
     _populateWeekCalendarViewModeSelect() {
@@ -4960,6 +5179,7 @@ class AppointmentsView {
     // KORREKTUR: Komplette Neugestaltung der Kalender-Render-Logik
     _renderWeekCalendar() {
         if (!this.weekCalendarBody || this.statsWeekView.classList.contains('hidden')) return;
+        const slotHeight = this.weekCalendarSlotHeight; // NEU
 
         const viewMode = this.statsScopeFilter.value;
         let userIds = new Set();
@@ -4970,21 +5190,6 @@ class AppointmentsView {
         weekEnd.setDate(weekStart.getDate() + 6);
         weekEnd.setHours(23, 59, 59, 999);
 
-        // KORREKTUR: Die Logik zur Sammlung der Benutzer-IDs muss hier wiederholt werden,
-        // da sie für die Filterung der Termine benötigt wird.
-        if (viewMode === 'user_select') {
-            const selectedUserId = this.weekCalendarUserSelect.value;
-            if (selectedUserId) userIds.add(selectedUserId);
-        } else if (viewMode === 'personal') {
-            userIds.add(this.currentUserId);
-        } else if (viewMode === 'group') {
-            userIds.add(this.currentUserId);
-            SKT_APP.getSubordinates(this.currentUserId, 'gruppe').forEach(u => userIds.add(u._id));
-        } else if (viewMode === 'structure') {
-            userIds.add(this.currentUserId);
-            this.downline.forEach(u => userIds.add(u._id));
-        }
-
         this.weekPeriodDisplay.textContent = `${weekStart.toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit'})} - ${weekEnd.toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit', year:'numeric'})}`;
 
         // NEU: Filterlogik aus der Timeline-Ansicht übernehmen
@@ -4993,20 +5198,29 @@ class AppointmentsView {
         const showHeldToggle = document.getElementById('appointments-show-held');
         const showHeld = showHeldToggle ? showHeldToggle.checked : false;
         const selectedCategories = Array.from(this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-
-        // Filter all appointments for the current week and selected users
-        const appointmentsForWeek = this.allAppointments.filter(t => {
+        
+        // KORREKTUR: Die Filterung nach Benutzern wird entfernt. `this.allAppointments` ist bereits
+        // durch `fetchAndRender` korrekt auf den ausgewählten Scope (Struktur, Gruppe, etc.) gefiltert.
+        // Die Wochenansicht muss nur noch nach Datum und den UI-Filtern (Kategorie, etc.) filtern.
+        let appointmentsForWeek = this.searchFilteredAppointments.filter(t => {
             if (!t.Datum) return false;
             const terminDate = new Date(t.Datum);
-            const ownerId = t.Mitarbeiter_ID?.[0]?.row_id || t.Mitarbeiter_ID;
-            const inviteeId = t.Eingeladener?.[0]?.row_id;
-            const isParticipant = userIds.has(ownerId) || userIds.has(inviteeId);
-            const isInCategory = selectedCategories.includes(t.Kategorie);
+            const isInCategory = selectedCategories.length > 0 ? selectedCategories.includes(t.Kategorie) : true;
             const isCancelledOk = showCancelled || (t.Absage !== true && t.Status !== 'Storno');
-            const isHeldOk = showHeld || (t.Status !== 'Gehalten');
-            return isParticipant && terminDate >= weekStart && terminDate <= weekEnd && isInCategory && isCancelledOk && isHeldOk;
+            const heldStatuses = ['Gehalten', 'Info Eingeladen', 'Info Bestätigt', 'Info Anwesend'];
+            const isHeldOk = showHeld || !heldStatuses.includes(t.Status);
+            return terminDate >= weekStart && terminDate <= weekEnd && isInCategory && isCancelledOk && isHeldOk;
         });
 
+        // NEU: Zusätzlicher Filter für den "Kalender von..." Modus.
+        // In diesem Modus enthält `this.allAppointments` mehr Daten als angezeigt werden sollen.
+        if (viewMode === 'user_select') {
+            const selectedUserId = this.weekCalendarUserSelect.value;
+            if (selectedUserId) {
+                appointmentsForWeek = appointmentsForWeek.filter(t => t.Mitarbeiter_ID === selectedUserId || t.Eingeladener === selectedUserId);
+            }
+        }
+        
         // Group appointments by day index (0=Mon, 1=Tue, ...)
         const appointmentsByDay = Array.from({ length: 7 }, () => []);
         appointmentsForWeek.forEach(termin => {
@@ -5036,7 +5250,7 @@ class AppointmentsView {
         // --- Render Body ---
         const bodyContainer = document.createElement('div');
         bodyContainer.className = 'relative'; // Main container for positioning
-        bodyContainer.style.height = `${36 * 40}px`; // 18 hours * 2 slots/hr * 40px/slot
+        bodyContainer.style.height = `${36 * slotHeight}px`; // NEU: Dynamische Höhe
 
         // Render time labels and grid lines in the background
         const gridAndTimes = document.createElement('div');
@@ -5046,7 +5260,8 @@ class AppointmentsView {
         timeColumn.className = 'absolute top-0 left-0 w-[60px] h-full';
         for (let hour = 6; hour < 24; hour++) {
             const timeLabelCell = document.createElement('div');
-            timeLabelCell.className = 'relative h-[80px] text-right text-xs text-gray-400'; // 2 slots high
+            timeLabelCell.className = 'relative text-right text-xs text-gray-400'; // KORREKTUR: h-[80px] entfernt
+            timeLabelCell.style.height = `${2 * slotHeight}px`; // NEU: Dynamische Höhe
             timeLabelCell.innerHTML = `<span class="week-calendar-time-label">${String(hour).padStart(2, '0')}:00</span>`;
             timeColumn.appendChild(timeLabelCell);
         }
@@ -5056,10 +5271,12 @@ class AppointmentsView {
         dayGrid.className = 'absolute top-0 left-[60px] right-0 bottom-0 grid grid-cols-7';
         for (let i = 0; i < 7; i++) {
             const dayCol = document.createElement('div');
-            dayCol.className = 'week-calendar-day-col'; // has position: relative and border-left
+            // KORREKTUR: dayCol wird selbst zu einem Grid-Container für die Zeit-Slots, was robuster ist.
+            dayCol.className = 'week-calendar-day-col grid';
+            dayCol.style.gridTemplateRows = `repeat(36, ${slotHeight}px)`;
             for (let j = 0; j < 36; j++) {
                 const slot = document.createElement('div');
-                slot.className = 'h-[40px] border-t border-dotted border-gray-200';
+                slot.className = 'border-t border-dotted border-gray-200';
                 if (j % 2 === 0) slot.classList.replace('border-dotted', 'border-solid');
                 dayCol.appendChild(slot);
             }
@@ -5069,15 +5286,16 @@ class AppointmentsView {
         bodyContainer.appendChild(gridAndTimes);
 
         // --- Render Appointments on top ---
+        const hintLog = (message, ...data) => console.log(`%c[Hint] %c${message}`, 'color: #9b59b6; font-weight: bold;', 'color: black;', ...data);
         const appointmentsContainer = document.createElement('div');
         appointmentsContainer.className = 'absolute top-0 left-[60px] right-0 bottom-0 grid grid-cols-7';
-
+        
         appointmentsByDay.forEach((dayAppointments, dayIndex) => {
             if (dayAppointments.length === 0) return;
 
             const dayColumnContainer = document.createElement('div');
             dayColumnContainer.className = 'relative h-full'; // Container for one day's appointments
-            dayColumnContainer.style.gridColumn = `${dayIndex + 1} / span 1`;
+            dayColumnContainer.style.gridColumn = `${parseInt(dayIndex) + 1} / span 1`;
 
             const layoutData = this._calculateOverlaps(dayAppointments);
 
@@ -5092,8 +5310,8 @@ class AppointmentsView {
                 const durationMinutes = termin.Dauer ? termin.Dauer / 60 : 60;
                 const startOffsetMinutes = (startHour - 6) * 60 + startMinute;
                 
-                const top = (startOffsetMinutes / 30) * 40; // 40px per 30-min slot
-                const height = Math.max(40, (durationMinutes / 30) * 40); // Min height of one slot
+                const top = (startOffsetMinutes / 30) * slotHeight; // NEU: Dynamische Höhe
+                const height = Math.max(slotHeight, (durationMinutes / 30) * slotHeight); // NEU: Dynamische Höhe
 
                 const width = 100 / layoutInfo.totalColumns;
                 const left = layoutInfo.column * width;
@@ -5103,8 +5321,8 @@ class AppointmentsView {
                 terminEl.dataset.id = termin._id;
                 const { border, bg, text } = this._getAppointmentColorClasses(termin, 'category');
 
-                const ownerId = termin.Mitarbeiter_ID?.[0]?.row_id;
-                const inviteeId = termin.Eingeladener?.[0]?.row_id;
+                const ownerId = termin.Mitarbeiter_ID;
+                const inviteeId = termin.Eingeladener;
                 let isInvitee = false;
                 if (viewMode === 'personal') {
                     if (inviteeId === this.currentUserId && ownerId !== this.currentUserId) isInvitee = true;
@@ -5120,11 +5338,18 @@ class AppointmentsView {
                 terminEl.style.height = `${height - 2}px`; // -2 for a small gap
                 terminEl.style.left = `calc(${left}% + 2px)`;
                 terminEl.style.width = `calc(${width}% - 4px)`;
+
+                // NEU: Füge Klassen hinzu, um die Sichtbarkeit von Inhalten basierend auf der Höhe zu steuern
+                if (height < 60) terminEl.classList.add('content-priority-low'); // Uhrzeit ausblenden
+                if (height < 40) terminEl.classList.add('content-priority-medium'); // Mitarbeitername ausblenden
+
                 terminEl.innerHTML = `
-                    <strong class="text-sm font-bold truncate">${termin.Terminpartner || 'Unbekannt'}</strong>
-                    <span class="text-xs opacity-90">${terminTime}</span>
-                    <span class="text-xs opacity-90 truncate mt-auto">${termin.Mitarbeiter_ID?.[0]?.display_value || ''} ${inviteeIcon}</span>
+                    <strong class="text-sm font-bold truncate appointment-customer-name">${termin.Terminpartner || 'Unbekannt'}</strong>
+                    <span class="text-xs opacity-90 appointment-time">${terminTime}</span>
+                    <span class="text-xs opacity-90 truncate mt-auto appointment-employee-name">${termin.Mitarbeiter_ID?.[0]?.display_value || ''} ${inviteeIcon}</span>
                 `;
+                // NEU: Hinweise für zugeordnete Umsätze oder PG-Einträge hinzufügen
+                this._renderAppointmentHints(termin, terminEl);
                 terminEl.addEventListener('click', (e) => { e.preventDefault(); this.openModal(this.allAppointments.find(t => t._id === e.currentTarget.dataset.id)); });
                 dayColumnContainer.appendChild(terminEl);
             });
@@ -5133,6 +5358,62 @@ class AppointmentsView {
 
         bodyContainer.appendChild(appointmentsContainer);
         this.weekCalendarBody.appendChild(bodyContainer);
+    }
+
+    // NEU: Fügt kontextbezogene Hinweise zu einem Termin-Element im Kalender hinzu.
+    _renderAppointmentHints(termin, terminEl) {
+        const hintLog = (message, ...data) => console.log(`%c[Hint] %c${message}`, 'color: #9b59b6; font-weight: bold;', 'color: black;', ...data);
+        // KORREKTUR: Der Banner für zugeordnete Umsätze wurde auf Wunsch des Kunden entfernt.
+        // Der Code wird auskommentiert, falls die Funktion reaktiviert werden soll.
+        /* if (termin.Kategorie === 'BT' && termin.Terminpartner) { ... } */
+
+        // Hinweis für zugehörige PG-Einträge
+        if (termin.Kategorie === 'PG') {
+            hintLog(`Prüfe auf PG-Eintrag für PG-Termin:`, termin);
+            let personId = null;
+            if (termin.Eingeladener && termin.Eingeladener[0]) {
+                personId = termin.Eingeladener[0].row_id;
+                hintLog(`Suche über 'Eingeladener'-Feld. Person-ID: ${personId}`);
+            } else if (termin.Terminpartner) {
+                const partnerUser = db.mitarbeiter.find(m => m.Name.toLowerCase() === termin.Terminpartner.toLowerCase());
+                if (partnerUser) {
+                    personId = partnerUser._id;
+                    hintLog(`Suche über 'Terminpartner'-Feld. Partner als Mitarbeiter gefunden: ${partnerUser.Name}, ID: ${personId}`);
+                } else {
+                    hintLog(`'Terminpartner' ${termin.Terminpartner} ist kein bekannter Mitarbeiter.`);
+                }
+            }
+
+            if (personId) {
+                const terminDateString = new Date(termin.Datum).toISOString().split('T')[0];
+                hintLog(`Suche PG-Eintrag für Person-ID ${personId} am Datum ${terminDateString}`);
+                // KORREKTUR: Robusterer Abgleich, der sowohl normalisierte (string) als auch nicht-normalisierte (link-Objekt) Daten für pg.Mitarbeiter handhabt.
+                const relatedPg = db.pg.find(pg => {
+                    const pgMitarbeiterId = pg.Mitarbeiter?.[0]?.row_id || pg.Mitarbeiter;
+                    const isMatch = pgMitarbeiterId === personId && pg.Datum && pg.Datum.startsWith(terminDateString);
+                    if (isMatch) {
+                        hintLog(`Gefunden: passender PG-Eintrag`, pg);
+                    }
+                    return isMatch;
+                });
+                if (relatedPg) {
+                    hintLog(`PG-Eintrag gefunden. Rendere Hinweis.`);
+                    const pgHint = document.createElement('div');
+                    pgHint.className = 'mt-2 p-1.5 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800 cursor-pointer hover:bg-blue-100';
+                    pgHint.innerHTML = `<i class="fas fa-comments mr-1"></i> Zum PG-Eintrag springen`; // KORREKTUR: Setze eine globale Variable und rufe dann switchView auf.
+                    pgHint.addEventListener('click', (e) => {
+                        e.preventDefault(); e.stopPropagation();
+                        pendingPgIdToOpen = relatedPg._id;
+                        switchView('pg-tagebuch');
+                    });
+                    terminEl.appendChild(pgHint);
+                } else {
+                    hintLog(`Kein passender PG-Eintrag gefunden.`);
+                }
+            } else {
+                hintLog(`Keine Person-ID für die Suche nach PG-Eintrag gefunden.`);
+            }
+        }
     }
 
     _navigateWeekCalendar(days) {
@@ -5287,12 +5568,12 @@ class AppointmentsView {
             const { border: statusColorClass, text: statusTextColorClass } = this._getAppointmentColorClasses(termin);
             tr.className = `border-l-8 ${statusColorClass} cursor-pointer`;
             
-            // KORREKTUR: Der Mitarbeitername wird aus dem verknüpften Objekt ausgelesen, das von der API kommt.
-            const mitarbeiterName = termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
+            // KORREKTUR: Mitarbeitername wird über die ID aus der DB geholt, da die Daten normalisiert sind.
+            const mitarbeiterName = SKT_APP.findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
 
             // NEU: Logik für "+1"-Icon, identisch zur Kalenderansicht
-            const ownerId = termin.Mitarbeiter_ID?.[0]?.row_id;
-            const inviteeId = termin.Eingeladener?.[0]?.row_id;
+            const ownerId = termin.Mitarbeiter_ID;
+            const inviteeId = termin.Eingeladener;
             // NEU: +1 wird angezeigt, wenn der aktuell angezeigte Benutzer der Eingeladene ist, aber nicht der Besitzer.
             const isInvitee = inviteeId === this.currentUserId && ownerId !== this.currentUserId;
             let inviteeHtml = '';
@@ -5356,7 +5637,7 @@ class AppointmentsView {
 
         // KORREKTUR: Filtere von `searchFilteredAppointments`, um die Datumsfilter zu ignorieren und Diskrepanzen zu beheben.
         const outstanding = this.searchFilteredAppointments.filter(t => {
-            if (!t.Datum || t.Status !== 'Ausgemacht') return false;
+            if (!t.Datum || t.Status !== 'Ausgemacht' || t.Absage === true) return false; // NEU: Stornierte Termine ausschließen
             const terminDate = new Date(t.Datum);
             return terminDate < today;
         });
@@ -5373,8 +5654,8 @@ class AppointmentsView {
             const item = document.createElement('div');
             item.className = 'bg-yellow-200 p-2 rounded-md flex justify-between items-center cursor-pointer hover:bg-yellow-300';
             item.dataset.id = termin._id;
-            // KORREKTUR: Der Mitarbeitername wird aus dem verknüpften Objekt ausgelesen.
-            const mitarbeiterName = termin.Mitarbeiter_ID?.[0]?.display_value || 'N/A';
+            // KORREKTUR: Mitarbeitername wird über die ID aus der DB geholt, da die Daten normalisiert sind.
+            const mitarbeiterName = SKT_APP.findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
             const terminDate = new Date(termin.Datum).toLocaleDateString('de-DE');
             item.innerHTML = `<p class="text-sm"><span class="font-bold">${termin.Terminpartner}</span> bei ${mitarbeiterName} am ${terminDate}</p><i class="fas fa-edit ml-2"></i>`;
             item.addEventListener('click', () => this.openModal(termin));
@@ -5798,10 +6079,25 @@ class AppointmentsView {
 
     openModal(termin = null) {
         appointmentsLog('--- START: openModal ---', termin ? `Editing term ID: ${termin?._id}` : 'Creating new term');
+        const hintsContainer = this.modal.querySelector('#appointment-modal-hints');
+        hintsContainer.innerHTML = '';
+        hintsContainer.classList.add('hidden');
+
+
+        // NEU: Logik für wiederkehrende Termine
+        let dateForForm = termin ? termin.Datum : null;
+        let isRecurring = false;
+        if (termin && termin.isRecurringInstance) {
+            isRecurring = true;
+            const originalTermin = this.allAppointments.find(t => t._id === termin.originalId);
+            if (originalTermin) {
+                // Bearbeite immer die Serie, nicht die einzelne Instanz
+                termin = originalTermin;
+            }
+        }
+
         try {
             this.form.reset();
-            appointmentsLog('Form reset.');
-
             const title = this.modal.querySelector('#appointment-modal-title');
             const idInput = this.modal.querySelector('#appointment-id');
             const userSelect = this.modal.querySelector('#appointment-user');
@@ -5847,9 +6143,11 @@ class AppointmentsView {
 
             if (termin) { // Edit mode
                 appointmentsLog('Entering edit mode for termin:', termin);
+                // NEU: Logik für Hinweise im Modal
+                this._renderModalHints(termin, hintsContainer);
                 title.textContent = 'Termin bearbeiten';
-                idInput.value = termin._id;
-                const mitarbeiterId = termin.Mitarbeiter_ID?.[0]?.row_id;
+                idInput.value = termin._id; // KORREKTUR: Robusterer Zugriff auf die ID, da sie nach der Normalisierung ein String sein kann.
+                const mitarbeiterId = Array.isArray(termin.Mitarbeiter_ID) ? termin.Mitarbeiter_ID?.[0]?.row_id : termin.Mitarbeiter_ID;
                 if (mitarbeiterId) {
                     // Stelle sicher, dass die Option existiert, bevor du sie setzt
                     if (userSelect.querySelector(`option[value="${mitarbeiterId}"]`)) {
@@ -5865,8 +6163,8 @@ class AppointmentsView {
                 // KORREKTUR: `datetime-local` erwartet das Format YYYY-MM-DDTHH:mm
                 // `toISOString()` konvertiert in UTC, was zu Zeitzonenfehlern führt.
                 // Wir müssen das Datum manuell in das korrekte lokale Format umwandeln.
-                if (termin.Datum) {
-                    const localDate = new Date(termin.Datum);
+                if (dateForForm) {
+                    const localDate = new Date(dateForForm);
                     // Wir ziehen den Zeitzonen-Offset ab, um die "echte" lokale Zeit zu bekommen, die dann korrekt als String formatiert wird.
                     localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
                     this.form.querySelector('#appointment-date').value = localDate.toISOString().slice(0, 16);
@@ -5883,9 +6181,8 @@ class AppointmentsView {
                 } else {
                     this.form.querySelector('#appointment-duration').value = '';
                 }
-                // KORREKTUR: Korrekte ID aus dem Link-Objekt auslesen
-                const inviteeLink = termin.Eingeladener;
-                const inviteeId = inviteeLink && Array.isArray(inviteeLink) && inviteeLink.length > 0 ? inviteeLink[0].row_id : null;
+                // KORREKTUR: Robusterer Zugriff auf die ID, da sie nach der Normalisierung ein String sein kann.
+                const inviteeId = Array.isArray(termin.Eingeladener) ? termin.Eingeladener?.[0]?.row_id : termin.Eingeladener;
                 if (inviteeId) {
                     inviteeSelect.value = inviteeId;
                 } else {
@@ -5900,6 +6197,8 @@ class AppointmentsView {
                 this.form.querySelector('#appointment-note').value = termin.Hinweis || '';
                 this.form.querySelector('#appointment-cancellation').checked = termin.Absage || false;
                 this.form.querySelector('#appointment-cancellation-reason').value = termin.Absagegrund || '';
+                // NEU: Wiederholungs-Dropdown befüllen
+                this.form.querySelector('#appointment-recurrence').value = termin.Wiederholung || '';
                 this.form.querySelector('#appointment-infoabend-date').value = termin.Infoabend ? termin.Infoabend.split('T')[0] : '';
 
                 this._updateStatusDropdown(termin.Kategorie, termin.Status);
@@ -5929,6 +6228,12 @@ class AppointmentsView {
 
             this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !this.form.querySelector('#appointment-cancellation').checked);
             
+            // NEU: Wiederholungs-Container basierend auf der Kategorie ein-/ausblenden
+            const recurrenceContainer = this.form.querySelector('#appointment-recurrence-container');
+            if (recurrenceContainer) {
+                recurrenceContainer.classList.toggle('hidden', !['Sonstiges', 'PG'].includes(categorySelect.value));
+            }
+            
             this.modal.classList.add('visible');
             document.body.classList.add('modal-open');
             appointmentsLog('Modal is now visible.');
@@ -5938,6 +6243,78 @@ class AppointmentsView {
             alert('Ein Fehler ist beim Öffnen des Formulars aufgetreten. Details siehe Konsole.');
         }
         appointmentsLog('--- END: openModal ---');
+    }
+
+    _renderModalHints(termin, container) {
+        const hintLog = (message, ...data) => console.log(`%c[ModalHint] %c${message}`, 'color: #9b59b6; font-weight: bold;', 'color: black;', ...data);
+        let hintsFound = false;
+        container.innerHTML = '';
+
+        // Hinweis für zugeordnete Umsätze bei BT-Terminen
+        if (termin.Kategorie === 'BT' && termin.Terminpartner) {
+            const partnerName = termin.Terminpartner;
+            hintLog(`Prüfe auf Umsatz für BT mit Partner: '${partnerName}'`);
+            const terminDate = new Date(termin.Datum);
+            const oneWeek = 7 * 24 * 60 * 60 * 1000;
+            const searchStart = new Date(terminDate.getTime() - oneWeek);
+            const searchEnd = new Date(terminDate.getTime() + oneWeek);
+            const relatedSales = db.umsatz.filter(sale =>
+                sale.Kunde && partnerName && sale.Kunde.trim().toLowerCase() === partnerName.trim().toLowerCase() &&
+                sale.Datum && new Date(sale.Datum) >= searchStart && new Date(sale.Datum) <= searchEnd
+            );
+
+            if (relatedSales.length > 0) {
+                hintsFound = true;
+                let salesHtml = '<strong>Zugeordneter Umsatz:</strong><ul class="list-disc list-inside pl-2 mt-1 text-sm">';
+                relatedSales.forEach(sale => {
+                    // KORREKTUR: Produktnamen über die ID aus db.produkte nachschlagen.
+                    const produkt = db.produkte.find(p => p._id === sale.Produkt_ID);
+                    const productName = produkt ? produkt.Produkt : 'Unbekannt';                    salesHtml += `<li>${(sale.EH || 0).toFixed(2)} EH - ${productName} am ${new Date(sale.Datum).toLocaleDateString('de-DE')}</li>`;
+                });
+                salesHtml += '</ul>';
+                const hintEl = document.createElement('div');
+                hintEl.className = 'p-3 bg-green-50 border border-green-200 rounded-lg text-green-800';
+                hintEl.innerHTML = salesHtml;
+                container.appendChild(hintEl);
+            }
+        }
+
+        // Hinweis für zugehörige PG-Einträge
+        if (termin.Kategorie === 'PG') {
+            hintLog(`Prüfe auf PG-Eintrag für PG-Termin:`, termin);
+            let personId = null;
+            if (termin.Eingeladener && termin.Eingeladener[0]) {
+                personId = termin.Eingeladener[0].row_id;
+            } else if (termin.Terminpartner) {
+                const partnerUser = db.mitarbeiter.find(m => m.Name.toLowerCase() === termin.Terminpartner.toLowerCase());
+                if (partnerUser) personId = partnerUser._id;
+            }
+
+            if (personId) {
+                const terminDateString = new Date(termin.Datum).toISOString().split('T')[0];
+                const relatedPg = db.pg.find(pg => {
+                    const pgMitarbeiterId = pg.Mitarbeiter?.[0]?.row_id || pg.Mitarbeiter;
+                    return pgMitarbeiterId === personId && pg.Datum && pg.Datum.startsWith(terminDateString);
+                });
+                if (relatedPg) {
+                    hintsFound = true;
+                    const hintEl = document.createElement('div');
+                    hintEl.className = 'p-3 bg-blue-50 border border-blue-200 rounded-lg text-blue-800 cursor-pointer hover:bg-blue-100'; // KORREKTUR: Setze eine globale Variable und rufe dann switchView auf.
+                    hintEl.innerHTML = `<i class="fas fa-comments mr-2"></i>Es existiert ein PG-Eintrag für diesen Tag. Klicke hier, um ihn zu öffnen.`;
+                    hintEl.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        this.closeModal();
+                        pendingPgIdToOpen = relatedPg._id;
+                        switchView('pg-tagebuch');
+                    });
+                    container.appendChild(hintEl);
+                }
+            }
+        }
+
+        if (hintsFound) {
+            container.classList.remove('hidden');
+        }
     }
 
     closeModal() {
@@ -5998,6 +6375,17 @@ class AppointmentsView {
             const hinweis = this.form.querySelector('#appointment-note').value;
             const absagegrund = this.form.querySelector('#appointment-cancellation-reason').value;
             const infoabend = this.form.querySelector('#appointment-infoabend-date').value;
+            const wiederholung = this.form.querySelector('#appointment-recurrence').value;
+
+            // NEU: Validierung für Dauer
+            if (!duration || parseInt(duration) <= 0) {
+                alert('Bitte geben Sie eine gültige Dauer für den Termin an (größer als 0 Minuten).');
+                saveBtn.disabled = false;
+                saveBtnText.classList.remove('hidden');
+                saveBtnLoader.classList.add('hidden');
+                this.form.querySelector('#appointment-duration').focus();
+                return;
+            }
 
             // NEU: Validierung für Absagegrund
             if (isCancellation && !absagegrund.trim()) {
@@ -6065,6 +6453,7 @@ class AppointmentsView {
                 [terminMap.Absage]: isCancellation,
                 [terminMap.Absagegrund]: isCancellation ? absagegrund : '',
                 [terminMap.Infoabend]: kategorie === 'ET' ? infoabend : null,
+                [terminMap.Wiederholung]: wiederholung || null,
             };
 
             // NEU: Neue Felder sicher hinzufügen, um Fehler bei veraltetem Cache zu vermeiden
@@ -6091,6 +6480,12 @@ class AppointmentsView {
 
             if (terminId) {
                 appointmentsLog('API call successful. Showing success message and refreshing.');
+                
+                // KORREKTUR: Cache für Termine invalidieren und neu laden, damit neue Termine sofort sichtbar sind.
+                localStorage.removeItem(CACHE_PREFIX + 'termine');
+                db.termine = await seaTableQuery('Termine');
+                normalizeAllData(); // Wichtig, um die neuen Daten zu normalisieren
+                appointmentsLog('Termin-Cache invalidiert und Daten neu geladen.');
                 
                 // NEU: iCal-Download-Logik
                 const downloadIcalCheckbox = this.form.querySelector('#appointment-download-ical');
@@ -6270,6 +6665,12 @@ class AppointmentsView {
         // Wenn die neue Kategorie "ET" ist, das Datum für den nächsten Infoabend setzen.
         if (newCategory === 'ET') {
             this.form.querySelector('#appointment-infoabend-date').value = findNextInfoDateAfter(getCurrentDate()).toISOString().split('T')[0];
+        }
+
+        // NEU: Wiederholungs-Container ein-/ausblenden
+        const recurrenceContainer = this.form.querySelector('#appointment-recurrence-container');
+        if (recurrenceContainer) {
+            recurrenceContainer.classList.toggle('hidden', !['Sonstiges', 'PG'].includes(newCategory));
         }
     }
 
@@ -11000,6 +11401,11 @@ async function loadAndInitPGTagebuchView() {
         container.innerHTML = await response.text();
         if (!pgTagebuchViewInstance) pgTagebuchViewInstance = new PGTagebuchView();
         await pgTagebuchViewInstance.init(authenticatedUserData._id);
+        // NEU: Prüfe, ob ein bestimmtes PG geöffnet werden soll.
+        if (pendingPgIdToOpen) {
+            pgTagebuchViewInstance.renderEditor(pendingPgIdToOpen);
+            pendingPgIdToOpen = null; // Variable zurücksetzen
+        }
     } catch (error) {
         console.error("Fehler beim Laden der PG-Tagebuch-Ansicht:", error);
     }
