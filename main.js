@@ -497,6 +497,65 @@ async function seaTableUploadFile(uploadLink, file, parentDir) {
     }
 }
 
+async function getSeaTableDownloadLink(filePath) {
+    const log = (message, ...data) => console.log(`%c[DownloadLink] %c${message}`, 'color: #17a2b8; font-weight: bold;', 'color: black;', ...data);
+    log(`Anfrage für Download-Link für Pfad: ${filePath}`);
+
+    if (!SEATABLE_API_TOKEN) {
+        log("!!! FEHLER: Haupt-API-Token (SEATABLE_API_TOKEN) fehlt.");
+        console.error("Cannot get download link without the main SeaTable API Token.");
+        return null;
+    }
+    try {
+        // The API expects a path relative to the asset directory, e.g., "files/2024-01/document.pdf"
+        // The path from the database might be a full URL.
+        let relativePath = filePath;
+        const assetPrefix = `/asset/${SEATABLE_DTABLE_UUID}/`;
+        const assetIndex = relativePath.indexOf(assetPrefix);
+
+        if (assetIndex !== -1) {
+            // Extract the path part AFTER "/asset/<dtable_uuid>/"
+            relativePath = relativePath.substring(assetIndex + assetPrefix.length);
+            log(`Asset-Pfad extrahiert: ${relativePath}`);
+        } else {
+            log(`WARNUNG: Asset-Präfix nicht im Pfad gefunden. Verwende Pfad wie er ist: ${relativePath}`);
+        }
+
+        let rawPath;
+        try {
+            const correctedPath = relativePath.replace(/%6s/g, '%20');
+            rawPath = decodeURIComponent(correctedPath);
+            log(`Pfad dekodiert zu: ${rawPath}`);
+        } catch (e) {
+            log(`Konnte Pfad nicht dekodieren, wird unverändert verwendet. Fehler: ${e.message}`);
+            rawPath = relativePath; // Fallback
+        }
+
+        const url = `https://cloud.seatable.io/api/v2.1/dtable/app-download-link/?dtable_uuid=${SEATABLE_DTABLE_UUID}&path=${rawPath}`;
+        log(`Sende GET-Anfrage an: ${url}`);
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: { Authorization: `Token ${SEATABLE_API_TOKEN}` }
+        });
+        log(`Antwort-Status: ${response.status}`);
+        if (!response.ok) {
+            const errorText = await response.text();
+            log(`!!! FEHLER: HTTP-Fehler!`, { status: response.status, text: errorText });
+            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        }
+        
+        const data = await response.json();
+        log('Erfolgreiche Antwort erhalten:', data);
+
+        return data.download_link;
+    } catch (error) {
+        log('!!! KRITISCHER FEHLER beim Abrufen des Download-Links:', error);
+        console.error("Error getting SeaTable download link:", error);
+        return null;
+    }
+}
+
 async function seaTableUpdateRow(tableName, rowId, rowData) {
   const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
   if (!tableMap) {
@@ -3702,25 +3761,12 @@ function renderTimelineSection(
     // NEU: PDF-Download-Icon für Führungskräfte
     let pdfIconHtml = '';
     if (isEditable && step.PDF && Array.isArray(step.PDF) && step.PDF.length > 0 && step.PDF[0].url) {
-        let pdfUrl = step.PDF[0].url;
-        let fullPdfUrl;
-
-        // KORREKTUR: Behandelt fehlerhafte URLs aus der API (z.B. "https//..." statt "https://...")
-        if (pdfUrl.startsWith('https//')) {
-            pdfUrl = 'https:' + pdfUrl.substring(5);
-        }
-
-        // KORREKTUR: Prüft, ob die URL bereits absolut ist, bevor die Basis-URL hinzugefügt wird, um doppelte URLs zu vermeiden.
-        if (pdfUrl.startsWith('http')) {
-            fullPdfUrl = pdfUrl;
-        } else {
-            const baseUrl = new URL(apiGatewayUrl).origin;
-            fullPdfUrl = baseUrl + pdfUrl;
-        }
+        const pdfPath = step.PDF[0].url;
+        // KORREKTUR: Verwende einen Button anstelle eines <a>-Tags, um den Download dynamisch auszulösen.
         pdfIconHtml = `
-            <a href="${fullPdfUrl}" target="_blank" download class="text-skt-red-accent hover:text-red-700 transition-colors" title="PDF herunterladen">
+            <button type="button" class="pdf-download-btn text-skt-red-accent hover:text-red-700 transition-colors" data-pdf-path="${pdfPath}" title="PDF herunterladen">
                 <i class="fas fa-file-pdf fa-lg"></i>
-            </a>
+            </button>
         `;
     }
 
@@ -3805,7 +3851,7 @@ function renderTimelineSection(
     const contentArea = stepEl.querySelector(".timeline-content");
     contentArea.addEventListener("click", (e) => {
         // Verhindert, dass das Modal aufgeht, wenn auf einen Button geklickt wird.
-        if (e.target.closest('.onboarding-step-toggle') || e.target.closest('a')) { // KORREKTUR: Klick auf PDF-Link ignorieren
+        if (e.target.closest('.onboarding-step-toggle') || e.target.closest('.pdf-download-btn')) {
             return;
         }
         // ...
@@ -3827,6 +3873,29 @@ function renderTimelineSection(
         const toggleBtn = stepEl.querySelector('.onboarding-step-toggle');
         if (toggleBtn) {
             toggleBtn.addEventListener('click', handleOnboardingStepToggle);
+        }
+        // NEU: Event-Listener für den PDF-Download-Button
+        const pdfDownloadBtn = stepEl.querySelector('.pdf-download-btn');
+        if (pdfDownloadBtn) {
+            pdfDownloadBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const button = e.currentTarget;
+                const icon = button.querySelector('i');
+                icon.classList.remove('fa-file-pdf');
+                icon.classList.add('fa-spinner', 'fa-spin');
+                button.disabled = true;
+
+                const filePath = button.dataset.pdfPath;
+                const downloadLink = await getSeaTableDownloadLink(filePath);
+                if (downloadLink) {
+                    window.open(downloadLink, '_blank');
+                } else {
+                    alert('Fehler: Der Download-Link konnte nicht erstellt werden.');
+                }
+                icon.classList.remove('fa-spinner', 'fa-spin');
+                icon.classList.add('fa-file-pdf');
+                button.disabled = false;
+            });
         }
     }
     container.appendChild(stepEl);
