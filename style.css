@@ -238,26 +238,38 @@ details[open] > summary::before { transform: rotate(180deg); }
     height: 0%;
     transition: height 0.8s ease-out;
 }
-.timeline-date-markers {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 10;
-}
 .timeline-date-marker {
     position: absolute;
-    right: calc(50% + 10px);
-    transform: translateY(-50%);
+    left: 50%;
+    transform: translateX(-50%);
     font-size: 0.75rem;
     font-weight: 600;
     color: var(--color-skt-blue-light);
     white-space: nowrap;
     background-color: var(--color-skt-grey-light);
     padding: 0 4px;
+    z-index: 10;
 }
-.timeline-date-marker::after {
+.timeline-date-marker-start {
+    top: -0.75rem; /* Position above the line */
+}
+.timeline-date-marker-end {
+    bottom: -0.75rem; /* Position below the line */
+}
+.timeline-today-marker {
+    position: absolute;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 12px;
+    height: 12px;
+    background-color: var(--color-accent-red);
+    border: 2px solid white;
+    border-radius: 50%;
+    z-index: 11;
+    cursor: help;
+}
+/* Entfernt die alte Linie neben dem Datum */
+/*.timeline-date-marker::after {
     content: '';
     position: absolute;
     right: -10px;
@@ -266,7 +278,7 @@ details[open] > summary::before { transform: rotate(180deg); }
     width: 8px;
     height: 2px;
     background-color: #94a3b8;
-}
+}*/
 
 .loader-small { 
     border: 3px solid rgba(255, 255, 255, 0.4); 
@@ -507,20 +519,6 @@ details[open] > summary::before { transform: rotate(180deg); }
     }
 }
 
-@media (min-width: 768px) {
-    .timeline-item-major::before {
-        left: -3.5rem;
-        width: 1.5rem;
-    }
-    .timeline-item-minor {
-        margin-left: 3rem;
-        padding-left: 2rem;
-    }
-    .timeline-item.timeline-item-major .timeline-icon-inline {
-        left: -3.5rem;
-        margin-right: -2.5rem;
-    }
-}
 /* Table Styles for Appointments */
 .appointments-table {
     width: 100%;

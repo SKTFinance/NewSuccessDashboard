@@ -3834,34 +3834,40 @@ function renderTimelineSection(
 }
 
 function renderDateMarkers(container, startDate, endDate) {
-    clearChildren(container);
-    const totalDuration = endDate.getTime() - startDate.getTime();
-    if (totalDuration <= 0) return;
+  clearChildren(container);
+  const totalDuration = endDate.getTime() - startDate.getTime();
+  if (totalDuration <= 0) return;
 
-    const today = new Date();
-    const elapsedDuration = today.getTime() - startDate.getTime();
-    const timeProgressPercent = Math.max(0, Math.min(100, (elapsedDuration / totalDuration) * 100));
+  const today = new Date();
+  const elapsedDuration = today.getTime() - startDate.getTime();
+  const timeProgressPercent = Math.max(
+    0,
+    Math.min(100, (elapsedDuration / totalDuration) * 100)
+  );
 
-    // Start- und Enddatum Marker
-    const createMarker = (date, topPercent) => {
-        const marker = document.createElement('div');
-        marker.className = 'timeline-date-marker';
-        marker.style.top = `${topPercent}%`;
-        marker.textContent = date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
-        container.appendChild(marker);
-    };
+  // Start- und Enddatum Marker
+  const createMarker = (date, topPercent, customClass = "") => {
+    const marker = document.createElement("div");
+    marker.className = `timeline-date-marker ${customClass}`;
+    marker.style.top = `${topPercent}%`;
+    marker.textContent = date.toLocaleDateString("de-DE", {
+      day: "2-digit",
+      month: "2-digit",
+    });
+    container.appendChild(marker);
+  };
 
-    createMarker(startDate, 0);
-    createMarker(endDate, 100);
+  createMarker(startDate, 0, "timeline-date-marker-start");
+  createMarker(endDate, 100, "timeline-date-marker-end");
 
-    // "Heute" Marker
-    if (today >= startDate && today <= endDate) {
-        const todayMarker = document.createElement('div');
-        todayMarker.className = 'timeline-date-marker font-bold text-skt-red-accent';
-        todayMarker.style.top = `${timeProgressPercent}%`;
-        todayMarker.textContent = 'Heute';
-        container.appendChild(todayMarker);
-    }
+  // "Heute" Marker
+  if (today >= startDate && today <= endDate) {
+    const todayMarker = document.createElement("div");
+    todayMarker.className = "timeline-today-marker";
+    todayMarker.style.top = `${timeProgressPercent}%`;
+    todayMarker.dataset.tooltip = "Heute";
+    container.appendChild(todayMarker);
+  }
 }
 
 async function handleOnboardingStepToggle(event) {
