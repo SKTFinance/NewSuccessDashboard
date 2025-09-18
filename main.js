@@ -20,6 +20,7 @@ let db = {
   umsatz: [],
   termine: [],
   monatsplanung: [],
+  infoplanung: [],
   einarbeitung: [],
   gesellschaften: [],
   produkte: [],
@@ -1202,6 +1203,7 @@ async function loadAllData() {
     "Karriereplan",
     "Einarbeitungsschritte",
     "Monatsplanung",
+    "Infoplanung",
     "Termine",
     "Einarbeitung",
     "Gesellschaften",
@@ -1598,11 +1600,16 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   const currentMonthName = startDate.toLocaleString("de-DE", { month: "long" });
   const currentYear = startDate.getFullYear();
 
-  // Plandaten aus dem vorgeladenen und normalisierten Cache laden.
+  // NEU: Finde den nächsten Infoabend, um die korrekten Plandaten zu laden.
+  const nextInfoDateForPlan = findNextInfoDateAfter(getCurrentDate());
+  const nextInfoDateStringForPlan = nextInfoDateForPlan.toISOString().split('T')[0];
+
+  // Plandaten (EH) aus dem vorgeladenen und normalisierten Cache laden.
   const planResults = db.monatsplanung.filter(
     (p) => p.Monat === currentMonthName && p.Jahr === currentYear
   );
-
+  // NEU: Lade die ET-Plandaten aus der neuen Infoplanung-Tabelle.
+  const infoPlanResults = db.infoplanung.filter(p => p.Informationsabend && p.Informationsabend.startsWith(nextInfoDateStringForPlan));
   // Termindaten für den aktuellen Monatszyklus laden (für ATs)
   const termineImMonat = db.termine.filter((t) => {
     if (!t.Datum) return false;
@@ -1651,6 +1658,8 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   return users.map((user) => {
     // 1. Plandaten und EH-Daten holen
     const plan = planResults.find((p) => p.Mitarbeiter_ID === user._id) || {};
+    // NEU: ET-Plan aus der Infoplanung holen.
+    const infoPlan = infoPlanResults.find(p => p.Mitarbeiter_ID === user._id) || {};
     const eh =
       ehResults.find(
         (e) =>
@@ -1695,7 +1704,7 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
     ).length;
 
     const ehZiel = plan["EH_Ziel"] || 0,
-      etZiel = plan["ET_Ziel"] || 0,
+      etZiel = infoPlan["ET_Ziel"] || 0, // KORREKTUR: ET-Ziel aus der Infoplanung nehmen
       ehIst = eh.ehIst || 0;
     const atSoll =
       user.EHproATQuote && ehZiel > 0
@@ -8665,11 +8674,13 @@ class AuswertungView {
         const selectedYear = parseInt(yearSelect.value);
         const selectedMonthName = monthSelect.options[selectedMonth].text;
 
+        const infoPlanForMonth = db.infoplanung.filter(p => new Date(p.Informationsabend).getFullYear() === selectedYear && new Date(p.Informationsabend).toLocaleString('de-DE', { month: 'long' }) === selectedMonthName);
         const allActiveUsers = db.mitarbeiter.filter(m => m.Status !== 'Ausgeschieden');
         const plansForMonth = db.monatsplanung.filter(p => p.Monat === selectedMonthName && p.Jahr === selectedYear);
         const plansByUserId = _.keyBy(plansForMonth, 'Mitarbeiter_ID');
+        const infoPlansByUserId = _.keyBy(infoPlanForMonth, 'Mitarbeiter_ID');
 
-        const pqqDataMap = await this.calculatePQQForUserList(allActiveUsers.map(u => u._id), selectedMonth, selectedYear);
+        const pqqDataMap = await this.calculatePQQForUserList(allActiveUsers.map(u => u._id), selectedMonth, selectedYear, infoPlansByUserId);
 
         const combinedData = allActiveUsers.map(user => {
             const plan = plansByUserId[user._id];
@@ -8677,9 +8688,9 @@ class AuswertungView {
                 id: user._id,
                 name: user.Name,
                 werberId: user.Werber,
-                ehGoal: plan?.EH_Ziel ?? 0,
-                etGoal: plan?.ET_Ziel ?? 0,
+                ehGoal: plan?.EH_Ziel ?? 0, // KORREKTUR: ET-Ziel wird jetzt aus der Infoplanung geholt.
                 ursprungsEhGoal: plan?.Ursprungsziel_EH ?? 0,
+                etGoal: infoPlansByUserId[user._id]?.ET_Ziel ?? 0, // KORREKTUR: ET-Ziel wird jetzt aus der Infoplanung geholt.
                 pqq: pqqDataMap[user._id] ?? 0,
                 hasPlan: !!plan
             };
@@ -8830,7 +8841,7 @@ class AuswertungView {
         });
     }
 
-    async calculatePQQForUserList(userIds, forMonth, forYear) {
+    async calculatePQQForUserList(userIds, forMonth, forYear, preloadedInfoPlans = null) {
         const pqqLog = (message, ...data) => console.log(`%c[PQQ_List_Calc] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
         const pqqDataMap = {};
         if (!userIds || userIds.length === 0) return pqqDataMap;
@@ -8845,7 +8856,10 @@ class AuswertungView {
         const prevEndDateIso = prevMonthEndDate.toISOString().split('T')[0];
 
         const relevantPlans = db.monatsplanung.filter(p => userIds.includes(p.Mitarbeiter_ID) && p.Monat === prevMonthName && p.Jahr === prevYear);
+        const relevantInfoPlans = preloadedInfoPlans ? Object.values(preloadedInfoPlans) : db.infoplanung.filter(p => userIds.includes(p.Mitarbeiter_ID) && new Date(p.Informationsabend).getFullYear() === prevYear && new Date(p.Informationsabend).getMonth() === prevMonthDate.getMonth());
+
         const plansByUserId = _.keyBy(relevantPlans, 'Mitarbeiter_ID');
+        const infoPlansByUserId = _.keyBy(relevantInfoPlans, 'Mitarbeiter_ID');
 
         const mitarbeiterNames = userIds.map(id => findRowById('mitarbeiter', id)?.Name).filter(Boolean);
         if (mitarbeiterNames.length === 0) return pqqDataMap;
@@ -8862,8 +8876,9 @@ class AuswertungView {
         const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
         userIds.forEach(userId => {
             const plan = plansByUserId[userId];
+            const infoPlan = infoPlansByUserId[userId];
             const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
-            const ursprungszielET = plan?.Ursprungsziel_ET || 0;
+            const ursprungszielET = infoPlan?.Ursprungsziel_ET || 0;
             const totalEH = ehByMitarbeiterId[userId]?.totalEH || 0;
             const userEts = etByMitarbeiterId[userId] || [];
             const totalETAusgemacht = userEts.filter(t => ET_STATUS_AUSGEMACHT.includes(t.Status)).length;
@@ -10441,14 +10456,14 @@ async function calculateAndRenderPQQForCurrentView() {
     const prevYear = startDate.getFullYear();
     pqqLog(`PQQ-Zeitraum: ${startDateIso} bis ${endDateIso} (${prevMonthName} ${prevYear})`);
     pqqLog('Suche Plandaten in `db.monatsplanung` (insgesamt ' + db.monatsplanung.length + ' Einträge).');
-
+    const relevantInfoPlans = db.infoplanung.filter(p => userIds.includes(p.Mitarbeiter_ID) && new Date(p.Informationsabend).getFullYear() === prevYear && new Date(p.Informationsabend).getMonth() === startDate.getMonth());
     const relevantPlans = db.monatsplanung.filter(p =>
         userIds.includes(p.Mitarbeiter_ID) &&
         p.Monat === prevMonthName &&
         p.Jahr === prevYear
     );
 
-    if (relevantPlans.length === 0) {
+    if (relevantPlans.length === 0 && relevantInfoPlans.length === 0) {
         pqqLog('FEHLER: Keine Plandaten für den Vormonat in der ausgewählten Ansicht gefunden. PQQ-Ansicht wird ausgeblendet.');
         const usersWithPlans = new Set(db.monatsplanung.filter(p => p.Monat === prevMonthName && p.Jahr === prevYear).map(p => p.Mitarbeiter_ID));
         const usersWithoutPlans = userIds.filter(id => !usersWithPlans.has(id));
@@ -10459,7 +10474,7 @@ async function calculateAndRenderPQQForCurrentView() {
 
     dom.pqqView.classList.remove('hidden');
     const totalUrsprungszielEH = relevantPlans.reduce((sum, p) => sum + (p.Ursprungsziel_EH || 0), 0);
-    const totalUrsprungszielET = relevantPlans.reduce((sum, p) => sum + (p.Ursprungsziel_ET || 0), 0);
+    const totalUrsprungszielET = relevantInfoPlans.reduce((sum, p) => sum + (p.Ursprungsziel_ET || 0), 0);
     pqqLog(`Plandaten gefunden (${relevantPlans.length} Einträge): Gesamt-EH-Ziel=${totalUrsprungszielEH}, Gesamt-ET-Ziel=${totalUrsprungszielET}`);
 
     // 3. Hole Ist-Daten für den Vormonat
@@ -11934,6 +11949,12 @@ function loadPlanningDataForSelection() {
     const etInput = document.getElementById('planning-et-goal');
     const infoabendInput = document.getElementById('planning-infoabend-date'); // NEU
 
+    // NEU: Immer das nächste Infoabend-Datum berechnen und im (deaktivierten) Feld anzeigen.
+    const nextInfoDate = findNextInfoDateAfter(getCurrentDate());
+    const nextInfoDateString = nextInfoDate.toISOString().split('T')[0];
+    infoabendInput.value = nextInfoDateString;
+
+    const infoPlan = db.infoplanung.find(p => p.Mitarbeiter_ID === userId && p.Informationsabend && p.Informationsabend.startsWith(nextInfoDateString));
     const existingPlan = db.monatsplanung.find(p =>
         p.Mitarbeiter_ID === userId &&
         p.Monat === monthName &&
@@ -11941,11 +11962,8 @@ function loadPlanningDataForSelection() {
     );
 
     ehInput.value = existingPlan?.EH_Ziel || 0;
-    etInput.value = existingPlan?.ET_Ziel || 0;
-
-    // NEU: Immer das nächste Infoabend-Datum berechnen und im (deaktivierten) Feld anzeigen.
-    const nextInfoDate = findNextInfoDateAfter(getCurrentDate());
-    infoabendInput.value = nextInfoDate.toISOString().split('T')[0];
+    // KORREKTUR: Lade das ET-Ziel aus der Infoplanung, nicht aus der Monatsplanung
+    etInput.value = infoPlan?.ET_Ziel || 0;
 }
 
 function closePlanningModal() {
@@ -11963,18 +11981,34 @@ async function savePlanningData() {
     const monthName = document.getElementById('planning-month-select').value;
     const year = parseInt(document.getElementById('planning-year-input').value);
     const nextInfoDateIso = document.getElementById('planning-infoabend-date').value;
-    
+
+    const existingInfoPlan = db.infoplanung.find(p => p.Mitarbeiter_ID === userId && p.Informationsabend && p.Informationsabend.startsWith(nextInfoDateIso));
     const existingPlan = db.monatsplanung.find(p =>
         p.Mitarbeiter_ID === userId &&
         p.Monat === monthName &&
         p.Jahr === year
     );
 
+    let infoPlanSuccess = false;
+    if (existingInfoPlan) {
+        const sql = `UPDATE \`Infoplanung\` SET \`ET_Ziel\` = ${etGoal} WHERE \`_id\` = '${existingInfoPlan._id}'`;
+        infoPlanSuccess = await seaTableSqlQuery(sql, false) !== null;
+    }
+    // KORREKTUR: Wenn kein Info-Plan existiert, einen neuen anlegen.
+    else {
+        const infoPlanRowData = {
+            [COLUMN_MAPS.infoplanung.Informationsabend]: nextInfoDateIso,
+            [COLUMN_MAPS.infoplanung.ET_Ziel]: etGoal,
+            [COLUMN_MAPS.infoplanung.Mitarbeiter_ID]: [userId],
+        };
+        infoPlanSuccess = await addPlanningRowToDatabase('Infoplanung', infoPlanRowData, 'Mitarbeiter_ID');
+    }
+
     let success = false;
     if (existingPlan) {
         // Update existing plan
-        // NEU: Informationsabend-Feld hinzugefügt
-        const sql = `UPDATE \`Monatsplanung\` SET \`EH_Ziel\` = ${ehGoal}, \`ET_Ziel\` = ${etGoal}, \`Informationsabend\` = '${nextInfoDateIso}' WHERE \`_id\` = '${existingPlan._id}'`;
+        // KORREKTUR: ET_Ziel wird nicht mehr in der Monatsplanung gespeichert.
+        const sql = `UPDATE \`Monatsplanung\` SET \`EH_Ziel\` = ${ehGoal} WHERE \`_id\` = '${existingPlan._id}'`;
         const result = await seaTableSqlQuery(sql, false);
         success = result !== null;
     } else {
@@ -11983,16 +12017,14 @@ async function savePlanningData() {
             [COLUMN_MAPS.monatsplanung.Monat]: monthName,
             [COLUMN_MAPS.monatsplanung.Jahr]: year,
             [COLUMN_MAPS.monatsplanung.EH_Ziel]: ehGoal,
-            [COLUMN_MAPS.monatsplanung.ET_Ziel]: etGoal,
             [COLUMN_MAPS.monatsplanung.Mitarbeiter_ID]: [userId],
-            // NEU: Informationsabend-Feld hinzugefügt
-            [COLUMN_MAPS.monatsplanung.Informationsabend]: nextInfoDateIso,
         };
-        success = await addPlanningRowToDatabase('Monatsplanung', rowData);
+        success = await addPlanningRowToDatabase('Monatsplanung', rowData, 'Mitarbeiter_ID');
     }
 
-    if (success) {
+    if (success && infoPlanSuccess) {
         localStorage.removeItem(CACHE_PREFIX + 'monatsplanung');
+        localStorage.removeItem(CACHE_PREFIX + 'infoplanung'); // NEU: Auch Infoplanung-Cache leeren
         await loadAllData();
         await fetchAndRenderDashboard(currentlyViewedUserData._id);
         closePlanningModal();
@@ -12004,24 +12036,28 @@ async function savePlanningData() {
     dom.savePlanningBtn.textContent = 'Speichern';
 }
 
-async function addPlanningRowToDatabase(tableName, rowData) {
+async function addPlanningRowToDatabase(tableName, rowData, linkField) {
     const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
     const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
 
+    // Trenne die ID für die Verknüpfung von den restlichen Daten.
     const rowDataForCreation = { ...rowData };
-    const mitarbeiterId = rowDataForCreation[COLUMN_MAPS.monatsplanung.Mitarbeiter_ID][0];
-    delete rowDataForCreation[COLUMN_MAPS.monatsplanung.Mitarbeiter_ID];
+    const linkId = rowDataForCreation[tableMap[linkField]]?.[0]; // Sicherer Zugriff
+    if (linkId) {
+        delete rowDataForCreation[tableMap[linkField]];
+    }
 
+    // Wandle die Spalten-Keys (z.B. '0000') in Spalten-Namen (z.B. 'Monat') um.
     const rowDataWithNames = {};
     for (const key in rowDataForCreation) {
         const name = reversedMap[key];
         if (name) rowDataWithNames[name] = (rowDataForCreation[key] === undefined || rowDataForCreation[key] === '') ? null : rowDataForCreation[key];
     }
 
+    // Erstelle die neue Zeile und setze danach die Verknüpfung.
     const newRowId = await genericSeaTableAddRow(tableName, rowDataWithNames);
     if (!newRowId) return false;
-
-    const success = await updateSingleLink(tableName, newRowId, 'Mitarbeiter_ID', [mitarbeiterId]);
+    const success = await updateSingleLink(tableName, newRowId, linkField, [linkId]);
     return success;
 }
 
