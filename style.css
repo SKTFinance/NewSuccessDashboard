@@ -140,10 +140,13 @@ html.modal-open, body.modal-open {
     stroke-linecap: round; 
 }
 
-details > summary { list-style: none; }
-details > summary::-webkit-details-marker { display: none; }
-details > summary::before { content: '\f078'; font-family: 'Font Awesome 6 Free'; font-weight: 900; margin-right: 0.5rem; transition: transform 0.3s ease-in-out; }
-details[open] > summary::before { transform: rotate(180deg); }
+/* Blendet den Standard-Pfeil bei allen <details>-Elementen aus */
+summary {
+    list-style: none; /* Für Firefox */
+}
+summary::-webkit-details-marker {
+    display: none; /* Für Chrome, Safari, etc. */
+}
 
 /* Stile für den Ansicht-Umschalter */
 .view-toggle button {

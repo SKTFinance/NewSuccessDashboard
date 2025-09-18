@@ -2642,8 +2642,11 @@ function renderTeamMemberCards(members) {
     const details = document.createElement("details");
     details.className = "bg-white rounded-xl shadow-lg";
     const summary = document.createElement("summary");
-    summary.className = "p-4 font-semibold text-skt-blue cursor-pointer";
-    summary.textContent = `Passive Mitarbeiter (${passiveMembers.length}) anzeigen`;
+    summary.className = "p-4 font-semibold text-skt-blue cursor-pointer flex justify-between items-center";
+    summary.innerHTML = `
+        <span>Passive Mitarbeiter (${passiveMembers.length}) anzeigen</span>
+        <i class="fas fa-chevron-down transition-transform duration-300"></i>
+    `;
     details.appendChild(summary);
 
     const container = document.createElement("div");
@@ -2663,6 +2666,14 @@ function renderTeamMemberCards(members) {
       container.appendChild(passiveCard);
     });
     details.appendChild(container);
+
+    // Sorge dafür, dass sich der Pfeil dreht
+    details.addEventListener('toggle', () => {
+        const icon = summary.querySelector('.fa-chevron-down');
+        if (icon) {
+            icon.classList.toggle('rotate-180', details.open);
+        }
+    });
     dom.passiveMembersSection.appendChild(details);
   }
 }
@@ -4560,7 +4571,8 @@ class AppointmentsView {
             if (this.filterText) {
                 const searchText = this.filterText.toLowerCase();
                 const partner = (t.Terminpartner || '').toLowerCase();
-                const mitarbeiter = (t.Mitarbeiter_ID?.[0]?.display_value || '').toLowerCase();
+                const mitarbeiterName = findRowById('mitarbeiter', t.Mitarbeiter_ID)?.Name || '';
+                const mitarbeiter = mitarbeiterName.toLowerCase();
                 if (!partner.includes(searchText) && !mitarbeiter.includes(searchText)) {
                     return false;
                 }
@@ -4582,7 +4594,7 @@ class AppointmentsView {
             return false;
         });
 
-        this._renderAppointmentStats();
+        this._renderAppointmentStats(this.dateAndSearchFilteredAppointments);
         this._renderOutstandingAppointments();
         this._renderStatsChart();
         this._renderPrognosisDetails();
@@ -4842,9 +4854,9 @@ class AppointmentsView {
             checkbox.type = 'checkbox';
             checkbox.className = 'h-5 w-5 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light';
             checkbox.value = value;
-            checkbox.checked = isChecked;
+            checkbox.checked = isChecked; // KORREKTUR: Der Event-Listener muss über die Instanz aufgerufen werden, um den korrekten Kontext sicherzustellen.
             checkbox.addEventListener('change', () => {
-                this._renderAppointmentStats();
+                appointmentsViewInstance._renderAppointmentStats(appointmentsViewInstance.dateAndSearchFilteredAppointments);
             });
             const span = document.createElement('span');
             span.textContent = label;
@@ -4882,12 +4894,12 @@ class AppointmentsView {
         // KORREKTUR: Der Event-Listener wird direkt hier gesetzt, um sicherzustellen, dass er immer existiert.
         const cancelledToggle = document.getElementById('appointments-show-cancelled');
         if (cancelledToggle) cancelledToggle.addEventListener('change', () => {
-            // Ruft die Haupt-Render-Funktion auf, die alle Filter (inkl. Kategorien) neu anwendet.
-            this._renderAppointmentStats();
+            // KORREKTUR: Der Aufruf muss über die Instanz erfolgen.
+            appointmentsViewInstance._renderAppointmentStats(appointmentsViewInstance.dateAndSearchFilteredAppointments);
         });
 
         const heldToggle = document.getElementById('appointments-show-held');
-        if (heldToggle) heldToggle.addEventListener('change', () => this._renderAppointmentStats());
+        if (heldToggle) heldToggle.addEventListener('change', () => appointmentsViewInstance._renderAppointmentStats(appointmentsViewInstance.dateAndSearchFilteredAppointments));
 
         const headerWrapper = document.createElement('div');
         headerWrapper.className = 'flex justify-between items-center mb-2';
@@ -4990,7 +5002,7 @@ class AppointmentsView {
     }
 
     // NEU: Funktion zum Berechnen und Anzeigen der Termin-Statistiken
-    _renderAppointmentStats() {
+    _renderAppointmentStats(appointmentsToRender) {
         const today = getCurrentDate();
         const { startDate: cycleStartDate, endDate: cycleEndDate } = getMonthlyCycleDates();
         const scope = this.statsScopeFilter.value;
@@ -5007,23 +5019,25 @@ class AppointmentsView {
         todayForFilter.setHours(0, 0, 0, 0);
 
         // --- Gemeinsame Filterfunktionen ---
-        const selectedCategories = Array.from(this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-        this._updateCategoryButtonText(); // KORREKTUR: Button-Text wird jetzt hier aktualisiert, direkt bevor die Ansicht neu gezeichnet wird.
-        const categoryFilter = t => selectedCategories.includes(t.Kategorie) && t.Datum;
+        const selectedCategories = this.statsCategoryFilterPanel
+            ? Array.from(this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value)
+            : [];
+        this._updateCategoryButtonText();
+        const categoryFilter = t => selectedCategories.length > 0 ? selectedCategories.includes(t.Kategorie) && t.Datum : true;
         const cancelledFilter = t => showCancelled || (t.Absage !== true && t.Status !== 'Storno');
         const heldStatuses = ['Gehalten', 'Info Eingeladen', 'Info Bestätigt', 'Info Anwesend'];
         const heldFilter = t => showHeld || !heldStatuses.includes(t.Status);
 
         // --- Daten für die Tabellenansicht vorbereiten ---
         // KORREKTUR: Beginnt mit `dateAndSearchFilteredAppointments`, um die Datumsauswahl zu berücksichtigen.
-        let finalAppointmentsForTable = this.dateAndSearchFilteredAppointments
+        let finalAppointmentsForTable = appointmentsToRender
             .filter(categoryFilter)
             .filter(cancelledFilter)
             .filter(heldFilter);
         // --- Table View Logic ---
         const sortedAppointments = this._sortStatsTableData(finalAppointmentsForTable);
         this._renderStatsTable(sortedAppointments);
-        this._renderWeekCalendar();
+        this._renderWeekCalendar(appointmentsToRender);
 
         // --- Calendar View Logic ---
         // Der Kalender arbeitet mit den Zyklusdaten, ignoriert aber die Datumsauswahl-Filter.
@@ -5074,8 +5088,9 @@ class AppointmentsView {
 
             let appointmentsHtml = '';
             if (appointmentsForDay.length > 0) {
-                appointmentsHtml = appointmentsForDay.map(termin => {
-                    const mitarbeiterName = SKT_APP.findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
+                appointmentsHtml = appointmentsForDay.map(termin => { // KORREKTUR: Der Mitarbeitername wird jetzt aus dem gecachten `db.mitarbeiter` geholt,
+                    // da `t.Mitarbeiter_ID` nach der Normalisierung nur noch die ID enthält.
+                    const mitarbeiterName = findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
                     const terminTime = termin.Datum ? new Date(termin.Datum).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '';
 
                     // KORREKTUR: Verwende die neue, robustere Farb-Logik
@@ -5094,10 +5109,7 @@ class AppointmentsView {
 
                     return `<div class="rounded-lg shadow-sm bg-white text-skt-blue text-xs mb-1.5 flex overflow-hidden border border-gray-200 border-l-4 ${statusColorClass}" data-id="${termin._id}">
                                 <div class="flex-shrink-0 ${categoryPillColor} text-white font-bold flex items-center justify-center p-2 w-12 text-center">${termin.Kategorie}</div>
-                                <div class="flex-grow p-2 min-w-0 cursor-pointer">
-                                    <p class="font-bold truncate flex items-center">${termin.Terminpartner || 'Unbekannt'}${inviteeHtml}</p>
-                                    <p class="text-gray-500">${mitarbeiterName}</p>
-                                </div>
+                                <div class="flex-grow p-2 min-w-0 cursor-pointer"><p class="font-bold truncate flex items-center">${termin.Terminpartner || 'Unbekannt'}${inviteeHtml}</p><p class="text-gray-500">${mitarbeiterName}</p></div>
                                 <div class="add-to-calendar-btn flex flex-col items-center justify-center flex-shrink-0 p-2 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors" data-termin-id="${termin._id}" title="Zum Kalender hinzufügen">
                                     <span class="font-semibold">${terminTime}</span>
                                     <i class="fas fa-calendar-plus text-gray-400 mt-1"></i>
@@ -5311,7 +5323,7 @@ class AppointmentsView {
     }
 
     // KORREKTUR: Komplette Neugestaltung der Kalender-Render-Logik
-    _renderWeekCalendar() {
+    _renderWeekCalendar(appointmentsToRender) {
         if (!this.weekCalendarBody || this.statsWeekView.classList.contains('hidden')) return;
         const slotHeight = this.weekCalendarSlotHeight; // NEU
 
@@ -5335,8 +5347,8 @@ class AppointmentsView {
         
         // KORREKTUR: Die Filterung nach Benutzern wird entfernt. `this.allAppointments` ist bereits
         // durch `fetchAndRender` korrekt auf den ausgewählten Scope (Struktur, Gruppe, etc.) gefiltert.
-        // Die Wochenansicht muss nur noch nach Datum und den UI-Filtern (Kategorie, etc.) filtern.
-        let appointmentsForWeek = this.searchFilteredAppointments.filter(t => {
+        // KORREKTUR: Verwende die bereits gefilterte Liste, die an die Funktion übergeben wird.
+        let appointmentsForWeek = appointmentsToRender.filter(t => {
             if (!t.Datum) return false;
             const terminDate = new Date(t.Datum);
             const isInCategory = selectedCategories.length > 0 ? selectedCategories.includes(t.Kategorie) : true;
@@ -5448,7 +5460,7 @@ class AppointmentsView {
                 const height = Math.max(slotHeight, (durationMinutes / 30) * slotHeight); // NEU: Dynamische Höhe
 
                 const width = 100 / layoutInfo.totalColumns;
-                const left = layoutInfo.column * width;
+                const left = layoutInfo.column * width; // KORREKTUR: Der Mitarbeitername wird jetzt aus dem gecachten `db.mitarbeiter` geholt.
 
                 const terminEl = document.createElement('a');
                 terminEl.href = '#';
@@ -5480,7 +5492,7 @@ class AppointmentsView {
                 terminEl.innerHTML = `
                     <strong class="text-sm font-bold truncate appointment-customer-name">${termin.Terminpartner || 'Unbekannt'}</strong>
                     <span class="text-xs opacity-90 appointment-time">${terminTime}</span>
-                    <span class="text-xs opacity-90 truncate mt-auto appointment-employee-name">${termin.Mitarbeiter_ID?.[0]?.display_value || ''} ${inviteeIcon}</span>
+                    <span class="text-xs opacity-90 truncate mt-auto appointment-employee-name">${findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || ''} ${inviteeIcon}</span>
                 `;
                 // NEU: Hinweise für zugeordnete Umsätze oder PG-Einträge hinzufügen
                 this._renderAppointmentHints(termin, terminEl);
@@ -5709,7 +5721,7 @@ class AppointmentsView {
             tr.className = `border-l-8 ${statusColorClass} cursor-pointer`;
             
             // KORREKTUR: Mitarbeitername wird über die ID aus der DB geholt, da die Daten normalisiert sind.
-            const mitarbeiterName = SKT_APP.findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
+            const mitarbeiterName = findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
 
             // NEU: Logik für "+1"-Icon, identisch zur Kalenderansicht
             const ownerId = termin.Mitarbeiter_ID;
@@ -5795,7 +5807,7 @@ class AppointmentsView {
             item.className = 'bg-yellow-200 p-2 rounded-md flex justify-between items-center cursor-pointer hover:bg-yellow-300';
             item.dataset.id = termin._id;
             // KORREKTUR: Mitarbeitername wird über die ID aus der DB geholt, da die Daten normalisiert sind.
-            const mitarbeiterName = SKT_APP.findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
+            const mitarbeiterName = findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
             const terminDate = new Date(termin.Datum).toLocaleDateString('de-DE');
             item.innerHTML = `<p class="text-sm"><span class="font-bold">${termin.Terminpartner}</span> bei ${mitarbeiterName} am ${terminDate}</p><i class="fas fa-edit ml-2"></i>`;
             item.addEventListener('click', () => this.openModal(termin));
@@ -6039,7 +6051,11 @@ class AppointmentsView {
     _renderPrognosisDetails() {
         const container = this.prognosisDetailsContainer;
         if (!container) return;
-        container.innerHTML = '';
+        
+        // KORREKTUR: Stelle sicher, dass die Sektion immer sichtbar ist.
+        const prognosisSection = document.getElementById('prognosis-section');
+        if (prognosisSection) prognosisSection.classList.remove('hidden'); // Entfernt die 'hidden' Klasse
+
 
         // NEU: Logik zur Gruppierung nach Führungskraft
         const employeeToGroupMap = new Map();
@@ -6102,8 +6118,8 @@ class AppointmentsView {
         if (this.statsChartMode === 'employee') {
             this.statsChartTitle.textContent = 'Termine nach Mitarbeiter';
             const statsByMitarbeiter = {};
-            this.dateAndSearchFilteredAppointments.forEach(t => {
-                const name = t.Mitarbeiter_ID?.[0]?.display_value || 'Unbekannt';
+            this.dateAndSearchFilteredAppointments.forEach(t => { // KORREKTUR: Mitarbeitername wird jetzt aus der DB nachgeschlagen.
+                const name = findRowById('mitarbeiter', t.Mitarbeiter_ID)?.Name || 'Unbekannt';
                 statsByMitarbeiter[name] = (statsByMitarbeiter[name] || 0) + 1;
             });
             data = Object.entries(statsByMitarbeiter).map(([label, value], index) => ({
@@ -10951,18 +10967,17 @@ class PGTagebuchView {
 
     async fetchAndRender() {
         this.listContainer.innerHTML = '<div class="loader mx-auto"></div>';
-        const currentUserIsLeader = SKT_APP.isUserLeader(SKT_APP.authenticatedUserData);
         const currentUserId = this.currentUserId;
         const mySubordinateIds = new Set(SKT_APP.getAllSubordinatesRecursive(this.currentUserId).map(u => u._id));
 
         this.allPgs = db['pg'].filter(pg => {
-            if (currentUserIsLeader) {
-                // KORREKTUR: Die geladenen Daten enthalten IDs, keine Namen.
-                return pg.Leiter === currentUserId || mySubordinateIds.has(pg.Mitarbeiter);
-            } else {
-                // KORREKTUR: Vergleich mit ID statt Name.
-                return pg.Mitarbeiter === currentUserId;
-            }
+            // Ein PG-Eintrag ist sichtbar, wenn der aktuelle Benutzer:
+            // 1. Der Leiter des Gesprächs ist.
+            // 2. Der Mitarbeiter im Gespräch ist.
+            // 3. Ein Vorgesetzter ist und der Mitarbeiter im Gespräch zu seiner Struktur gehört.
+            return pg.Leiter === currentUserId || 
+                   pg.Mitarbeiter === currentUserId || 
+                   mySubordinateIds.has(pg.Mitarbeiter);
         });
 
         this.allPgs.sort((a, b) => new Date(b.Datum) - new Date(a.Datum));
