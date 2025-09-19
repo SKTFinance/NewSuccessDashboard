@@ -1267,3 +1267,67 @@ summary::-webkit-details-marker {
 .week-calendar-appointment.content-priority-medium .appointment-employee-name {
     display: none;
 }
+
+/* NEU: Stile für den Stimmungs-Slider im Check-in Modal */
+#checkin-stimmung-value {
+    background-color: var(--color-skt-blue);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    white-space: nowrap;
+}
+
+/* NEU: Stile für das Stimmungsdashboard */
+.stimmungs-motivation-item {
+    background-color: #f8fafc;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid #e2e8f0;
+}
+.stimmungs-todo-card {
+    background-color: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+.stimmungs-line-chart-svg {
+    overflow: visible; /* Allow labels to be outside the main area */
+}
+.stimmungs-line-chart-svg .grid-line {
+    stroke: #e5e7eb; /* gray-200 */
+    stroke-width: 1;
+    stroke-dasharray: 2, 3;
+}
+.stimmungs-line-chart-svg .axis-line {
+    stroke: #9ca3af; /* gray-400 */
+    stroke-width: 1.5;
+}
+.stimmungs-line-chart-svg .axis-label {
+    font-size: 0.75rem; /* text-xs */
+    fill: #6b7280; /* gray-500 */
+}
+.stimmungs-line-chart-svg .line-path {
+    fill: none;
+    stroke: var(--color-skt-blue-main);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+.stimmungs-line-chart-svg .line-point {
+    fill: var(--color-skt-blue-main);
+    stroke: white;
+    stroke-width: 2;
+    transition: r 0.2s ease;
+}
+.stimmungs-line-chart-svg .line-point:hover {
+    r: 6;
+}
+.stimmungs-line-chart-svg .tooltip-bg {
+    fill: var(--color-skt-blue);
+    rx: 4;
+    ry: 4;
+}
+.stimmungs-line-chart-svg .tooltip-text {
+    fill: white;
+    font-size: 0.75rem;
+    font-weight: 600;
+}

@@ -125,6 +125,7 @@
                                 <a href="#" id="money-view-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-euro-sign w-5 mr-2"></i>Geld-Ansicht</a>
                                 <a href="#" id="edit-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-edit w-5 mr-2"></i>Personendaten</a>
                                 <a href="#" id="planning-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-tasks w-5 mr-2"></i>Planung</a>
+                                <a href="#" id="stimmungs-dashboard-settings-item" class="hidden block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-smile-beam w-5 mr-2"></i>Stimmungsdashboard</a>
                                 <a href="#" id="add-new-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-plus w-5 mr-2"></i>Neuer Nutzer</a>
                                 <a href="#" id="datenschutz-header-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-shield-alt w-5 mr-2"></i>Datenschutz</a>                             <a href="#" id="time-travel-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-clock-rotate-left w-5 mr-2"></i>Zeitreise</a>
                                 <a href="#" id="clear-cache-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-right-from-bracket w-5 mr-2"></i>Logout</a>
@@ -446,6 +447,11 @@
         <main id="datenschutz-view" class="hidden w-full max-w-7xl mx-auto flex-grow px-4 md:px-8 pt-6 pb-6">
             <!-- Inhalt von datenschutz.html wird hier geladen -->
         </main>
+
+        <!-- Container für das Stimmungsdashboard -->
+        <main id="stimmungs-dashboard-view" class="hidden w-full max-w-7xl mx-auto flex-grow px-4 md:px-8 pt-6 pb-6">
+            <!-- Inhalt von stimmungs-dashboard.html wird hier geladen -->
+        </main>
     </div>
 
     <!-- NEU: Container für die Bildschirm-Ansicht -->
@@ -748,6 +754,41 @@
                     <div><label for="bt-follow-up-no-bt-reason" class="block text-sm font-medium text-gray-700 mb-1">Grund (z.B. kein Interesse, unpassend)</label><textarea id="bt-follow-up-no-bt-reason" rows="2" class="modern-input" placeholder="Bitte gib einen Grund an..."></textarea></div>
                 </div>
                 <div class="pt-4 flex justify-end space-x-3"><button type="button" id="cancel-bt-follow-up-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Später entscheiden</button><button type="submit" id="save-bt-follow-up-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors">Aktion speichern</button></div>
+            </form>
+        </div>
+    </div>
+    <!-- NEU: Modal für den täglichen Check-in -->
+    <div id="checkin-modal" class="modal-overlay">
+        <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-5xl w-full relative max-h-[90vh] flex flex-col">
+            <h3 class="text-2xl font-bold text-skt-blue mb-6">Täglicher Check-in</h3>
+            <form id="checkin-form" class="flex-grow flex flex-col min-h-0 space-y-6">
+                <!-- Part 1: General Questions -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label for="checkin-motivation" class="block text-sm font-medium text-gray-700 mb-1">Was motiviert dich heute Gas zu geben?</label>
+                        <textarea id="checkin-motivation" rows="3" class="modern-input" required></textarea>
+                    </div>
+                    <div>
+                        <label for="checkin-stimmung" class="block text-sm font-medium text-gray-700 mb-1">Wie ist deine aktuelle Stimmung?</label>
+                        <div class="relative pt-8">
+                            <input type="range" id="checkin-stimmung" min="1" max="10" value="5" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                            <div id="checkin-stimmung-value" class="absolute text-lg font-bold text-skt-blue transition-all duration-200 ease-out" style="top: 0; left: 50%; transform: translateX(-50%);">5</div>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label for="checkin-todos-container" class="block text-sm font-medium text-gray-700 mb-1">Was sind deine wichtigsten 3 To-Dos heute?</label>
+                    <div id="checkin-todos-container" class="modern-input p-3" style="min-height: 150px; background-color: #f9fafb;"></div>
+                </div>
+                <!-- Part 2: Team Matrix -->
+                <div class="flex-grow min-h-0 overflow-y-auto border-t pt-6">
+                    <h4 class="text-xl font-semibold text-skt-blue mb-4">Team-Check</h4>
+                    <div id="checkin-matrix-container" class="space-y-4">
+                        <!-- Matrix wird per JS generiert -->
+                    </div>
+                </div>
+                <!-- Actions -->
+                <div class="pt-4 flex justify-end"><button type="submit" id="save-checkin-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors">Check-in abschließen</button></div>
             </form>
         </div>
     </div>

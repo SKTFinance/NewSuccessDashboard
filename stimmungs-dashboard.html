@@ -1,0 +1,68 @@
+<!-- Ansicht für das Stimmungsdashboard -->
+<div id="stimmungs-dashboard-module-root" class="space-y-6">
+    <!-- Header mit Title, Toggles und Date Pickers -->
+    <div class="flex flex-wrap justify-between items-center gap-4 p-6 bg-white rounded-2xl shadow-lg">
+        <h2 class="text-3xl font-bold text-skt-blue">Stimmungsdashboard</h2>
+        <div class="flex flex-wrap items-center gap-4">
+            <!-- Scope Toggle -->
+            <div id="stimmungs-scope-toggle" class="view-toggle flex space-x-2">
+                <button id="stimmungs-group-btn" class="active">Gruppe</button>
+                <button id="stimmungs-structure-btn">Struktur</button>
+            </div>
+            <!-- Date Pickers -->
+            <div class="flex items-center gap-2">
+                <input type="date" id="stimmungs-start-date" class="modern-input w-40">
+                <span class="text-gray-500">bis</span>
+                <input type="date" id="stimmungs-end-date" class="modern-input w-40">
+            </div>
+            <!-- Edit Button -->
+            <button id="edit-today-checkin-btn" class="hidden bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors">
+                <i class="fas fa-edit mr-2"></i>Heutigen Check-in bearbeiten
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left Column: Mood Trend. KORREKTUR: min-h entfernt, um leeren Raum bei fehlenden Daten zu vermeiden. -->
+        <div class="lg:col-span-2 bg-white rounded-2xl p-6 shadow-lg">
+            <h3 class="text-xl font-semibold text-skt-blue mb-4">Stimmungsverlauf im Team</h3>
+            <div id="stimmungs-chart-container">
+                <!-- SVG Line Chart will be rendered here -->
+            </div>
+        </div>
+
+        <!-- Right Column: Mood Distribution. KORREKTUR: min-h entfernt, um leeren Raum bei fehlenden Daten zu vermeiden. -->
+        <div class="bg-white rounded-2xl p-6 shadow-lg">
+            <h3 class="text-xl font-semibold text-skt-blue mb-4">Stimmungsverteilung</h3>
+            <div id="stimmungs-distribution-chart-container">
+                <!-- Bar chart for mood distribution will be rendered here -->
+            </div>
+        </div>
+
+        <!-- Red Flags -->
+        <div class="lg:col-span-3 bg-white rounded-2xl p-6 shadow-lg">
+            <h3 class="text-xl font-semibold text-skt-blue mb-4">Häufigste "Red Flags"</h3>
+            <p class="text-sm text-gray-500 mb-4">Fragen, die in den Check-ins am häufigsten negativ beantwortet wurden.</p>
+            <div id="stimmungs-red-flags-container">
+                <!-- Bar chart for red flags will be rendered here -->
+            </div>
+        </div>
+
+        <!-- Motivation & Todos -->
+        <div class="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-white rounded-2xl p-6 shadow-lg">
+                <h3 class="text-xl font-semibold text-skt-blue mb-4">Motivationen</h3>
+                <div id="stimmungs-motivation-container" class="space-y-3 max-h-80 overflow-y-auto">
+                    <!-- Motivation items will be rendered here -->
+                </div>
+            </div>
+            <div class="bg-white rounded-2xl p-6 shadow-lg">
+                <h3 class="text-xl font-semibold text-skt-blue mb-4">Heutige To-Dos</h3>
+                <div id="stimmungs-todos-container" class="space-y-4 max-h-80 overflow-y-auto">
+                    <!-- Todo cards will be rendered here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

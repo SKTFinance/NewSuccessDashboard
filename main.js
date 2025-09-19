@@ -8,7 +8,23 @@ const CACHE_VERSION = "v1.1";
 const CACHE_PREFIX = `skt-dashboard-cache-${CACHE_VERSION}-`;
 
 let COLUMN_MAPS = {}; // Wird dynamisch gefüllt
-
+// HINWEIS: Dies sollte dynamisch von der API geladen werden.
+// Für die Entwicklung wird es hier hartcodiert, um die Logik zu implementieren.
+const CHECKIN_COLUMN_MAP_FALLBACK = {
+    "Datum": "0000",
+    "Leiter": "aaaa",
+    "Mitarbeiter": "bbbb",
+    "TermineEingetragen": "cccc",
+    "PositiverKontakt": "dddd",
+    "ZieleDran": "eeee",
+    "SeminarAnwesend": "ffff",
+    "RecruitingTermine": "gggg",
+    "AktuelleErfolge": "hhhh",
+    "TodosErledigt": "iiii",
+    "Motivation": "jjjj",
+    "Stimmung": "kkkk",
+    "Todos": "llll"
+};
 // --- GLOBALE VARIABLEN ---
 let seaTableAccessToken = null;
 let apiGatewayUrl = null;
@@ -25,6 +41,7 @@ let db = {
   gesellschaften: [],
   produkte: [],
   "pg": [],
+  checkin: [],
   bürostandorte: [],
 };
 let totalEhResults = []; // NEU: Globale Variable für die vorgeladenen Gesamtumsätze
@@ -46,6 +63,7 @@ let umsatzViewInstance = null;
 let auswertungViewInstance = null;
 let strukturbaumViewInstance = null;
 let pgTagebuchViewInstance = null;
+let stimmungsDashboardViewInstance = null;
 let bildschirmViewInstance = null; // NEU
 let datenschutzViewInstance = null; // NEU
 let pendingAppointmentFilter = null;
@@ -149,10 +167,13 @@ const dom = {
   umsatzView: document.getElementById("umsatz-view"),
   potentialView: document.getElementById("potential-view"),
   appointmentsView: document.getElementById("appointments-view"),
+  pgTagebuchView: document.getElementById('pg-tagebuch-view'),
+  stimmungsDashboardView: document.getElementById('stimmungs-dashboard-view'),
   einarbeitungTitle: document.getElementById("einarbeitung-title"),
   traineeOnboardingView: document.getElementById("trainee-onboarding-view"),
   leaderOnboardingView: document.getElementById("leader-onboarding-view"),
   pgTagebuchView: document.getElementById('pg-tagebuch-view'),
+  stimmungsDashboardView: document.getElementById('stimmungs-dashboard-view'),
   strukturbaumView: document.getElementById("strukturbaum-view"),
   grundseminarStepsContainer: document.getElementById(
     "grundseminar-steps-container"
@@ -778,7 +799,7 @@ async function updateSingleLink(baseTableName, baseRowId, linkColumnName, otherR
             }
         };
         
-        pgLog(`[UPDATE-LINK] Updating link for ${linkColumnName}. Payload:`, body);
+        console.log(`[API-LINK-UPDATE] Updating link for ${linkColumnName}. Payload:`, body);
         const response = await fetch(url, { method: 'PUT', headers: { Authorization: `Bearer ${seaTableAccessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         if (!response.ok) {
             throw new Error(`Link update for ${linkColumnName} failed: ${response.status} ${await response.text()}`);
@@ -1197,6 +1218,11 @@ async function loadAllData() {
     console.log('Geladene Tabellen-Metadaten:', METADATA.tables); // NEU: Log für Tabellenstruktur
   }
 
+  // NEU: Füge die Fallback-Map für Checkin hinzu, falls sie nicht von der API kommt.
+  if (!COLUMN_MAPS.checkin) {
+    COLUMN_MAPS.checkin = CHECKIN_COLUMN_MAP_FALLBACK;
+  }
+
   setStatus("Lade Stammdaten...");
   const tablesToLoad = [
     "Mitarbeiter",
@@ -1210,6 +1236,7 @@ async function loadAllData() {
     "Produkte",
     "PG",
     "Bürostandorte",
+    "Checkin",
     "Umsatz", // NEU: Umsatzdaten global laden, um Hinweise im Kalender zu ermöglichen
   ];
 
@@ -1241,8 +1268,15 @@ async function loadAllData() {
           );
           return false; // Stoppe die Initialisierung
         }
-        console.error(`Konnte '${tableName}' nicht von der API laden.`);
+        // NEU: Logge den Fehler nicht, wenn die Checkin-Tabelle nicht existiert.
+        // Dies ermöglicht eine sanfte Einführung der Funktion, ohne dass die DB sofort angepasst werden muss.
+        if (tableName !== 'Checkin') {
+            console.error(`Konnte '${tableName}' nicht von der API laden.`);
+        }
       }
+    }
+    if (key === 'checkin') {
+        console.log(`%c[DATENLADEN-DEBUG] %cInhalt der Tabelle 'Checkin':`, 'color: #d4af37; font-weight: bold;', 'color: black;', db[key]);
     }
   }
   console.timeEnd('[DATENLADEN] Gesamtladezeit Stammdaten');
@@ -1253,6 +1287,15 @@ async function loadAllData() {
 }
 
 // --- HILFSFUNKTIONEN ---
+function _escapeHtml(str) {
+    if (typeof str !== 'string') {
+        return '';
+    }
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+}
+
 function saveToCache(key, data) {
   try {
     const item = {
@@ -1378,6 +1421,35 @@ function getAncestors(userId, levels = 3) {
 function escapeSql(str) {
   if (typeof str !== "string") return str;
   return str.replace(/'/g, "''");
+}
+
+// KORREKTUR: Neue Hilfsfunktion, um die Timeline-Navigation für verschiedene Monate zu ermöglichen.
+function getMonthlyCycleDatesForDate(date) {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+
+    let currentMonth = d.getMonth();
+    let currentYear = d.getFullYear();
+    let thisMonthCycleStart = _findCycleStartForMonth(currentYear, currentMonth);
+    let startDate, endDate;
+
+    // Diese Logik stellt sicher, dass wir immer den Zyklus bekommen, in den das `date` fällt.
+    if (d < thisMonthCycleStart) {
+        let prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+        let prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+        startDate = _findCycleStartForMonth(prevYear, prevMonth);
+        endDate = new Date(thisMonthCycleStart);
+        endDate.setDate(endDate.getDate() - 1);
+    } else {
+        startDate = thisMonthCycleStart;
+        let nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
+        let nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
+        let nextMonthCycleStart = _findCycleStartForMonth(nextYear, nextMonth);
+        endDate = new Date(nextMonthCycleStart);
+        endDate.setDate(endDate.getDate() - 1);
+    }
+    endDate.setHours(23, 59, 59, 999);
+    return { startDate, endDate };
 }
 
 // --- NEU: UI-Einstellungen im LocalStorage speichern/laden ---
@@ -3202,6 +3274,9 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
   // NEU: UI für den Planning-View-Toggle basierend auf der geladenen Einstellung aktualisieren
   dom.teamViewBtn.classList.toggle("active", currentPlanningView === "team");
   dom.personalViewBtn.classList.toggle("active", currentPlanningView === "personal");
+  // KORREKTUR: Zugriff auf das neue Element im Einstellungsmenü
+  const stimmungsDashboardSettingsItem = document.getElementById('stimmungs-dashboard-settings-item');
+  if (stimmungsDashboardSettingsItem) stimmungsDashboardSettingsItem.classList.toggle('hidden', !isLeader);
   dom.strukturViewBtn.classList.toggle("active", currentPlanningView === "struktur");
 
   // NEU: Titel und Daten basierend auf der geladenen Ansicht setzen
@@ -4514,14 +4589,6 @@ class AppointmentsView {
             // KORREKTUR: `userAppointments` war nicht definiert. Filtere die global geladenen Termine nach den relevanten Benutzern.
             // KORREKTUR: Auch Termine, bei denen der Benutzer eingeladen ist, müssen berücksichtigt werden.
             const userAppointments = db.termine.filter(t => userIds.has(t.Mitarbeiter_ID) || userIds.has(t.Eingeladener));
-
-            // 4. Filter by date range
-            const dateFilteredAppointments = userAppointments.filter(t => {
-                if (!t.Datum) return false;
-                const terminDate = new Date(t.Datum);
-                return terminDate >= overallStartDate && terminDate <= overallEndDate;
-            });
-
             // 5. Find outstanding appointments that might be outside the date range
             const today = new Date(getCurrentDate());
             today.setHours(0, 0, 0, 0);
@@ -4532,12 +4599,8 @@ class AppointmentsView {
             });
 
             // 6. Combine, deduplicate, and sort
-            const combinedAppointments = _.uniqBy([...dateFilteredAppointments, ...outstandingAppointments], '_id');
+            const combinedAppointments = _.uniqBy([...userAppointments, ...outstandingAppointments], '_id');
             this.allAppointments = combinedAppointments.sort((a, b) => new Date(b.Datum) - new Date(a.Datum));
-
-            // NEU: Wiederkehrende Termine generieren
-            this.allAppointments = this._generateRecurringAppointments(this.allAppointments, overallStartDate, overallEndDate);
-            appointmentsLog(`5. Antwort in ${this.allAppointments.length} Termin-Objekte umgewandelt.`);
 
             appointmentsLog('6. Rufe render() auf, um die Termine anzuzeigen.');
             this.render();
@@ -4724,16 +4787,13 @@ class AppointmentsView {
         }
     }
 
-    _navigateStats(days) {
+    _navigateStats(months) {
         const newDate = new Date(this.statsCurrentDate);
-        newDate.setDate(newDate.getDate() + days);
+        newDate.setDate(1); // Springe zum Ersten des Monats, um Fehler bei Monatslängen zu vermeiden
+        newDate.setMonth(newDate.getMonth() + months);
         this.statsCurrentDate = newDate;
-        // KORREKTUR: Scrollt zum neuen Datum in der Timeline, anstatt alles neu zu rendern.
-        const dateString = newDate.toISOString().split('T')[0];
-        const targetCard = this.statsMonthTimeline.querySelector(`[data-date="${dateString}"]`);
-        if (targetCard) {
-            targetCard.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-        }
+        // KORREKTUR: Rendert die Ansicht für den neuen Monat neu, anstatt nur zu scrollen.
+        this._renderAppointmentStats(this.dateAndSearchFilteredAppointments);
     }
 
     _resetStatsToToday() {
@@ -5002,12 +5062,17 @@ class AppointmentsView {
     }
 
     // NEU: Funktion zum Berechnen und Anzeigen der Termin-Statistiken
-    _renderAppointmentStats(appointmentsToRender) {
+    _renderAppointmentStats() {
+        // KORREKTUR: Diese Funktion filtert jetzt die Daten für jede Ansicht (Tabelle, Timeline, Woche)
+        // selbst aus dem Pool der `searchFilteredAppointments`, anstatt vor-gefilterte Daten zu erhalten.
+        // Dies stellt sicher, dass jede Ansicht immer auf den vollständigen, relevanten Datenpool zugreifen kann.
         const today = getCurrentDate();
-        const { startDate: cycleStartDate, endDate: cycleEndDate } = getMonthlyCycleDates();
-        const scope = this.statsScopeFilter.value;
+        // KORREKTUR: Verwende die neue Hilfsfunktion, um den Zyklus für das navigierbare Datum zu erhalten.
+        const { startDate: cycleStartDate, endDate: cycleEndDate } = getMonthlyCycleDatesForDate(this.statsCurrentDate);
         this.statsPeriodDisplay.textContent = cycleStartDate.toLocaleString('de-DE', { month: 'long', year: 'numeric' });
         this._updateCategoryButtonText();
+        // KORREKTUR: Die 'scope'-Variable muss hier definiert werden, damit sie in der Funktion verfügbar ist.
+        const scope = this.statsScopeFilter.value;
 
         // --- Filter-Einstellungen ---
         // KORREKTUR: Der Button existiert nicht mehr, der Wert wird aus dem dynamisch erstellten Element gelesen.
@@ -5029,23 +5094,48 @@ class AppointmentsView {
         const heldFilter = t => showHeld || !heldStatuses.includes(t.Status);
 
         // --- Daten für die Tabellenansicht vorbereiten ---
-        // KORREKTUR: Beginnt mit `dateAndSearchFilteredAppointments`, um die Datumsauswahl zu berücksichtigen.
-        let finalAppointmentsForTable = appointmentsToRender
+        const filterStartDate = new Date(this.startDateInput.value);
+        const filterEndDate = new Date(this.endDateInput.value);
+        const appointmentsForTableWithRecurrence = this._generateRecurringAppointments(this.searchFilteredAppointments, filterStartDate, filterEndDate);
+        let finalAppointmentsForTable = appointmentsForTableWithRecurrence
+            .filter(t => {
+                if (!t.Datum) return false;
+                const terminDate = new Date(t.Datum);
+                return terminDate >= filterStartDate && terminDate <= filterEndDate;
+            })
             .filter(categoryFilter)
             .filter(cancelledFilter)
             .filter(heldFilter);
         // --- Table View Logic ---
         const sortedAppointments = this._sortStatsTableData(finalAppointmentsForTable);
         this._renderStatsTable(sortedAppointments);
-        this._renderWeekCalendar(appointmentsToRender);
+
+        // --- Daten für Wochenkalender vorbereiten ---
+        const weekStart = new Date(this.calendarWeekStartDate);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        weekEnd.setHours(23, 59, 59, 999);
+        const appointmentsForWeekWithRecurrence = this._generateRecurringAppointments(this.searchFilteredAppointments, weekStart, weekEnd);
+        const appointmentsForWeek = appointmentsForWeekWithRecurrence.filter(t => {
+            if (!t.Datum) return false;
+            const terminDate = new Date(t.Datum);
+            return terminDate >= weekStart && terminDate <= weekEnd;
+        })
+        .filter(categoryFilter)
+        .filter(cancelledFilter)
+        .filter(heldFilter);
+        this._renderWeekCalendar(appointmentsForWeek);
 
         // --- Calendar View Logic ---
-        // Der Kalender arbeitet mit den Zyklusdaten, ignoriert aber die Datumsauswahl-Filter.
-        const calendarAppointments = this.searchFilteredAppointments
+        // KORREKTUR: Die Timeline ignoriert die vor-gefilterten `appointmentsToRender` und filtert
+        // stattdessen `this.searchFilteredAppointments` (nur nach Text gefiltert) nach dem Zyklusdatum.
+        const appointmentsForTimelineWithRecurrence = this._generateRecurringAppointments(this.searchFilteredAppointments, cycleStartDate, cycleEndDate);
+        const calendarAppointments = appointmentsForTimelineWithRecurrence
             .filter(categoryFilter)
             .filter(cancelledFilter)
             .filter(heldFilter)
             .filter(t => {
+                if (!t.Datum) return false;
                 const terminDate = new Date(t.Datum);
                 return terminDate >= cycleStartDate && terminDate <= cycleEndDate;
             });
@@ -5143,14 +5233,8 @@ class AppointmentsView {
     
     // NEU: Hilfsfunktion, die auf Änderungen im Haupt-Kalender-Dropdown reagiert.
     _handleViewModeChange() {
-        // KORREKTUR: Lese den Wert aus dem Haupt-Scope-Filter, nicht aus dem alten, versteckten Dropdown.
-        const selectedMode = this.statsScopeFilter.value;
-        saveUiSetting('appointmentsScope', selectedMode); // Speichere die Einstellung unter dem korrekten Schlüssel.
-        const showUserSelect = selectedMode === 'user_select';
-        this.weekCalendarUserSelectContainer.classList.toggle('hidden', !showUserSelect);
-
         // Kalender nach jeder Änderung neu rendern
-        this._renderWeekCalendar();
+        this._renderAppointmentStats();
     }
 
     // NEU: Hilfsfunktion zur Berechnung von überlappenden Terminen für einen Tag
@@ -5569,7 +5653,7 @@ class AppointmentsView {
         const newDate = new Date(this.calendarWeekStartDate);
         newDate.setDate(newDate.getDate() + days);
         this.calendarWeekStartDate = newDate;
-        this._renderWeekCalendar();
+        this._renderAppointmentStats();
     }
 
     _resetWeekCalendarToToday() {
@@ -5579,7 +5663,7 @@ class AppointmentsView {
         const monday = new Date(today.setDate(diff));
         this.calendarWeekStartDate = monday;
         this.calendarWeekStartDate.setHours(0, 0, 0, 0);
-        this._renderWeekCalendar();
+        this._renderAppointmentStats();
     }
 
     _escapeIcsString(str) {
@@ -7268,6 +7352,14 @@ class PotentialView {
         this.scheduleForm.querySelector('#schedule-potential-id').value = potential._id;
 
         const categorySelect = this.scheduleForm.querySelector('#schedule-category');
+        // KORREKTUR: Das Datumsfeld wird dynamisch auf datetime-local umgestellt.
+        const dateInput = this.scheduleForm.querySelector('#schedule-date');
+        if (dateInput) {
+            dateInput.type = 'datetime-local';
+            const now = new Date();
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            dateInput.value = now.toISOString().slice(0, 16);
+        }
         const statusSelect = this.scheduleForm.querySelector('#schedule-status');
         categorySelect.innerHTML = '';
         statusSelect.innerHTML = '';
@@ -9502,6 +9594,8 @@ function setupEventListeners() {
   dom.auswertungHeaderBtn.addEventListener("click", () => {
     switchView("auswertung");
   });
+  // KORREKTUR: Listener für den neuen Menüpunkt in den Einstellungen
+  document.getElementById('stimmungs-dashboard-settings-item').addEventListener('click', () => switchView('stimmungs-dashboard'));
 
   dom.strukturbaumHeaderBtn.addEventListener("click", () => {
     // NEU
@@ -9704,11 +9798,13 @@ async function initializeDashboard() {
   isInitializing = true;
 
   // NEU: Zeitreise-Datum aus dem Speicher laden
-  currentLeadershipViewMode = loadUiSetting('leadershipViewMode', 'list');
   const storedTimeTravelDate = localStorage.getItem('timeTravelDate');
   if (storedTimeTravelDate) {
       timeTravelDate = new Date(storedTimeTravelDate);
   }
+
+  // KORREKTUR: Lade UI-Einstellungen, bevor die Daten geladen werden.
+  currentLeadershipViewMode = loadUiSetting('leadershipViewMode', 'list');
 
   const dataLoaded = await loadAllData();
 
@@ -9716,6 +9812,19 @@ async function initializeDashboard() {
     setStatus("Initialisierung fehlgeschlagen. Bitte Seite neu laden.", true);
     isInitializing = false;
     return;
+  }
+  if (!COLUMN_MAPS.checkin) {
+    console.error("Spalten-Map für 'Checkin' nicht gefunden. Funktion ist deaktiviert.");
+    isInitializing = false;
+    return;
+  }
+
+  // NEU: Logge die Metadaten für die Checkin-Tabelle, um die Struktur zu überprüfen.
+  const checkinTableMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'checkin');
+  if (checkinTableMeta) {
+      console.log('%c[Checkin-Setup] %cMetadaten für Tabelle "Checkin":', 'color: #17a2b8; font-weight: bold;', 'color: black;', checkinTableMeta);
+  } else {
+      console.warn('[Checkin-Setup] Keine Metadaten für Tabelle "Checkin" in der Datenbank gefunden. Es wird die Fallback-Struktur verwendet.');
   }
 
   // NEU: Lade die Gesamt-EH-Daten, BEVOR das Dashboard gerendert wird.
@@ -9757,13 +9866,21 @@ async function initializeDashboard() {
         document.getElementById("user-select-screen").classList.add("hidden");
         document.getElementById("dashboard-content").classList.remove("hidden");
         await showPrivacyConsentView();
+    } else if (authenticatedUserData.Checkin) {
+        const todayString = new Date().toISOString().split('T')[0];
+        const lastCheckin = localStorage.getItem(`lastCheckin-${authenticatedUserData._id}`);
+        if (lastCheckin !== todayString) {
+            document.getElementById("user-select-screen").classList.add("hidden");
+            document.getElementById("dashboard-content").classList.remove("hidden");
+            await openCheckinModal();
+        } else {
+            await proceedToDashboard(loggedInUserId);
+        }
     } else {
-        viewHistory = [loggedInUserId];
-        document.getElementById("user-select-screen").classList.add("hidden");
-        document.getElementById("dashboard-content").classList.remove("hidden");
-            switchView('dashboard'); // NEU: Setzt die initiale Ansicht und den aktiven Button-Rahmen
-        await fetchAndRenderDashboard(loggedInUserId);
+        await proceedToDashboard(loggedInUserId);
     }
+
+
   } else {
     document.getElementById("user-select-screen").classList.remove("hidden");
     document.getElementById("user-select-screen").classList.add("flex");
@@ -9773,6 +9890,14 @@ async function initializeDashboard() {
   setupSwipeToBack(); // NEU: Swipe-Geste initialisieren
   isInitializing = false;
 }
+async function proceedToDashboard(userId) {
+    viewHistory = [userId];
+    document.getElementById("user-select-screen").classList.add("hidden");
+    document.getElementById("dashboard-content").classList.remove("hidden");
+    switchView('dashboard');
+    await fetchAndRenderDashboard(userId);
+}
+
 
 async function showPrivacyConsentView() {
     // Alle anderen Ansichten ausblenden und nur die Datenschutz-Ansicht anzeigen
@@ -10897,16 +11022,6 @@ class PGTagebuchView {
         this.aufgabenContainer = null; // NEU: Referenz auf den Aufgaben-Container
     }
 
-    // KORREKTUR: Hilfsfunktion an den Anfang der Klasse verschoben, um `this`-Kontext-Fehler zu vermeiden.
-    _escapeHtml(str) {
-        if (typeof str !== 'string') {
-            return '';
-        }
-        const div = document.createElement('div');
-        div.appendChild(document.createTextNode(str));
-        return div.innerHTML;
-    }
-
     _getDomElements() {
         this.listContainer = document.getElementById('pg-list-container');
         this.editorContainer = document.getElementById('pg-editor-container');
@@ -11481,7 +11596,7 @@ class PGTagebuchView {
                 todoItem.className = 'flex items-center gap-2 my-1 pg-todo-item group';
                 todoItem.innerHTML = `
                     <input type="checkbox" class="h-5 w-5 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light pg-todo-checkbox" ${isChecked ? 'checked' : ''}>
-                    <input type="text" class="flex-grow bg-transparent border-b border-gray-200 focus:outline-none focus:border-skt-blue pg-todo-text" value="${this._escapeHtml(todoText)}">
+                    <input type="text" class="flex-grow bg-transparent border-b border-gray-200 focus:outline-none focus:border-skt-blue pg-todo-text" value="${_escapeHtml(todoText)}">
                     <button type="button" class="text-gray-400 hover:text-red-500 pg-todo-delete-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Löschen"><i class="fas fa-times"></i></button>
                 `;
                 container.appendChild(todoItem);
@@ -11496,7 +11611,7 @@ class PGTagebuchView {
                     // KORREKTUR: Überschriften sind jetzt editierbare Input-Felder
                     otherItem.className = 'py-1 pg-heading-item group';
                     otherItem.innerHTML = `
-                        <input type="text" class="w-full bg-transparent font-bold text-skt-blue mt-2 border-b border-transparent focus:outline-none focus:border-skt-blue pg-heading-text" value="${this._escapeHtml(line)}">
+                        <input type="text" class="w-full bg-transparent font-bold text-skt-blue mt-2 border-b border-transparent focus:outline-none focus:border-skt-blue pg-heading-text" value="${_escapeHtml(line)}">
                     `;
                     container.appendChild(otherItem);
                 }
@@ -11521,15 +11636,6 @@ class PGTagebuchView {
             todoItem.querySelector('.pg-todo-text').focus();
         });
         container.appendChild(addTodoBtn);
-
-        // Helper to escape HTML
-        if (!this._escapeHtml) {
-            this._escapeHtml = (str) => {
-                const div = document.createElement('div');
-                div.appendChild(document.createTextNode(str));
-                return div.innerHTML;
-            };
-        }
     }
  
     // NEU: Serialisiert die interaktive To-Do-Liste zurück in einen Text-String
@@ -11662,6 +11768,440 @@ function formatMinutesToDuration(totalMinutes) {
     const minutes = totalMinutes % 60;
     return `${hours}:${minutes.toString().padStart(2, '0')}`;
 }
+
+async function seaTableUpdateCheckinRow(rowId, rowData) {
+    const tableName = 'Checkin';
+    const checkinLog = (message, ...data) => console.log(`%c[Checkin-Update] %c${message}`, 'color: #1abc9c; font-weight: bold;', 'color: black;', ...data);
+    checkinLog(`Starte Update für Checkin ID: ${rowId}`);
+
+    const tableMap = COLUMN_MAPS.checkin;
+    if (!tableMap) {
+        checkinLog('!!! FEHLER: Spalten-Map für Checkin nicht gefunden.');
+        return false;
+    }
+    const tableMeta = METADATA.tables.find(t => t.name.toLowerCase() === tableName.toLowerCase());
+    if (!tableMeta) {
+        checkinLog('!!! FEHLER: Metadaten für Checkin nicht gefunden.');
+        return false;
+    }
+    const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
+
+    // KORREKTUR: Zurück zum bewährten SQL-Update-Ansatz, der in anderen Teilen der App (z.B. Termine) zuverlässig funktioniert.
+    // Dies bündelt alle Datenänderungen in einer einzigen Anfrage und vermeidet Rate-Limiting.
+    const dataUpdates = {};
+    const linkUpdates = {};
+    const linkColumnKeys = [tableMap.Mitarbeiter].filter(Boolean);
+
+    for (const key in rowData) {
+        if (!Object.prototype.hasOwnProperty.call(rowData, key)) continue;
+        if (linkColumnKeys.includes(key)) {
+            linkUpdates[key] = rowData[key];
+        } else {
+            dataUpdates[key] = rowData[key];
+        }
+    }
+    checkinLog('Getrennte Daten für SQL-Update:', { dataUpdates, linkUpdates });
+
+    // 1. Aktualisiere Nicht-Link-Daten mit einer einzigen SQL-Abfrage
+    const setClauses = [];
+    for (const key in dataUpdates) {
+        const value = dataUpdates[key];
+        const colName = reversedMap[key];
+        if (!colName || colName === '_id') continue;
+
+        const colMeta = tableMeta.columns.find(c => c.key === key);
+        let formattedValue;
+
+        // Explizite Behandlung für die verschiedenen Feldtypen, um die Logik zu vereinheitlichen.
+        if (value === null || value === undefined) {
+            formattedValue = "NULL";
+        } else if (key === tableMap.Stimmung) {
+            // 'Stimmung' wird immer als Zahl behandelt.
+            const numValue = parseFloat(value);
+            formattedValue = isNaN(numValue) ? "NULL" : numValue;
+        } else {
+            // Alle anderen Felder (Motivation, Todos, und die 'x'-Felder) werden als Text behandelt.
+            // Ein leerer String wird als leerer String gespeichert, nicht als NULL.
+            formattedValue = `'${escapeSql(String(value))}'`;
+        }
+        setClauses.push(`\`${colName}\` = ${formattedValue}`);
+    }
+
+    if (setClauses.length > 0) {
+        const sql = `UPDATE \`${tableName}\` SET ${setClauses.join(', ')} WHERE \`_id\` = '${rowId}'`;
+        checkinLog('Führe SQL-Update für Datenfelder aus:', sql);
+        const result = await seaTableSqlQuery(sql, false);
+        if (result === null) {
+            checkinLog('!!! FEHLER: SQL-Update fehlgeschlagen.');
+            return false;
+        }
+        checkinLog('SQL-Update erfolgreich.');
+    }
+
+    // 2. Aktualisiere Link-Daten separat am Ende
+    for (const key in linkUpdates) {
+        const colName = reversedMap[key];
+        const linkRowId = linkUpdates[key] && linkUpdates[key][0] ? linkUpdates[key][0] : null;
+        if (!(await updateSingleLink(tableName, rowId, colName, linkRowId ? [linkRowId] : []))) {
+            checkinLog(`!!! FEHLER: Update für Link-Feld '${colName}' fehlgeschlagen.`);
+            return false;
+        }
+    }
+
+    checkinLog(`Update für Checkin ID ${rowId} erfolgreich abgeschlossen.`);
+    return rowId;
+}
+
+async function addOrUpdateCheckinEntry(rowId, rowDataWithKeys) {
+    const tableName = 'Checkin';
+    const checkinLog = (message, ...data) => console.log(`%c[Checkin-Save] %c${message}`, 'color: #1abc9c; font-weight: bold;', 'color: black;', ...data);
+
+    if (!seaTableAccessToken || !apiGatewayUrl) {
+        checkinLog('!!! FEHLER: Kein Access Token oder Gateway URL vorhanden.');
+        return false;
+    }
+
+    if (rowId) {
+        checkinLog(`Aktualisiere Checkin-Eintrag mit ID: ${rowId}`, JSON.parse(JSON.stringify(rowDataWithKeys)));
+        // KORREKTUR: Die Update-Logik wird direkt hier implementiert, um Fehlerquellen zu minimieren
+        // und sicherzustellen, dass alle Felder in einer einzigen Transaktion aktualisiert werden.
+        const tableMap = COLUMN_MAPS.checkin;
+        if (!tableMap) { checkinLog('!!! FEHLER: Spalten-Map für Checkin nicht gefunden.'); return false; }
+        const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
+
+        const setClauses = [];
+        for (const key in rowDataWithKeys) {
+            if (!Object.prototype.hasOwnProperty.call(rowDataWithKeys, key)) continue;
+            
+            // Link-Spalten werden beim Bearbeiten nicht geändert und hier übersprungen.
+            if (key === tableMap.Mitarbeiter) continue;
+
+            const value = rowDataWithKeys[key];
+            const colName = reversedMap[key];
+            if (!colName || colName === '_id') continue;
+
+            let formattedValue;
+            if (value === null || value === undefined) {
+                formattedValue = "NULL";
+            } else if (key === tableMap.Stimmung) {
+                const numValue = parseFloat(value);
+                formattedValue = isNaN(numValue) ? "NULL" : numValue;
+            } else {
+                // Alle anderen Felder (Motivation, Todos, und die 'x'-Checkboxen) werden als Text behandelt.
+                formattedValue = `'${escapeSql(String(value))}'`;
+            }
+            setClauses.push(`\`${colName}\` = ${formattedValue}`);
+        }
+
+        if (setClauses.length > 0) {
+            const sql = `UPDATE \`${tableName}\` SET ${setClauses.join(', ')} WHERE \`_id\` = '${rowId}'`;
+            checkinLog('Führe SQL-Update aus:', sql);
+            const result = await seaTableSqlQuery(sql, false);
+            if (result === null) {
+                checkinLog('!!! FEHLER: SQL-Update fehlgeschlagen.');
+                return false;
+            }
+        }
+        checkinLog(`Update für Checkin ID ${rowId} erfolgreich abgeschlossen.`);
+        return true;
+
+    } else {
+        checkinLog(`Erstelle neuen Checkin-Eintrag mit Daten:`, JSON.parse(JSON.stringify(rowDataWithKeys)));
+        // The generic function is robust for creating new rows with links.
+        // The only link column for a check-in is 'Mitarbeiter'.
+        return await genericAddRowWithLinks(tableName, rowDataWithKeys, ['Mitarbeiter']);
+    }
+}
+async function openCheckinModal(isEditMode = false) {
+    const modal = document.getElementById('checkin-modal');
+    const form = document.getElementById('checkin-form');
+    const matrixContainer = document.getElementById('checkin-matrix-container');
+    const stimmungSlider = document.getElementById('checkin-stimmung');
+    const stimmungValue = document.getElementById('checkin-stimmung-value');
+    const todosContainer = document.getElementById('checkin-todos-container');
+
+    // KORREKTUR: Setze den Speicher-Button zurück, falls er vom letzten Speichervorgang noch im "Laden"-Zustand ist.
+    const saveBtn = document.getElementById('save-checkin-btn');
+    if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = 'Check-in abschließen';
+    }
+
+    if (!modal || !form || !matrixContainer || !stimmungSlider || !stimmungValue) {
+        console.error('Check-in Modal-Elemente nicht gefunden.');
+        // Fallback: Dashboard normal laden, um den Benutzer nicht zu blockieren.
+        await proceedToDashboard(authenticatedUserData._id);
+        return;
+    }
+
+    const checkinLog = (message, ...data) => console.log(`%c[Checkin-Modal] %c${message}`, 'color: #1abc9c; font-weight: bold;', 'color: black;', ...data);
+    checkinLog(`Modal wird geöffnet. isEditMode: ${isEditMode}`);
+
+    // NEU: Daten für den Bearbeitungsmodus abrufen
+    const todayString = new Date().toISOString().split('T')[0];
+    // KORREKTUR: Die Unterscheidung zwischen Leiter- und Team-Check-in wird jetzt über das 'Stimmung'-Feld getroffen.
+    // Ein Haupteintrag hat immer eine Stimmung, ein reiner Matrix-Eintrag für ein Teammitglied nicht.
+    const leaderCheckin = isEditMode ? db.checkin.find(c => 
+        c.Mitarbeiter === authenticatedUserData._id && 
+        c.Datum && c.Datum.startsWith(todayString) && 
+        (c.Stimmung !== undefined && c.Stimmung !== null) // Haupteintrag hat eine Stimmung
+    ) : null;
+    checkinLog('Heutiger Check-in des Leiters:', leaderCheckin);
+
+    const teamCheckins = isEditMode ? db.checkin.filter(c => 
+        getSubordinates(authenticatedUserData._id, 'gruppe').map(u => u._id).includes(c.Mitarbeiter) && 
+        c.Datum && c.Datum.startsWith(todayString) && 
+        (c.Stimmung === undefined || c.Stimmung === null) // Team-Eintrag hat keine Stimmung
+    ) : [];
+    const teamCheckinsById = _.keyBy(teamCheckins, 'Mitarbeiter');
+    checkinLog(`Heutige Check-ins des Teams (${teamCheckins.length} gefunden):`, JSON.parse(JSON.stringify(teamCheckins)));
+    checkinLog('Team Check-ins nach ID:', JSON.parse(JSON.stringify(teamCheckinsById)));
+
+    // 1. Allgemeine Felder vorbereiten
+    form.reset();
+    document.getElementById('checkin-motivation').value = leaderCheckin?.Motivation || '';
+    stimmungSlider.value = leaderCheckin?.Stimmung || 5;
+    stimmungSlider.dispatchEvent(new Event('input')); // Slider-UI aktualisieren
+
+    // 2. To-Do-Liste initialisieren
+    const renderCheckinTodos = (text) => {
+        todosContainer.innerHTML = '';
+        const lines = text.split('\n');
+        lines.forEach(line => {
+            const trimmedLine = line.trim();
+            if (trimmedLine.startsWith('-')) {
+                const todoItem = document.createElement('div');
+                todoItem.className = 'flex items-center gap-2 my-1 pg-todo-item group';
+                todoItem.innerHTML = `
+                    <input type="checkbox" class="h-5 w-5 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light pg-todo-checkbox" disabled>
+                    <input type="text" class="flex-grow bg-transparent border-b border-gray-200 focus:outline-none focus:border-skt-blue pg-todo-text" value="${_escapeHtml(line.substring(1).trim())}">
+                    <button type="button" class="text-gray-400 hover:text-red-500 pg-todo-delete-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Löschen"><i class="fas fa-times"></i></button>
+                `;
+                todosContainer.appendChild(todoItem);
+                todoItem.querySelector('.pg-todo-delete-btn').addEventListener('click', () => todoItem.remove());
+            } else {
+                const otherItem = document.createElement('div');
+                otherItem.className = 'py-1 pg-heading-item group';
+                otherItem.innerHTML = `<input type="text" class="w-full bg-transparent font-bold text-skt-blue mt-2 border-b border-transparent focus:outline-none focus:border-skt-blue pg-heading-text" value="${_escapeHtml(line)}">`;
+                todosContainer.appendChild(otherItem);
+            }
+        });
+        const addTodoBtn = document.createElement('button');
+        addTodoBtn.type = 'button';
+        addTodoBtn.className = 'mt-2 text-skt-blue hover:underline text-sm';
+        addTodoBtn.innerHTML = '<i class="fas fa-plus mr-1"></i> Aufgabe hinzufügen';
+        addTodoBtn.addEventListener('click', () => {
+            const todoItem = document.createElement('div');
+            todoItem.className = 'flex items-center gap-2 my-1 pg-todo-item group';
+            todoItem.innerHTML = `
+                <input type="checkbox" class="h-5 w-5 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light pg-todo-checkbox" disabled>
+                <input type="text" class="flex-grow bg-transparent border-b border-gray-200 focus:outline-none focus:border-skt-blue pg-todo-text" value="">
+                <button type="button" class="text-gray-400 hover:text-red-500 pg-todo-delete-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Löschen"><i class="fas fa-times"></i></button>
+            `;
+            todosContainer.insertBefore(todoItem, addTodoBtn);
+            todoItem.querySelector('.pg-todo-delete-btn').addEventListener('click', () => todoItem.remove());
+            todoItem.querySelector('.pg-todo-text').focus();
+        });
+        todosContainer.appendChild(addTodoBtn);
+    };
+    renderCheckinTodos(leaderCheckin?.Todos || "Top 3 To-Dos:\n- \n- \n- ");
+
+    // 3. Stimmungs-Slider-Listener
+    stimmungSlider.addEventListener('input', () => {
+        const percent = (stimmungSlider.value - stimmungSlider.min) / (stimmungSlider.max - stimmungSlider.min);
+        stimmungValue.textContent = stimmungSlider.value;
+        stimmungValue.style.left = `calc(${percent * 100}% + (${8 - percent * 16}px))`;
+    });
+
+    // 4. Team-Matrix erstellen
+    matrixContainer.innerHTML = '<div class="loader mx-auto"></div>';
+    // KORREKTUR: Füge den Leiter selbst zur Liste hinzu, damit er auch seine eigenen Punkte abhaken kann.
+    const subordinates = getSubordinates(authenticatedUserData._id, 'gruppe');
+    const teamForMatrix = [authenticatedUserData, ...subordinates];
+    if (teamForMatrix.length === 0) {
+        matrixContainer.innerHTML = '<p class="text-center text-gray-500">Du hast keine Teammitglieder für den Check-in.</p>';
+    } else {
+        const questions = [
+            { label: 'Termine eingetragen?', key: 'TermineEingetragen' },
+            { label: 'Positiver Kontakt?', key: 'PositiverKontakt' },
+            { label: 'An Zielen dran?', key: 'ZieleDran' },
+            { label: 'Seminar anwesend?', key: 'SeminarAnwesend' },
+            { label: 'Recruiting Termine?', key: 'RecruitingTermine' },
+            { label: 'Akt. Erfolge?', key: 'AktuelleErfolge' },
+            { label: 'PG-Todos erledigt?', key: 'TodosErledigt' }
+        ];
+
+        const table = document.createElement('table');
+        table.className = 'w-full border-collapse';
+        
+        const thead = document.createElement('thead');
+        let headerHtml = '<tr class="bg-skt-grey-light"><th class="p-2 text-left font-semibold text-skt-blue">Mitarbeiter</th>';
+        questions.forEach(q => {
+            headerHtml += `<th class="p-2 text-center font-semibold text-skt-blue text-xs whitespace-nowrap">${q.label}</th>`;
+        });
+        headerHtml += '</tr>';
+        thead.innerHTML = headerHtml;
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        teamForMatrix.forEach(ma => {
+            const tr = document.createElement('tr');
+            tr.className = 'border-b border-gray-200 checkin-matrix-row';
+            tr.dataset.mitarbeiterId = ma._id;
+
+            const isLeaderRow = ma._id === authenticatedUserData._id;
+            const existingCheckinForMA = isLeaderRow ? leaderCheckin : teamCheckinsById[ma._id];
+
+            let rowHtml = `<td class="p-3 font-bold text-skt-blue">${ma.Name}</td>`;
+            questions.forEach(q => {
+                const isChecked = existingCheckinForMA && existingCheckinForMA[q.key] === 'x';
+                rowHtml += `<td class="p-2 text-center">
+                                <div class="custom-checkbox inline-block ${isChecked ? 'checked' : ''}">
+                                    <input type="checkbox" data-key="${q.key}" class="hidden" ${isChecked ? 'checked' : ''}>
+                                    <div class="custom-checkbox-tick"></div>
+                                </div>
+                            </td>`;
+            });
+            tr.innerHTML = rowHtml;
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        matrixContainer.innerHTML = '';
+        matrixContainer.appendChild(table);
+
+        matrixContainer.querySelectorAll('.custom-checkbox').forEach(box => {
+            box.addEventListener('click', () => {
+                box.classList.toggle('checked');
+                const input = box.querySelector('input');
+                input.checked = !input.checked;
+            });
+        });
+    }
+
+    // 5. Formular-Submit-Handler
+    form.onsubmit = async (e) => {
+        e.preventDefault();
+        const saveBtn = document.getElementById('save-checkin-btn');
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<div class="loader-small mx-auto"></div>';
+
+        const serializeTodos = () => { // This function is defined here to have access to `todosContainer`
+            const lines = [];
+            Array.from(todosContainer.children).forEach(child => {
+                if (child.classList.contains('pg-todo-item')) {
+                    const textInput = child.querySelector('.pg-todo-text');
+                    if (textInput) {
+                        lines.push(`- ${textInput.value}`);
+                    }
+                } else if (child.classList.contains('pg-heading-item')) {
+                    const textInput = child.querySelector('.pg-heading-text');
+                    if (textInput) lines.push(textInput.value);
+                } else if (child.classList.contains('pg-empty-line')) {
+                    lines.push('');
+                }
+            });
+            return lines.join('\n');
+        };
+
+        const dateString = new Date().toISOString().split('T')[0];
+        const leiterId = authenticatedUserData._id;
+        const motivation = document.getElementById('checkin-motivation').value;
+        const stimmung = parseInt(document.getElementById('checkin-stimmung').value, 10);
+        const todos = serializeTodos();
+
+        // Prepare leader's full entry
+        const leaderEntryData = {
+            [COLUMN_MAPS.checkin.Datum]: dateString, // KORREKTUR: 'Leiter' gibt es nicht, es ist ein 'Mitarbeiter'-Link zum Leiter selbst
+            [COLUMN_MAPS.checkin.Mitarbeiter]: [leiterId],
+            [COLUMN_MAPS.checkin.Motivation]: motivation,
+            [COLUMN_MAPS.checkin.Stimmung]: stimmung,
+            [COLUMN_MAPS.checkin.Todos]: todos,
+        };
+
+        const entriesToSave = [];
+
+        // Matrix entries for each person (including leader)
+        document.querySelectorAll('.checkin-matrix-row').forEach(row => {
+            const mitarbeiterId = row.dataset.mitarbeiterId;
+            checkinLog(`Verarbeite Matrix-Zeile für Mitarbeiter-ID: ${mitarbeiterId}`);
+            const matrixBooleans = {};
+            row.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                const key = COLUMN_MAPS.checkin[checkbox.dataset.key];
+                matrixBooleans[key] = checkbox.checked ? 'x' : '';
+            });
+            checkinLog(`Gelesene Checkbox-Daten für ${mitarbeiterId}:`, matrixBooleans);
+
+            if (mitarbeiterId === leiterId) {
+                // Dies ist die Zeile des Leiters, füge die Boolean-Werte zum Haupteintrag hinzu.
+                Object.assign(leaderEntryData, matrixBooleans);
+            } else {
+                // Dies ist ein unterstellter Mitarbeiter, erstelle einen separaten Eintrag.
+                const subordinateCheckin = teamCheckinsById[mitarbeiterId];
+                const subordinateRowId = subordinateCheckin ? subordinateCheckin._id : null;
+                const matrixEntry = {
+                    rowId: subordinateRowId,
+                    data: {
+                        [COLUMN_MAPS.checkin.Datum]: dateString,
+                        [COLUMN_MAPS.checkin.Mitarbeiter]: [mitarbeiterId],
+                        ...matrixBooleans
+                    }
+                };
+                entriesToSave.push(matrixEntry);
+            }
+        });
+
+        // Add the fully prepared leader entry to the list of entries to save
+        const leaderRowId = leaderCheckin ? leaderCheckin._id : null;
+        entriesToSave.unshift({ rowId: leaderRowId, data: leaderEntryData }); // Add to the beginning
+
+        checkinLog(`Bereite Speicherung von ${entriesToSave.length} Check-in Einträgen vor...`, JSON.parse(JSON.stringify(entriesToSave)));
+
+        // Sequentially save all entries
+        let allSuccess = true;
+        for (const entry of entriesToSave) {
+            const result = await addOrUpdateCheckinEntry(entry.rowId, entry.data);
+            if (!result) {
+                allSuccess = false;
+                checkinLog(`!!! FEHLER beim Speichern des Eintrags für rowId ${entry.rowId || 'NEU'}. Breche ab.`);
+                break; // Stop on first error
+            }
+        }
+
+        if (allSuccess) {
+            localStorage.setItem(`lastCheckin-${leiterId}`, dateString);
+            
+            // NEU: Lade Checkin-Daten neu, damit der "Bearbeiten"-Button sofort erscheint.
+            console.log('[Checkin-Save] Lade Checkin-Daten neu, um die Ansicht zu aktualisieren...');
+            localStorage.removeItem(CACHE_PREFIX + 'checkin');
+            db.checkin = await seaTableQuery('Checkin');
+            normalizeAllData();
+            console.log('[Checkin-Save] Checkin-Daten erfolgreich neu geladen.');
+
+            modal.classList.remove('visible');
+            document.body.classList.remove('modal-open');
+            document.documentElement.classList.remove('modal-open'); // KORREKTUR: Auch vom HTML-Element entfernen
+
+            // KORREKTUR: Leite zur korrekten Ansicht zurück (Stimmungsdashboard oder Haupt-Dashboard).
+            if (currentView === 'stimmungs-dashboard') {
+                // Wenn wir vom Stimmungsdashboard kamen, dorthin zurückkehren.
+                switchView('stimmungs-dashboard'); // Dies lädt die Ansicht mit den neuen Daten neu.
+            } else {
+                // Standardverhalten: Zum Haupt-Dashboard gehen.
+                await proceedToDashboard(leiterId);
+            }
+        } else {
+            alert('Fehler beim Speichern des Check-ins.');
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = 'Check-in abschließen';
+        }
+    };
+
+    // 6. Modal anzeigen
+    modal.classList.add('visible');
+    document.body.classList.add('modal-open');
+}
+
+
 
 // --- User Data Editing Modal ---
 function openEditUserModal() {
@@ -12138,6 +12678,7 @@ function switchView(viewName) {
   dom.auswertungView.classList.toggle("hidden", viewName !== "auswertung");
   dom.strukturbaumView.classList.toggle("hidden", viewName !== "strukturbaum");
   dom.pgTagebuchView.classList.toggle('hidden', viewName !== 'pg-tagebuch');
+  dom.stimmungsDashboardView.classList.toggle('hidden', viewName !== 'stimmungs-dashboard');
   document.getElementById('bildschirm-view').classList.add('hidden'); // Sicherstellen, dass die Bildschirm-Ansicht immer ausgeblendet ist
   updateBackButtonVisibility();
 
@@ -12151,6 +12692,7 @@ function switchView(viewName) {
       'potential': [dom.potentialHeaderBtn, document.getElementById('potential-menu-item')],
       'auswertung': [dom.auswertungHeaderBtn, document.getElementById('auswertung-menu-item')],
       'strukturbaum': [dom.strukturbaumHeaderBtn, document.getElementById('strukturbaum-menu-item')],
+      'stimmungs-dashboard': [dom.stimmungsDashboardHeaderBtn, document.getElementById('stimmungs-dashboard-menu-item')],
       'datenschutz': [dom.datenschutzHeaderBtn],
   };
 
@@ -12177,6 +12719,11 @@ function switchView(viewName) {
   // KORREKTUR: Sicherheitsprüfung wiederhergestellt.
   if (viewName === 'auswertung' && !isUserLeader(authenticatedUserData)) {
       alert('Du hast keine Berechtigung für diese Ansicht.');
+      switchView('dashboard'); // KORREKTUR: Sicherheitsprüfung für Stimmungsdashboard
+      return;
+  }
+  if (viewName === 'stimmungs-dashboard' && !isUserLeader(authenticatedUserData)) {
+      alert('Du hast keine Berechtigung für diese Ansicht.');
       switchView('dashboard');
       return;
   }
@@ -12195,6 +12742,8 @@ function switchView(viewName) {
     loadAndInitDatenschutzView();
   } else if (viewName === 'pg-tagebuch') {
     loadAndInitPGTagebuchView();
+  } else if (viewName === 'stimmungs-dashboard') {
+    loadAndInitStimmungsDashboardView();
   }
 }
 
@@ -12267,6 +12816,462 @@ async function loadAndInitDatenschutzView() {
     container.innerHTML = await response.text();
     if (!datenschutzViewInstance) datenschutzViewInstance = new DatenschutzView();
     await datenschutzViewInstance.init();
+}
+
+class StimmungsDashboardView {
+    constructor() {
+        this.initialized = false;
+        this.scope = 'group';
+        this.startDate = null;
+        this.endDate = null;
+    }
+
+    _getDomElements() {
+        // Neue Elemente
+        this.scopeGroupBtn = document.getElementById('stimmungs-group-btn');
+        this.scopeStructureBtn = document.getElementById('stimmungs-structure-btn');
+        this.startDateInput = document.getElementById('stimmungs-start-date');
+        this.endDateInput = document.getElementById('stimmungs-end-date');
+        this.distributionChartContainer = document.getElementById('stimmungs-distribution-chart-container');
+        this.kpiWarningsContainer = document.getElementById('stimmungs-kpi-warnings-container');
+
+        // Bestehende Elemente
+        this.redFlagsContainer = document.getElementById('stimmungs-red-flags-container');
+        this.chartContainer = document.getElementById('stimmungs-chart-container');
+        this.motivationContainer = document.getElementById('stimmungs-motivation-container');
+        this.todosContainer = document.getElementById('stimmungs-todos-container');
+        this.editTodayCheckinBtn = document.getElementById('edit-today-checkin-btn');
+        return this.scopeGroupBtn && this.scopeStructureBtn && this.startDateInput && this.endDateInput && this.distributionChartContainer && this.redFlagsContainer && this.chartContainer && this.motivationContainer && this.todosContainer && this.editTodayCheckinBtn && this.kpiWarningsContainer;
+    }
+
+    async init() {
+        if (!this._getDomElements()) {
+            console.error('[StimmungsDashboard] Benötigte DOM-Elemente nicht gefunden.');
+            return;
+        }
+// Initialisiere Datumsauswahl (letzte 30 Tage)
+        this.endDate = new Date();
+        this.startDate = new Date();
+        this.startDate.setDate(this.endDate.getDate() - 30);
+        this.startDateInput.value = this.startDate.toISOString().split('T')[0];
+        this.endDateInput.value = this.endDate.toISOString().split('T')[0];
+
+        // Lade gespeicherte Einstellungen
+        this.scope = loadUiSetting('stimmungsScope', 'group');
+        this.scopeGroupBtn.classList.toggle('active', this.scope === 'group');
+        this.scopeStructureBtn.classList.toggle('active', this.scope === 'structure');
+
+        // Event Listeners
+        const debouncedRender = _.debounce(() => this.fetchAndRender(), 300);
+        this.scopeGroupBtn.addEventListener('click', () => { this.scope = 'group'; saveUiSetting('stimmungsScope', 'group'); this.updateScopeButtons(); debouncedRender(); });
+        this.scopeStructureBtn.addEventListener('click', () => { this.scope = 'structure'; saveUiSetting('stimmungsScope', 'structure'); this.updateScopeButtons(); debouncedRender(); });
+        this.startDateInput.addEventListener('change', () => { this.startDate = new Date(this.startDateInput.value); debouncedRender(); });
+        this.endDateInput.addEventListener('change', () => { this.endDate = new Date(this.endDateInput.value); debouncedRender(); });
+
+
+        await this.fetchAndRender();
+        this.initialized = true;
+    }
+    updateScopeButtons() {
+        this.scopeGroupBtn.classList.toggle('active', this.scope === 'group');
+        this.scopeStructureBtn.classList.toggle('active', this.scope === 'structure');
+    }
+
+    async fetchAndRender() {
+        // 1. Lade die korrekten Benutzer-IDs basierend auf dem Scope
+        let userIds;
+        if (this.scope === 'structure') {
+            // Alle untergebenen Mitarbeiter in der gesamten Struktur
+            const structureMembers = getAllSubordinatesRecursive(authenticatedUserData._id);
+            userIds = [authenticatedUserData._id, ...structureMembers.map(u => u._id)];
+        } else { // 'group'
+            // Alle Mitarbeiter in der direkten Gruppe
+            const groupMembers = getSubordinates(authenticatedUserData._id, 'gruppe');
+            userIds = [authenticatedUserData._id, ...groupMembers.map(u => u._id)];
+        }
+        const userIdsSet = new Set(userIds);
+
+        // 2. Filtere Check-ins nach Benutzern und Datum
+        const filteredCheckins = db.checkin.filter(c => {
+            if (!c.Datum || !userIdsSet.has(c.Mitarbeiter)) return false;
+            const checkinDate = new Date(c.Datum);
+            return checkinDate >= this.startDate && checkinDate <= this.endDate;
+        });
+
+        // NEU: Logik für den "Bearbeiten"-Button
+        const todayString = new Date().toISOString().split('T')[0];
+        const todaysCheckin = db.checkin.find(c => 
+            // KORREKTUR: Der eigene Check-in wird über die 'Mitarbeiter'-Spalte gefunden.
+            // Die Prüfung auf 'Motivation' (truthiness) stellt sicher, dass es der Haupteintrag des Leiters ist.
+            c.Mitarbeiter === authenticatedUserData._id &&
+            c.Datum && c.Datum.startsWith(todayString) &&
+            c.Motivation
+        );
+
+        if (todaysCheckin) {
+            this.editTodayCheckinBtn.classList.remove('hidden');
+            this.editTodayCheckinBtn.onclick = () => openCheckinModal(true); // true für Bearbeitungsmodus
+        } else {
+            this.editTodayCheckinBtn.classList.add('hidden');
+        }
+
+        // 3. Rufe die Render-Funktionen mit den gefilterten Daten auf
+        this.renderRedFlags(filteredCheckins);
+        this.renderStimmungChart(filteredCheckins);
+        this.renderStimmungDistribution(filteredCheckins);
+        this.renderMotivation(filteredCheckins);
+        this.renderTodos(filteredCheckins);
+        // NEU: KPI-Warnungen rendern
+        this.renderKpiWarnings(userIdsSet);
+    }
+
+    renderRedFlags(checkins) {
+        this.redFlagsContainer.innerHTML = '';
+        const matrixCheckins = checkins.filter(c => c.Motivation === undefined); // Nur Team-Check-ins
+        const questionKeys = ['TermineEingetragen', 'PositiverKontakt', 'ZieleDran', 'SeminarAnwesend', 'RecruitingTermine', 'AktuelleErfolge', 'TodosErledigt'];
+        const questionLabels = {
+            'TermineEingetragen': 'Termine eingetragen?',
+            'PositiverKontakt': 'Positiver Kontakt?',
+            'ZieleDran': 'An Zielen dran?',
+            'SeminarAnwesend': 'Seminar anwesend?',
+            'RecruitingTermine': 'Recruitingtermine?',
+            'AktuelleErfolge': 'Aktuelle Erfolge?',
+            'TodosErledigt': 'PG-Todos erledigt?'
+        };
+
+        const flagCounts = questionKeys.reduce((acc, key) => {
+            acc[key] = 0;
+            return acc;
+        }, {});
+
+        matrixCheckins.forEach(checkin => {
+            questionKeys.forEach(key => {
+                if (checkin[key] === false) {
+                    flagCounts[key]++;
+                }
+            });
+        });
+
+        const sortedFlags = Object.entries(flagCounts).sort(([, a], [, b]) => b - a);
+        const maxCount = sortedFlags[0]?.[1] || 0;
+
+        if (maxCount === 0) {
+            this.redFlagsContainer.innerHTML = '<p class="text-center text-gray-500 py-4">Keine negativen Antworten im ausgewählten Zeitraum. Sehr gut!</p>';
+            return;
+        }
+
+        const container = document.createElement('div');
+        container.className = 'space-y-3';
+        sortedFlags.forEach(([key, count]) => {
+            const percentage = maxCount > 0 ? (count / maxCount) * 100 : 0;
+            container.innerHTML += `
+                <div class="flex items-center gap-4">
+                    <div class="w-48 text-sm text-skt-blue-light text-right">${questionLabels[key]}</div>
+                    <div class="flex-1 bg-gray-200 rounded-full h-6">
+                        <div class="bg-skt-red-accent h-6 rounded-full flex items-center justify-end pr-2 text-white font-bold text-sm" style="width: ${percentage}%">
+                            ${count}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        this.redFlagsContainer.appendChild(container);
+    }
+
+    renderStimmungChart(checkins) {
+        this.chartContainer.innerHTML = '';
+        const leaderCheckins = checkins.filter(c => c.Motivation !== undefined && c.Stimmung);
+
+        if (leaderCheckins.length < 2) {
+            this.chartContainer.style.height = 'auto';
+            this.chartContainer.innerHTML = '<div class="flex items-center justify-center text-gray-500 py-16"><p>Nicht genügend Daten für einen Stimmungsverlauf vorhanden.</p></div>';
+            return;
+        }
+
+        this.chartContainer.style.height = '20rem'; // 320px, entspricht h-80
+        const stimmungByDay = _.groupBy(leaderCheckins, c => c.Datum.split('T')[0]);
+        const chartData = Object.entries(stimmungByDay).map(([date, entries]) => {
+            const avgStimmung = _.meanBy(entries, 'Stimmung');
+            return { date: new Date(date), value: avgStimmung };
+        }).sort((a, b) => a.date - b.date);
+
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 500 200');
+        svg.classList.add('stimmungs-line-chart-svg', 'w-full', 'h-full');
+
+        const margin = { top: 20, right: 20, bottom: 30, left: 30 };
+        const width = 500 - margin.left - margin.right;
+        const height = 200 - margin.top - margin.bottom;
+
+        const x = (date) => margin.left + (date - chartData[0].date) / (chartData[chartData.length - 1].date - chartData[0].date) * width;
+        const y = (value) => margin.top + height - ((value - 1) / 9) * height;
+
+        // Grid lines and axes
+        let gridHtml = `<g class="grid-lines">`;
+        for (let i = 1; i <= 10; i++) {
+            gridHtml += `<line class="grid-line" x1="${margin.left}" y1="${y(i)}" x2="${width + margin.left}" y2="${y(i)}"></line>`;
+            gridHtml += `<text class="axis-label" x="${margin.left - 8}" y="${y(i) + 3}" text-anchor="end">${i}</text>`;
+        }
+        gridHtml += `</g>`;
+        svg.innerHTML += gridHtml;
+
+        // Line path
+        const pathData = chartData.map(d => `${x(d.date)},${y(d.value)}`).join(' L ');
+        svg.innerHTML += `<path class="line-path" d="M ${pathData}"></path>`;
+
+        // Points and tooltips
+        chartData.forEach(d => {
+            svg.innerHTML += `
+                <g class="tooltip-group" transform="translate(${x(d.date)}, ${y(d.value)})">
+                    <circle class="line-point" r="4"></circle>
+                    <g class="tooltip" style="visibility: hidden;">
+                        <rect class="tooltip-bg" x="-30" y="-25" width="60" height="20"></rect>
+                        <text class="tooltip-text" x="0" y="-12" text-anchor="middle">${d.date.toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit'})}: ${d.value.toFixed(1)}</text>
+                    </g>
+                </g>
+            `;
+        });
+
+        this.chartContainer.appendChild(svg);
+
+        // Tooltip hover logic
+        this.chartContainer.querySelectorAll('.tooltip-group').forEach(group => {
+            group.addEventListener('mouseenter', () => group.querySelector('.tooltip').style.visibility = 'visible');
+            group.addEventListener('mouseleave', () => group.querySelector('.tooltip').style.visibility = 'hidden');
+        });
+    }
+
+    renderStimmungDistribution(checkins) {
+        this.distributionChartContainer.innerHTML = '';
+        const leaderCheckins = checkins.filter(c => c.Motivation !== undefined && c.Stimmung);
+
+        if (leaderCheckins.length === 0) {
+            this.distributionChartContainer.style.height = 'auto';
+            this.distributionChartContainer.innerHTML = '<div class="flex items-center justify-center text-gray-500 py-16"><p>Keine Stimmungsdaten.</p></div>';
+            return;
+        }
+
+        this.distributionChartContainer.style.height = '20rem'; // 320px, entspricht h-80
+        const counts = Array(10).fill(0);
+        leaderCheckins.forEach(c => {
+            counts[c.Stimmung - 1]++;
+        });
+
+        const maxCount = Math.max(...counts);
+        if (maxCount === 0) {
+            this.distributionChartContainer.style.height = 'auto';
+            this.distributionChartContainer.innerHTML = '<div class="flex items-center justify-center text-gray-500 py-16"><p>Keine Stimmungsdaten.</p></div>';
+            return;
+        }
+
+        const chartHtml = counts.map((count, i) => {
+            const height = maxCount > 0 ? (count / maxCount) * 100 : 0;
+            return `
+                <div class="flex-1 flex flex-col items-center justify-end" title="${count} mal">
+                    <div class="w-full bg-skt-blue-light rounded-t-md text-center text-white text-xs py-0.5" style="height: ${height}%; min-height: ${count > 0 ? '16px' : '0'};">
+                        ${count > 0 ? count : ''}
+                    </div>
+                    <div class="text-xs mt-1 text-gray-500 font-semibold">${i + 1}</div>
+                </div>
+            `;
+        }).join('');
+
+        this.distributionChartContainer.innerHTML = `<div class="flex h-full items-end gap-1">${chartHtml}</div>`;
+    }
+
+    renderMotivation(checkins) {
+        this.motivationContainer.innerHTML = '';
+        // KORREKTUR: Prüfe, ob 'Motivation' truthy ist, bevor .trim() aufgerufen wird, um Fehler bei null-Werten zu vermeiden.
+        const leaderCheckins = checkins.filter(c => c.Motivation && c.Motivation.trim() !== '');
+
+        if (leaderCheckins.length === 0) {
+            this.motivationContainer.innerHTML = '<p class="text-center text-gray-500">Keine Motivationseinträge gefunden.</p>';
+            return;
+        }
+        this.motivationContainer.innerHTML = leaderCheckins.map(c => {
+            const leiter = findRowById('mitarbeiter', c.Mitarbeiter);
+            return `<div class="stimmungs-motivation-item">
+                        <p>${c.Motivation}</p>
+                        <p class="text-xs text-right text-gray-400 mt-1">- ${leiter ? leiter.Name : 'Unbekannt'} am ${new Date(c.Datum).toLocaleDateString('de-DE')}</p>
+                    </div>`;
+        }).join('');
+    }
+
+    // NEU: Rendert die KPI-basierten Warnungen für die Struktur/Gruppe
+    renderKpiWarnings(userIds) {
+        if (!this.kpiWarningsContainer) return;
+
+        this.kpiWarningsContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        const warnings = [];
+        const users = Array.from(userIds).map(id => findRowById('mitarbeiter', id)).filter(Boolean);
+
+        // NEU: Monatsdaten für Planungs-Check holen
+        const { startDate: cycleStartDate } = getMonthlyCycleDates();
+        const currentMonthName = cycleStartDate.toLocaleString('de-DE', { month: 'long' });
+        const currentYear = cycleStartDate.getFullYear();
+
+        const twoWeeksAgo = new Date();
+        twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+        const fourWeeksAgo = new Date();
+        fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+        const today = new Date();
+
+        users.forEach(user => {
+            if (user.Status === 'Ausgeschieden') return;
+
+            // NEU: Mitarbeiter ohne EH-Monatsziel überspringen
+            const plan = db.monatsplanung.find(p => 
+                p.Mitarbeiter_ID === user._id &&
+                p.Monat === currentMonthName &&
+                p.Jahr === currentYear
+            );
+            if (!plan || !plan.EH_Ziel || plan.EH_Ziel <= 0) {
+                return; // continue to next user
+            }
+
+            const userWarnings = [];
+
+            // KPI 1: High Cancellation Rate (last 2 weeks)
+            const twoWeekAppointments = db.termine.filter(t => 
+                t.Mitarbeiter_ID === user._id && 
+                t.Datum && 
+                new Date(t.Datum) >= twoWeeksAgo && 
+                new Date(t.Datum) <= today
+            );
+            
+            if (twoWeekAppointments.length > 0) {
+                const cancelledCount = twoWeekAppointments.filter(t => t.Absage === true || t.Status === 'Storno').length;
+                const cancellationRate = cancelledCount / twoWeekAppointments.length;
+                if (cancellationRate >= 0.5) {
+                    userWarnings.push(`Hohe Stornoquote (${(cancellationRate * 100).toFixed(0)}% in den letzten 2 Wochen)`);
+                }
+            }
+
+            // Check if user is active for at least 4 weeks
+            const userStartDate = new Date(user.Startdatum);
+            if (userStartDate <= fourWeeksAgo) {
+                // KPI 2: Low Activity Rate (last 4 weeks)
+                const fourWeekAppointments = db.termine.filter(t => 
+                    t.Mitarbeiter_ID === user._id &&
+                    t.Datum &&
+                    new Date(t.Datum) >= fourWeeksAgo &&
+                    new Date(t.Datum) <= today &&
+                    ['AT', 'BT', 'ET'].includes(t.Kategorie)
+                );
+
+                if (fourWeekAppointments.length < 5) {
+                    userWarnings.push(`Geringe Aktivität (${fourWeekAppointments.length} Termine in den letzten 4 Wochen)`);
+                }
+
+                // KPI 3: No Recruiting Activity (last 4 weeks)
+                const fourWeekEtAppointments = fourWeekAppointments.filter(t => t.Kategorie === 'ET');
+                if (fourWeekEtAppointments.length === 0) {
+                    userWarnings.push('Keine Recruiting-Termine (ET) in den letzten 4 Wochen');
+                }
+            }
+
+            if (userWarnings.length > 0) {
+                warnings.push({
+                    name: user.Name,
+                    id: user._id,
+                    reasons: userWarnings
+                });
+            }
+        });
+
+        this.kpiWarningsContainer.innerHTML = '';
+        if (warnings.length === 0) {
+            this.kpiWarningsContainer.innerHTML = '<p class="text-center text-gray-500 py-4">Keine KPI-Warnungen. Alles im grünen Bereich!</p>';
+            return;
+        }
+
+        warnings.forEach(warning => {
+            const warningEl = document.createElement('div');
+            warningEl.className = 'p-3 bg-red-50 border-l-4 border-skt-red-accent rounded-r-lg';
+            
+            let reasonsHtml = warning.reasons.map(reason => `<li class="text-sm text-red-700">${reason}</li>`).join('');
+
+            warningEl.innerHTML = `
+                <p class="font-bold text-skt-blue">${warning.name}</p>
+                <ul class="list-disc list-inside mt-1">
+                    ${reasonsHtml}
+                </ul>
+            `;
+            this.kpiWarningsContainer.appendChild(warningEl);
+        });
+    }
+
+
+
+    renderTodos(checkins) {
+        this.todosContainer.innerHTML = '';
+        // KORREKTUR: Verwende das heutige Datum, da die Karte "Heutige To-Dos" heißt.
+        const today = new Date();
+        const displayDateString = today.toISOString().split('T')[0];
+        // KORREKTUR: Prüfe, ob 'Motivation' truthy ist, um nur "Haupt-Check-ins" zu berücksichtigen.
+        const displayDateCheckins = checkins.filter(c => c.Motivation && c.Todos && c.Datum.startsWith(displayDateString));
+
+        if (displayDateCheckins.length === 0) {
+            // KORREKTUR: Gib das heutige Datum in der Meldung aus.
+            this.todosContainer.innerHTML = `<p class="text-center text-gray-500">Keine To-Dos für heute (${today.toLocaleDateString('de-DE')}) gefunden.</p>`;
+            return;
+        }
+
+        this.todosContainer.innerHTML = displayDateCheckins.map(c => {
+            const leiter = findRowById('mitarbeiter', c.Mitarbeiter);
+            const todosHtml = c.Todos.split('\n').map(line => {
+                if (line.trim().startsWith('-')) {
+                    return `<li class="ml-4">${line.substring(1).trim()}</li>`;
+                }
+                return `<p class="font-semibold mt-2">${line}</p>`;
+            }).join('');
+
+            return `
+                <div class="stimmungs-todo-card p-4 rounded-lg">
+                    <p class="font-bold text-skt-blue mb-2">${leiter ? leiter.Name : 'Unbekannt'}</p>
+                    <ul class="list-disc list-inside text-sm text-gray-700">${todosHtml}</ul>
+                </div>
+            `;
+        }).join('');
+            
+        
+    }
+
+    
+}
+
+async function loadAndInitStimmungsDashboardView() {
+    const container = dom.stimmungsDashboardView;
+    const editBtn = document.getElementById('edit-today-checkin-btn');
+    
+    try {
+        const response = await fetch("./stimmungs-dashboard.html");
+        if (!response.ok) throw new Error(`Die Datei 'stimmungs-dashboard.html' konnte nicht gefunden werden.`);
+        let html = await response.text();
+        container.innerHTML = html;
+
+        // NEU: Dynamically create the KPI warnings container.
+        const redFlagsContainer = container.querySelector('#stimmungs-red-flags-container');
+        if (redFlagsContainer && redFlagsContainer.parentElement && redFlagsContainer.parentElement.parentElement) {
+            const gridContainer = redFlagsContainer.parentElement.parentElement;
+            if (gridContainer.classList.contains('grid') && !gridContainer.querySelector('#stimmungs-kpi-warnings-container')) {
+                const kpiWarningsHtml = `
+                    <div class="bg-white rounded-2xl p-6 shadow-lg">
+                        <h3 class="text-xl font-bold text-skt-blue mb-4">KPI Warnungen</h3>
+                        <div id="stimmungs-kpi-warnings-container" class="space-y-4 max-h-96 overflow-y-auto pr-2">
+                            <!-- content will be generated by JS -->
+                        </div>
+                    </div>
+                `;
+                gridContainer.insertAdjacentHTML('beforeend', kpiWarningsHtml);
+            }
+        }
+        if (!stimmungsDashboardViewInstance) stimmungsDashboardViewInstance = new StimmungsDashboardView();
+        await stimmungsDashboardViewInstance.init();
+    } catch (error) {
+        console.error("Fehler beim Laden des Stimmungsdashboards:", error);
+        container.innerHTML = `<p class="text-red-500 text-center">${error.message}</p>`;
+    }
 }
 
 // Mache Kernfunktionen global verfügbar für andere Module/Dateien
