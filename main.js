@@ -64,6 +64,7 @@ let auswertungViewInstance = null;
 let strukturbaumViewInstance = null;
 let pgTagebuchViewInstance = null;
 let stimmungsDashboardViewInstance = null;
+let wettbewerbViewInstance = null; // NEU
 let bildschirmViewInstance = null; // NEU
 let datenschutzViewInstance = null; // NEU
 let pendingAppointmentFilter = null;
@@ -162,6 +163,7 @@ const dom = {
   auswertungHeaderBtn: document.getElementById("auswertung-header-btn"),
   pgTagebuchHeaderBtn: document.getElementById('pg-tagebuch-header-btn'),
   strukturbaumHeaderBtn: document.getElementById("strukturbaum-header-btn"),
+  wettbewerbHeaderBtn: document.getElementById("wettbewerb-header-btn"), // NEU
   auswertungView: document.getElementById("auswertung-view"),
   datenschutzView: document.getElementById("datenschutz-view"), // NEU
   umsatzView: document.getElementById("umsatz-view"),
@@ -171,6 +173,7 @@ const dom = {
   stimmungsDashboardView: document.getElementById('stimmungs-dashboard-view'),
   einarbeitungTitle: document.getElementById("einarbeitung-title"),
   traineeOnboardingView: document.getElementById("trainee-onboarding-view"),
+  wettbewerbView: document.getElementById("wettbewerb-view"), // NEU
   leaderOnboardingView: document.getElementById("leader-onboarding-view"),
   pgTagebuchView: document.getElementById('pg-tagebuch-view'),
   stimmungsDashboardView: document.getElementById('stimmungs-dashboard-view'),
@@ -238,6 +241,7 @@ const dom = {
   datenschutzHeaderBtn: document.getElementById('datenschutz-header-btn'),
   moreToolsBtn: document.getElementById('more-tools-btn'),
   moreToolsMenu: document.getElementById('more-tools-menu'),
+  wettbewerbMenuItem: document.getElementById('wettbewerb-menu-item'), // NEU
 };
 
 // --- SEATABLE API FUNKTIONEN ---
@@ -1563,6 +1567,30 @@ function isDateValidInfoabend(dateToCheck) {
     return diffInDays % 21 === 0;
 }
 
+function updateUiForUserRoles() {
+    const user = authenticatedUserData;
+    if (!user || !user.Name) return;
+
+    // Wettbewerb visibility
+    const wettbewerbAllowedUsers = ["Jason Schreiber", "Samuel Königslehner"];
+    const showWettbewerb = wettbewerbAllowedUsers.includes(user.Name.trim());
+
+    if (dom.wettbewerbHeaderBtn) {
+        // The button should be `hidden sm:flex` for authorized users.
+        // For unauthorized users, it should just be `hidden`. So we toggle `sm:flex`.
+        dom.wettbewerbHeaderBtn.classList.toggle('sm:flex', showWettbewerb);
+    }
+    if (dom.wettbewerbMenuItem) {
+        dom.wettbewerbMenuItem.classList.toggle('hidden', !showWettbewerb);
+    }
+
+    // Stimmungsdashboard visibility
+    const hasStimmungsAccess = user.Checkin === true || String(user.Checkin).toLowerCase() === 'true';
+    const stimmungsDashboardHeaderBtn = document.getElementById('stimmungs-dashboard-header-btn');
+    if (stimmungsDashboardHeaderBtn) {
+        stimmungsDashboardHeaderBtn.classList.toggle('hidden', !hasStimmungsAccess);
+    }
+}
 
 function getPreviousMonthlyCycleDates() {
     const { startDate: currentCycleStart } = getMonthlyCycleDates();
@@ -3276,7 +3304,6 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
   dom.personalViewBtn.classList.toggle("active", currentPlanningView === "personal");
   // KORREKTUR: Zugriff auf das neue Element im Einstellungsmenü
   const stimmungsDashboardSettingsItem = document.getElementById('stimmungs-dashboard-settings-item');
-  if (stimmungsDashboardSettingsItem) stimmungsDashboardSettingsItem.classList.toggle('hidden', !isLeader);
   dom.strukturViewBtn.classList.toggle("active", currentPlanningView === "struktur");
 
   // NEU: Titel und Daten basierend auf der geladenen Ansicht setzen
@@ -9404,6 +9431,7 @@ function setupEventListeners() {
       if (user && user.PWD === enteredPassword) {
         localStorage.setItem("loggedInUserId", selectedUserId);
         authenticatedUserData = user;
+        updateUiForUserRoles();
         
         // KORREKTUR: Prüfe die Datenschutzzustimmung direkt nach dem Login.
         if (authenticatedUserData && !authenticatedUserData.Datenschutz) {
@@ -9466,6 +9494,7 @@ function setupEventListeners() {
   setupMenuItem('potential-menu-item', 'potential-header-btn');
   setupMenuItem('auswertung-menu-item', 'auswertung-header-btn');
   setupMenuItem('strukturbaum-menu-item', 'strukturbaum-header-btn');
+  setupMenuItem('wettbewerb-menu-item', 'wettbewerb-header-btn'); // NEU
   setupMenuItem('ai-assistant-menu-item', 'ai-assistant-btn');
   dom.superuserBtn.addEventListener("click", async (e) => {
     e.preventDefault();
@@ -9595,7 +9624,12 @@ function setupEventListeners() {
     switchView("auswertung");
   });
   // KORREKTUR: Listener für den neuen Menüpunkt in den Einstellungen
-  document.getElementById('stimmungs-dashboard-settings-item').addEventListener('click', () => switchView('stimmungs-dashboard'));
+  dom.wettbewerbHeaderBtn.addEventListener("click", () => {
+    // NEU
+    switchView("wettbewerb");
+  });
+
+  document.getElementById('stimmungs-dashboard-header-btn').addEventListener('click', () => switchView('stimmungs-dashboard'));
 
   dom.strukturbaumHeaderBtn.addEventListener("click", () => {
     // NEU
@@ -9860,6 +9894,7 @@ async function initializeDashboard() {
   const loggedInUserId = localStorage.getItem("loggedInUserId");
   if (loggedInUserId && findRowById("mitarbeiter", loggedInUserId)) {
     authenticatedUserData = findRowById("mitarbeiter", loggedInUserId);
+    updateUiForUserRoles();
     
     // NEU: Prüfe die Datenschutzzustimmung, BEVOR das Dashboard geladen wird.
     if (authenticatedUserData && !authenticatedUserData.Datenschutz) {
@@ -12230,6 +12265,20 @@ function openEditUserModal() {
         ausscheideFieldsContainer.classList.toggle('hidden', !e.target.checked);
     });
 
+    // NEU: Handle Check-in logic
+    const checkinContainer = document.getElementById('edit-checkin-container');
+    const checkinCheckbox = document.getElementById('edit-checkin-enabled');
+    
+    // Checkbox nur für Führungskräfte anzeigen und den Status des bearbeiteten Benutzers setzen
+    if (isUserLeader(authenticatedUserData)) {
+        checkinContainer.classList.remove('hidden');
+        checkinContainer.classList.add('flex');
+        checkinCheckbox.checked = user.Checkin === true;
+    } else {
+        checkinContainer.classList.add('hidden');
+        checkinContainer.classList.remove('flex');
+    }
+
     dom.editUserModal.classList.add('visible');
     document.body.classList.add('modal-open');
 }
@@ -12267,6 +12316,13 @@ async function saveUserData() {
       Ausscheidetag: isAusgeschieden ? ausscheidetag : null,
       Ausscheidegrund: isAusgeschieden ? ausscheidegrund : null,
   };
+
+  // NEU: Check-in Status nur hinzufügen, wenn die Checkbox sichtbar war (d.h. von einer FK bearbeitet)
+  const checkinContainer = document.getElementById('edit-checkin-container');
+  if (checkinContainer && !checkinContainer.classList.contains('hidden')) {
+      // Annahme: Die Spalte in der DB heißt 'Checkin' und ist vom Typ Boolean (Checkbox).
+      dataToUpdate.Checkin = document.getElementById('edit-checkin-enabled').checked;
+  }
 
   const mitarbeiterTableMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'mitarbeiter');
   const setClauses = [];
@@ -12662,7 +12718,344 @@ function resetTimeTravel() {
     localStorage.removeItem('timeTravelDate');
     location.reload();
 }
+class WettbewerbView {
+    constructor() {
+        this.initialized = false;
+        this.slideshowInterval = null;
+        this.countdownInterval = null;
+        this.currentSlide = 0;
+    }
 
+    _getDomElements() {
+        this.slideshowContainer = document.getElementById('wettbewerb-slideshow-container');
+        this.slideshowDots = document.getElementById('slideshow-dots');
+        this.slideshowPrev = document.getElementById('slideshow-prev');
+        this.slideshowNext = document.getElementById('slideshow-next');
+        this.challengeSection = document.getElementById('wettbewerb-challenge-section');
+        this.chartSection = document.getElementById('wettbewerb-chart-section');
+        this.chartContainer = document.getElementById('challenge-chart-container');
+        this.qualifiedList = document.getElementById('qualified-list');
+        this.contenderList = document.getElementById('contender-list');
+        return this.slideshowContainer && this.challengeSection && this.chartSection && this.qualifiedList && this.contenderList;
+    }
+
+    async init() {
+        if (!this._getDomElements()) {
+            console.error('[Wettbewerb] Benötigte DOM-Elemente nicht gefunden.');
+            return;
+        }
+        this.setupSlideshow();
+        this.setupCountdown();
+        await this.fetchAndRender();
+        this.initialized = true;
+    }
+
+    setupSlideshow() {
+        this.images = [
+            { src: 'https://images.unsplash.com/photo-1550345332-09e3ac987658?q=80&w=2574&auto=format&fit=crop', alt: 'Paris, Frankreich' },
+            { src: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?q=80&w=2094&auto=format&fit=crop', alt: 'Tokio, Asien' },
+            { src: 'https://images.unsplash.com/photo-1485871981521-5b1fd3805eee?q=80&w=2070&auto=format&fit=crop', alt: 'New York, Amerika' },
+            { src: 'https://images.unsplash.com/photo-1523805009345-7448845a9e53?q=80&w=2072&auto=format&fit=crop', alt: 'Safari in Afrika' },
+            { src: 'https://images.unsplash.com/photo-1513026705753-bc3fffca8bf4?q=80&w=2070&auto=format&fit=crop', alt: 'Santorini, Europa' }
+        ];
+
+        // Preload images to prevent white flash
+        this.images.forEach(imgData => {
+            const img = new Image();
+            img.src = imgData.src;
+        });
+
+        this.slideshowContainer.innerHTML = ''; // Clear previous content
+        this.slideshowDots.innerHTML = '';
+
+        this.images.forEach((img, index) => {
+            const slide = document.createElement('div');
+            slide.className = 'slide';
+            slide.style.backgroundImage = `url("${img.src}")`;
+            slide.dataset.index = index;
+            this.slideshowContainer.appendChild(slide);
+
+            const dot = document.createElement('div');
+            dot.className = 'dot';
+            dot.dataset.index = index;
+            this.slideshowDots.appendChild(dot);
+        });
+
+        this.slides = this.slideshowContainer.querySelectorAll('.slide');
+        this.dots = this.slideshowDots.querySelectorAll('.dot');
+
+        // NEU: Verhindert die Einblend-Animation für das erste Bild, um ein "Aufblitzen" zu vermeiden.
+        this.slideshowContainer.classList.add('no-transition');
+        this.slideshowPrev.addEventListener('click', () => this.showSlide(this.currentSlide - 1));
+        this.slideshowNext.addEventListener('click', () => this.showSlide(this.currentSlide + 1));
+        this.dots.forEach(dot => dot.addEventListener('click', (e) => this.showSlide(parseInt(e.target.dataset.index))));
+
+        this.showSlide(0);
+        this.startAutoplay();
+        // Entfernt die Klasse nach einer kurzen Verzögerung, um Animationen für die folgenden Bilder zu ermöglichen.
+        setTimeout(() => this.slideshowContainer.classList.remove('no-transition'), 100);
+    }
+
+    showSlide(index) {
+        if (this.slides.length === 0) return;
+        this.currentSlide = (index + this.slides.length) % this.slides.length;
+
+        this.slides.forEach(slide => slide.classList.remove('active'));
+        this.dots.forEach(dot => dot.classList.remove('active'));
+
+        this.slides[this.currentSlide].classList.add('active');
+        this.dots[this.currentSlide].classList.add('active');
+
+        // NEU: Caption aktualisieren
+        const captionEl = document.getElementById('slideshow-caption');
+        if (captionEl && this.images) {
+            captionEl.textContent = this.images[this.currentSlide].alt;
+        }
+
+        this.resetAutoplay();
+    }
+
+    startAutoplay() {
+        this.slideshowInterval = setInterval(() => this.showSlide(this.currentSlide + 1), 5000);
+    }
+
+    resetAutoplay() {
+        clearInterval(this.slideshowInterval);
+        this.startAutoplay();
+    }
+
+    setupCountdown() {
+        if (this.countdownInterval) clearInterval(this.countdownInterval);
+
+        const countdownEl = document.getElementById('countdown-timer');
+        if (!countdownEl) return;
+
+        const deadline = new Date('2026-01-07T00:00:00').getTime();
+
+        const update = () => {
+            const now = new Date().getTime();
+            const distance = deadline - now;
+
+            if (distance < 0) {
+                countdownEl.textContent = "Der Wettbewerb ist beendet!";
+                clearInterval(this.countdownInterval);
+                return;
+            }
+
+            const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+            countdownEl.textContent = `${days}T ${hours.toString().padStart(2, '0')}H ${minutes.toString().padStart(2, '0')}Min ${seconds.toString().padStart(2, '0')}Sek`;
+        };
+
+        update();
+        this.countdownInterval = setInterval(update, 1000);
+    }
+
+    async fetchAndRender() {
+        const currentUser = authenticatedUserData;
+        const isLeader = isUserLeader(currentUser);
+        const jgstHierarchie = db.karriereplan.find(p => p.Stufe === 'JGST')?.Hierarchie || 3;
+        const userHierarchie = db.karriereplan.find(p => p.Stufe === currentUser.Karrierestufe)?.Hierarchie || 0;
+
+        if (isLeader && userHierarchie >= jgstHierarchie) {
+            this.challengeSection.classList.remove('hidden');
+            this.chartSection.classList.remove('hidden');
+
+            const qualifyingSubordinates = await this.getQualifyingSubordinates(currentUser._id);
+            this.renderChallengeChart(qualifyingSubordinates.length);
+        }
+
+        await this.renderCompanionList();
+    }
+
+    async getQualifyingSubordinates(leaderId) {
+        const directSubordinates = getSubordinates(leaderId, 'gruppe');
+        if (directSubordinates.length === 0) return [];
+
+        // Calculate date range for the last 2 sales months
+        const { startDate: currentCycleStart } = getMonthlyCycleDates();
+        const prevCycleStart = new Date(currentCycleStart);
+        prevCycleStart.setMonth(prevCycleStart.getMonth() - 2);
+        const { startDate: twoMonthsAgoStart } = getMonthlyCycleDatesForDate(prevCycleStart);
+        const { endDate: currentCycleEnd } = getMonthlyCycleDates();
+
+        const startDateIso = twoMonthsAgoStart.toISOString().split('T')[0];
+        const endDateIso = currentCycleEnd.toISOString().split('T')[0];
+
+        const subordinateIds = directSubordinates.map(s => `'${s._id}'`).join(',');
+        const subordinateNames = directSubordinates.map(s => `'${escapeSql(s.Name)}'`).join(',');
+
+        const query = `SELECT Mitarbeiter_ID, SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID IN (${subordinateNames}) AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}' GROUP BY Mitarbeiter_ID`;
+        const umsatzResultsRaw = await seaTableSqlQuery(query, true);
+        const umsatzResults = mapSqlResults(umsatzResultsRaw || [], 'Umsatz');
+
+        const qualifyingIds = new Set(
+            umsatzResults
+                .filter(r => r.totalEH >= 1)
+                .map(r => r.Mitarbeiter_ID[0].row_id)
+        );
+
+        return directSubordinates.filter(s => qualifyingIds.has(s._id));
+    }
+
+    renderChallengeChart(count) {
+        const progress = Math.min(count, 4);
+        const progressPercent = (progress / 4) * 100;
+
+        const pathData = "M 20 150 Q 150 150 150 80 T 280 20";
+        const stopLabels = ['1. MA', '2. MA', '3. MA', '4. MA'];
+
+        const tempPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        tempPath.setAttribute('d', pathData);
+        const pathLength = tempPath.getTotalLength();
+
+        const progressLength = pathLength * (progressPercent / 100);
+        const planePos = tempPath.getPointAtLength(progressLength);
+        
+        // Calculate plane angle
+        const p1 = tempPath.getPointAtLength(Math.max(0, progressLength - 1));
+        const p2 = planePos;
+        const planeAngle = Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180 / Math.PI;
+
+        let stopsHtml = '';
+        for (let i = 1; i <= 4; i++) {
+            const stopPercent = (i / 4) * 100;
+            const stopLength = pathLength * (stopPercent / 100);
+            const pos = tempPath.getPointAtLength(stopLength);
+            const isReached = progress >= i;
+
+            stopsHtml += `
+                <g class="flight-stop ${isReached ? 'reached' : ''}" transform="translate(${pos.x}, ${pos.y})">
+                    <circle cx="0" cy="0" r="12"></circle>
+                    <text x="0" y="1" class="stop-number">${i}</text>
+                </g>
+                <text x="${pos.x}" y="${pos.y + 25}" class="stop-label">${stopLabels[i-1]}</text>
+            `;
+        }
+
+        // NEU: "Ziel!"-Text am Ende des Pfades hinzufügen
+        const finalPos = tempPath.getPointAtLength(pathLength);
+        stopsHtml += `
+            <g transform="translate(${finalPos.x}, ${finalPos.y})">
+                <text class="stop-label" style="font-size: 1.2rem; fill: var(--color-accent-gold); transform: translate(15px, 5px);" text-anchor="start">Ziel! ☀️</text>
+            </g>
+        `;
+
+        this.chartContainer.innerHTML = `
+            <svg width="100%" height="100%" viewBox="0 0 300 180" preserveAspectRatio="xMidYNone meet">
+                <defs>
+                    <linearGradient id="flightProgressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#38bdf8" />
+                        <stop offset="100%" stop-color="#a78bfa" />
+                    </linearGradient>
+                </defs>
+                <path d="${pathData}" class="flight-path-track" fill="none" />
+                <path d="${pathData}" class="flight-path-progress" fill="none" stroke="url(#flightProgressGradient)" stroke-dasharray="${pathLength}" stroke-dashoffset="${pathLength}" />
+                ${stopsHtml}
+                <g class="plane-wrapper" style="transform: translate(${planePos.x}px, ${planePos.y}px) rotate(${planeAngle}deg);">
+                    <text class="plane-icon" x="0" y="0">✈️</text>
+                </g>
+            </svg>
+        `;
+
+        // Animate progress bar after rendering
+        setTimeout(() => {
+            const progressPath = this.chartContainer.querySelector('.flight-path-progress');
+            if (progressPath) {
+                progressPath.style.strokeDashoffset = pathLength - progressLength;
+            }
+        }, 100);
+
+        // NEU: Text-Bereich füllen
+        const textContainer = document.getElementById('challenge-text-container');
+        if (textContainer) {
+            const deadline = new Date('2026-01-07');
+            const today = new Date();
+            
+            let infoabendeCount = 0;
+            let currentDate = new Date(today);
+            while(currentDate <= deadline) {
+                if (isDateValidInfoabend(currentDate)) {
+                    infoabendeCount++;
+                }
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+
+            const remainingMitarbeiter = Math.max(0, 4 - count);
+            const remainingETs = remainingMitarbeiter * 10;
+            const weeksRemaining = (deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 7);
+            const etsPerWeek = weeksRemaining > 0 ? (remainingETs / weeksRemaining).toFixed(1) : 0;
+
+            textContainer.innerHTML = `
+                <div class="p-4 bg-skt-grey-light rounded-lg"><p class="font-semibold text-skt-blue"><i class="fas fa-bullseye mr-2 text-skt-blue-main"></i>1 qualifizierter MA = 10 Einstellungstermine (Ø)</p></div>
+                <div class="p-4 bg-skt-grey-light rounded-lg"><p class="font-semibold text-skt-blue"><i class="fas fa-calendar-check mr-2 text-skt-blue-main"></i><span class="font-bold text-skt-blue-main">${infoabendeCount}</span> Infoabende bis zum 07.01.2026</p></div>
+                <div class="p-4 bg-skt-grey-light rounded-lg"><p class="font-semibold text-skt-blue"><i class="fas fa-chart-line mr-2 text-skt-blue-main"></i>Du benötigst im Schnitt noch <span class="font-bold text-skt-blue-main">${etsPerWeek}</span> ETs pro Woche!</p></div>
+            `;
+        }
+    }
+
+    async renderCompanionList() {
+        this.qualifiedList.innerHTML = '<div class="loader mx-auto"></div>';
+        this.contenderList.innerHTML = '<div class="loader mx-auto"></div>';
+
+        const leaders = db.mitarbeiter.filter(m => isUserLeader(m) && m.Status !== 'Ausgeschieden');
+        const qualified = [];
+        const contenders = [];
+
+        for (const leader of leaders) {
+            const qualifyingSubs = await this.getQualifyingSubordinates(leader._id);
+            const count = qualifyingSubs.length;
+            const subNames = qualifyingSubs.map(s => s.Name); // NEU
+
+            if (count >= 4) {
+                qualified.push({ name: leader.Name, count: count, subNames }); // NEU: subNames hinzufügen
+            } else if (count >= 2 && count <= 3) {
+                contenders.push({ name: leader.Name, count: count, subNames }); // NEU: subNames hinzufügen
+            }
+        }
+
+        this.renderCompanionGroup(this.qualifiedList, qualified.sort((a,b) => b.count - a.count), false);
+        this.renderCompanionGroup(this.contenderList, contenders.sort((a,b) => b.count - a.count), true);
+    }
+
+    renderCompanionGroup(container, list, isContender) {
+        container.innerHTML = '';
+        if (list.length === 0) {
+            container.innerHTML = `<p class="text-gray-500">${isContender ? 'Noch keine Anwärter.' : 'Noch niemand qualifiziert.'}</p>`;
+            return;
+        }
+
+        list.forEach(item => {
+            const itemEl = document.createElement('div');
+            itemEl.className = `flex items-center justify-between p-3 rounded-lg ${isContender ? 'contender-item' : 'bg-green-50'}`;
+            // NEU: Tooltip mit den Namen der qualifizierten Mitarbeiter
+            const subNamesList = item.subNames.join(', ');
+            itemEl.title = `Qualifizierte Mitarbeiter: ${subNamesList || 'Keine'}`;
+            itemEl.innerHTML = `
+                <span class="font-bold ${isContender ? 'text-gray-600' : 'text-skt-blue'}">${item.name}</span>
+                <span class="font-semibold ${isContender ? 'text-gray-500' : 'text-skt-green-accent'}">${item.count} MA</span>
+            `;
+            container.appendChild(itemEl);
+        });
+    }
+}
+
+async function loadAndInitWettbewerbView() {
+    const container = dom.wettbewerbView;
+    try {
+        const response = await fetch("./wettbewerb.html");
+        if (!response.ok) throw new Error(`Die Datei 'wettbewerb.html' konnte nicht gefunden werden.`);
+        container.innerHTML = await response.text();
+        if (!wettbewerbViewInstance) wettbewerbViewInstance = new WettbewerbView();
+        await wettbewerbViewInstance.init();
+    } catch (error) {
+        console.error("Fehler beim Laden der Wettbewerb-Ansicht:", error);
+        container.innerHTML = `<p class="text-red-500 text-center">${error.message}</p>`;
+    }
+}
 
 // --- START ---
 document.addEventListener("DOMContentLoaded", initializeDashboard);
@@ -12678,6 +13071,7 @@ function switchView(viewName) {
   dom.auswertungView.classList.toggle("hidden", viewName !== "auswertung");
   dom.strukturbaumView.classList.toggle("hidden", viewName !== "strukturbaum");
   dom.pgTagebuchView.classList.toggle('hidden', viewName !== 'pg-tagebuch');
+  dom.wettbewerbView.classList.toggle('hidden', viewName !== 'wettbewerb'); // NEU
   dom.stimmungsDashboardView.classList.toggle('hidden', viewName !== 'stimmungs-dashboard');
   document.getElementById('bildschirm-view').classList.add('hidden'); // Sicherstellen, dass die Bildschirm-Ansicht immer ausgeblendet ist
   updateBackButtonVisibility();
@@ -12691,8 +13085,9 @@ function switchView(viewName) {
       'pg-tagebuch': [dom.pgTagebuchHeaderBtn, document.getElementById('pg-tagebuch-menu-item')],
       'potential': [dom.potentialHeaderBtn, document.getElementById('potential-menu-item')],
       'auswertung': [dom.auswertungHeaderBtn, document.getElementById('auswertung-menu-item')],
+      'wettbewerb': [dom.wettbewerbHeaderBtn, document.getElementById('wettbewerb-menu-item')], // NEU
       'strukturbaum': [dom.strukturbaumHeaderBtn, document.getElementById('strukturbaum-menu-item')],
-      'stimmungs-dashboard': [dom.stimmungsDashboardHeaderBtn, document.getElementById('stimmungs-dashboard-menu-item')],
+      'stimmungs-dashboard': [document.getElementById('stimmungs-dashboard-header-btn')],
       'datenschutz': [dom.datenschutzHeaderBtn],
   };
 
@@ -12722,7 +13117,9 @@ function switchView(viewName) {
       switchView('dashboard'); // KORREKTUR: Sicherheitsprüfung für Stimmungsdashboard
       return;
   }
-  if (viewName === 'stimmungs-dashboard' && !isUserLeader(authenticatedUserData)) {
+  // KORREKTUR: Sicherheitsprüfung für Stimmungsdashboard, die explizit auf `true` prüft.
+  const hasStimmungsAccess = authenticatedUserData.Checkin === true || String(authenticatedUserData.Checkin).toLowerCase() === 'true';
+  if (viewName === 'stimmungs-dashboard' && !hasStimmungsAccess) {
       alert('Du hast keine Berechtigung für diese Ansicht.');
       switchView('dashboard');
       return;
@@ -12744,6 +13141,14 @@ function switchView(viewName) {
     loadAndInitPGTagebuchView();
   } else if (viewName === 'stimmungs-dashboard') {
     loadAndInitStimmungsDashboardView();
+  } else if (viewName === 'wettbewerb') { // NEU
+    const wettbewerbAllowedUsers = ["Jason Schreiber", "Samuel Königslehner"];
+    if (!authenticatedUserData || !wettbewerbAllowedUsers.includes(authenticatedUserData.Name.trim())) {
+        alert('Du hast keine Berechtigung für diese Ansicht.');
+        switchView('dashboard');
+        return;
+    }
+      loadAndInitWettbewerbView();
   }
 }
 

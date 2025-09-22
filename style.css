@@ -1331,3 +1331,90 @@ summary::-webkit-details-marker {
     font-size: 0.75rem;
     font-weight: 600;
 }
+
+/* --- NEU: Stile für Wettbewerb-Seite --- */
+/* Slideshow */
+#wettbewerb-slideshow-container .slide {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transition: opacity 1s ease-in-out;
+    background-size: cover;
+    background-position: center;
+}
+#wettbewerb-slideshow-container .slide.active {
+    opacity: 1;
+}
+#slideshow-dots .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+#slideshow-dots .dot.active {
+    background-color: white;
+}
+
+/* NEU: Verhindert die Einblend-Animation für das erste Bild */
+#wettbewerb-slideshow-container.no-transition .slide {
+    transition: none;
+}
+
+/* Challenge Chart - Flight Path */
+#challenge-chart-container .flight-path-track {
+    stroke: #e2e8f0; /* gray-200 */
+    stroke-width: 6;
+    stroke-linecap: round;
+    stroke-dasharray: 1, 10;
+}
+#challenge-chart-container .flight-path-progress {
+    stroke-width: 6;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1.2s ease-out;
+}
+#challenge-chart-container .flight-stop circle {
+    fill: white;
+    stroke: #cbd5e1; /* gray-300 */
+    stroke-width: 3;
+    transition: all 0.5s ease-out 0.5s;
+}
+#challenge-chart-container .flight-stop.reached circle {
+    fill: var(--color-skt-blue-main);
+    stroke: var(--color-skt-blue);
+}
+#challenge-chart-container .flight-stop .stop-number {
+    font-size: 0.8rem;
+    fill: #64748b; /* gray-500 */
+    text-anchor: middle;
+    dominant-baseline: middle;
+    font-weight: bold;
+    transition: fill 0.5s ease-out 0.5s;
+}
+#challenge-chart-container .flight-stop.reached .stop-number {
+    fill: white;
+}
+
+/* Reisebegleiter Liste */
+#contender-list .contender-item {
+    background-color: #f1f5f9; /* gray-100 */
+    opacity: 0.8;
+}
+#challenge-chart-container .stop-label {
+    font-size: 0.8rem;
+    fill: #475569; /* gray-600 */
+    text-anchor: middle;
+    font-weight: 600;
+}
+#challenge-chart-container .plane-wrapper {
+    transition: transform 1.2s ease-out;
+}
+#challenge-chart-container .plane-icon {
+    font-size: 1.8rem;
+    /* Adjust to center the emoji on the path */
+    transform: translate(-12px, 8px);
+}

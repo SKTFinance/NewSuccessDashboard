@@ -1,0 +1,77 @@
+<!-- Ansicht für den Wettbewerb -->
+<div id="wettbewerb-module-root" class="space-y-12">
+    <!-- 1. Headline -->
+    <div class="text-center">
+        <h1 class="text-4xl md:text-6xl font-extrabold text-skt-blue tracking-tight">
+            Mission SKT: Landesdirektion!
+        </h1>
+    </div>
+
+    <!-- NEU: Bonus-Sektion -->
+    <section class="bg-accent-gold text-white rounded-2xl p-8 shadow-lg text-center">
+        <h3 class="text-3xl md:text-5xl font-extrabold tracking-tight">10.000€ Reisebudget Zuschuss!</h3>
+        <p class="text-xl mt-2">Für eine unvergessliche Reise</p>
+    </section>
+
+    <!-- 2. Reiseziel Slideshow -->
+    <section class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
+        <h2 class="text-2xl md:text-3xl font-bold text-skt-blue mb-2">Manager Reise 2026 – Reiseziel Vorschläge:</h2>
+        <div id="wettbewerb-slideshow-container" class="relative w-full h-64 md:h-96 rounded-xl overflow-hidden mt-6 shadow-inner">
+            <!-- Slides werden per JS eingefügt -->
+            <div class="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex space-x-2" id="slideshow-dots">
+                <!-- Dots werden per JS eingefügt -->
+            </div>
+            <button id="slideshow-prev" class="absolute top-1/2 -translate-y-1/2 left-4 z-20 bg-white/50 hover:bg-white text-skt-blue rounded-full h-10 w-10 flex items-center justify-center transition-colors">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <button id="slideshow-next" class="absolute top-1/2 -translate-y-1/2 right-4 z-20 bg-white/50 hover:bg-white text-skt-blue rounded-full h-10 w-10 flex items-center justify-center transition-colors">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+        <div id="slideshow-caption" class="text-center mt-4 text-xl font-semibold text-skt-blue">
+            <!-- Caption wird per JS eingefügt -->
+        </div>
+    </section>
+
+    <!-- 3. Challenge-Bereich (Sichtbarkeit wird per JS gesteuert) -->
+    <section id="wettbewerb-challenge-section" class="hidden text-center bg-skt-blue-light text-white rounded-2xl p-8 shadow-lg">
+        <p class="text-xl mb-4">Mindestens <span class="text-gold font-bold">JGST</span> + <span class="text-gold font-bold">4 aktive Mitarbeiter</span> in der direkten Gruppe.</p>
+        <h3 class="text-2xl md:text-3xl font-bold">Stichtag: 07.01.2026</h3>
+        <div class="text-xl mt-4">
+            <span class="font-semibold">Zeit übrig:</span>
+            <span id="countdown-timer" class="font-mono text-2xl tracking-wider ml-2"></span>
+        </div>
+    </section>
+
+    <!-- 4. Chart zur Challenge -->
+    <section id="wettbewerb-chart-section" class="hidden bg-white rounded-2xl p-6 md:p-8 shadow-lg">
+        <h3 class="text-2xl font-bold text-skt-blue mb-8 text-center">Dein Weg zum Reiseziel</h3>
+        <div class="grid md:grid-cols-2 gap-8 items-center">
+            <div id="challenge-chart-container" class="relative max-w-full mx-auto h-72 md:h-96">
+                <!-- SVG Chart wird hier per JS gerendert -->
+            </div>
+            <div id="challenge-text-container" class="space-y-4 text-center md:text-left">
+                <!-- Text wird per JS gerendert -->
+            </div>
+        </div>
+    </section>
+
+    <!-- 5. Reisebegleiter-Liste -->
+    <section class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
+        <h3 class="text-2xl font-bold text-skt-blue mb-6">Deine qualifizierten Reisebegleiter</h3>
+        <div id="reisebegleiter-container" class="space-y-8">
+            <div>
+                <h4 class="text-xl font-semibold text-skt-green-accent mb-4 flex items-center"><i class="fas fa-check-circle mr-3"></i>Qualifiziert</h4>
+                <div id="qualified-list" class="space-y-3">
+                    <!-- Qualifizierte Personen werden hier per JS eingefügt -->
+                </div>
+            </div>
+            <div class="border-t pt-8">
+                <h4 class="text-xl font-semibold text-gray-500 mb-4 flex items-center"><i class="fas fa-hourglass-half mr-3"></i>Anwärter</h4>
+                <div id="contender-list" class="space-y-3">
+                    <!-- Anwärter werden hier per JS eingefügt -->
+                </div>
+            </div>
+        </div>
+    </section>
+</div>

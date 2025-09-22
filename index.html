@@ -91,6 +91,10 @@
                     <button id="umsatz-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Umsätze">
                         <i class="fas fa-chart-line"></i>
                     </button>
+                    <!-- NEU: Stimmungsdashboard-Button im Header -->
+                    <button id="stimmungs-dashboard-header-btn" class="hidden bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Stimmungsdashboard">
+                        <i class="fas fa-smile-beam"></i>
+                    </button>
                     <!-- Folgende Buttons werden auf kleinen Bildschirmen in einem Menü zusammengefasst -->
                     <button id="pg-tagebuch-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="PG-Tagebuch">
                         <i class="fas fa-comments"></i>
@@ -100,6 +104,9 @@
                     </button>
                     <button id="auswertung-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Auswertungen">
                         <i class="fas fa-trophy"></i>
+                    </button>
+                    <button id="wettbewerb-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Wettbewerb">
+                        <i class="fas fa-plane-departure"></i>
                     </button>
                     <button id="strukturbaum-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Strukturbaum">
                         <i class="fas fa-sitemap"></i>
@@ -113,6 +120,7 @@
                                 <a href="#" id="pg-tagebuch-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-comments w-5 mr-2"></i>PG-Tagebuch</a>
                                 <a href="#" id="potential-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-users w-5 mr-2"></i>Potential</a>
                                 <a href="#" id="auswertung-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-trophy w-5 mr-2"></i>Auswertung</a>
+                                <a href="#" id="wettbewerb-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-plane-departure w-5 mr-2"></i>Wettbewerb</a>
                                 <a href="#" id="strukturbaum-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sitemap w-5 mr-2"></i>Strukturbaum</a>
                         </div>
                     </div>
@@ -125,7 +133,6 @@
                                 <a href="#" id="money-view-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-euro-sign w-5 mr-2"></i>Geld-Ansicht</a>
                                 <a href="#" id="edit-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-edit w-5 mr-2"></i>Personendaten</a>
                                 <a href="#" id="planning-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-tasks w-5 mr-2"></i>Planung</a>
-                                <a href="#" id="stimmungs-dashboard-settings-item" class="hidden block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-smile-beam w-5 mr-2"></i>Stimmungsdashboard</a>
                                 <a href="#" id="add-new-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-plus w-5 mr-2"></i>Neuer Nutzer</a>
                                 <a href="#" id="datenschutz-header-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-shield-alt w-5 mr-2"></i>Datenschutz</a>                             <a href="#" id="time-travel-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-clock-rotate-left w-5 mr-2"></i>Zeitreise</a>
                                 <a href="#" id="clear-cache-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-right-from-bracket w-5 mr-2"></i>Logout</a>
@@ -452,6 +459,11 @@
         <main id="stimmungs-dashboard-view" class="hidden w-full max-w-7xl mx-auto flex-grow px-4 md:px-8 pt-6 pb-6">
             <!-- Inhalt von stimmungs-dashboard.html wird hier geladen -->
         </main>
+
+        <!-- Container für die Wettbewerb-Ansicht -->
+        <main id="wettbewerb-view" class="hidden w-full max-w-7xl mx-auto flex-grow px-4 md:px-8 pt-6 pb-6">
+            <!-- Inhalt von wettbewerb.html wird hier geladen -->
+        </main>
     </div>
 
     <!-- NEU: Container für die Bildschirm-Ansicht -->
@@ -570,6 +582,14 @@
                         <input type="date" id="edit-promotion-date" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
                      </div>
                      <p class="mt-1 text-xs text-gray-500">Startdatum deines nächsten Karriereschritts</p>
+                 </div>
+                 <!-- NEU: Check-in Aktivierung (nur für Führungskräfte sichtbar) -->
+                 <div id="edit-checkin-container" class="hidden items-center space-x-3 pt-4 border-t border-gray-200">
+                     <label for="edit-checkin-enabled" class="toggle-switch">
+                         <input type="checkbox" id="edit-checkin-enabled" class="sr-only peer">
+                         <div class="toggle-slider"></div>
+                     </label>
+                     <label for="edit-checkin-enabled" class="text-sm font-medium text-gray-700">Täglichen Check-in für diesen Nutzer aktivieren</label>
                  </div>
                  <div class="flex items-center space-x-3 pt-2">
                      <label for="edit-ausgeschieden" class="toggle-switch">
