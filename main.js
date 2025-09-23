@@ -8430,122 +8430,7 @@ class AuswertungView {
         }
     }
 
-    // NEU: Logik aus Stimmungsdashboard übernommen
-    getSingleUserPQQ(userId) {
-        const { startDate, endDate } = getPreviousMonthlyCycleDates();
-        const prevMonthName = startDate.toLocaleString("de-DE", { month: "long" });
-        const prevYear = startDate.getFullYear();
-
-        // Get EH plan
-        const plan = db.monatsplanung.find(p => 
-            p.Mitarbeiter_ID === userId &&
-            p.Monat === prevMonthName &&
-            p.Jahr === prevYear
-        );
-        const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
-
-        // Get ET plan
-        const prevMonthInfoPlan = db.infoplanung.find(p => 
-            p.Mitarbeiter_ID === userId &&
-            new Date(p.Informationsabend).getFullYear() === prevYear &&
-            new Date(p.Informationsabend).getMonth() === startDate.getMonth()
-        );
-        const ursprungszielET = prevMonthInfoPlan?.Ursprungsziel_ET || 0;
-
-        if (!plan && !prevMonthInfoPlan) return null;
-
-        // Get actual EH
-        const actualEH = db.umsatz.filter(sale => 
-            sale.Mitarbeiter_ID === userId &&
-            sale.Datum && new Date(sale.Datum) >= startDate && new Date(sale.Datum) <= endDate
-        ).reduce((sum, sale) => sum + (sale.EH || 0), 0);
-
-        // Get actual ET
-        const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
-        const actualET = db.termine.filter(t => 
-            t.Mitarbeiter_ID === userId && t.Kategorie === 'ET' && t.Datum &&
-            new Date(t.Datum) >= startDate && new Date(t.Datum) <= endDate &&
-            ET_STATUS_AUSGEMACHT.includes(t.Status)
-        ).length;
-
-        const ehQuote = (ursprungszielEH > 0) ? (actualEH / ursprungszielEH) : 1;
-        const etQuote = (ursprungszielET > 0) ? (actualET / ursprungszielET) : 1;
-        return ((ehQuote + etQuote) / 2) * 100;
-    }
-
-    _getIndividualKpiData(user) {
-        const warnings = [];
-        const values = {
-            cancellationRate: null,
-            closingRate: null,
-        };
-        const today = new Date();
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(today.getDate() - 30);
-        const twoWeeksAgo = new Date();
-        twoWeeksAgo.setDate(today.getDate() - 14);
-        const fourWeeksAgo = new Date();
-        fourWeeksAgo.setDate(today.getDate() - 28);
-
-        const { startDate: cycleStartDate } = getMonthlyCycleDates();
-        const currentMonthName = cycleStartDate.toLocaleString('de-DE', { month: 'long' });
-        const currentYear = cycleStartDate.getFullYear();
-        const plan = db.monatsplanung.find(p => p.Mitarbeiter_ID === user._id && p.Monat === currentMonthName && p.Jahr === currentYear);
-        if (!plan || !plan.EH_Ziel || plan.EH_Ziel <= 0) return { warnings, values };
-
-        const twoWeekAppointments = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Datum && new Date(t.Datum) >= twoWeeksAgo && new Date(t.Datum) <= today);
-        if (twoWeekAppointments.length > 0) {
-            const cancelledCount = twoWeekAppointments.filter(t => t.Absage === true || t.Status === 'Storno').length;
-            const cancellationRate = cancelledCount / twoWeekAppointments.length;
-            values.cancellationRate = cancellationRate;
-            if (cancellationRate >= 0.5) warnings.push(`Hoher Terminausfall (${(cancellationRate * 100).toFixed(0)}% in 2 Wochen)`);
-        }
-
-        const userStartDate = new Date(user.Startdatum);
-        if (userStartDate <= fourWeeksAgo) {
-            const fourWeekAppointments = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Datum && new Date(t.Datum) >= fourWeeksAgo && new Date(t.Datum) <= today && ['AT', 'BT', 'ET'].includes(t.Kategorie));
-            if (fourWeekAppointments.length < 5) warnings.push(`Geringe Aktivität (${fourWeekAppointments.length} Termine in 4 Wochen)`);
-
-            const nextInfoDateForPlan = findNextInfoDateAfter(today);
-            const nextInfoDateStringForPlan = nextInfoDateForPlan.toISOString().split('T')[0];
-            const infoPlan = db.infoplanung.find(p => p.Mitarbeiter_ID === user._id && p.Informationsabend && p.Informationsabend.startsWith(nextInfoDateStringForPlan));
-            const etGoal = infoPlan?.ET_Ziel || 0;
-            const fourWeekEtAppointments = fourWeekAppointments.filter(t => t.Kategorie === 'ET');
-            if (etGoal > 0 && fourWeekEtAppointments.length === 0) warnings.push('Keine Recruiting-Termine (ET) in den letzten 4 Wochen');
-        }
-
-        const userBTs = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Kategorie === 'BT' && t.Status === 'Gehalten' && t.Datum && new Date(t.Datum) >= thirtyDaysAgo && new Date(t.Datum) <= today);
-        if (userBTs.length > 0) {
-            let btsWithSale = 0;
-            for (const bt of userBTs) {
-                const terminDate = new Date(bt.Datum);
-                const oneWeek = 7 * 24 * 60 * 60 * 1000;
-                const searchStart = new Date(terminDate.getTime() - oneWeek);
-                const searchEnd = new Date(terminDate.getTime() + oneWeek);
-                const hasSale = db.umsatz.some(sale => sale.Kunde && bt.Terminpartner && sale.Kunde.trim().toLowerCase() === bt.Terminpartner.trim().toLowerCase() && sale.Datum && new Date(sale.Datum) >= searchStart && new Date(sale.Datum) <= searchEnd);
-                if (hasSale) btsWithSale++;
-            }
-            const closingRate = btsWithSale / userBTs.length;
-            values.closingRate = closingRate;
-            const noSaleRate = 1 - closingRate;
-            if (userBTs.length >= 2 && noSaleRate > 0.4) warnings.push(`Niedrige Abschlussquote (${(noSaleRate * 100).toFixed(0)}% der BTs ohne direkten Umsatz)`);
-        }
-
-        const pqq = this.getSingleUserPQQ(user._id);
-        if (pqq !== null && pqq < 50) warnings.push(`PQQ unter 50% (${pqq.toFixed(0)}%)`);
-
-        if (isUserLeader(user)) {
-            const groupMembers = getSubordinates(user._id, 'gruppe');
-            const groupMemberIds = new Set([user._id, ...groupMembers.map(m => m._id)]);
-            const groupAppointments = db.termine.filter(t => groupMemberIds.has(t.Mitarbeiter_ID) && t.Datum && new Date(t.Datum) >= thirtyDaysAgo && new Date(t.Datum) <= today && ['AT', 'BT', 'ET'].includes(t.Kategorie));
-            if (groupAppointments.length < 10) warnings.push(`Geringe Aktivität als FK (${groupAppointments.length} Termine in 30 Tagen)`);
-
-            const recentlyLeftCount = groupMembers.filter(m => m.Status === 'Ausgeschieden' && m.Ausscheidetag && new Date(m.Ausscheidetag) >= thirtyDaysAgo).length;
-            if (recentlyLeftCount > 2) warnings.push(`Hohe Fluktuation (${recentlyLeftCount} Austritte in der Gruppe in 30 Tagen)`);
-        }
-
-        return { warnings, values };
-    }
+    
 
     setupEventListeners() {
         document.querySelectorAll('.auswertung-tab').forEach(tab => {
@@ -8677,7 +8562,7 @@ class AuswertungView {
             
             let membersHtml = '';
             for (const member of groupMembers) {
-                const { warnings, values } = this._getIndividualKpiData(member);
+                const { warnings, values } = getIndividualKpiData(member);
 
                 const kpiValuesHtml = `
                     <div class="flex gap-x-6 gap-y-1 mt-2 text-xs text-gray-700 flex-wrap">
@@ -10554,6 +10439,156 @@ function getVerdienstForPosition(position) {
 
   const rate = parseFloat(verdienstValue);
   return isNaN(rate) ? 0 : rate;
+}
+
+// NEU: Globale Funktion zur PQQ-Berechnung
+function getSingleUserPQQ(userId) {
+    const { startDate, endDate } = getPreviousMonthlyCycleDates();
+    const prevMonthName = startDate.toLocaleString("de-DE", { month: "long" });
+    const prevYear = startDate.getFullYear();
+
+    // Get EH plan
+    const plan = db.monatsplanung.find(p => 
+        p.Mitarbeiter_ID === userId &&
+        p.Monat === prevMonthName &&
+        p.Jahr === prevYear
+    );
+    const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
+
+    // Get ET plan
+    const prevMonthInfoPlan = db.infoplanung.find(p => 
+        p.Mitarbeiter_ID === userId &&
+        new Date(p.Informationsabend).getFullYear() === prevYear &&
+        new Date(p.Informationsabend).getMonth() === startDate.getMonth()
+    );
+    const ursprungszielET = prevMonthInfoPlan?.Ursprungsziel_ET || 0;
+
+    if (!plan && !prevMonthInfoPlan) return null;
+
+    // Get actual EH
+    const actualEH = db.umsatz.filter(sale => 
+        sale.Mitarbeiter_ID === userId &&
+        sale.Datum && new Date(sale.Datum) >= startDate && new Date(sale.Datum) <= endDate
+    ).reduce((sum, sale) => sum + (sale.EH || 0), 0);
+
+    // Get actual ET
+    const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+    const actualET = db.termine.filter(t => 
+        t.Mitarbeiter_ID === userId && t.Kategorie === 'ET' && t.Datum &&
+        new Date(t.Datum) >= startDate && new Date(t.Datum) <= endDate &&
+        ET_STATUS_AUSGEMACHT.includes(t.Status)
+    ).length;
+
+    const ehQuote = (ursprungszielEH > 0) ? (actualEH / ursprungszielEH) : 1;
+    const etQuote = (ursprungszielET > 0) ? (actualET / ursprungszielET) : 1;
+    return ((ehQuote + etQuote) / 2) * 100;
+}
+
+// NEU: Globale Funktion zur KPI-Berechnung
+function getIndividualKpiData(user) {
+    const warnings = [];
+    const values = {
+        cancellationRate: null,
+        closingRate: null,
+    };
+    const today = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    const twoWeeksAgo = new Date();
+    twoWeeksAgo.setDate(today.getDate() - 14);
+    const fourWeeksAgo = new Date();
+    fourWeeksAgo.setDate(today.getDate() - 28);
+
+    const { startDate: cycleStartDate } = getMonthlyCycleDates();
+    const currentMonthName = cycleStartDate.toLocaleString('de-DE', { month: 'long' });
+    const currentYear = cycleStartDate.getFullYear();
+    const plan = db.monatsplanung.find(p => p.Mitarbeiter_ID === user._id && p.Monat === currentMonthName && p.Jahr === currentYear);
+    if (!plan || !plan.EH_Ziel || plan.EH_Ziel <= 0) return { warnings, values };
+
+    const twoWeekAppointments = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Datum && new Date(t.Datum) >= twoWeeksAgo && new Date(t.Datum) <= today);
+    if (twoWeekAppointments.length > 0) {
+        const cancelledCount = twoWeekAppointments.filter(t => t.Absage === true || t.Status === 'Storno').length;
+        const cancellationRate = cancelledCount / twoWeekAppointments.length;
+        values.cancellationRate = cancellationRate;
+        if (cancellationRate >= 0.5) warnings.push(`Hoher Terminausfall (${(cancellationRate * 100).toFixed(0)}% in 2 Wochen)`);
+    }
+
+    const userStartDate = new Date(user.Startdatum);
+    if (userStartDate <= fourWeeksAgo) {
+        const fourWeekAppointments = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Datum && new Date(t.Datum) >= fourWeeksAgo && new Date(t.Datum) <= today && ['AT', 'BT', 'ET'].includes(t.Kategorie));
+        if (fourWeekAppointments.length < 5) warnings.push(`Geringe Aktivität (${fourWeekAppointments.length} Termine in 4 Wochen)`);
+
+        const nextInfoDateForPlan = findNextInfoDateAfter(today);
+        const nextInfoDateStringForPlan = nextInfoDateForPlan.toISOString().split('T')[0];
+        const infoPlan = db.infoplanung.find(p => p.Mitarbeiter_ID === user._id && p.Informationsabend && p.Informationsabend.startsWith(nextInfoDateStringForPlan));
+        const etGoal = infoPlan?.ET_Ziel || 0;
+        const fourWeekEtAppointments = fourWeekAppointments.filter(t => t.Kategorie === 'ET');
+        if (etGoal > 0 && fourWeekEtAppointments.length === 0) warnings.push('Keine Recruiting-Termine (ET) in den letzten 4 Wochen');
+    }
+
+    const userBTs = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Kategorie === 'BT' && t.Status === 'Gehalten' && t.Datum && new Date(t.Datum) >= thirtyDaysAgo && new Date(t.Datum) <= today);
+    if (userBTs.length > 0) {
+        let btsWithSale = 0;
+        for (const bt of userBTs) {
+            const terminDate = new Date(bt.Datum);
+            const oneWeek = 7 * 24 * 60 * 60 * 1000;
+            const searchStart = new Date(terminDate.getTime() - oneWeek);
+            const searchEnd = new Date(terminDate.getTime() + oneWeek);
+            const hasSale = db.umsatz.some(sale => sale.Kunde && bt.Terminpartner && sale.Kunde.trim().toLowerCase() === bt.Terminpartner.trim().toLowerCase() && sale.Datum && new Date(sale.Datum) >= searchStart && new Date(sale.Datum) <= searchEnd);
+            if (hasSale) btsWithSale++;
+        }
+        const closingRate = btsWithSale / userBTs.length;
+        values.closingRate = closingRate;
+        const noSaleRate = 1 - closingRate;
+        if (userBTs.length >= 2 && noSaleRate > 0.4) warnings.push(`Niedrige Abschlussquote (${(noSaleRate * 100).toFixed(0)}% der BTs ohne direkten Umsatz)`);
+    }
+
+    const pqq = getSingleUserPQQ(user._id);
+    if (pqq !== null && pqq < 50) warnings.push(`PQQ unter 50% (${pqq.toFixed(0)}%)`);
+
+    if (isUserLeader(user)) {
+        const groupMembers = getSubordinates(user._id, 'gruppe');
+        const groupMemberIds = new Set([user._id, ...groupMembers.map(m => m._id)]);
+        const groupAppointments = db.termine.filter(t => groupMemberIds.has(t.Mitarbeiter_ID) && t.Datum && new Date(t.Datum) >= thirtyDaysAgo && new Date(t.Datum) <= today && ['AT', 'BT', 'ET'].includes(t.Kategorie));
+        if (groupAppointments.length < 10) warnings.push(`Geringe Aktivität als FK (${groupAppointments.length} Termine in 30 Tagen)`);
+
+        const recentlyLeftCount = groupMembers.filter(m => m.Status === 'Ausgeschieden' && m.Ausscheidetag && new Date(m.Ausscheidetag) >= thirtyDaysAgo).length;
+        if (recentlyLeftCount > 2) warnings.push(`Hohe Fluktuation (${recentlyLeftCount} Austritte in der Gruppe in 30 Tagen)`);
+
+        // NEU: KPI für Mitarbeiter ohne Umsatz
+        const { startDate: cycleStart, endDate: cycleEnd } = getMonthlyCycleDates();
+        const monthProgress = (today.getTime() - cycleStart.getTime()) / (cycleEnd.getTime() - cycleStart.getTime());
+
+        if (monthProgress >= 0.5) {
+            const subordinates = getSubordinates(user._id, 'gruppe');
+            const relevantSubordinates = subordinates.filter(sub => {
+                const subPlan = db.monatsplanung.find(p => p.Mitarbeiter_ID === sub._id && p.Monat === currentMonthName && p.Jahr === currentYear);
+                return subPlan && subPlan.EH_Ziel > 0;
+            });
+
+            if (relevantSubordinates.length > 0) {
+                let membersWithoutEH = 0;
+                for (const sub of relevantSubordinates) {
+                    const hasEH = db.umsatz.some(sale => 
+                        sale.Mitarbeiter_ID === sub._id && 
+                        sale.Datum && 
+                        new Date(sale.Datum) >= cycleStart && 
+                        new Date(sale.Datum) <= cycleEnd && 
+                        sale.EH > 0
+                    );
+                    if (!hasEH) {
+                        membersWithoutEH++;
+                    }
+                }
+                const percentageWithoutEH = membersWithoutEH / relevantSubordinates.length;
+                if (percentageWithoutEH >= 0.5) {
+                    warnings.push(`${membersWithoutEH} von ${relevantSubordinates.length} Mitarbeitern ohne Umsatz`);
+                }
+            }
+        }
+    }
+
+    return { warnings, values };
 }
 
 async function calculateAllStructureEarnings(memberIds, startDate, endDate) {
@@ -14189,157 +14224,11 @@ class StimmungsDashboardView {
         const warnings = [];
         const users = Array.from(userIds).map(id => findRowById('mitarbeiter', id)).filter(Boolean);
 
-        // NEU: Monatsdaten für Planungs-Check holen
-        const { startDate: cycleStartDate } = getMonthlyCycleDates();
-        const currentMonthName = cycleStartDate.toLocaleString('de-DE', { month: 'long' });
-        const currentYear = cycleStartDate.getFullYear();
-
-        const today = new Date();
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(today.getDate() - 30);
-
-        const twoWeeksAgo = new Date();
-        twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-        const fourWeeksAgo = new Date();
-        fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
-
         users.forEach(user => {
             if (user.Status === 'Ausgeschieden') return;
 
-            // NEU: Mitarbeiter ohne EH-Monatsziel überspringen
-            const plan = db.monatsplanung.find(p => 
-                p.Mitarbeiter_ID === user._id &&
-                p.Monat === currentMonthName &&
-                p.Jahr === currentYear
-            );
-            if (!plan || !plan.EH_Ziel || plan.EH_Ziel <= 0) {
-                return; // continue to next user
-            }
-
-            const userWarnings = [];
-            const isLeader = isUserLeader(user);
-
-            // KPI 1: High Cancellation Rate (last 2 weeks)
-            const twoWeekAppointments = db.termine.filter(t => 
-                t.Mitarbeiter_ID === user._id && 
-                t.Datum && 
-                new Date(t.Datum) >= twoWeeksAgo && 
-                new Date(t.Datum) <= today
-            );
-            
-            if (twoWeekAppointments.length > 0) {
-                const cancelledCount = twoWeekAppointments.filter(t => t.Absage === true || t.Status === 'Storno').length;
-                const cancellationRate = cancelledCount / twoWeekAppointments.length;
-                if (cancellationRate >= 0.5) {
-                    userWarnings.push(`Hoher Terminausfall (${(cancellationRate * 100).toFixed(0)}% in 2 Wochen)`);
-                }
-            }
-
-            // Check if user is active for at least 4 weeks
-            const userStartDate = new Date(user.Startdatum);
-            if (userStartDate <= fourWeeksAgo) {
-                // KPI 2: Low Activity Rate (last 4 weeks)
-                const fourWeekAppointments = db.termine.filter(t => 
-                    t.Mitarbeiter_ID === user._id &&
-                    t.Datum &&
-                    new Date(t.Datum) >= fourWeeksAgo &&
-                    new Date(t.Datum) <= today &&
-                    ['AT', 'BT', 'ET'].includes(t.Kategorie)
-                );
-
-                if (fourWeekAppointments.length < 5) {
-                    userWarnings.push(`Geringe Aktivität (${fourWeekAppointments.length} Termine in 4 Wochen)`);
-                }
-
-                // KPI 3: No Recruiting Activity (last 4 weeks)
-                // NEU: Finde den ET-Plan für den nächsten Infoabend
-                const nextInfoDateForPlan = findNextInfoDateAfter(today);
-                const nextInfoDateStringForPlan = nextInfoDateForPlan.toISOString().split('T')[0];
-                const infoPlan = db.infoplanung.find(p => 
-                    p.Mitarbeiter_ID === user._id && 
-                    p.Informationsabend && 
-                    p.Informationsabend.startsWith(nextInfoDateStringForPlan)
-                );
-                const etGoal = infoPlan?.ET_Ziel || 0;
-
-                const fourWeekEtAppointments = fourWeekAppointments.filter(t => t.Kategorie === 'ET');
-                if (etGoal > 0 && fourWeekEtAppointments.length === 0) {
-                    userWarnings.push('Keine Recruiting-Termine (ET) in den letzten 4 Wochen');
-                }
-            }
-
-            // --- NEW KPIs ---
-
-            // KPI: Low closing rate (everyone, last 30 days)
-            const userBTs = db.termine.filter(t => 
-                t.Mitarbeiter_ID === user._id &&
-                t.Kategorie === 'BT' &&
-                t.Status === 'Gehalten' &&
-                t.Datum &&
-                new Date(t.Datum) >= thirtyDaysAgo &&
-                new Date(t.Datum) <= today
-            );
-
-            if (userBTs.length > 0) {
-                let btsWithoutSale = 0;
-                for (const bt of userBTs) {
-                    // NEU: Logik an die Modal-Anzeige angepasst (+/- 7 Tage, ohne Mitarbeiter-Check)
-                    const terminDate = new Date(bt.Datum);
-                    const oneWeek = 7 * 24 * 60 * 60 * 1000;
-                    const searchStart = new Date(terminDate.getTime() - oneWeek);
-                    const searchEnd = new Date(terminDate.getTime() + oneWeek);
-
-                    const hasSale = db.umsatz.some(sale => 
-                        sale.Kunde && bt.Terminpartner &&
-                        sale.Kunde.trim().toLowerCase() === bt.Terminpartner.trim().toLowerCase() &&
-                        sale.Datum && new Date(sale.Datum) >= searchStart && new Date(sale.Datum) <= searchEnd
-                    );
-                    if (!hasSale) {
-                        btsWithoutSale++;
-                    }
-                }
-                const noSaleRate = btsWithoutSale / userBTs.length;
-                if (userBTs.length >= 2 && noSaleRate > 0.4) {
-                    userWarnings.push(`Niedrige Abschlussquote (${(noSaleRate * 100).toFixed(0)}% der BTs ohne direkten Umsatz)`);
-                }
-            }
-
-            // KPI: PQQ unter 50%
-            const pqq = this.getSingleUserPQQ(user._id);
-            if (pqq !== null && pqq < 50) {
-                userWarnings.push(`PQQ unter 50% (${pqq.toFixed(0)}%)`);
-            }
-
-            // Leader-specific KPIs
-            if (isLeader) {
-                // KPI: Geringe Aktivität als FK (letzte 30 Tage)
-                // NEU: Zählt jetzt die Termine der gesamten Gruppe (inkl. FK)
-                const groupMembers = getSubordinates(user._id, 'gruppe');
-                const groupMemberIds = new Set([user._id, ...groupMembers.map(m => m._id)]);
-
-                const groupAppointments = db.termine.filter(t => 
-                    groupMemberIds.has(t.Mitarbeiter_ID) &&
-                    t.Datum &&
-                    new Date(t.Datum) >= thirtyDaysAgo &&
-                    new Date(t.Datum) <= today &&
-                    ['AT', 'BT', 'ET'].includes(t.Kategorie)
-                );
-
-                if (groupAppointments.length < 10) {
-                    userWarnings.push(`Geringe Aktivität als FK (${groupAppointments.length} Termine in 30 Tagen)`);
-                }
-
-                // KPI: High fluctuation in group (last 30 days)
-                const recentlyLeftCount = groupMembers.filter(m => 
-                    m.Status === 'Ausgeschieden' && 
-                    m.Ausscheidetag && 
-                    new Date(m.Ausscheidetag) >= thirtyDaysAgo
-                ).length;
-
-                if (recentlyLeftCount > 2) {
-                    userWarnings.push(`Hohe Fluktuation (${recentlyLeftCount} Austritte in der Gruppe in 30 Tagen)`);
-                }
-            }
+            // NEU: Verwende die globale Funktion
+            const { warnings: userWarnings } = getIndividualKpiData(user);
 
             if (userWarnings.length > 0) {
                 warnings.push({
@@ -14350,13 +14239,13 @@ class StimmungsDashboardView {
             }
         });
 
-        this.kpiWarningsContainer.innerHTML = '';
         if (kpiWarningCountEl) kpiWarningCountEl.textContent = warnings.length;
         if (warnings.length === 0) {
             this.kpiWarningsContainer.innerHTML = '<p class="text-center text-gray-500 col-span-full py-4">Keine KPI-Warnungen. Alles im grünen Bereich!</p>';
             return;
         }
 
+        this.kpiWarningsContainer.innerHTML = ''; // Clear loader
         warnings.forEach(warning => {
             const warningEl = document.createElement('div');
             warningEl.className = 'p-3 bg-red-50 border-l-4 border-skt-red-accent rounded-r-lg';
