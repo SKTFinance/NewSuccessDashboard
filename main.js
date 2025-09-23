@@ -246,6 +246,11 @@ const dom = {
   moreToolsBtn: document.getElementById('more-tools-btn'),
   moreToolsMenu: document.getElementById('more-tools-menu'),
   stimmungsDashboardMenuItem: document.getElementById('stimmungs-dashboard-menu-item'),
+  helpBtn: document.getElementById('help-btn'),
+  helpModal: document.getElementById('help-modal'),
+  helpForm: document.getElementById('help-form'),
+  cancelHelpBtn: document.getElementById('cancel-help-btn'),
+  sendHelpBtn: document.getElementById('send-help-btn'),
 };
 
 // --- SEATABLE API FUNKTIONEN ---
@@ -1495,6 +1500,7 @@ async function showConfirmationModal(text, title = 'Bestätigung', okText = 'Bes
         titleEl.textContent = title;
         textEl.textContent = text;
         confirmOkBtn.textContent = okText;
+        confirmCancelBtn.classList.toggle('hidden', !cancelText);
         confirmCancelBtn.textContent = cancelText;
 
         const handleOk = () => { cleanup(); resolve(true); };
@@ -3237,6 +3243,76 @@ function updateBackButtonVisibility() {
   const isViewingAnotherUser = authenticatedUserData?._id !== currentlyViewedUserData?._id;
   const shouldShow = isViewingAnotherUser || isSuperuserView;
   dom.backButton.classList.toggle("hidden", !shouldShow);
+}
+
+function openHelpModal() {
+    dom.helpForm.reset();
+    dom.helpModal.classList.add('visible');
+    document.body.classList.add('modal-open');
+}
+
+function closeHelpModal() {
+    dom.helpModal.classList.remove('visible');
+    document.body.classList.remove('modal-open');
+}
+
+async function handleHelpFormSubmit() {
+    const sendBtn = dom.sendHelpBtn;
+    const sendBtnText = sendBtn.querySelector('#send-help-btn-text');
+    const sendBtnLoader = sendBtn.querySelector('.loader-small');
+
+    sendBtn.disabled = true;
+    sendBtnText.classList.add('hidden');
+    sendBtnLoader.classList.remove('hidden');
+
+    const subject = document.getElementById('help-subject').value;
+    const message = document.getElementById('help-message').value;
+
+    const success = await saveHelpRequestToDb(subject, message);
+
+    if (success) {
+        closeHelpModal(); // Close the form modal first
+
+        // Show confirmation
+        await showConfirmationModal(
+            'Dein Anliegen ist angekommen und wird umgehend bearbeitet.',
+            'Nachricht gesendet',
+            'OK',
+            '' // Hide cancel button
+        );
+
+        // Reset button state for next time
+        sendBtn.disabled = false;
+        sendBtnText.textContent = 'Senden';
+        sendBtnText.classList.remove('hidden');
+        sendBtnLoader.classList.add('hidden');
+        sendBtn.classList.remove('bg-skt-green-accent');
+        sendBtn.classList.add('bg-skt-blue', 'hover:bg-skt-blue-light');
+    } else {
+        alert('Fehler beim Senden der Nachricht. Bitte versuchen Sie es später erneut.');
+        sendBtn.disabled = false;
+        sendBtnText.classList.remove('hidden');
+        sendBtnLoader.classList.add('hidden');
+    }
+}
+
+async function saveHelpRequestToDb(subject, body) {
+    const tableName = 'Hilfe';
+    const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
+    if (!tableMap) {
+        console.error(`[Hilfe] Column map for table '${tableName}' not found.`);
+        alert('Fehler: Die Konfiguration für das Hilfe-Modul ist unvollständig. Bitte kontaktiere den Support.');
+        return false;
+    }
+
+    const rowData = {
+        [tableMap.Betreff]: subject,
+        [tableMap.Text]: body,
+    };
+
+    // Using genericAddRowWithLinks as it's robust. No links to set.
+    const success = await genericAddRowWithLinks(tableName, rowData, []);
+    return success;
 }
 
 // --- MAIN LOGIC ---
@@ -9613,6 +9689,18 @@ function setupEventListeners() {
     closeSettingsMenu();
     openEditUserModal();
   });
+
+  // NEU: Event Listener für Hilfe-Modal
+  dom.helpBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      closeSettingsMenu();
+      openHelpModal();
+  });
+  dom.helpForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      handleHelpFormSubmit();
+  });
+  dom.cancelHelpBtn.addEventListener('click', closeHelpModal);
 
   // --- Main Navigation ---
   dom.backButton.addEventListener("click", async () => {
