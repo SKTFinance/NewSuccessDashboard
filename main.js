@@ -167,7 +167,7 @@ const dom = {
   pgTagebuchHeaderBtn: document.getElementById('pg-tagebuch-header-btn'),
   strukturbaumHeaderBtn: document.getElementById("strukturbaum-header-btn"),
   wettbewerbHeaderBtn: document.getElementById("wettbewerb-header-btn"), // NEU
-  wettbewerbHeaderBtnWrapper: document.getElementById("wettbewerb-header-btn-wrapper"), // NEU
+  wettbewerbHeaderBtnWrapper: document.getElementById("wettbewerb-header-btn-wrapper"),
   auswertungView: document.getElementById("auswertung-view"),
   datenschutzView: document.getElementById("datenschutz-view"), // NEU
   umsatzView: document.getElementById("umsatz-view"),
@@ -245,7 +245,7 @@ const dom = {
   datenschutzHeaderBtn: document.getElementById('datenschutz-header-btn'),
   moreToolsBtn: document.getElementById('more-tools-btn'),
   moreToolsMenu: document.getElementById('more-tools-menu'),
-  wettbewerbMenuItem: document.getElementById('wettbewerb-menu-item'), // NEU
+  stimmungsDashboardMenuItem: document.getElementById('stimmungs-dashboard-menu-item'),
 };
 
 // --- SEATABLE API FUNKTIONEN ---
@@ -1645,19 +1645,19 @@ function updateUiForUserRoles() {
     const wettbewerbAllowedUsers = ["Jason Schreiber", "Samuel Königslehner"];
     const showWettbewerb = wettbewerbAllowedUsers.includes(user.Name.trim());
 
+    // Wettbewerb: Immer sichtbar (mobil + desktop), wenn Berechtigung da ist.
     if (dom.wettbewerbHeaderBtnWrapper) {
-        // The wrapper should be `hidden sm:block` for authorized users.
-        dom.wettbewerbHeaderBtnWrapper.classList.toggle('sm:block', showWettbewerb);
-    }
-    if (dom.wettbewerbMenuItem) {
-        dom.wettbewerbMenuItem.classList.toggle('hidden', !showWettbewerb);
+        dom.wettbewerbHeaderBtnWrapper.classList.toggle('hidden', !showWettbewerb);
     }
 
-    // Stimmungsdashboard visibility
+    // Stimmungsdashboard: Auf Desktop sichtbar, auf Mobil im Menü, wenn Berechtigung da ist.
     const hasStimmungsAccess = user.Checkin === true || String(user.Checkin).toLowerCase() === 'true';
     const stimmungsDashboardHeaderBtn = document.getElementById('stimmungs-dashboard-header-btn');
     if (stimmungsDashboardHeaderBtn) {
-        stimmungsDashboardHeaderBtn.classList.toggle('hidden', !hasStimmungsAccess);
+        stimmungsDashboardHeaderBtn.classList.toggle('sm:flex', hasStimmungsAccess);
+    }
+    if (dom.stimmungsDashboardMenuItem) {
+        dom.stimmungsDashboardMenuItem.classList.toggle('hidden', !hasStimmungsAccess);
     }
 }
 
