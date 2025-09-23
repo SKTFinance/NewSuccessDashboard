@@ -1595,7 +1595,7 @@ function getKpiWarningsForUser(user) {
         const cancelledCount = twoWeekAppointments.filter(t => t.Absage === true || t.Status === 'Storno').length;
         const cancellationRate = cancelledCount / twoWeekAppointments.length;
         if (cancellationRate >= 0.5) {
-            warnings.push(`Hohe Stornoquote (${(cancellationRate * 100).toFixed(0)}%)`);
+            warnings.push(`Hoher Terminausfall (${(cancellationRate * 100).toFixed(0)}%)`);
         }
     }
 
@@ -8235,6 +8235,7 @@ class AuswertungView {
         this.currentTab = 'rangliste'; // Wird in init() aus dem Speicher geladen
         this.currentFkRennlisteScope = 'group'; // NEU
         this.currentRanglisteTimespan = 'monat'; // NEU
+        this.currentKpiScope = 'gruppe'; // NEU
         this.currentAktivitaetenTimespan = 'woche';
         this.sortConfig = {
             rangliste: { column: 'eh', direction: 'desc' },
@@ -8248,6 +8249,8 @@ class AuswertungView {
         this.ranglisteTab = document.getElementById('rangliste-tab');
         this.aktivitaetenTab = document.getElementById('aktivitaeten-tab');
         this.fkRennlisteTab = document.getElementById('fk-rennliste-tab');
+        this.kpisTab = document.getElementById('kpis-tab');
+        this.kpisView = document.getElementById('kpis-view');
         this.ranglisteView = document.getElementById('rangliste-view');
         this.ranglisteListContainer = document.getElementById('rangliste-list-container'); // NEU
         this.ranglisteWocheBtn = document.getElementById('rangliste-woche-btn'); // NEU
@@ -8264,8 +8267,8 @@ class AuswertungView {
         this.fkRennlisteView = document.getElementById('fk-rennliste-view');
         this.naechstesInfoView = document.getElementById('naechstes-info-view');
         this.planungenTab = document.getElementById('planungen-tab'); // NEU
-        this.planungenView = document.getElementById('planungen-view'); // NEU
-        return this.ranglisteTab && this.aktivitaetenTab && this.fkRennlisteTab && this.planungenTab && this.ranglisteView && this.aktivitaetenView && this.fkRennlisteView && this.planungenView;
+        this.planungenView = document.getElementById('planungen-view'); // NEU // NEU
+        return this.ranglisteTab && this.aktivitaetenTab && this.fkRennlisteTab && this.planungenTab && this.kpisTab && this.ranglisteView && this.aktivitaetenView && this.fkRennlisteView && this.planungenView && this.kpisView;
     }
 
     _getHierarchyForGroup(groupName) {
@@ -8302,6 +8305,7 @@ class AuswertungView {
         this.currentAktivitaetenTimespan = loadUiSetting('aktivitaetenTimespan', 'woche');
         this.currentAktivitaetenRole = loadUiSetting('aktivitaetenRole', 'individual');
         this.currentRanglisteTimespan = loadUiSetting('ranglisteTimespan', 'monat'); // NEU
+        this.currentKpiScope = loadUiSetting('kpiScope', 'gruppe'); // NEU
 
         if (!this._getDomElements()) {
             auswertungLog('!!! FEHLER: Benötigte DOM-Elemente wurden nicht gefunden.');
@@ -8319,7 +8323,8 @@ class AuswertungView {
         this.aktivitaetenRoleFilter.value = this.currentAktivitaetenRole;
         // NEU: UI für Rangliste-Toggle aktualisieren
         this.ranglisteWocheBtn.classList.toggle('active', this.currentRanglisteTimespan === 'woche');
-        this.ranglisteMonatBtn.classList.toggle('active', this.currentRanglisteTimespan === 'monat');
+        this.ranglisteMonatBtn.classList.toggle('active', this.currentRanglisteTimespan === 'monat'); // NEU: UI für KPI-Scope-Toggle aktualisieren
+        document.querySelectorAll('.kpi-scope-btn').forEach(b => b.classList.toggle('active', b.dataset.scope === this.currentKpiScope));
 
         // NEU: Scope für FK-Rennliste laden und UI aktualisieren
         this.currentFkRennlisteScope = loadUiSetting('fkRennlisteScope', 'group');
@@ -8329,6 +8334,217 @@ class AuswertungView {
         this.setupEventListeners();
         this.updateTabs();
         await this.renderCurrentView();
+    }
+
+    async _renderKPIs() {
+        const cancellationRateEl = document.getElementById('auswertung-kpi-cancellation-rate');
+        const cancellationDetailsEl = document.getElementById('auswertung-kpi-cancellation-details');
+        const closingRateEl = document.getElementById('auswertung-kpi-closing-rate');
+        const closingDetailsEl = document.getElementById('auswertung-kpi-closing-details');
+
+        if (!cancellationRateEl || !closingRateEl) {
+            auswertungLog('KPI-Elemente in auswertung.html nicht gefunden. KPIs werden nicht gerendert.');
+            return;
+        }
+
+        // Get user IDs based on scope
+        let userIds = [];
+        const scope = this.currentKpiScope;
+        const currentUser = SKT_APP.authenticatedUserData; // Use logged-in user for context
+
+        switch (scope) {
+            case 'persoenlich':
+                userIds = [currentUser._id];
+                break;
+            case 'gruppe':
+                const groupMembers = getSubordinates(currentUser._id, 'gruppe');
+                userIds = [currentUser._id, ...groupMembers.map(u => u._id)];
+                break;
+            case 'struktur':
+                const structureMembers = getAllSubordinatesRecursive(currentUser._id);
+                userIds = [currentUser._id, ...structureMembers.map(u => u._id)];
+                break;
+            default:
+                userIds = [currentUser._id];
+        }
+
+        // The rest of the function uses userIdsSet, so this should work.
+        const userIdsSet = new Set(userIds);
+        const today = getCurrentDate();
+
+        // --- Terminausfall (Cancellation Rate) ---
+        const twoWeeksAgo = new Date(today);
+        twoWeeksAgo.setDate(today.getDate() - 14);
+        const allTwoWeekAppointments = db.termine.filter(t => 
+            userIdsSet.has(t.Mitarbeiter_ID) && 
+            t.Datum && 
+            new Date(t.Datum) >= twoWeeksAgo && 
+            new Date(t.Datum) <= today
+        );
+        
+        if (allTwoWeekAppointments.length > 0) {
+            const cancelledCount = allTwoWeekAppointments.filter(t => t.Absage === true || t.Status === 'Storno').length;
+            const cancellationRate = cancelledCount / allTwoWeekAppointments.length;
+            cancellationRateEl.textContent = `${(cancellationRate * 100).toFixed(0)}%`;
+            cancellationDetailsEl.textContent = `${cancelledCount} von ${allTwoWeekAppointments.length} Terminen`;
+        } else {
+            cancellationRateEl.textContent = '0%';
+            cancellationDetailsEl.textContent = 'Keine Termine in den letzten 14 Tagen';
+        }
+
+        // --- Abschlussquote (Closing Rate) ---
+        const thirtyDaysAgo = new Date(today);
+        thirtyDaysAgo.setDate(today.getDate() - 30);
+        const allUserBTs = db.termine.filter(t => 
+            userIdsSet.has(t.Mitarbeiter_ID) &&
+            t.Kategorie === 'BT' &&
+            t.Status === 'Gehalten' &&
+            t.Datum &&
+            new Date(t.Datum) >= thirtyDaysAgo &&
+            new Date(t.Datum) <= today
+        );
+
+        if (allUserBTs.length > 0) {
+            let btsWithSale = 0;
+            for (const bt of allUserBTs) {
+                const terminDate = new Date(bt.Datum);
+                const oneWeek = 7 * 24 * 60 * 60 * 1000;
+                const searchStart = new Date(terminDate.getTime() - oneWeek);
+                const searchEnd = new Date(terminDate.getTime() + oneWeek);
+
+                const hasSale = db.umsatz.some(sale => 
+                    sale.Kunde && bt.Terminpartner &&
+                    sale.Kunde.trim().toLowerCase() === bt.Terminpartner.trim().toLowerCase() &&
+                    sale.Datum && new Date(sale.Datum) >= searchStart && new Date(sale.Datum) <= searchEnd
+                );
+                if (hasSale) {
+                    btsWithSale++;
+                }
+            }
+            const closingRate = btsWithSale / allUserBTs.length;
+            closingRateEl.textContent = `${(closingRate * 100).toFixed(0)}%`;
+            closingDetailsEl.textContent = `${btsWithSale} von ${allUserBTs.length} BTs mit Umsatz`;
+        } else {
+            closingRateEl.textContent = 'N/A';
+            closingDetailsEl.textContent = 'Keine gehaltenen BTs in den letzten 30 Tagen';
+        }
+    }
+
+    // NEU: Logik aus Stimmungsdashboard übernommen
+    getSingleUserPQQ(userId) {
+        const { startDate, endDate } = getPreviousMonthlyCycleDates();
+        const prevMonthName = startDate.toLocaleString("de-DE", { month: "long" });
+        const prevYear = startDate.getFullYear();
+
+        // Get EH plan
+        const plan = db.monatsplanung.find(p => 
+            p.Mitarbeiter_ID === userId &&
+            p.Monat === prevMonthName &&
+            p.Jahr === prevYear
+        );
+        const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
+
+        // Get ET plan
+        const prevMonthInfoPlan = db.infoplanung.find(p => 
+            p.Mitarbeiter_ID === userId &&
+            new Date(p.Informationsabend).getFullYear() === prevYear &&
+            new Date(p.Informationsabend).getMonth() === startDate.getMonth()
+        );
+        const ursprungszielET = prevMonthInfoPlan?.Ursprungsziel_ET || 0;
+
+        if (!plan && !prevMonthInfoPlan) return null;
+
+        // Get actual EH
+        const actualEH = db.umsatz.filter(sale => 
+            sale.Mitarbeiter_ID === userId &&
+            sale.Datum && new Date(sale.Datum) >= startDate && new Date(sale.Datum) <= endDate
+        ).reduce((sum, sale) => sum + (sale.EH || 0), 0);
+
+        // Get actual ET
+        const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+        const actualET = db.termine.filter(t => 
+            t.Mitarbeiter_ID === userId && t.Kategorie === 'ET' && t.Datum &&
+            new Date(t.Datum) >= startDate && new Date(t.Datum) <= endDate &&
+            ET_STATUS_AUSGEMACHT.includes(t.Status)
+        ).length;
+
+        const ehQuote = (ursprungszielEH > 0) ? (actualEH / ursprungszielEH) : 1;
+        const etQuote = (ursprungszielET > 0) ? (actualET / ursprungszielET) : 1;
+        return ((ehQuote + etQuote) / 2) * 100;
+    }
+
+    _getIndividualKpiData(user) {
+        const warnings = [];
+        const values = {
+            cancellationRate: null,
+            closingRate: null,
+        };
+        const today = new Date();
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(today.getDate() - 30);
+        const twoWeeksAgo = new Date();
+        twoWeeksAgo.setDate(today.getDate() - 14);
+        const fourWeeksAgo = new Date();
+        fourWeeksAgo.setDate(today.getDate() - 28);
+
+        const { startDate: cycleStartDate } = getMonthlyCycleDates();
+        const currentMonthName = cycleStartDate.toLocaleString('de-DE', { month: 'long' });
+        const currentYear = cycleStartDate.getFullYear();
+        const plan = db.monatsplanung.find(p => p.Mitarbeiter_ID === user._id && p.Monat === currentMonthName && p.Jahr === currentYear);
+        if (!plan || !plan.EH_Ziel || plan.EH_Ziel <= 0) return { warnings, values };
+
+        const twoWeekAppointments = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Datum && new Date(t.Datum) >= twoWeeksAgo && new Date(t.Datum) <= today);
+        if (twoWeekAppointments.length > 0) {
+            const cancelledCount = twoWeekAppointments.filter(t => t.Absage === true || t.Status === 'Storno').length;
+            const cancellationRate = cancelledCount / twoWeekAppointments.length;
+            values.cancellationRate = cancellationRate;
+            if (cancellationRate >= 0.5) warnings.push(`Hoher Terminausfall (${(cancellationRate * 100).toFixed(0)}% in 2 Wochen)`);
+        }
+
+        const userStartDate = new Date(user.Startdatum);
+        if (userStartDate <= fourWeeksAgo) {
+            const fourWeekAppointments = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Datum && new Date(t.Datum) >= fourWeeksAgo && new Date(t.Datum) <= today && ['AT', 'BT', 'ET'].includes(t.Kategorie));
+            if (fourWeekAppointments.length < 5) warnings.push(`Geringe Aktivität (${fourWeekAppointments.length} Termine in 4 Wochen)`);
+
+            const nextInfoDateForPlan = findNextInfoDateAfter(today);
+            const nextInfoDateStringForPlan = nextInfoDateForPlan.toISOString().split('T')[0];
+            const infoPlan = db.infoplanung.find(p => p.Mitarbeiter_ID === user._id && p.Informationsabend && p.Informationsabend.startsWith(nextInfoDateStringForPlan));
+            const etGoal = infoPlan?.ET_Ziel || 0;
+            const fourWeekEtAppointments = fourWeekAppointments.filter(t => t.Kategorie === 'ET');
+            if (etGoal > 0 && fourWeekEtAppointments.length === 0) warnings.push('Keine Recruiting-Termine (ET) in den letzten 4 Wochen');
+        }
+
+        const userBTs = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Kategorie === 'BT' && t.Status === 'Gehalten' && t.Datum && new Date(t.Datum) >= thirtyDaysAgo && new Date(t.Datum) <= today);
+        if (userBTs.length > 0) {
+            let btsWithSale = 0;
+            for (const bt of userBTs) {
+                const terminDate = new Date(bt.Datum);
+                const oneWeek = 7 * 24 * 60 * 60 * 1000;
+                const searchStart = new Date(terminDate.getTime() - oneWeek);
+                const searchEnd = new Date(terminDate.getTime() + oneWeek);
+                const hasSale = db.umsatz.some(sale => sale.Kunde && bt.Terminpartner && sale.Kunde.trim().toLowerCase() === bt.Terminpartner.trim().toLowerCase() && sale.Datum && new Date(sale.Datum) >= searchStart && new Date(sale.Datum) <= searchEnd);
+                if (hasSale) btsWithSale++;
+            }
+            const closingRate = btsWithSale / userBTs.length;
+            values.closingRate = closingRate;
+            const noSaleRate = 1 - closingRate;
+            if (userBTs.length >= 2 && noSaleRate > 0.4) warnings.push(`Niedrige Abschlussquote (${(noSaleRate * 100).toFixed(0)}% der BTs ohne direkten Umsatz)`);
+        }
+
+        const pqq = this.getSingleUserPQQ(user._id);
+        if (pqq !== null && pqq < 50) warnings.push(`PQQ unter 50% (${pqq.toFixed(0)}%)`);
+
+        if (isUserLeader(user)) {
+            const groupMembers = getSubordinates(user._id, 'gruppe');
+            const groupMemberIds = new Set([user._id, ...groupMembers.map(m => m._id)]);
+            const groupAppointments = db.termine.filter(t => groupMemberIds.has(t.Mitarbeiter_ID) && t.Datum && new Date(t.Datum) >= thirtyDaysAgo && new Date(t.Datum) <= today && ['AT', 'BT', 'ET'].includes(t.Kategorie));
+            if (groupAppointments.length < 10) warnings.push(`Geringe Aktivität als FK (${groupAppointments.length} Termine in 30 Tagen)`);
+
+            const recentlyLeftCount = groupMembers.filter(m => m.Status === 'Ausgeschieden' && m.Ausscheidetag && new Date(m.Ausscheidetag) >= thirtyDaysAgo).length;
+            if (recentlyLeftCount > 2) warnings.push(`Hohe Fluktuation (${recentlyLeftCount} Austritte in der Gruppe in 30 Tagen)`);
+        }
+
+        return { warnings, values };
     }
 
     setupEventListeners() {
@@ -8349,6 +8565,17 @@ class AuswertungView {
                 document.querySelectorAll('.rangliste-timespan-btn').forEach(b => b.classList.remove('active'));
                 e.currentTarget.classList.add('active');
                 this.renderRangliste();
+            });
+        });
+
+        // NEU: Event Listener für KPI Scope
+        document.querySelectorAll('.kpi-scope-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.currentKpiScope = e.currentTarget.dataset.scope;
+                saveUiSetting('kpiScope', this.currentKpiScope);
+                document.querySelectorAll('.kpi-scope-btn').forEach(b => b.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+                this._renderKPIs();
             });
         });
 
@@ -8407,7 +8634,7 @@ class AuswertungView {
 
     updateTabs() {
         document.querySelectorAll('.auswertung-tab').forEach(tab => {
-            const isActive = tab.dataset.view === this.currentTab;
+            const isActive = tab.dataset.view === this.currentTab; // NEU
             tab.className = `auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg ${isActive ? 'border-skt-blue text-skt-blue' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}`;
         });
         document.querySelectorAll('.auswertung-view-content').forEach(view => {
@@ -8426,10 +8653,72 @@ class AuswertungView {
             case 'fk-rennliste':
                 await this.renderFkRennliste();
                 break;
+            case 'kpis': // NEW
+                await this._renderKPIs();
+                await this._renderEmployeeKpiList();
+                break;
             case 'planungen':
                 await this.renderPlanungen();
                 break;
         }
+    }
+
+    async _renderEmployeeKpiList() {
+        const container = document.getElementById('auswertung-kpi-employee-list');
+        if (!container) return;
+        container.innerHTML = '<div class="loader mx-auto"></div>';
+
+        const leaders = db.mitarbeiter.filter(m => isUserLeader(m) && m.Status !== 'Ausgeschieden').sort((a, b) => a.Name.localeCompare(b.Name));
+        
+        let finalHtml = '';
+
+        for (const leader of leaders) {
+            const groupMembers = [leader, ...getSubordinates(leader._id, 'gruppe')];
+            
+            let membersHtml = '';
+            for (const member of groupMembers) {
+                const { warnings, values } = this._getIndividualKpiData(member);
+
+                const kpiValuesHtml = `
+                    <div class="flex gap-x-6 gap-y-1 mt-2 text-xs text-gray-700 flex-wrap">
+                        <div>
+                            <span class="font-semibold text-skt-blue-light">Terminausfall:</span>
+                            <span class="font-bold">${values.cancellationRate !== null ? (values.cancellationRate * 100).toFixed(0) + '%' : 'N/A'}</span>
+                        </div>
+                        <div>
+                            <span class="font-semibold text-skt-blue-light">Abschlussquote:</span>
+                            <span class="font-bold">${values.closingRate !== null ? (values.closingRate * 100).toFixed(0) + '%' : 'N/A'}</span>
+                        </div>
+                    </div>
+                `;
+
+                if (warnings.length > 0) {
+                    membersHtml += `
+                        <div class="p-3 bg-red-50 border-l-4 border-skt-red-accent rounded-r-lg">
+                            <p class="font-bold text-skt-blue">${member.Name}</p>
+                            <ul class="list-disc list-inside mt-1">
+                                ${warnings.map(reason => `<li class="text-sm text-red-700">${_escapeHtml(reason)}</li>`).join('')}
+                            </ul>
+                            ${kpiValuesHtml}
+                        </div>
+                    `;
+                } else {
+                    membersHtml += `
+                        <div class="p-3 bg-green-50 border-l-4 border-skt-green-accent rounded-r-lg">
+                            <p class="font-bold text-skt-blue flex items-center">
+                                ${member.Name}
+                                <i class="fas fa-check-circle text-skt-green-accent ml-2"></i>
+                            </p>
+                            ${kpiValuesHtml}
+                        </div>
+                    `;
+                }
+            }
+
+            finalHtml += `<div class="mb-8"><h4 class="text-xl font-bold text-skt-blue mb-4">${leader.Name}</h4><div class="space-y-3">${membersHtml}</div></div>`;
+        }
+
+        container.innerHTML = finalHtml || '<p class="text-center text-gray-500">Keine Mitarbeiter zum Anzeigen gefunden.</p>';
     }
 
     async renderRangliste() {
@@ -13636,6 +13925,49 @@ class StimmungsDashboardView {
         this.renderKpiWarnings(userIdsSet);
     }
 
+    // Helper function for PQQ calculation for a single user
+    getSingleUserPQQ(userId) {
+        const { startDate, endDate } = getPreviousMonthlyCycleDates();
+        const prevMonthName = startDate.toLocaleString("de-DE", { month: "long" });
+        const prevYear = startDate.getFullYear();
+
+        // Get EH plan
+        const plan = db.monatsplanung.find(p => 
+            p.Mitarbeiter_ID === userId &&
+            p.Monat === prevMonthName &&
+            p.Jahr === prevYear
+        );
+        const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
+
+        // Get ET plan
+        const prevMonthInfoPlan = db.infoplanung.find(p => 
+            p.Mitarbeiter_ID === userId &&
+            new Date(p.Informationsabend).getFullYear() === prevYear &&
+            new Date(p.Informationsabend).getMonth() === startDate.getMonth()
+        );
+        const ursprungszielET = prevMonthInfoPlan?.Ursprungsziel_ET || 0;
+
+        if (!plan && !prevMonthInfoPlan) return null;
+
+        // Get actual EH
+        const actualEH = db.umsatz.filter(sale => 
+            sale.Mitarbeiter_ID === userId &&
+            sale.Datum && new Date(sale.Datum) >= startDate && new Date(sale.Datum) <= endDate
+        ).reduce((sum, sale) => sum + (sale.EH || 0), 0);
+
+        // Get actual ET
+        const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+        const actualET = db.termine.filter(t => 
+            t.Mitarbeiter_ID === userId && t.Kategorie === 'ET' && t.Datum &&
+            new Date(t.Datum) >= startDate && new Date(t.Datum) <= endDate &&
+            ET_STATUS_AUSGEMACHT.includes(t.Status)
+        ).length;
+
+        const ehQuote = (ursprungszielEH > 0) ? (actualEH / ursprungszielEH) : 1;
+        const etQuote = (ursprungszielET > 0) ? (actualET / ursprungszielET) : 1;
+        return ((ehQuote + etQuote) / 2) * 100;
+    }
+
     renderRedFlags(checkins) {
         this.redFlagsContainer.innerHTML = '';
         // KORREKTUR: Der alte Filter (c.Motivation === undefined) hat die Red Flags des Leiters ignoriert.
@@ -13899,7 +14231,7 @@ class StimmungsDashboardView {
                 const cancelledCount = twoWeekAppointments.filter(t => t.Absage === true || t.Status === 'Storno').length;
                 const cancellationRate = cancelledCount / twoWeekAppointments.length;
                 if (cancellationRate >= 0.5) {
-                    userWarnings.push(`Hohe Stornoquote (${(cancellationRate * 100).toFixed(0)}% in 2 Wochen)`);
+                    userWarnings.push(`Hoher Terminausfall (${(cancellationRate * 100).toFixed(0)}% in 2 Wochen)`);
                 }
             }
 
@@ -13920,8 +14252,18 @@ class StimmungsDashboardView {
                 }
 
                 // KPI 3: No Recruiting Activity (last 4 weeks)
+                // NEU: Finde den ET-Plan für den nächsten Infoabend
+                const nextInfoDateForPlan = findNextInfoDateAfter(today);
+                const nextInfoDateStringForPlan = nextInfoDateForPlan.toISOString().split('T')[0];
+                const infoPlan = db.infoplanung.find(p => 
+                    p.Mitarbeiter_ID === user._id && 
+                    p.Informationsabend && 
+                    p.Informationsabend.startsWith(nextInfoDateStringForPlan)
+                );
+                const etGoal = infoPlan?.ET_Ziel || 0;
+
                 const fourWeekEtAppointments = fourWeekAppointments.filter(t => t.Kategorie === 'ET');
-                if (fourWeekEtAppointments.length === 0) {
+                if (etGoal > 0 && fourWeekEtAppointments.length === 0) {
                     userWarnings.push('Keine Recruiting-Termine (ET) in den letzten 4 Wochen');
                 }
             }
@@ -13941,41 +14283,53 @@ class StimmungsDashboardView {
             if (userBTs.length > 0) {
                 let btsWithoutSale = 0;
                 for (const bt of userBTs) {
-                    const btDateString = new Date(bt.Datum).toISOString().split('T')[0];
+                    // NEU: Logik an die Modal-Anzeige angepasst (+/- 7 Tage, ohne Mitarbeiter-Check)
+                    const terminDate = new Date(bt.Datum);
+                    const oneWeek = 7 * 24 * 60 * 60 * 1000;
+                    const searchStart = new Date(terminDate.getTime() - oneWeek);
+                    const searchEnd = new Date(terminDate.getTime() + oneWeek);
+
                     const hasSale = db.umsatz.some(sale => 
-                        sale.Mitarbeiter_ID === user._id &&
-                        sale.Datum &&
-                        sale.Datum.startsWith(btDateString) &&
                         sale.Kunde && bt.Terminpartner &&
-                        sale.Kunde.trim().toLowerCase() === bt.Terminpartner.trim().toLowerCase()
+                        sale.Kunde.trim().toLowerCase() === bt.Terminpartner.trim().toLowerCase() &&
+                        sale.Datum && new Date(sale.Datum) >= searchStart && new Date(sale.Datum) <= searchEnd
                     );
                     if (!hasSale) {
                         btsWithoutSale++;
                     }
                 }
                 const noSaleRate = btsWithoutSale / userBTs.length;
-                if (noSaleRate > 0.4) {
+                if (userBTs.length >= 2 && noSaleRate > 0.4) {
                     userWarnings.push(`Niedrige Abschlussquote (${(noSaleRate * 100).toFixed(0)}% der BTs ohne direkten Umsatz)`);
                 }
             }
 
+            // KPI: PQQ unter 50%
+            const pqq = this.getSingleUserPQQ(user._id);
+            if (pqq !== null && pqq < 50) {
+                userWarnings.push(`PQQ unter 50% (${pqq.toFixed(0)}%)`);
+            }
+
             // Leader-specific KPIs
             if (isLeader) {
-                // KPI: Low activity for leaders (last 30 days)
-                const leaderAppointments = db.termine.filter(t => 
-                    t.Mitarbeiter_ID === user._id &&
+                // KPI: Geringe Aktivität als FK (letzte 30 Tage)
+                // NEU: Zählt jetzt die Termine der gesamten Gruppe (inkl. FK)
+                const groupMembers = getSubordinates(user._id, 'gruppe');
+                const groupMemberIds = new Set([user._id, ...groupMembers.map(m => m._id)]);
+
+                const groupAppointments = db.termine.filter(t => 
+                    groupMemberIds.has(t.Mitarbeiter_ID) &&
                     t.Datum &&
                     new Date(t.Datum) >= thirtyDaysAgo &&
                     new Date(t.Datum) <= today &&
                     ['AT', 'BT', 'ET'].includes(t.Kategorie)
                 );
 
-                if (leaderAppointments.length < 10) {
-                    userWarnings.push(`Geringe Aktivität als FK (${leaderAppointments.length} Termine in 30 Tagen)`);
+                if (groupAppointments.length < 10) {
+                    userWarnings.push(`Geringe Aktivität als FK (${groupAppointments.length} Termine in 30 Tagen)`);
                 }
 
                 // KPI: High fluctuation in group (last 30 days)
-                const groupMembers = getSubordinates(user._id, 'gruppe');
                 const recentlyLeftCount = groupMembers.filter(m => 
                     m.Status === 'Ausgeschieden' && 
                     m.Ausscheidetag && 

@@ -1,98 +1,64 @@
-<!-- Ansicht für die Auswertungen -->
-<div id="auswertung-module-root" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-        <h2 id="auswertung-title" class="text-3xl font-bold text-skt-blue">Auswertungen</h2>
-    </div>
+<!-- Ansicht für Auswertungen -->
+<div id="auswertung-module-root">
+    <h2 class="text-3xl font-bold text-skt-blue mb-6">Auswertungen</h2>
 
-    <!-- Tabs -->
-    <div class="border-b border-gray-200 mb-6">
-        <nav class="-mb-px flex space-x-8 overflow-x-auto hide-scrollbar pb-2" aria-label="Tabs">
-            <button id="rangliste-tab" data-view="rangliste" class="auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue">Rangliste</button>
-            <button id="aktivitaeten-tab" data-view="aktivitaeten" class="auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Aktivitäten</button>
-            <button id="fk-rennliste-tab" data-view="fk-rennliste" class="auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">FK Rennliste</button>
-            <button id="planungen-tab" data-view="planungen" class="auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Planungen</button>
-        </nav>
-    </div>
-
-    <!-- Container für die verschiedenen Ansichten -->
-    <div id="auswertung-content-container">
-
-        <!-- Rangliste View -->
-        <div id="rangliste-view" class="auswertung-view-content space-y-6">
-            <!-- NEU: Filter für Rangliste -->
-            <div class="flex justify-end items-center">
+    <!-- Bestehende Auswertungs-Tabs -->
+    <div class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
+        <div class="border-b border-gray-200 mb-6">
+            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                <button id="rangliste-tab" data-view="rangliste" class="auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg">Rangliste</button>
+                <button id="aktivitaeten-tab" data-view="aktivitaeten" class="auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg">Aktivitäten</button>
+                <button id="fk-rennliste-tab" data-view="fk-rennliste" class="auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg">FK-Rennliste</button>
+                <button id="kpis-tab" data-view="kpis" class="auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg">KPIs</button>
+                <button id="planungen-tab" data-view="planungen" class="auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg">Planungen</button>
+            </nav>
+        </div>
+        <div id="rangliste-view" class="auswertung-view-content">
+            <div class="flex justify-end mb-4">
                 <div class="view-toggle flex space-x-2">
                     <button id="rangliste-woche-btn" data-timespan="woche" class="rangliste-timespan-btn">Woche</button>
                     <button id="rangliste-monat-btn" data-timespan="monat" class="rangliste-timespan-btn active">Monat</button>
                 </div>
             </div>
-            <div id="rangliste-list-container">
-                <div class="loader mx-auto"></div>
-            </div>
+            <div id="rangliste-list-container" class="mt-6"></div>
         </div>
-
-        <!-- Aktivitäten View -->
         <div id="aktivitaeten-view" class="auswertung-view-content hidden">
             <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
-                <p id="aktivitaeten-date-range-hint" class="text-sm text-gray-600"></p>
-                <div class="flex items-center gap-4">
-                    <select id="aktivitaeten-role-filter" class="modern-select">
-                        <option value="individual" selected>Einzelleistung</option>
-                        <option value="leader">Führungskräfte</option>
-                    </select>
-                    <!-- NEU: Filter für "Nur meine Struktur" -->
-                    <select id="aktivitaeten-structure-filter" class="modern-select hidden">
-                        <option value="all">Gesamt</option>
-                        <option value="mine" selected>Nur meine Struktur</option>
-                    </select>
-                    <div class="view-toggle flex space-x-2"><button id="aktivitaeten-woche-btn" data-timespan="woche" class="aktivitaeten-timespan-btn active">Woche</button><button id="aktivitaeten-monat-btn" data-timespan="monat" class="aktivitaeten-timespan-btn">Monat</button></div>
+                <div class="view-toggle flex space-x-2"><button data-timespan="woche" class="aktivitaeten-timespan-btn">Woche</button><button data-timespan="monat" class="aktivitaeten-timespan-btn active">Monat</button></div>
+                <div class="flex gap-4"><select id="aktivitaeten-role-filter" class="modern-select"></select><select id="aktivitaeten-structure-filter" class="modern-select hidden"></select></div>
+            </div>
+            <p id="aktivitaeten-date-range-hint" class="text-sm text-gray-500 mb-4"></p>
+            <div id="aktivitaeten-list-container" class="mt-6"></div>
+        </div>
+        <div id="fk-rennliste-view" class="auswertung-view-content hidden"><div id="fk-rennliste-scope-toggle" class="view-toggle flex space-x-2"><button id="fk-rennliste-group-btn" class="active">Gruppe</button><button id="fk-rennliste-structure-btn">Struktur</button></div><select id="fk-rennliste-structure-filter" class="modern-select hidden"></select><div id="fk-rennliste-container" class="mt-6"></div></div>
+        <div id="planungen-view" class="auswertung-view-content hidden"><div class="flex gap-4 mb-4"><select id="planungen-month-select" class="modern-select"></select><select id="planungen-year-select" class="modern-select"></select></div><div id="planungen-list-container" class="mt-6"></div></div>
+        <!-- NEU: KPI Ansicht -->
+        <div id="kpis-view" class="auswertung-view-content hidden">
+            <div class="flex justify-end mb-6">
+                <div id="kpi-scope-toggle" class="view-toggle flex space-x-2">
+                    <button data-scope="struktur" class="kpi-scope-btn">Struktur</button>
+                    <button data-scope="gruppe" class="kpi-scope-btn">Gruppe</button>
+                    <button data-scope="persoenlich" class="kpi-scope-btn">Persönlich</button>
                 </div>
             </div>
-            <div id="aktivitaeten-list-container" class="space-y-6">
-                <!-- Inhalt wird per JS generiert -->
-                <div class="loader mx-auto"></div>
-            </div>
-        </div>
-
-        <!-- FK Rennliste View -->
-        <div id="fk-rennliste-view" class="auswertung-view-content hidden">
-            <div class="flex flex-col sm:flex-row justify-end items-center mb-4 gap-4">
-                <!-- NEU: Toggle für Gruppe/Struktur -->
-                <div id="fk-rennliste-scope-toggle" class="view-toggle flex space-x-2">
-                    <button id="fk-rennliste-group-btn" data-scope="group" class="active">Gruppe</button>
-                    <button id="fk-rennliste-structure-btn" data-scope="structure">Struktur</button>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Terminausfall -->
+                <div class="bg-skt-grey-light p-4 rounded-xl">
+                    <h4 class="text-lg font-semibold text-skt-blue mb-2">Terminausfall</h4>
+                    <p class="text-sm text-gray-500 mb-2">Letzte 14 Tage</p>
+                    <p class="text-3xl font-bold" id="auswertung-kpi-cancellation-rate">-%</p>
+                    <p class="text-sm text-gray-500" id="auswertung-kpi-cancellation-details">0 von 0 Terminen</p>
                 </div>
-                <select id="fk-rennliste-structure-filter" class="modern-select hidden w-full sm:w-auto">
-                    <option value="all">Gesamt</option>
-                    <option value="mine" selected>Nur meine Struktur</option>
-                </select>
-            </div>
-            <div id="fk-rennliste-container">
-                <!-- Inhalt wird per JS generiert -->
-                <div class="loader mx-auto"></div>
-            </div>
-        </div>
-
-        <!-- Planungen View -->
-        <div id="planungen-view" class="auswertung-view-content hidden space-y-6">
-            <!-- Filter -->
-            <div class="bg-skt-grey-light p-4 rounded-xl border border-gray-200">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                    <div>
-                        <label for="planungen-month-select" class="block text-sm font-medium text-gray-700 mb-1">Monat</label>
-                        <select id="planungen-month-select" class="modern-select"></select>
-                    </div>
-                    <div>
-                        <label for="planungen-year-select" class="block text-sm font-medium text-gray-700 mb-1">Jahr</label>
-                        <select id="planungen-year-select" class="modern-select"></select>
-                    </div>
+                <!-- Abschlussquote -->
+                <div class="bg-skt-grey-light p-4 rounded-xl">
+                    <h4 class="text-lg font-semibold text-skt-blue mb-2">Abschlussquote</h4>
+                    <p class="text-sm text-gray-500 mb-2">Letzte 30 Tage (gehaltene BTs)</p>
+                    <p class="text-3xl font-bold" id="auswertung-kpi-closing-rate">-%</p>
+                    <p class="text-sm text-gray-500" id="auswertung-kpi-closing-details">0 von 0 BTs mit Umsatz</p>
                 </div>
             </div>
-            <!-- List Container -->
-            <div id="planungen-list-container" class="space-y-8">
-                <!-- Inhalt wird per JS generiert -->
-            </div>
+            <!-- NEU: Mitarbeiter-KPI-Liste -->
+            <div id="auswertung-kpi-employee-list" class="mt-12 pt-8 border-t border-gray-200"></div>
         </div>
-
     </div>
 </div>
