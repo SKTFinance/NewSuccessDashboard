@@ -7365,6 +7365,12 @@ class PotentialView {
             if (potential) this.openScheduleModal(potential);
         });
 
+        // NEU: Event-Listener für den Löschen-Button
+        const deleteBtn = this.form.querySelector('#delete-potential-btn');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => this.handleDelete());
+        }
+
         // Schedule Modal
         this.scheduleForm.addEventListener('submit', e => this.handleScheduleSubmit(e));
         document.getElementById('close-schedule-modal-btn').addEventListener('click', () => this.closeScheduleModal());
@@ -7376,6 +7382,7 @@ class PotentialView {
         const title = this.modal.querySelector('#potential-modal-title');
         const idInput = this.form.querySelector('#potential-id');
         const userSelect = this.form.querySelector('#potential-user');
+        const deleteBtn = this.form.querySelector('#delete-potential-btn');
 
         const allRelevantUsers = [SKT_APP.authenticatedUserData, ...this.downline].filter(Boolean);
         userSelect.innerHTML = '';
@@ -7384,6 +7391,7 @@ class PotentialView {
         if (potential) {
             title.textContent = 'Kontakt bearbeiten';
             idInput.value = potential._id;
+            deleteBtn.classList.remove('hidden');
             this.form.querySelector('#potential-partner').value = potential.Terminpartner || '';
             const user = allRelevantUsers.find(u => u.Name === potential.Mitarbeiter_ID?.[0]?.display_value);
             if (user) userSelect.value = user._id;
@@ -7397,6 +7405,7 @@ class PotentialView {
         } else {
             title.textContent = 'Neuen Kontakt anlegen';
             idInput.value = '';
+            deleteBtn.classList.add('hidden');
             userSelect.value = this.currentUserId;
         }
         this.modal.classList.add('visible');
@@ -7404,6 +7413,27 @@ class PotentialView {
 
     closeModal() {
         this.modal.classList.remove('visible');
+    }
+
+    async handleDelete() {
+        const rowId = this.form.querySelector('#potential-id').value;
+        if (!rowId) return;
+
+        const confirmed = await showConfirmationModal(
+            'Möchten Sie dieses Potential wirklich endgültig löschen? Diese Aktion kann nicht rückgängig gemacht werden.',
+            'Löschen bestätigen',
+            'Ja, löschen'
+        );
+
+        if (confirmed) {
+            const success = await SKT_APP.seaTableDeleteRow('Termine', rowId);
+            if (success) {
+                this.closeModal();
+                await this.fetchAndRender();
+            } else {
+                alert('Fehler beim Löschen des Potentials.');
+            }
+        }
     }
 
     async handleFormSubmit(e) {
@@ -9981,7 +10011,8 @@ async function initializeDashboard() {
             (c.Stimmung !== null && c.Stimmung !== undefined)
         );
 
-        if (!hasAlreadyCheckedIn) {
+        // NEU: Check-in-Modal nur auf Geräten > 768px Breite anzeigen
+        if (!hasAlreadyCheckedIn && window.innerWidth > 768) {
             document.getElementById("user-select-screen").classList.add("hidden");
             document.getElementById("dashboard-content").classList.remove("hidden");
             await openCheckinModal();
@@ -12027,8 +12058,32 @@ async function addOrUpdateCheckinEntry(rowId, rowDataWithKeys) {
         return await genericAddRowWithLinks(tableName, rowDataWithKeys, ['Mitarbeiter']);
     }
 }
+
+function closeCheckinModal() {
+    const modal = document.getElementById('checkin-modal');
+    if (modal) modal.classList.remove('visible');
+    if (checkinTimerInterval) clearInterval(checkinTimerInterval);
+    document.body.classList.remove('modal-open');
+    document.documentElement.classList.remove('modal-open');
+
+    // If the modal was closed without completing, proceed to the dashboard.
+    // This prevents the user from being stuck if this was the initial login modal.
+    const todayString = new Date().toISOString().split('T')[0];
+    const hasAlreadyCheckedIn = db.checkin.some(c =>
+        c.Mitarbeiter === authenticatedUserData._id &&
+        c.Datum && c.Datum.startsWith(todayString) &&
+        (c.Stimmung !== null && c.Stimmung !== undefined)
+    );
+    if (!hasAlreadyCheckedIn) {
+        proceedToDashboard(authenticatedUserData._id);
+    }
+}
+
+
+
 async function openCheckinModal(isEditMode = false) {
     const modal = document.getElementById('checkin-modal');
+    const closeBtn = document.getElementById('close-checkin-modal-btn');
     const timerDisplay = document.getElementById('checkin-timer-display');
     checkinStartTime = Date.now();
 
@@ -12052,6 +12107,14 @@ async function openCheckinModal(isEditMode = false) {
             timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         }, 1000);
     }
+
+    // Event listeners for closing the modal
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeCheckinModal);
+    }
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeCheckinModal();
+    });
 
     const form = document.getElementById('checkin-form');
     const matrixContainer = document.getElementById('checkin-matrix-container');
