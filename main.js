@@ -21,9 +21,10 @@ const CHECKIN_COLUMN_MAP_FALLBACK = {
     "RecruitingTermine": "gggg",
     "AktuelleErfolge": "hhhh",
     "TodosErledigt": "iiii",
-    "Motivation": "jjjj",
-    "Stimmung": "kkkk",
-    "Todos": "llll"
+    "Motivation": "jjjj", // Fallback-Spalten-ID
+    "Stimmung": "kkkk",   // Fallback-Spalten-ID
+    "Todos": "llll",     // Fallback-Spalten-ID
+    "Dauer": "mmmm"      // NEU: Fallback-Spalten-ID für die Dauer
 };
 // --- GLOBALE VARIABLEN ---
 let seaTableAccessToken = null;
@@ -73,6 +74,8 @@ let pendingAppointmentScope = null;
 let pendingAppointmentGroupFilter = null; // NEU
 let pendingPgIdToOpen = null; // NEU
 let HIERARCHY_CACHE = null;
+let checkinStartTime = null; // NEU: Zeitstempel für den Start des Check-ins
+let checkinTimerInterval = null; // NEU: Intervall für den Check-in-Timer
 
 // --- NEU: Gekapselte Instanzen für jede Ansicht ---
 let appointmentsViewInstance = null;
@@ -11976,6 +11979,8 @@ async function addOrUpdateCheckinEntry(rowId, rowDataWithKeys) {
         // und sicherzustellen, dass alle Felder in einer einzigen Transaktion aktualisiert werden.
         const tableMap = COLUMN_MAPS.checkin;
         if (!tableMap) { checkinLog('!!! FEHLER: Spalten-Map für Checkin nicht gefunden.'); return false; }
+        const tableMeta = METADATA.tables.find(t => t.name.toLowerCase() === tableName.toLowerCase());
+        if (!tableMeta) { checkinLog(`!!! FEHLER: Metadaten für ${tableName} nicht gefunden.`); return false; }
         const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
 
         const setClauses = [];
@@ -11989,10 +11994,11 @@ async function addOrUpdateCheckinEntry(rowId, rowDataWithKeys) {
             const colName = reversedMap[key];
             if (!colName || colName === '_id') continue;
 
+            const colMeta = tableMeta.columns.find(c => c.key === key);
             let formattedValue;
-            if (value === null || value === undefined) {
+            if (value === null || value === undefined || value === '') {
                 formattedValue = "NULL";
-            } else if (key === tableMap.Stimmung) {
+            } else if (colMeta && (colMeta.type === 'number' || colMeta.type === 'duration')) {
                 const numValue = parseFloat(value);
                 formattedValue = isNaN(numValue) ? "NULL" : numValue;
             } else {
@@ -12023,6 +12029,30 @@ async function addOrUpdateCheckinEntry(rowId, rowDataWithKeys) {
 }
 async function openCheckinModal(isEditMode = false) {
     const modal = document.getElementById('checkin-modal');
+    const timerDisplay = document.getElementById('checkin-timer-display');
+    checkinStartTime = Date.now();
+
+    // KORREKTUR: Lade den bestehenden Check-in, um die Dauer zu initialisieren.
+    const todayStringForEdit = new Date().toISOString().split('T')[0];
+    const leaderCheckin = isEditMode ? db.checkin.find(c => 
+        c.Mitarbeiter === authenticatedUserData._id && 
+        c.Datum && c.Datum.startsWith(todayStringForEdit) && 
+        (c.Stimmung !== undefined && c.Stimmung !== null)
+    ) : null;
+    const initialDuration = leaderCheckin?.Dauer || 0; // in seconds
+
+    if (checkinTimerInterval) clearInterval(checkinTimerInterval);
+    if (timerDisplay) {
+        checkinTimerInterval = setInterval(() => {
+            if (!checkinStartTime) return;
+            const elapsedSeconds = Math.floor((Date.now() - checkinStartTime) / 1000);
+            const totalSeconds = initialDuration + elapsedSeconds;
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }, 1000);
+    }
+
     const form = document.getElementById('checkin-form');
     const matrixContainer = document.getElementById('checkin-matrix-container');
     const stimmungSlider = document.getElementById('checkin-stimmung');
@@ -12048,13 +12078,6 @@ async function openCheckinModal(isEditMode = false) {
 
     // NEU: Daten für den Bearbeitungsmodus abrufen
     const todayString = new Date().toISOString().split('T')[0];
-    // KORREKTUR: Die Unterscheidung zwischen Leiter- und Team-Check-in wird jetzt über das 'Stimmung'-Feld getroffen.
-    // Ein Haupteintrag hat immer eine Stimmung, ein reiner Matrix-Eintrag für ein Teammitglied nicht.
-    const leaderCheckin = isEditMode ? db.checkin.find(c => 
-        c.Mitarbeiter === authenticatedUserData._id && 
-        c.Datum && c.Datum.startsWith(todayString) && 
-        (c.Stimmung !== undefined && c.Stimmung !== null) // Haupteintrag hat eine Stimmung
-    ) : null;
     checkinLog('Heutiger Check-in des Leiters:', leaderCheckin);
 
     const teamCheckins = isEditMode ? db.checkin.filter(c => 
@@ -12233,6 +12256,7 @@ async function openCheckinModal(isEditMode = false) {
     // 5. Formular-Submit-Handler
     form.onsubmit = async (e) => {
         e.preventDefault();
+        if (checkinTimerInterval) clearInterval(checkinTimerInterval);
         const saveBtn = document.getElementById('save-checkin-btn');
         saveBtn.disabled = true;
         saveBtn.innerHTML = '<div class="loader-small mx-auto"></div>';
@@ -12262,6 +12286,9 @@ async function openCheckinModal(isEditMode = false) {
         const motivation = document.getElementById('checkin-motivation').value;
         const stimmung = parseInt(document.getElementById('checkin-stimmung').value, 10);
         const todos = serializeTodos();
+        // KORREKTUR: Korrekte Berechnung der Dauer beim Bearbeiten
+        const initialDurationOnSubmit = leaderCheckin?.Dauer || 0;
+        const durationInSeconds = checkinStartTime ? initialDurationOnSubmit + Math.round((Date.now() - checkinStartTime) / 1000) : initialDurationOnSubmit;
 
         // Prepare leader's full entry
         const leaderEntryData = {
@@ -12270,6 +12297,7 @@ async function openCheckinModal(isEditMode = false) {
             [COLUMN_MAPS.checkin.Motivation]: motivation,
             [COLUMN_MAPS.checkin.Stimmung]: stimmung,
             [COLUMN_MAPS.checkin.Todos]: todos,
+            [COLUMN_MAPS.checkin.Dauer]: durationInSeconds
         };
 
         const entriesToSave = [];
@@ -13368,7 +13396,9 @@ class StimmungsDashboardView {
         this.motivationContainer = document.getElementById('stimmungs-motivation-container');
         this.todosContainer = document.getElementById('stimmungs-todos-container');
         this.editTodayCheckinBtn = document.getElementById('edit-today-checkin-btn');
-        return this.scopeGroupBtn && this.scopeStructureBtn && this.startDateInput && this.endDateInput && this.distributionChartContainer && this.redFlagsContainer && this.chartContainer && this.motivationContainer && this.todosContainer && this.editTodayCheckinBtn && this.kpiWarningsContainer;
+        this.avgDurationHeaderContainer = document.getElementById('average-checkin-duration-header-container'); // NEU
+        this.avgDurationHeaderValue = document.getElementById('average-checkin-duration-header-value'); // NEU
+        return this.scopeGroupBtn && this.scopeStructureBtn && this.startDateInput && this.endDateInput && this.distributionChartContainer && this.redFlagsContainer && this.chartContainer && this.motivationContainer && this.todosContainer && this.editTodayCheckinBtn && this.kpiWarningsContainer && this.avgDurationHeaderContainer && this.avgDurationHeaderValue;
     }
 
     async init() {
@@ -13376,6 +13406,8 @@ class StimmungsDashboardView {
             console.error('[StimmungsDashboard] Benötigte DOM-Elemente nicht gefunden.');
             return;
         }
+        // Event Listener für den Bearbeiten-Button
+        this.editTodayCheckinBtn.addEventListener('click', () => openCheckinModal(true));
 // Initialisiere Datumsauswahl (letzte 30 Tage)
         this.endDate = new Date();
         this.startDate = new Date();
@@ -13448,6 +13480,7 @@ class StimmungsDashboardView {
         this.renderStimmungDistribution(filteredCheckins);
         this.renderMotivation(filteredCheckins);
         this.renderTodos(filteredCheckins);
+        this.renderAverageDuration(filteredCheckins); // NEU
         // NEU: KPI-Warnungen rendern
         this.renderKpiWarnings(userIdsSet);
     }
@@ -13620,6 +13653,29 @@ class StimmungsDashboardView {
         }).join('');
 
         this.distributionChartContainer.innerHTML = `<div class="flex h-full items-end gap-1">${chartHtml}</div>`;
+    }
+
+    renderAverageDuration(checkins) {
+        if (!this.avgDurationHeaderContainer || !this.avgDurationHeaderValue) return;
+
+        // Filter for main check-ins that have a valid duration.
+        // Duration is stored in seconds.
+        const durationCheckins = checkins.filter(c => c.Motivation && typeof c.Dauer === 'number' && c.Dauer > 0);
+
+        if (durationCheckins.length === 0) {
+            this.avgDurationHeaderContainer.classList.add('hidden');
+            return;
+        }
+
+        this.avgDurationHeaderContainer.classList.remove('hidden');
+        this.avgDurationHeaderContainer.classList.add('flex');
+
+        const avgSeconds = _.meanBy(durationCheckins, 'Dauer');
+        const minutes = Math.floor(avgSeconds / 60);
+        const seconds = Math.round(avgSeconds % 60);
+        const formattedDuration = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+        this.avgDurationHeaderValue.textContent = formattedDuration;
     }
 
     renderMotivation(checkins) {
