@@ -13844,6 +13844,7 @@ class StimmungsDashboardView {
             const userBTs = db.termine.filter(t => 
                 t.Mitarbeiter_ID === user._id &&
                 t.Kategorie === 'BT' &&
+                t.Status === 'Gehalten' &&
                 t.Datum &&
                 new Date(t.Datum) >= thirtyDaysAgo &&
                 new Date(t.Datum) <= today
