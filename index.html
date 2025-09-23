@@ -105,9 +105,13 @@
                     <button id="auswertung-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Auswertungen">
                         <i class="fas fa-trophy"></i>
                     </button>
-                    <button id="wettbewerb-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Wettbewerb">
-                        <i class="fas fa-plane-departure"></i>
-                    </button>
+                    <!-- NEU: Wrapper für Wettbewerb-Button mit "Neu!"-Label -->
+                    <div id="wettbewerb-header-btn-wrapper" class="relative hidden">
+                        <span class="absolute -top-2 -right-2 bg-accent-gold text-skt-blue text-xs font-bold px-1.5 py-0.5 rounded-full shadow-md z-10">Neu!</span>
+                        <button id="wettbewerb-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Wettbewerb">
+                            <i class="fas fa-plane-departure text-gold"></i>
+                        </button>
+                    </div>
                     <button id="strukturbaum-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Strukturbaum">
                         <i class="fas fa-sitemap"></i>
                     </button>
@@ -780,35 +784,34 @@
     <!-- NEU: Modal für den täglichen Check-in -->
     <div id="checkin-modal" class="modal-overlay">
         <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-5xl w-full relative max-h-[90vh] flex flex-col">
-            <h3 class="text-2xl font-bold text-skt-blue mb-6">Täglicher Check-in</h3>
-            <form id="checkin-form" class="flex-grow flex flex-col min-h-0 space-y-6">
-                <!-- Part 1: General Questions -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label for="checkin-motivation" class="block text-sm font-medium text-gray-700 mb-1">Was motiviert dich heute Gas zu geben?</label>
-                        <textarea id="checkin-motivation" rows="3" class="modern-input" required></textarea>
-                    </div>
-                    <div>
-                        <label for="checkin-stimmung" class="block text-sm font-medium text-gray-700 mb-1">Wie ist deine aktuelle Stimmung?</label>
-                        <div class="relative pt-8">
-                            <input type="range" id="checkin-stimmung" min="1" max="10" value="5" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-                            <div id="checkin-stimmung-value" class="absolute text-lg font-bold text-skt-blue transition-all duration-200 ease-out" style="top: 0; left: 50%; transform: translateX(-50%);">5</div>
+            <h3 class="text-2xl font-bold text-skt-blue mb-4">Täglicher Check-in</h3>
+            <form id="checkin-form" class="flex-grow flex flex-col min-h-0">
+                <!-- Obere Hälfte (ca. 1/3) -->
+                <div class="flex-shrink-0">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="flex flex-col"><label for="checkin-motivation" class="block text-sm font-medium text-gray-700 mb-1">Was motiviert dich heute Gas zu geben?</label><textarea id="checkin-motivation" class="modern-input flex-grow" required></textarea></div>
+                        <div>
+                            <label for="checkin-stimmung" class="block text-sm font-medium text-gray-700 mb-1">Wie ist deine aktuelle Stimmung?</label>
+                            <div class="relative pt-8">
+                                <input type="range" id="checkin-stimmung" min="1" max="10" value="5" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                                <div id="checkin-stimmung-value" class="absolute text-lg font-bold text-skt-blue transition-all duration-200 ease-out" style="top: 0; left: 50%; transform: translateX(-50%);">5</div>
+                            </div>
+                        </div>
+                        <div class="flex flex-col">
+                            <label for="checkin-todos-container" class="block text-sm font-medium text-gray-700 mb-1">Was sind deine wichtigsten 3 To-Dos heute?</label>
+                            <div id="checkin-todos-container" class="modern-input p-3 flex-grow overflow-y-auto" style="background-color: #f9fafb;"></div>
                         </div>
                     </div>
                 </div>
-                <div>
-                    <label for="checkin-todos-container" class="block text-sm font-medium text-gray-700 mb-1">Was sind deine wichtigsten 3 To-Dos heute?</label>
-                    <div id="checkin-todos-container" class="modern-input p-3" style="min-height: 150px; background-color: #f9fafb;"></div>
-                </div>
-                <!-- Part 2: Team Matrix -->
-                <div class="flex-grow min-h-0 overflow-y-auto border-t pt-6">
+                <!-- Untere Hälfte (ca. 2/3) -->
+                <div class="flex-grow flex flex-col min-h-0 mt-4 pt-4 border-t border-gray-200">
                     <h4 class="text-xl font-semibold text-skt-blue mb-4">Team-Check</h4>
-                    <div id="checkin-matrix-container" class="space-y-4">
-                        <!-- Matrix wird per JS generiert -->
-                    </div>
+                    <div id="checkin-matrix-container" class="flex-grow overflow-y-auto pr-2"></div>
                 </div>
                 <!-- Actions -->
-                <div class="pt-4 flex justify-end"><button type="submit" id="save-checkin-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors">Check-in abschließen</button></div>
+                <div class="pt-4 mt-4 flex justify-end flex-shrink-0">
+                    <button type="submit" id="save-checkin-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors">Check-in abschließen</button>
+                </div>
             </form>
         </div>
     </div>

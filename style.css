@@ -483,10 +483,10 @@ summary::-webkit-details-marker {
     right: 0;
     bottom: 0;
     background-color: rgba(0, 0, 0, 0.6);
-    display: flex;
+    display: none; /* KORREKTUR: Standardmäßig ausblenden, um Flackern zu verhindern */
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: 5000; /* KORREKTUR: Erhöht, um sicherzustellen, dass es über allen anderen Elementen liegt */
     opacity: 0;
     padding: 1rem; /* Fügt einen Abstand hinzu, damit Modals nicht am Rand kleben */
     visibility: hidden;
@@ -495,6 +495,7 @@ summary::-webkit-details-marker {
 .modal-overlay.visible {
     opacity: 1;
     visibility: visible;
+    display: flex; /* Bei Sichtbarkeit als Flexbox anzeigen */
 }
 
 /* NEU: Animation für den Modal-Inhalt */
@@ -1277,6 +1278,13 @@ summary::-webkit-details-marker {
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     white-space: nowrap;
 }
+
+/* NEU: Custom scrollbar for checkin matrix */
+#checkin-matrix-container::-webkit-scrollbar { width: 8px; }
+#checkin-matrix-container::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+#checkin-matrix-container::-webkit-scrollbar-thumb { background: #ccc; border-radius: 10px; }
+#checkin-matrix-container::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
 
 /* NEU: Stile für das Stimmungsdashboard */
 .stimmungs-motivation-item {

@@ -164,6 +164,7 @@ const dom = {
   pgTagebuchHeaderBtn: document.getElementById('pg-tagebuch-header-btn'),
   strukturbaumHeaderBtn: document.getElementById("strukturbaum-header-btn"),
   wettbewerbHeaderBtn: document.getElementById("wettbewerb-header-btn"), // NEU
+  wettbewerbHeaderBtnWrapper: document.getElementById("wettbewerb-header-btn-wrapper"), // NEU
   auswertungView: document.getElementById("auswertung-view"),
   datenschutzView: document.getElementById("datenschutz-view"), // NEU
   umsatzView: document.getElementById("umsatz-view"),
@@ -1550,6 +1551,72 @@ function getMonthlyCycleDates() {
   endDate.setHours(23, 59, 59, 999);
   return { startDate, endDate };
 }
+
+function getKpiWarningsForUser(user) {
+    const warnings = [];
+    
+    // Check if user has a plan for the current month. If not, no warnings.
+    const { startDate: cycleStartDate } = getMonthlyCycleDates();
+    const currentMonthName = cycleStartDate.toLocaleString('de-DE', { month: 'long' });
+    const currentYear = cycleStartDate.getFullYear();
+    const plan = db.monatsplanung.find(p => 
+        p.Mitarbeiter_ID === user._id &&
+        p.Monat === currentMonthName &&
+        p.Jahr === currentYear
+    );
+    if (!plan || !plan.EH_Ziel || plan.EH_Ziel <= 0) {
+        return [];
+    }
+
+    const twoWeeksAgo = new Date();
+    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+    const fourWeeksAgo = new Date();
+    fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+    const today = new Date();
+
+    // KPI 1: High Cancellation Rate
+    const twoWeekAppointments = db.termine.filter(t => 
+        t.Mitarbeiter_ID === user._id && 
+        t.Datum && 
+        new Date(t.Datum) >= twoWeeksAgo && 
+        new Date(t.Datum) <= today
+    );
+    
+    if (twoWeekAppointments.length > 0) {
+        const cancelledCount = twoWeekAppointments.filter(t => t.Absage === true || t.Status === 'Storno').length;
+        const cancellationRate = cancelledCount / twoWeekAppointments.length;
+        if (cancellationRate >= 0.5) {
+            warnings.push(`Hohe Stornoquote (${(cancellationRate * 100).toFixed(0)}%)`);
+        }
+    }
+
+    // Check if user is active for at least 4 weeks
+    const userStartDate = new Date(user.Startdatum);
+    if (userStartDate <= fourWeeksAgo) {
+        // KPI 2: Low Activity Rate
+        const fourWeekAppointments = db.termine.filter(t => 
+            t.Mitarbeiter_ID === user._id &&
+            t.Datum &&
+            new Date(t.Datum) >= fourWeeksAgo &&
+            new Date(t.Datum) <= today &&
+            ['AT', 'BT', 'ET'].includes(t.Kategorie)
+        );
+
+        if (fourWeekAppointments.length < 5) {
+            warnings.push(`Geringe Aktivität (${fourWeekAppointments.length} Termine/4 Wo.)`);
+        }
+
+        // KPI 3: No Recruiting Activity
+        const fourWeekEtAppointments = fourWeekAppointments.filter(t => t.Kategorie === 'ET');
+        if (fourWeekEtAppointments.length === 0) {
+            warnings.push('Keine ETs in 4 Wo.');
+        }
+    }
+    
+    return warnings;
+}
+
+
 function isDateValidInfoabend(dateToCheck) {
     // Klonen, um das Original nicht zu verändern
     const checkDate = new Date(dateToCheck);
@@ -1575,10 +1642,9 @@ function updateUiForUserRoles() {
     const wettbewerbAllowedUsers = ["Jason Schreiber", "Samuel Königslehner"];
     const showWettbewerb = wettbewerbAllowedUsers.includes(user.Name.trim());
 
-    if (dom.wettbewerbHeaderBtn) {
-        // The button should be `hidden sm:flex` for authorized users.
-        // For unauthorized users, it should just be `hidden`. So we toggle `sm:flex`.
-        dom.wettbewerbHeaderBtn.classList.toggle('sm:flex', showWettbewerb);
+    if (dom.wettbewerbHeaderBtnWrapper) {
+        // The wrapper should be `hidden sm:block` for authorized users.
+        dom.wettbewerbHeaderBtnWrapper.classList.toggle('sm:block', showWettbewerb);
     }
     if (dom.wettbewerbMenuItem) {
         dom.wettbewerbMenuItem.classList.toggle('hidden', !showWettbewerb);
@@ -4779,7 +4845,9 @@ class AppointmentsView {
         this.weekNavNextBtn.addEventListener('click', () => this._navigateWeekCalendar(7));
         this.weekPeriodDisplay.addEventListener('click', () => this._resetWeekCalendarToToday());
         // Der `weekCalendarViewModeSelect` wird nicht mehr verwendet, der Listener ist am Haupt-Scope-Filter.
-        this.weekCalendarUserSelect.addEventListener('change', () => this._renderWeekCalendar());
+        // KORREKTUR: Ruft die Haupt-Render-Funktion auf, um sicherzustellen, dass alle Daten und Filter
+        // korrekt neu angewendet werden, wenn ein Benutzer im Dropdown ausgewählt wird.
+        this.weekCalendarUserSelect.addEventListener('change', () => this.render());
 
         // NEU: Event-Listener für Zoom-Buttons
         this.weekZoomInBtn.addEventListener('click', () => this._zoomWeekCalendar(5));
@@ -9902,9 +9970,15 @@ async function initializeDashboard() {
         document.getElementById("dashboard-content").classList.remove("hidden");
         await showPrivacyConsentView();
     } else if (authenticatedUserData.Checkin) {
+        // KORREKTUR: Prüfen, ob in der DB bereits ein Check-in für heute existiert.
         const todayString = new Date().toISOString().split('T')[0];
-        const lastCheckin = localStorage.getItem(`lastCheckin-${authenticatedUserData._id}`);
-        if (lastCheckin !== todayString) {
+        const hasAlreadyCheckedIn = db.checkin.some(c =>
+            c.Mitarbeiter === authenticatedUserData._id &&
+            c.Datum && c.Datum.startsWith(todayString) &&
+            (c.Stimmung !== null && c.Stimmung !== undefined)
+        );
+
+        if (!hasAlreadyCheckedIn) {
             document.getElementById("user-select-screen").classList.add("hidden");
             document.getElementById("dashboard-content").classList.remove("hidden");
             await openCheckinModal();
@@ -12002,19 +12076,34 @@ async function openCheckinModal(isEditMode = false) {
     const renderCheckinTodos = (text) => {
         todosContainer.innerHTML = '';
         const lines = text.split('\n');
-        lines.forEach(line => {
+        lines.forEach(line => { // KORREKTUR: Checkbox-Logik
             const trimmedLine = line.trim();
-            if (trimmedLine.startsWith('-')) {
+            if (trimmedLine.startsWith('-')) { // Ist ein To-Do-Eintrag
+                const isChecked = trimmedLine.startsWith('- [x]');
+                const isUnchecked = trimmedLine.startsWith('- [ ]');
+                let todoText = '';
+                if (isChecked || isUnchecked) {
+                    todoText = line.substring(line.indexOf('] ') + 2);
+                } else {
+                    todoText = line.substring(line.indexOf('-') + 1).trim();
+                }
+
                 const todoItem = document.createElement('div');
                 todoItem.className = 'flex items-center gap-2 my-1 pg-todo-item group';
                 todoItem.innerHTML = `
-                    <input type="checkbox" class="h-5 w-5 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light pg-todo-checkbox" disabled>
-                    <input type="text" class="flex-grow bg-transparent border-b border-gray-200 focus:outline-none focus:border-skt-blue pg-todo-text" value="${_escapeHtml(line.substring(1).trim())}">
+                    <div class="custom-checkbox pg-todo-checkbox ${isChecked ? 'checked' : ''}">
+                        <div class="custom-checkbox-tick"></div>
+                    </div>
+                    <input type="text" class="flex-grow bg-transparent border-b border-gray-200 focus:outline-none focus:border-skt-blue pg-todo-text" value="${_escapeHtml(todoText)}">
                     <button type="button" class="text-gray-400 hover:text-red-500 pg-todo-delete-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Löschen"><i class="fas fa-times"></i></button>
                 `;
                 todosContainer.appendChild(todoItem);
                 todoItem.querySelector('.pg-todo-delete-btn').addEventListener('click', () => todoItem.remove());
-            } else {
+                // KORREKTUR: Event-Listener für die klickbare Checkbox
+                todoItem.querySelector('.pg-todo-checkbox').addEventListener('click', (e) => {
+                    e.currentTarget.classList.toggle('checked');
+                });
+            } else { // Ist eine Überschrift oder Leerzeile
                 const otherItem = document.createElement('div');
                 otherItem.className = 'py-1 pg-heading-item group';
                 otherItem.innerHTML = `<input type="text" class="w-full bg-transparent font-bold text-skt-blue mt-2 border-b border-transparent focus:outline-none focus:border-skt-blue pg-heading-text" value="${_escapeHtml(line)}">`;
@@ -12029,12 +12118,18 @@ async function openCheckinModal(isEditMode = false) {
             const todoItem = document.createElement('div');
             todoItem.className = 'flex items-center gap-2 my-1 pg-todo-item group';
             todoItem.innerHTML = `
-                <input type="checkbox" class="h-5 w-5 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light pg-todo-checkbox" disabled>
+                <div class="custom-checkbox pg-todo-checkbox">
+                    <div class="custom-checkbox-tick"></div>
+                </div>
                 <input type="text" class="flex-grow bg-transparent border-b border-gray-200 focus:outline-none focus:border-skt-blue pg-todo-text" value="">
                 <button type="button" class="text-gray-400 hover:text-red-500 pg-todo-delete-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Löschen"><i class="fas fa-times"></i></button>
             `;
             todosContainer.insertBefore(todoItem, addTodoBtn);
             todoItem.querySelector('.pg-todo-delete-btn').addEventListener('click', () => todoItem.remove());
+            // KORREKTUR: Event-Listener auch für neue Checkboxen
+            todoItem.querySelector('.pg-todo-checkbox').addEventListener('click', (e) => {
+                e.currentTarget.classList.toggle('checked');
+            });
             todoItem.querySelector('.pg-todo-text').focus();
         });
         todosContainer.appendChild(addTodoBtn);
@@ -12050,9 +12145,20 @@ async function openCheckinModal(isEditMode = false) {
 
     // 4. Team-Matrix erstellen
     matrixContainer.innerHTML = '<div class="loader mx-auto"></div>';
-    // KORREKTUR: Füge den Leiter selbst zur Liste hinzu, damit er auch seine eigenen Punkte abhaken kann.
+    // NEU: Filter für Mitarbeiter ohne EH-Ziel
+    const { startDate: cycleStartDate } = getMonthlyCycleDates();
+    const currentMonthName = cycleStartDate.toLocaleString('de-DE', { month: 'long' });
+    const currentYear = cycleStartDate.getFullYear();
+    const plansByUserId = _.keyBy(db.monatsplanung.filter(p => p.Monat === currentMonthName && p.Jahr === currentYear), 'Mitarbeiter_ID');
+
     const subordinates = getSubordinates(authenticatedUserData._id, 'gruppe');
-    const teamForMatrix = [authenticatedUserData, ...subordinates];
+    // Filter subordinates first, then add the leader to ensure the leader is always present.
+    const activeSubordinates = subordinates.filter(user => {
+        const plan = plansByUserId[user._id];
+        return plan && plan.EH_Ziel > 0;
+    });
+    const teamForMatrix = [authenticatedUserData, ...activeSubordinates];
+
     if (teamForMatrix.length === 0) {
         matrixContainer.innerHTML = '<p class="text-center text-gray-500">Du hast keine Teammitglieder für den Check-in.</p>';
     } else {
@@ -12070,6 +12176,7 @@ async function openCheckinModal(isEditMode = false) {
         table.className = 'w-full border-collapse';
         
         const thead = document.createElement('thead');
+        thead.className = 'sticky top-0 z-10'; // NEU: Macht den Header fixiert
         let headerHtml = '<tr class="bg-skt-grey-light"><th class="p-2 text-left font-semibold text-skt-blue">Mitarbeiter</th>';
         questions.forEach(q => {
             headerHtml += `<th class="p-2 text-center font-semibold text-skt-blue text-xs whitespace-nowrap">${q.label}</th>`;
@@ -12087,7 +12194,17 @@ async function openCheckinModal(isEditMode = false) {
             const isLeaderRow = ma._id === authenticatedUserData._id;
             const existingCheckinForMA = isLeaderRow ? leaderCheckin : teamCheckinsById[ma._id];
 
-            let rowHtml = `<td class="p-3 font-bold text-skt-blue">${ma.Name}</td>`;
+            // NEU: KPI-Warnungen abrufen und anzeigen
+            const warnings = getKpiWarningsForUser(ma);
+            let warningsHtml = '';
+            if (warnings.length > 0) {
+                warningsHtml = `<div class="flex items-center gap-1 mt-1" title="${warnings.join(', ')}">
+                                    <i class="fas fa-exclamation-triangle text-skt-red-accent"></i>
+                                    <span class="text-xs font-normal text-skt-red-accent">${warnings.length} Warnung(en)</span>
+                                </div>`;
+            }
+
+            let rowHtml = `<td class="p-3 font-bold text-skt-blue">${ma.Name}${warningsHtml}</td>`;
             questions.forEach(q => {
                 const isChecked = existingCheckinForMA && existingCheckinForMA[q.key] === 'x';
                 rowHtml += `<td class="p-2 text-center">
@@ -12123,12 +12240,14 @@ async function openCheckinModal(isEditMode = false) {
         const serializeTodos = () => { // This function is defined here to have access to `todosContainer`
             const lines = [];
             Array.from(todosContainer.children).forEach(child => {
-                if (child.classList.contains('pg-todo-item')) {
+                if (child.classList.contains('pg-todo-item')) { // KORREKTUR: Checkbox-Status auslesen
+                    const checkbox = child.querySelector('.pg-todo-checkbox');
+                    const isChecked = checkbox.classList.contains('checked');
                     const textInput = child.querySelector('.pg-todo-text');
-                    if (textInput) {
-                        lines.push(`- ${textInput.value}`);
+                    if (textInput) { // KORREKTUR: Markdown-Format für Checkboxen verwenden
+                        lines.push(`${isChecked ? '- [x]' : '- [ ]'} ${textInput.value}`);
                     }
-                } else if (child.classList.contains('pg-heading-item')) {
+                } else if (child.classList.contains('pg-heading-item')) { // KORREKTUR: Überschriften korrekt serialisieren
                     const textInput = child.querySelector('.pg-heading-text');
                     if (textInput) lines.push(textInput.value);
                 } else if (child.classList.contains('pg-empty-line')) {
@@ -12752,11 +12871,14 @@ class WettbewerbView {
 
     setupSlideshow() {
         this.images = [
-            { src: 'https://images.unsplash.com/photo-1550345332-09e3ac987658?q=80&w=2574&auto=format&fit=crop', alt: 'Paris, Frankreich' },
-            { src: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?q=80&w=2094&auto=format&fit=crop', alt: 'Tokio, Asien' },
             { src: 'https://images.unsplash.com/photo-1485871981521-5b1fd3805eee?q=80&w=2070&auto=format&fit=crop', alt: 'New York, Amerika' },
-            { src: 'https://images.unsplash.com/photo-1523805009345-7448845a9e53?q=80&w=2072&auto=format&fit=crop', alt: 'Safari in Afrika' },
-            { src: 'https://images.unsplash.com/photo-1513026705753-bc3fffca8bf4?q=80&w=2070&auto=format&fit=crop', alt: 'Santorini, Europa' }
+            { src: 'https://images.ctfassets.net/rc3dlxapnu6k/70RDHdgBst4X0FVcBSYH2d/7b648b5ac766f85c58de070c0752b973/El_Nido__Island__Philippines.jpg?w=3840&q=50&fm=webp', alt: 'Philippinen' },
+            { src: 'https://images.interhome.group/travelguide/france-cote-d-azur.jpg', alt: 'Cote d\'Azur' },
+            { src: 'https://www.sabtours.at/app/uploads/fly-images/11341/sab-cruises-center-kreuzfahrten-e1529499988731-1920x690-c.jpg', alt: 'Kreuzfahrt' },
+            { src: 'https://loving-travel.com/wp-content/uploads/2021/04/210504181054002-1920x960.jpeg', alt: 'Dubai' },
+            { src: 'https://d26gc54f207k5x.cloudfront.net/media/public/cache/1400x550/2019/03/14/mexiko-reisen-rundreise-yucatan-tulum.jpeg', alt: 'Mexico' },
+            { src: 'https://cdn1.travala.com/wp-content/uploads/2020/03/Mykonos.jpg', alt: 'Mykonos' },
+            { src: 'https://www.ibizarocks.com/wp-content/uploads/2024/10/Ushuaia-Ibiza-2023.webp', alt: 'Ibiza' }
         ];
 
         // Preload images to prevent white flash
@@ -13332,7 +13454,10 @@ class StimmungsDashboardView {
 
     renderRedFlags(checkins) {
         this.redFlagsContainer.innerHTML = '';
-        const matrixCheckins = checkins.filter(c => c.Motivation === undefined); // Nur Team-Check-ins
+        // KORREKTUR: Der alte Filter (c.Motivation === undefined) hat die Red Flags des Leiters ignoriert.
+        // Der neue Filter prüft, ob ein Eintrag überhaupt Matrix-Daten enthält (anhand eines repräsentativen Feldes),
+        // und schließt so sowohl die Einträge der Teammitglieder als auch den des Leiters korrekt mit ein.
+        const matrixCheckins = checkins.filter(c => c.TermineEingetragen !== undefined);
         const questionKeys = ['TermineEingetragen', 'PositiverKontakt', 'ZieleDran', 'SeminarAnwesend', 'RecruitingTermine', 'AktuelleErfolge', 'TodosErledigt'];
         const questionLabels = {
             'TermineEingetragen': 'Termine eingetragen?',
@@ -13351,7 +13476,10 @@ class StimmungsDashboardView {
 
         matrixCheckins.forEach(checkin => {
             questionKeys.forEach(key => {
-                if (checkin[key] === false) {
+                // KORREKTUR: Eine "Red Flag" ist jeder Zustand, der nicht 'x' ist.
+                // Dies schließt leere Felder (null, undefined, '') und den booleschen Wert `false` mit ein,
+                // was der Logik "alles was kein 'x' ist, ist falsch" entspricht.
+                if (checkin[key] !== 'x') {
                     flagCounts[key]++;
                 }
             });
@@ -13448,6 +13576,8 @@ class StimmungsDashboardView {
 
     renderStimmungDistribution(checkins) {
         this.distributionChartContainer.innerHTML = '';
+        // KORREKTUR: Nur Check-ins mit einer gültigen Stimmung berücksichtigen.
+        // Dies stellt sicher, dass reine Team-Matrix-Einträge nicht mitgezählt werden.
         const leaderCheckins = checkins.filter(c => c.Motivation !== undefined && c.Stimmung);
 
         if (leaderCheckins.length === 0) {
@@ -13457,6 +13587,9 @@ class StimmungsDashboardView {
         }
 
         this.distributionChartContainer.style.height = '20rem'; // 320px, entspricht h-80
+        // KORREKTUR: Gruppiere Check-ins nach Stimmung, um die Namen für den Tooltip zu erhalten.
+        const checkinsByStimmung = _.groupBy(leaderCheckins, 'Stimmung');
+
         const counts = Array(10).fill(0);
         leaderCheckins.forEach(c => {
             counts[c.Stimmung - 1]++;
@@ -13470,9 +13603,14 @@ class StimmungsDashboardView {
         }
 
         const chartHtml = counts.map((count, i) => {
+            const stimmung = i + 1;
+            const names = (checkinsByStimmung[stimmung] || [])
+                .map(c => findRowById('mitarbeiter', c.Mitarbeiter)?.Name || 'Unbekannt')
+                .join(', ');
+            const title = count > 0 ? `${count} mal: ${names}` : `${count} mal`;
             const height = maxCount > 0 ? (count / maxCount) * 100 : 0;
             return `
-                <div class="flex-1 flex flex-col items-center justify-end" title="${count} mal">
+                <div class="flex-1 flex flex-col items-center justify-end" title="${title}">
                     <div class="w-full bg-skt-blue-light rounded-t-md text-center text-white text-xs py-0.5" style="height: ${height}%; min-height: ${count > 0 ? '16px' : '0'};">
                         ${count > 0 ? count : ''}
                     </div>
@@ -13507,6 +13645,8 @@ class StimmungsDashboardView {
         if (!this.kpiWarningsContainer) return;
 
         this.kpiWarningsContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        const kpiWarningCountEl = document.getElementById('kpi-warning-count');
+
         const warnings = [];
         const users = Array.from(userIds).map(id => findRowById('mitarbeiter', id)).filter(Boolean);
 
@@ -13515,11 +13655,14 @@ class StimmungsDashboardView {
         const currentMonthName = cycleStartDate.toLocaleString('de-DE', { month: 'long' });
         const currentYear = cycleStartDate.getFullYear();
 
+        const today = new Date();
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(today.getDate() - 30);
+
         const twoWeeksAgo = new Date();
         twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
         const fourWeeksAgo = new Date();
         fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
-        const today = new Date();
 
         users.forEach(user => {
             if (user.Status === 'Ausgeschieden') return;
@@ -13535,6 +13678,7 @@ class StimmungsDashboardView {
             }
 
             const userWarnings = [];
+            const isLeader = isUserLeader(user);
 
             // KPI 1: High Cancellation Rate (last 2 weeks)
             const twoWeekAppointments = db.termine.filter(t => 
@@ -13548,7 +13692,7 @@ class StimmungsDashboardView {
                 const cancelledCount = twoWeekAppointments.filter(t => t.Absage === true || t.Status === 'Storno').length;
                 const cancellationRate = cancelledCount / twoWeekAppointments.length;
                 if (cancellationRate >= 0.5) {
-                    userWarnings.push(`Hohe Stornoquote (${(cancellationRate * 100).toFixed(0)}% in den letzten 2 Wochen)`);
+                    userWarnings.push(`Hohe Stornoquote (${(cancellationRate * 100).toFixed(0)}% in 2 Wochen)`);
                 }
             }
 
@@ -13565,13 +13709,73 @@ class StimmungsDashboardView {
                 );
 
                 if (fourWeekAppointments.length < 5) {
-                    userWarnings.push(`Geringe Aktivität (${fourWeekAppointments.length} Termine in den letzten 4 Wochen)`);
+                    userWarnings.push(`Geringe Aktivität (${fourWeekAppointments.length} Termine in 4 Wochen)`);
                 }
 
                 // KPI 3: No Recruiting Activity (last 4 weeks)
                 const fourWeekEtAppointments = fourWeekAppointments.filter(t => t.Kategorie === 'ET');
                 if (fourWeekEtAppointments.length === 0) {
                     userWarnings.push('Keine Recruiting-Termine (ET) in den letzten 4 Wochen');
+                }
+            }
+
+            // --- NEW KPIs ---
+
+            // KPI: Low closing rate (everyone, last 30 days)
+            const userBTs = db.termine.filter(t => 
+                t.Mitarbeiter_ID === user._id &&
+                t.Kategorie === 'BT' &&
+                t.Datum &&
+                new Date(t.Datum) >= thirtyDaysAgo &&
+                new Date(t.Datum) <= today
+            );
+
+            if (userBTs.length > 0) {
+                let btsWithoutSale = 0;
+                for (const bt of userBTs) {
+                    const btDateString = new Date(bt.Datum).toISOString().split('T')[0];
+                    const hasSale = db.umsatz.some(sale => 
+                        sale.Mitarbeiter_ID === user._id &&
+                        sale.Datum &&
+                        sale.Datum.startsWith(btDateString) &&
+                        sale.Kunde && bt.Terminpartner &&
+                        sale.Kunde.trim().toLowerCase() === bt.Terminpartner.trim().toLowerCase()
+                    );
+                    if (!hasSale) {
+                        btsWithoutSale++;
+                    }
+                }
+                const noSaleRate = btsWithoutSale / userBTs.length;
+                if (noSaleRate > 0.4) {
+                    userWarnings.push(`Niedrige Abschlussquote (${(noSaleRate * 100).toFixed(0)}% der BTs ohne direkten Umsatz)`);
+                }
+            }
+
+            // Leader-specific KPIs
+            if (isLeader) {
+                // KPI: Low activity for leaders (last 30 days)
+                const leaderAppointments = db.termine.filter(t => 
+                    t.Mitarbeiter_ID === user._id &&
+                    t.Datum &&
+                    new Date(t.Datum) >= thirtyDaysAgo &&
+                    new Date(t.Datum) <= today &&
+                    ['AT', 'BT', 'ET'].includes(t.Kategorie)
+                );
+
+                if (leaderAppointments.length < 10) {
+                    userWarnings.push(`Geringe Aktivität als FK (${leaderAppointments.length} Termine in 30 Tagen)`);
+                }
+
+                // KPI: High fluctuation in group (last 30 days)
+                const groupMembers = getSubordinates(user._id, 'gruppe');
+                const recentlyLeftCount = groupMembers.filter(m => 
+                    m.Status === 'Ausgeschieden' && 
+                    m.Ausscheidetag && 
+                    new Date(m.Ausscheidetag) >= thirtyDaysAgo
+                ).length;
+
+                if (recentlyLeftCount > 2) {
+                    userWarnings.push(`Hohe Fluktuation (${recentlyLeftCount} Austritte in der Gruppe in 30 Tagen)`);
                 }
             }
 
@@ -13585,8 +13789,9 @@ class StimmungsDashboardView {
         });
 
         this.kpiWarningsContainer.innerHTML = '';
+        if (kpiWarningCountEl) kpiWarningCountEl.textContent = warnings.length;
         if (warnings.length === 0) {
-            this.kpiWarningsContainer.innerHTML = '<p class="text-center text-gray-500 py-4">Keine KPI-Warnungen. Alles im grünen Bereich!</p>';
+            this.kpiWarningsContainer.innerHTML = '<p class="text-center text-gray-500 col-span-full py-4">Keine KPI-Warnungen. Alles im grünen Bereich!</p>';
             return;
         }
 
@@ -13624,11 +13829,21 @@ class StimmungsDashboardView {
 
         this.todosContainer.innerHTML = displayDateCheckins.map(c => {
             const leiter = findRowById('mitarbeiter', c.Mitarbeiter);
+            // KORREKTUR: Parse den To-Do-String, um den Status (erledigt/offen) zu erkennen.
             const todosHtml = c.Todos.split('\n').map(line => {
-                if (line.trim().startsWith('-')) {
-                    return `<li class="ml-4">${line.substring(1).trim()}</li>`;
+                const trimmedLine = line.trim();
+                if (trimmedLine.startsWith('-')) {
+                    const isChecked = trimmedLine.startsWith('- [x]');
+                    const isUnchecked = trimmedLine.startsWith('- [ ]');
+                    let todoText = '';
+                    if (isChecked || isUnchecked) {
+                        todoText = trimmedLine.substring(trimmedLine.indexOf('] ') + 2);
+                    } else {
+                        todoText = trimmedLine.substring(1).trim();
+                    }
+                    return `<li class="ml-4 flex items-center gap-2 ${isChecked ? 'line-through text-gray-500' : ''}"><i class="fas ${isChecked ? 'fa-check-square text-green-500' : 'fa-square text-gray-400'}"></i><span>${_escapeHtml(todoText)}</span></li>`;
                 }
-                return `<p class="font-semibold mt-2">${line}</p>`;
+                return `<p class="font-semibold mt-2">${_escapeHtml(line)}</p>`;
             }).join('');
 
             return `
