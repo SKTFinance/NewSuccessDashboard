@@ -15,16 +15,19 @@ const CHECKIN_COLUMN_MAP_FALLBACK = {
     "Leiter": "aaaa",
     "Mitarbeiter": "bbbb",
     "TermineEingetragen": "cccc",
-    "PositiverKontakt": "dddd",
-    "ZieleDran": "eeee",
-    "SeminarAnwesend": "ffff",
-    "RecruitingTermine": "gggg",
-    "AktuelleErfolge": "hhhh",
-    "TodosErledigt": "iiii",
     "Motivation": "jjjj", // Fallback-Spalten-ID
     "Stimmung": "kkkk",   // Fallback-Spalten-ID
     "Todos": "llll",     // Fallback-Spalten-ID
-    "Dauer": "mmmm"      // NEU: Fallback-Spalten-ID für die Dauer
+    "Dauer": "mmmm",      // NEU: Fallback-Spalten-ID für die Dauer
+    // NEU: Neue Spalten für den überarbeiteten Check-in
+    "ZielLautFK": "nnnn",
+    "IstMotiviert": "oooo",
+    "WillRekrutieren": "pppp",
+    "HatErfolg": "qqqq",
+    "MotivationAntwort": "rrrr",
+    "RecruitingAntwort": "ssss",
+    "ErfolgAntwort": "tttt",
+    "KPIAntworten": "uuuu"
 };
 // --- GLOBALE VARIABLEN ---
 let seaTableAccessToken = null;
@@ -4848,6 +4851,10 @@ class AppointmentsView {
         const debouncedFetchAndRender = _.debounce(() => this.fetchAndRender(), 350);
         this.startDateInput.addEventListener('change', debouncedFetchAndRender);
         this.endDateInput.addEventListener('change', debouncedFetchAndRender);
+        // NEU: Event-Listener für den manuellen Start-Button
+        if (this.startTodayCheckinBtn) {
+            this.startTodayCheckinBtn.addEventListener('click', () => this.openCheckinModal(false));
+        }
         this.searchInput.addEventListener('input', _.debounce(e => {
             this.filterText = e.target.value; this.render();
         }, 350));
@@ -10231,6 +10238,8 @@ async function initializeDashboard() {
   // NEU: Instanz der AppointmentsView erstellen und Modal-Listener initialisieren
   appointmentsViewInstance = new AppointmentsView();
   appointmentsViewInstance._initSharedElementsAndListeners();
+  
+  if (!stimmungsDashboardViewInstance) stimmungsDashboardViewInstance = new StimmungsDashboardView();
 
   if (!totalEhLoaded) {
       // loadAndCacheTotalEh setzt bereits die Fehlermeldung
@@ -10277,7 +10286,7 @@ async function initializeDashboard() {
         if (!hasAlreadyCheckedIn && window.innerWidth > 768) {
             document.getElementById("user-select-screen").classList.add("hidden");
             document.getElementById("dashboard-content").classList.remove("hidden");
-            await openCheckinModal();
+            await stimmungsDashboardViewInstance.openCheckinModal();
         } else {
             await proceedToDashboard(loggedInUserId);
         }
@@ -12324,89 +12333,6 @@ function formatMinutesToDuration(totalMinutes) {
     return `${hours}:${minutes.toString().padStart(2, '0')}`;
 }
 
-async function seaTableUpdateCheckinRow(rowId, rowData) {
-    const tableName = 'Checkin';
-    const checkinLog = (message, ...data) => console.log(`%c[Checkin-Update] %c${message}`, 'color: #1abc9c; font-weight: bold;', 'color: black;', ...data);
-    checkinLog(`Starte Update für Checkin ID: ${rowId}`);
-
-    const tableMap = COLUMN_MAPS.checkin;
-    if (!tableMap) {
-        checkinLog('!!! FEHLER: Spalten-Map für Checkin nicht gefunden.');
-        return false;
-    }
-    const tableMeta = METADATA.tables.find(t => t.name.toLowerCase() === tableName.toLowerCase());
-    if (!tableMeta) {
-        checkinLog('!!! FEHLER: Metadaten für Checkin nicht gefunden.');
-        return false;
-    }
-    const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
-
-    // KORREKTUR: Zurück zum bewährten SQL-Update-Ansatz, der in anderen Teilen der App (z.B. Termine) zuverlässig funktioniert.
-    // Dies bündelt alle Datenänderungen in einer einzigen Anfrage und vermeidet Rate-Limiting.
-    const dataUpdates = {};
-    const linkUpdates = {};
-    const linkColumnKeys = [tableMap.Mitarbeiter].filter(Boolean);
-
-    for (const key in rowData) {
-        if (!Object.prototype.hasOwnProperty.call(rowData, key)) continue;
-        if (linkColumnKeys.includes(key)) {
-            linkUpdates[key] = rowData[key];
-        } else {
-            dataUpdates[key] = rowData[key];
-        }
-    }
-    checkinLog('Getrennte Daten für SQL-Update:', { dataUpdates, linkUpdates });
-
-    // 1. Aktualisiere Nicht-Link-Daten mit einer einzigen SQL-Abfrage
-    const setClauses = [];
-    for (const key in dataUpdates) {
-        const value = dataUpdates[key];
-        const colName = reversedMap[key];
-        if (!colName || colName === '_id') continue;
-
-        const colMeta = tableMeta.columns.find(c => c.key === key);
-        let formattedValue;
-
-        // Explizite Behandlung für die verschiedenen Feldtypen, um die Logik zu vereinheitlichen.
-        if (value === null || value === undefined) {
-            formattedValue = "NULL";
-        } else if (key === tableMap.Stimmung) {
-            // 'Stimmung' wird immer als Zahl behandelt.
-            const numValue = parseFloat(value);
-            formattedValue = isNaN(numValue) ? "NULL" : numValue;
-        } else {
-            // Alle anderen Felder (Motivation, Todos, und die 'x'-Felder) werden als Text behandelt.
-            // Ein leerer String wird als leerer String gespeichert, nicht als NULL.
-            formattedValue = `'${escapeSql(String(value))}'`;
-        }
-        setClauses.push(`\`${colName}\` = ${formattedValue}`);
-    }
-
-    if (setClauses.length > 0) {
-        const sql = `UPDATE \`${tableName}\` SET ${setClauses.join(', ')} WHERE \`_id\` = '${rowId}'`;
-        checkinLog('Führe SQL-Update für Datenfelder aus:', sql);
-        const result = await seaTableSqlQuery(sql, false);
-        if (result === null) {
-            checkinLog('!!! FEHLER: SQL-Update fehlgeschlagen.');
-            return false;
-        }
-        checkinLog('SQL-Update erfolgreich.');
-    }
-
-    // 2. Aktualisiere Link-Daten separat am Ende
-    for (const key in linkUpdates) {
-        const colName = reversedMap[key];
-        const linkRowId = linkUpdates[key] && linkUpdates[key][0] ? linkUpdates[key][0] : null;
-        if (!(await updateSingleLink(tableName, rowId, colName, linkRowId ? [linkRowId] : []))) {
-            checkinLog(`!!! FEHLER: Update für Link-Feld '${colName}' fehlgeschlagen.`);
-            return false;
-        }
-    }
-
-    checkinLog(`Update für Checkin ID ${rowId} erfolgreich abgeschlossen.`);
-    return rowId;
-}
-
 async function addOrUpdateCheckinEntry(rowId, rowDataWithKeys) {
     const tableName = 'Checkin';
     const checkinLog = (message, ...data) => console.log(`%c[Checkin-Save] %c${message}`, 'color: #1abc9c; font-weight: bold;', 'color: black;', ...data);
@@ -12439,7 +12365,7 @@ async function addOrUpdateCheckinEntry(rowId, rowDataWithKeys) {
 
             const colMeta = tableMeta.columns.find(c => c.key === key);
             let formattedValue;
-            if (value === null || value === undefined || value === '') {
+            if (value === null || value === undefined) {
                 formattedValue = "NULL";
             } else if (colMeta && (colMeta.type === 'number' || colMeta.type === 'duration')) {
                 const numValue = parseFloat(value);
@@ -12471,392 +12397,9 @@ async function addOrUpdateCheckinEntry(rowId, rowDataWithKeys) {
     }
 }
 
-function closeCheckinModal() {
-    const modal = document.getElementById('checkin-modal');
-    if (modal) modal.classList.remove('visible');
-    if (checkinTimerInterval) clearInterval(checkinTimerInterval);
-    document.body.classList.remove('modal-open');
-    document.documentElement.classList.remove('modal-open');
-
-    // If the modal was closed without completing, proceed to the dashboard.
-    // This prevents the user from being stuck if this was the initial login modal.
-    const todayString = new Date().toISOString().split('T')[0];
-    const hasAlreadyCheckedIn = db.checkin.some(c =>
-        c.Mitarbeiter === authenticatedUserData._id &&
-        c.Datum && c.Datum.startsWith(todayString) &&
-        (c.Stimmung !== null && c.Stimmung !== undefined)
-    );
-    if (!hasAlreadyCheckedIn) {
-        proceedToDashboard(authenticatedUserData._id);
-    }
-}
 
 
 
-async function openCheckinModal(isEditMode = false) {
-    const modal = document.getElementById('checkin-modal');
-    const closeBtn = document.getElementById('close-checkin-modal-btn');
-    const timerDisplay = document.getElementById('checkin-timer-display');
-    checkinStartTime = Date.now();
-
-    // KORREKTUR: Lade den bestehenden Check-in, um die Dauer zu initialisieren.
-    const todayStringForEdit = new Date().toISOString().split('T')[0];
-    const leaderCheckin = isEditMode ? db.checkin.find(c => 
-        c.Mitarbeiter === authenticatedUserData._id && 
-        c.Datum && c.Datum.startsWith(todayStringForEdit) && 
-        (c.Stimmung !== undefined && c.Stimmung !== null)
-    ) : null;
-    const initialDuration = leaderCheckin?.Dauer || 0; // in seconds
-
-    if (checkinTimerInterval) clearInterval(checkinTimerInterval);
-    if (timerDisplay) {
-        checkinTimerInterval = setInterval(() => {
-            if (!checkinStartTime) return;
-            const elapsedSeconds = Math.floor((Date.now() - checkinStartTime) / 1000);
-            const totalSeconds = initialDuration + elapsedSeconds;
-            const minutes = Math.floor(totalSeconds / 60);
-            const seconds = totalSeconds % 60;
-            timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        }, 1000);
-    }
-
-    // Event listeners for closing the modal
-    if (closeBtn) {
-        closeBtn.addEventListener('click', closeCheckinModal);
-    }
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeCheckinModal();
-    });
-
-    const form = document.getElementById('checkin-form');
-    const matrixContainer = document.getElementById('checkin-matrix-container');
-    const stimmungSlider = document.getElementById('checkin-stimmung');
-    const stimmungValue = document.getElementById('checkin-stimmung-value');
-    const todosContainer = document.getElementById('checkin-todos-container');
-
-    // KORREKTUR: Setze den Speicher-Button zurück, falls er vom letzten Speichervorgang noch im "Laden"-Zustand ist.
-    const saveBtn = document.getElementById('save-checkin-btn');
-    if (saveBtn) {
-        saveBtn.disabled = false;
-        saveBtn.innerHTML = 'Check-in abschließen';
-    }
-
-    if (!modal || !form || !matrixContainer || !stimmungSlider || !stimmungValue) {
-        console.error('Check-in Modal-Elemente nicht gefunden.');
-        // Fallback: Dashboard normal laden, um den Benutzer nicht zu blockieren.
-        await proceedToDashboard(authenticatedUserData._id);
-        return;
-    }
-
-    const checkinLog = (message, ...data) => console.log(`%c[Checkin-Modal] %c${message}`, 'color: #1abc9c; font-weight: bold;', 'color: black;', ...data);
-    checkinLog(`Modal wird geöffnet. isEditMode: ${isEditMode}`);
-
-    // NEU: Daten für den Bearbeitungsmodus abrufen
-    const todayString = new Date().toISOString().split('T')[0];
-    checkinLog('Heutiger Check-in des Leiters:', leaderCheckin);
-
-    const teamCheckins = isEditMode ? db.checkin.filter(c => 
-        getSubordinates(authenticatedUserData._id, 'gruppe').map(u => u._id).includes(c.Mitarbeiter) && 
-        c.Datum && c.Datum.startsWith(todayString) && 
-        (c.Stimmung === undefined || c.Stimmung === null) // Team-Eintrag hat keine Stimmung
-    ) : [];
-    const teamCheckinsById = _.keyBy(teamCheckins, 'Mitarbeiter');
-    checkinLog(`Heutige Check-ins des Teams (${teamCheckins.length} gefunden):`, JSON.parse(JSON.stringify(teamCheckins)));
-    checkinLog('Team Check-ins nach ID:', JSON.parse(JSON.stringify(teamCheckinsById)));
-
-    // 1. Allgemeine Felder vorbereiten
-    form.reset();
-    document.getElementById('checkin-motivation').value = leaderCheckin?.Motivation || '';
-    stimmungSlider.value = leaderCheckin?.Stimmung || 5;
-    stimmungSlider.dispatchEvent(new Event('input')); // Slider-UI aktualisieren
-
-    // 2. To-Do-Liste initialisieren
-    const renderCheckinTodos = (text) => {
-        todosContainer.innerHTML = '';
-        const lines = text.split('\n');
-        lines.forEach(line => { // KORREKTUR: Checkbox-Logik
-            const trimmedLine = line.trim();
-            if (trimmedLine.startsWith('-')) { // Ist ein To-Do-Eintrag
-                const isChecked = trimmedLine.startsWith('- [x]');
-                const isUnchecked = trimmedLine.startsWith('- [ ]');
-                let todoText = '';
-                if (isChecked || isUnchecked) {
-                    todoText = line.substring(line.indexOf('] ') + 2);
-                } else {
-                    todoText = line.substring(line.indexOf('-') + 1).trim();
-                }
-
-                const todoItem = document.createElement('div');
-                todoItem.className = 'flex items-center gap-2 my-1 pg-todo-item group';
-                todoItem.innerHTML = `
-                    <div class="custom-checkbox pg-todo-checkbox ${isChecked ? 'checked' : ''}">
-                        <div class="custom-checkbox-tick"></div>
-                    </div>
-                    <input type="text" class="flex-grow bg-transparent border-b border-gray-200 focus:outline-none focus:border-skt-blue pg-todo-text" value="${_escapeHtml(todoText)}">
-                    <button type="button" class="text-gray-400 hover:text-red-500 pg-todo-delete-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Löschen"><i class="fas fa-times"></i></button>
-                `;
-                todosContainer.appendChild(todoItem);
-                todoItem.querySelector('.pg-todo-delete-btn').addEventListener('click', () => todoItem.remove());
-                // KORREKTUR: Event-Listener für die klickbare Checkbox
-                todoItem.querySelector('.pg-todo-checkbox').addEventListener('click', (e) => {
-                    e.currentTarget.classList.toggle('checked');
-                });
-            } else { // Ist eine Überschrift oder Leerzeile
-                const otherItem = document.createElement('div');
-                otherItem.className = 'py-1 pg-heading-item group';
-                otherItem.innerHTML = `<input type="text" class="w-full bg-transparent font-bold text-skt-blue mt-2 border-b border-transparent focus:outline-none focus:border-skt-blue pg-heading-text" value="${_escapeHtml(line)}">`;
-                todosContainer.appendChild(otherItem);
-            }
-        });
-        const addTodoBtn = document.createElement('button');
-        addTodoBtn.type = 'button';
-        addTodoBtn.className = 'mt-2 text-skt-blue hover:underline text-sm';
-        addTodoBtn.innerHTML = '<i class="fas fa-plus mr-1"></i> Aufgabe hinzufügen';
-        addTodoBtn.addEventListener('click', () => {
-            const todoItem = document.createElement('div');
-            todoItem.className = 'flex items-center gap-2 my-1 pg-todo-item group';
-            todoItem.innerHTML = `
-                <div class="custom-checkbox pg-todo-checkbox">
-                    <div class="custom-checkbox-tick"></div>
-                </div>
-                <input type="text" class="flex-grow bg-transparent border-b border-gray-200 focus:outline-none focus:border-skt-blue pg-todo-text" value="">
-                <button type="button" class="text-gray-400 hover:text-red-500 pg-todo-delete-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Löschen"><i class="fas fa-times"></i></button>
-            `;
-            todosContainer.insertBefore(todoItem, addTodoBtn);
-            todoItem.querySelector('.pg-todo-delete-btn').addEventListener('click', () => todoItem.remove());
-            // KORREKTUR: Event-Listener auch für neue Checkboxen
-            todoItem.querySelector('.pg-todo-checkbox').addEventListener('click', (e) => {
-                e.currentTarget.classList.toggle('checked');
-            });
-            todoItem.querySelector('.pg-todo-text').focus();
-        });
-        todosContainer.appendChild(addTodoBtn);
-    };
-    renderCheckinTodos(leaderCheckin?.Todos || "Top 3 To-Dos:\n- \n- \n- ");
-
-    // 3. Stimmungs-Slider-Listener
-    stimmungSlider.addEventListener('input', () => {
-        const percent = (stimmungSlider.value - stimmungSlider.min) / (stimmungSlider.max - stimmungSlider.min);
-        stimmungValue.textContent = stimmungSlider.value;
-        stimmungValue.style.left = `calc(${percent * 100}% + (${8 - percent * 16}px))`;
-    });
-
-    // 4. Team-Matrix erstellen
-    matrixContainer.innerHTML = '<div class="loader mx-auto"></div>';
-    // NEU: Filter für Mitarbeiter ohne EH-Ziel
-    const { startDate: cycleStartDate } = getMonthlyCycleDates();
-    const currentMonthName = cycleStartDate.toLocaleString('de-DE', { month: 'long' });
-    const currentYear = cycleStartDate.getFullYear();
-    const plansByUserId = _.keyBy(db.monatsplanung.filter(p => p.Monat === currentMonthName && p.Jahr === currentYear), 'Mitarbeiter_ID');
-
-    const subordinates = getSubordinates(authenticatedUserData._id, 'gruppe');
-    // Filter subordinates first, then add the leader to ensure the leader is always present.
-    const activeSubordinates = subordinates.filter(user => {
-        const plan = plansByUserId[user._id];
-        return plan && plan.EH_Ziel > 0;
-    });
-    const teamForMatrix = [authenticatedUserData, ...activeSubordinates];
-
-    if (teamForMatrix.length === 0) {
-        matrixContainer.innerHTML = '<p class="text-center text-gray-500">Du hast keine Teammitglieder für den Check-in.</p>';
-    } else {
-        const questions = [
-            { label: 'Termine eingetragen?', key: 'TermineEingetragen' },
-            { label: 'Positiver Kontakt?', key: 'PositiverKontakt' },
-            { label: 'An Zielen dran?', key: 'ZieleDran' },
-            { label: 'Seminar anwesend?', key: 'SeminarAnwesend' },
-            { label: 'Recruiting Termine?', key: 'RecruitingTermine' },
-            { label: 'Akt. Erfolge?', key: 'AktuelleErfolge' },
-            { label: 'PG-Todos erledigt?', key: 'TodosErledigt' }
-        ];
-
-        const table = document.createElement('table');
-        table.className = 'w-full border-collapse';
-        
-        const thead = document.createElement('thead');
-        thead.className = 'sticky top-0 z-10'; // NEU: Macht den Header fixiert
-        let headerHtml = '<tr class="bg-skt-grey-light"><th class="p-2 text-left font-semibold text-skt-blue">Mitarbeiter</th>';
-        questions.forEach(q => {
-            headerHtml += `<th class="p-2 text-center font-semibold text-skt-blue text-xs whitespace-nowrap">${q.label}</th>`;
-        });
-        headerHtml += '</tr>';
-        thead.innerHTML = headerHtml;
-        table.appendChild(thead);
-
-        const tbody = document.createElement('tbody');
-        teamForMatrix.forEach(ma => {
-            const tr = document.createElement('tr');
-            tr.className = 'border-b border-gray-200 checkin-matrix-row';
-            tr.dataset.mitarbeiterId = ma._id;
-
-            const isLeaderRow = ma._id === authenticatedUserData._id;
-            const existingCheckinForMA = isLeaderRow ? leaderCheckin : teamCheckinsById[ma._id];
-
-            // NEU: KPI-Warnungen abrufen und anzeigen
-            const warnings = getKpiWarningsForUser(ma);
-            let warningsHtml = '';
-            if (warnings.length > 0) {
-                warningsHtml = `<div class="flex items-center gap-1 mt-1" title="${warnings.join(', ')}">
-                                    <i class="fas fa-exclamation-triangle text-skt-red-accent"></i>
-                                    <span class="text-xs font-normal text-skt-red-accent">${warnings.length} Warnung(en)</span>
-                                </div>`;
-            }
-
-            let rowHtml = `<td class="p-3 font-bold text-skt-blue">${ma.Name}${warningsHtml}</td>`;
-            questions.forEach(q => {
-                const isChecked = existingCheckinForMA && existingCheckinForMA[q.key] === 'x';
-                rowHtml += `<td class="p-2 text-center">
-                                <div class="custom-checkbox inline-block ${isChecked ? 'checked' : ''}">
-                                    <input type="checkbox" data-key="${q.key}" class="hidden" ${isChecked ? 'checked' : ''}>
-                                    <div class="custom-checkbox-tick"></div>
-                                </div>
-                            </td>`;
-            });
-            tr.innerHTML = rowHtml;
-            tbody.appendChild(tr);
-        });
-        table.appendChild(tbody);
-        matrixContainer.innerHTML = '';
-        matrixContainer.appendChild(table);
-
-        matrixContainer.querySelectorAll('.custom-checkbox').forEach(box => {
-            box.addEventListener('click', () => {
-                box.classList.toggle('checked');
-                const input = box.querySelector('input');
-                input.checked = !input.checked;
-            });
-        });
-    }
-
-    // 5. Formular-Submit-Handler
-    form.onsubmit = async (e) => {
-        e.preventDefault();
-        if (checkinTimerInterval) clearInterval(checkinTimerInterval);
-        const saveBtn = document.getElementById('save-checkin-btn');
-        saveBtn.disabled = true;
-        saveBtn.innerHTML = '<div class="loader-small mx-auto"></div>';
-
-        const serializeTodos = () => { // This function is defined here to have access to `todosContainer`
-            const lines = [];
-            Array.from(todosContainer.children).forEach(child => {
-                if (child.classList.contains('pg-todo-item')) { // KORREKTUR: Checkbox-Status auslesen
-                    const checkbox = child.querySelector('.pg-todo-checkbox');
-                    const isChecked = checkbox.classList.contains('checked');
-                    const textInput = child.querySelector('.pg-todo-text');
-                    if (textInput) { // KORREKTUR: Markdown-Format für Checkboxen verwenden
-                        lines.push(`${isChecked ? '- [x]' : '- [ ]'} ${textInput.value}`);
-                    }
-                } else if (child.classList.contains('pg-heading-item')) { // KORREKTUR: Überschriften korrekt serialisieren
-                    const textInput = child.querySelector('.pg-heading-text');
-                    if (textInput) lines.push(textInput.value);
-                } else if (child.classList.contains('pg-empty-line')) {
-                    lines.push('');
-                }
-            });
-            return lines.join('\n');
-        };
-
-        const dateString = new Date().toISOString().split('T')[0];
-        const leiterId = authenticatedUserData._id;
-        const motivation = document.getElementById('checkin-motivation').value;
-        const stimmung = parseInt(document.getElementById('checkin-stimmung').value, 10);
-        const todos = serializeTodos();
-        // KORREKTUR: Korrekte Berechnung der Dauer beim Bearbeiten
-        const initialDurationOnSubmit = leaderCheckin?.Dauer || 0;
-        const durationInSeconds = checkinStartTime ? initialDurationOnSubmit + Math.round((Date.now() - checkinStartTime) / 1000) : initialDurationOnSubmit;
-
-        // Prepare leader's full entry
-        const leaderEntryData = {
-            [COLUMN_MAPS.checkin.Datum]: dateString, // KORREKTUR: 'Leiter' gibt es nicht, es ist ein 'Mitarbeiter'-Link zum Leiter selbst
-            [COLUMN_MAPS.checkin.Mitarbeiter]: [leiterId],
-            [COLUMN_MAPS.checkin.Motivation]: motivation,
-            [COLUMN_MAPS.checkin.Stimmung]: stimmung,
-            [COLUMN_MAPS.checkin.Todos]: todos,
-            [COLUMN_MAPS.checkin.Dauer]: durationInSeconds
-        };
-
-        const entriesToSave = [];
-
-        // Matrix entries for each person (including leader)
-        document.querySelectorAll('.checkin-matrix-row').forEach(row => {
-            const mitarbeiterId = row.dataset.mitarbeiterId;
-            checkinLog(`Verarbeite Matrix-Zeile für Mitarbeiter-ID: ${mitarbeiterId}`);
-            const matrixBooleans = {};
-            row.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-                const key = COLUMN_MAPS.checkin[checkbox.dataset.key];
-                matrixBooleans[key] = checkbox.checked ? 'x' : '';
-            });
-            checkinLog(`Gelesene Checkbox-Daten für ${mitarbeiterId}:`, matrixBooleans);
-
-            if (mitarbeiterId === leiterId) {
-                // Dies ist die Zeile des Leiters, füge die Boolean-Werte zum Haupteintrag hinzu.
-                Object.assign(leaderEntryData, matrixBooleans);
-            } else {
-                // Dies ist ein unterstellter Mitarbeiter, erstelle einen separaten Eintrag.
-                const subordinateCheckin = teamCheckinsById[mitarbeiterId];
-                const subordinateRowId = subordinateCheckin ? subordinateCheckin._id : null;
-                const matrixEntry = {
-                    rowId: subordinateRowId,
-                    data: {
-                        [COLUMN_MAPS.checkin.Datum]: dateString,
-                        [COLUMN_MAPS.checkin.Mitarbeiter]: [mitarbeiterId],
-                        ...matrixBooleans
-                    }
-                };
-                entriesToSave.push(matrixEntry);
-            }
-        });
-
-        // Add the fully prepared leader entry to the list of entries to save
-        const leaderRowId = leaderCheckin ? leaderCheckin._id : null;
-        entriesToSave.unshift({ rowId: leaderRowId, data: leaderEntryData }); // Add to the beginning
-
-        checkinLog(`Bereite Speicherung von ${entriesToSave.length} Check-in Einträgen vor...`, JSON.parse(JSON.stringify(entriesToSave)));
-
-        // Sequentially save all entries
-        let allSuccess = true;
-        for (const entry of entriesToSave) {
-            const result = await addOrUpdateCheckinEntry(entry.rowId, entry.data);
-            if (!result) {
-                allSuccess = false;
-                checkinLog(`!!! FEHLER beim Speichern des Eintrags für rowId ${entry.rowId || 'NEU'}. Breche ab.`);
-                break; // Stop on first error
-            }
-        }
-
-        if (allSuccess) {
-            localStorage.setItem(`lastCheckin-${leiterId}`, dateString);
-            
-            // NEU: Lade Checkin-Daten neu, damit der "Bearbeiten"-Button sofort erscheint.
-            console.log('[Checkin-Save] Lade Checkin-Daten neu, um die Ansicht zu aktualisieren...');
-            localStorage.removeItem(CACHE_PREFIX + 'checkin');
-            db.checkin = await seaTableQuery('Checkin');
-            normalizeAllData();
-            console.log('[Checkin-Save] Checkin-Daten erfolgreich neu geladen.');
-
-            modal.classList.remove('visible');
-            document.body.classList.remove('modal-open');
-            document.documentElement.classList.remove('modal-open'); // KORREKTUR: Auch vom HTML-Element entfernen
-
-            // KORREKTUR: Leite zur korrekten Ansicht zurück (Stimmungsdashboard oder Haupt-Dashboard).
-            if (currentView === 'stimmungs-dashboard') {
-                // Wenn wir vom Stimmungsdashboard kamen, dorthin zurückkehren.
-                switchView('stimmungs-dashboard'); // Dies lädt die Ansicht mit den neuen Daten neu.
-            } else {
-                // Standardverhalten: Zum Haupt-Dashboard gehen.
-                await proceedToDashboard(leiterId);
-            }
-        } else {
-            alert('Fehler beim Speichern des Check-ins.');
-            saveBtn.disabled = false;
-            saveBtn.innerHTML = 'Check-in abschließen';
-        }
-    };
-
-    // 6. Modal anzeigen
-    modal.classList.add('visible');
-    document.body.classList.add('modal-open');
-}
 
 
 
@@ -13854,6 +13397,29 @@ class StimmungsDashboardView {
         this.scope = 'group';
         this.startDate = null;
         this.endDate = null;
+        // NEU: Status für den mehrstufigen Check-in
+        this.checkinStep = 1;
+        this.checkinData = {};
+
+        // KORREKTUR: Die Check-in-Buttons gehören zum globalen Modal in index.html
+        // und müssen im Konstruktor initialisiert werden, damit sie immer verfügbar sind,
+        // auch wenn das Stimmungsdashboard selbst noch nicht geladen wurde.
+        this.checkinNextBtn = document.getElementById('checkin-next-btn');
+        this.checkinBackBtn = document.getElementById('checkin-back-btn');
+        this.checkinSaveBtn = document.getElementById('save-checkin-btn');
+
+        if (this.checkinNextBtn) {
+            this.checkinNextBtn.addEventListener('click', () => this._handleCheckinNext());
+        }
+        if (this.checkinBackBtn) {
+            this.checkinBackBtn.addEventListener('click', () => this._handleCheckinBack());
+        }
+        if (this.checkinSaveBtn) {
+            this.checkinSaveBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this._handleCheckinFinalSubmit();
+            });
+        }
     }
 
     _getDomElements() {
@@ -13873,7 +13439,9 @@ class StimmungsDashboardView {
         this.editTodayCheckinBtn = document.getElementById('edit-today-checkin-btn');
         this.avgDurationHeaderContainer = document.getElementById('average-checkin-duration-header-container'); // NEU
         this.avgDurationHeaderValue = document.getElementById('average-checkin-duration-header-value'); // NEU
-        return this.scopeGroupBtn && this.scopeStructureBtn && this.startDateInput && this.endDateInput && this.distributionChartContainer && this.redFlagsContainer && this.chartContainer && this.motivationContainer && this.todosContainer && this.editTodayCheckinBtn && this.kpiWarningsContainer && this.avgDurationHeaderContainer && this.avgDurationHeaderValue;
+        this.problemeLoesungenContainer = document.getElementById('stimmungs-probleme-loesungen-container'); // NEU
+        this.startTodayCheckinBtn = document.getElementById('start-today-checkin-btn'); // NEU
+        return this.scopeGroupBtn && this.scopeStructureBtn && this.startDateInput && this.endDateInput && this.distributionChartContainer && this.redFlagsContainer && this.chartContainer && this.motivationContainer && this.todosContainer && this.editTodayCheckinBtn && this.kpiWarningsContainer && this.avgDurationHeaderContainer && this.avgDurationHeaderValue && this.problemeLoesungenContainer && this.startTodayCheckinBtn;
     }
 
     async init() {
@@ -13882,7 +13450,7 @@ class StimmungsDashboardView {
             return;
         }
         // Event Listener für den Bearbeiten-Button
-        this.editTodayCheckinBtn.addEventListener('click', () => openCheckinModal(true));
+        this.editTodayCheckinBtn.addEventListener('click', () => this.openCheckinModal(true));
 // Initialisiere Datumsauswahl (letzte 30 Tage)
         this.endDate = new Date();
         this.startDate = new Date();
@@ -13906,6 +13474,273 @@ class StimmungsDashboardView {
         await this.fetchAndRender();
         this.initialized = true;
     }
+
+async openCheckinModal(isEditMode = false) {
+        const modal = document.getElementById('checkin-modal');
+        const closeBtn = document.getElementById('close-checkin-modal-btn');
+        const timerDisplay = document.getElementById('checkin-timer-display');
+        checkinStartTime = Date.now();
+    
+        // KORREKTUR: Lade den bestehenden Check-in, um die Dauer zu initialisieren.
+        const todayStringForEdit = new Date().toISOString().split('T')[0];
+        const leaderCheckin = isEditMode ? db.checkin.find(c => 
+            c.Mitarbeiter === authenticatedUserData._id && 
+            c.Datum && c.Datum.startsWith(todayStringForEdit) && 
+            (c.Stimmung !== undefined && c.Stimmung !== null)
+        ) : null;
+        const initialDuration = leaderCheckin?.Dauer || 0; // in seconds
+    
+        if (checkinTimerInterval) clearInterval(checkinTimerInterval);
+        if (timerDisplay) {
+            checkinTimerInterval = setInterval(() => {
+                if (!checkinStartTime) return;
+                const elapsedSeconds = Math.floor((Date.now() - checkinStartTime) / 1000);
+                const totalSeconds = initialDuration + elapsedSeconds;
+                const minutes = Math.floor(totalSeconds / 60);
+                const seconds = totalSeconds % 60;
+                timerDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }, 1000);
+        }
+    
+        // Event listeners for closing the modal
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.closeCheckinModal());
+        }
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) this.closeCheckinModal();
+        });
+    
+        const form = document.getElementById('checkin-form');
+        const matrixContainer = document.getElementById('checkin-matrix-container');
+        const stimmungSlider = document.getElementById('checkin-stimmung');
+        const stimmungValue = document.getElementById('checkin-stimmung-value');
+        const todosContainer = document.getElementById('checkin-todos-container'); // NEU: Logik für mehrstufigen Check-in
+        this.checkinStep = 1;
+        this.checkinData = {};
+        this._showCheckinStep(1);
+        const saveBtn = document.getElementById('save-checkin-btn');
+    
+        if (!modal || !form || !matrixContainer || !stimmungSlider || !stimmungValue) {
+            console.error('Check-in Modal-Elemente nicht gefunden.');
+            // Fallback: Dashboard normal laden, um den Benutzer nicht zu blockieren.
+            await proceedToDashboard(authenticatedUserData._id);
+            return;
+        }
+    
+        const checkinLog = (message, ...data) => console.log(`%c[Checkin-Modal] %c${message}`, 'color: #1abc9c; font-weight: bold;', 'color: black;', ...data);
+        checkinLog(`Modal wird geöffnet. isEditMode: ${isEditMode}`);
+    
+        // NEU: Daten für den Bearbeitungsmodus abrufen
+        const todayString = new Date().toISOString().split('T')[0];
+        checkinLog('Heutiger Check-in des Leiters:', leaderCheckin);
+    
+        const teamCheckins = isEditMode ? db.checkin.filter(c => 
+            getSubordinates(authenticatedUserData._id, 'gruppe').map(u => u._id).includes(c.Mitarbeiter) && 
+            c.Datum && c.Datum.startsWith(todayString) && 
+            (c.Stimmung === undefined || c.Stimmung === null) // Team-Eintrag hat keine Stimmung
+        ) : [];
+        this.teamCheckinsById = _.keyBy(teamCheckins, 'Mitarbeiter');
+        checkinLog(`Heutige Check-ins des Teams (${teamCheckins.length} gefunden):`, JSON.parse(JSON.stringify(teamCheckins)));
+        checkinLog('Team Check-ins nach ID:', JSON.parse(JSON.stringify(this.teamCheckinsById)));
+    
+        // 1. Allgemeine Felder vorbereiten
+        form.reset();
+        document.getElementById('checkin-motivation').value = leaderCheckin?.Motivation || '';
+        stimmungSlider.value = leaderCheckin?.Stimmung || 5;
+        document.getElementById('checkin-kpi-antworten').value = leaderCheckin?.KPIAntworten || '';
+        stimmungSlider.dispatchEvent(new Event('input')); // Slider-UI aktualisieren
+    
+        // 2. To-Do-Liste initialisieren
+        const renderCheckinTodos = (text) => {
+            todosContainer.innerHTML = '';
+            const lines = text.split('\n');
+            lines.forEach(line => { // KORREKTUR: Checkbox-Logik
+                const trimmedLine = line.trim();
+                if (trimmedLine.startsWith('-')) { // Ist ein To-Do-Eintrag
+                    const isChecked = trimmedLine.startsWith('- [x]');
+                    const isUnchecked = trimmedLine.startsWith('- [ ]');
+                    let todoText = '';
+                    if (isChecked || isUnchecked) {
+                        todoText = trimmedLine.substring(trimmedLine.indexOf('] ') + 2);
+                    } else {
+                        todoText = trimmedLine.substring(1).trim();
+                    }
+    
+                    const todoItem = document.createElement('div');
+                    todoItem.className = 'flex items-center gap-2 my-1 pg-todo-item group';
+                    todoItem.innerHTML = `
+                        <div class="custom-checkbox pg-todo-checkbox ${isChecked ? 'checked' : ''}">
+                            <div class="custom-checkbox-tick"></div>
+                        </div>
+                        <input type="text" class="flex-grow bg-transparent border-b border-gray-200 focus:outline-none focus:border-skt-blue pg-todo-text" value="${_escapeHtml(todoText)}">
+                        <button type="button" class="text-gray-400 hover:text-red-500 pg-todo-delete-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Löschen"><i class="fas fa-times"></i></button>
+                    `;
+                    todosContainer.appendChild(todoItem);
+                    todoItem.querySelector('.pg-todo-delete-btn').addEventListener('click', () => todoItem.remove());
+                    // KORREKTUR: Event-Listener für die klickbare Checkbox
+                    todoItem.querySelector('.pg-todo-checkbox').addEventListener('click', (e) => {
+                        e.currentTarget.classList.toggle('checked');
+                    });
+                } else { // Ist eine Überschrift oder Leerzeile
+                    const otherItem = document.createElement('div');
+                    otherItem.className = 'py-1 pg-heading-item group';
+                    otherItem.innerHTML = `<input type="text" class="w-full bg-transparent font-bold text-skt-blue mt-2 border-b border-transparent focus:outline-none focus:border-skt-blue pg-heading-text" value="${_escapeHtml(line)}">`;
+                    todosContainer.appendChild(otherItem);
+                }
+            });
+            const addTodoBtn = document.createElement('button');
+            addTodoBtn.type = 'button';
+            addTodoBtn.className = 'mt-2 text-skt-blue hover:underline text-sm';
+            addTodoBtn.innerHTML = '<i class="fas fa-plus mr-1"></i> Aufgabe hinzufügen';
+            addTodoBtn.addEventListener('click', () => {
+                const todoItem = document.createElement('div');
+                todoItem.className = 'flex items-center gap-2 my-1 pg-todo-item group';
+                todoItem.innerHTML = `
+                    <div class="custom-checkbox pg-todo-checkbox">
+                        <div class="custom-checkbox-tick"></div>
+                    </div>
+                    <input type="text" class="flex-grow bg-transparent border-b border-gray-200 focus:outline-none focus:border-skt-blue pg-todo-text" value="">
+                    <button type="button" class="text-gray-400 hover:text-red-500 pg-todo-delete-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Löschen"><i class="fas fa-times"></i></button>
+                `;
+                todosContainer.insertBefore(todoItem, addTodoBtn);
+                todoItem.querySelector('.pg-todo-delete-btn').addEventListener('click', () => todoItem.remove());
+                // KORREKTUR: Event-Listener auch für neue Checkboxen
+                todoItem.querySelector('.pg-todo-checkbox').addEventListener('click', (e) => {
+                    e.currentTarget.classList.toggle('checked');
+                });
+                todoItem.querySelector('.pg-todo-text').focus();
+            });
+            todosContainer.appendChild(addTodoBtn);
+        };
+        renderCheckinTodos(leaderCheckin?.Todos || "Top 3 To-Dos:\n- \n- \n- ");
+    
+        // 3. Stimmungs-Slider-Listener
+        stimmungSlider.addEventListener('input', () => {
+            const percent = (stimmungSlider.value - stimmungSlider.min) / (stimmungSlider.max - stimmungSlider.min);
+            stimmungValue.textContent = stimmungSlider.value;
+            stimmungValue.style.left = `calc(${percent * 100}% + (${8 - percent * 16}px))`;
+        });
+    
+        // 4. Team-Matrix erstellen
+        matrixContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        // NEU: Filter für Mitarbeiter ohne EH-Ziel
+        const { startDate: cycleStartDate } = getMonthlyCycleDates();
+        const currentMonthName = cycleStartDate.toLocaleString('de-DE', { month: 'long' });
+        const currentYear = cycleStartDate.getFullYear();
+        const plansByUserId = _.keyBy(db.monatsplanung.filter(p => p.Monat === currentMonthName && p.Jahr === currentYear), 'Mitarbeiter_ID');
+    
+        const subordinates = getSubordinates(authenticatedUserData._id, 'gruppe');
+        // Filter subordinates first, then add the leader to ensure the leader is always present.
+        const activeSubordinates = subordinates.filter(user => {
+            const plan = plansByUserId[user._id];
+            return plan && plan.EH_Ziel > 0;
+        });
+        const teamForMatrix = [authenticatedUserData, ...activeSubordinates];
+    
+        if (teamForMatrix.length === 0) {
+            matrixContainer.innerHTML = '<p class="text-center text-gray-500">Du hast keine Teammitglieder für den Check-in.</p>';
+        } else {
+            const questions = [ // NEU: Angepasste Fragen
+                { label: 'Termine eingetragen?', key: 'TermineEingetragen' },
+                { label: 'Mitarbeiter Motiviert?', key: 'IstMotiviert' },
+                { label: 'Will der MA rekrutieren und tut er es?', key: 'WillRekrutieren' },
+                { label: 'Hat der MA aktuell Erfolge?', key: 'HatErfolg' }
+            ];
+    
+            const table = document.createElement('table');
+            table.className = 'w-full border-collapse';
+            
+            const thead = document.createElement('thead');
+            thead.className = 'sticky top-0 z-10'; // NEU: Macht den Header fixiert
+            // KORREKTUR: Breiteres Feld für "Ziel laut FK" und Textumbruch für Checkbox-Header
+            let headerHtml = '<tr class="bg-skt-grey-light"><th class="p-2 text-left font-semibold text-skt-blue" style="width: 25%;">Mitarbeiter</th><th class="p-2 text-left font-semibold text-skt-blue" style="width: 45%;">Was ist das Ziel des MA und wie hilfst du dabei?</th>';
+            questions.forEach(q => {
+                // Breche lange Labels in zwei Zeilen um
+                const wrappedLabel = q.label.replace(' und tut er es?', '<br>und tut er es?').replace('Mitarbeiter ', 'MA ');
+                headerHtml += `<th class="p-2 text-center font-semibold text-skt-blue text-xs" style="width: 7.5%;">${wrappedLabel}</th>`;
+            });
+            headerHtml += '</tr>';
+            thead.innerHTML = headerHtml;
+            table.appendChild(thead);
+    
+            const tbody = document.createElement('tbody');
+            teamForMatrix.forEach(ma => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-200 checkin-matrix-row';
+                tr.dataset.mitarbeiterId = ma._id;
+    
+                const isLeaderRow = ma._id === authenticatedUserData._id;
+                const existingCheckinForMA = isLeaderRow ? leaderCheckin : (this.teamCheckinsById ? this.teamCheckinsById[ma._id] : null);
+    
+                // NEU: KPI-Warnungen abrufen und anzeigen
+                const warnings = getKpiWarningsForUser(ma);
+                let warningsHtml = '';
+                if (warnings.length > 0) {
+                    warningsHtml = `<div class="flex items-center gap-1 mt-1" title="${warnings.join(', ')}">
+                                        <i class="fas fa-exclamation-triangle text-skt-red-accent"></i>
+                                        <span class="text-xs font-normal text-skt-red-accent">${warnings.length} Warnung(en)</span>
+                                    </div>`;
+                }
+                // NEU: Textfeld für "ZielLautFK" hinzugefügt
+                let rowHtml = `
+                    <td class="p-3 font-bold text-skt-blue">${ma.Name}${warningsHtml}</td>
+                    <td class="p-2">
+                        <textarea data-key="ZielLautFK" class="modern-input checkin-ziel-input" placeholder="Ziel für ${ma.Name}" rows="2" required>${existingCheckinForMA?.ZielLautFK || ''}</textarea>
+                    </td>
+                `;
+                questions.forEach(q => {
+                    const isChecked = existingCheckinForMA && existingCheckinForMA[q.key] === 'x';
+                    rowHtml += `<td class="p-2 text-center">
+                                    <div class="custom-checkbox inline-block ${isChecked ? 'checked' : ''}">
+                                        <input type="checkbox" data-key="${q.key}" class="hidden" ${isChecked ? 'checked' : ''}>
+                                        <div class="custom-checkbox-tick"></div>
+                                    </div>
+                                </td>`;
+                });
+                tr.innerHTML = rowHtml;
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody);
+            matrixContainer.innerHTML = '';
+            matrixContainer.appendChild(table);
+    
+            matrixContainer.querySelectorAll('.custom-checkbox').forEach(box => {
+                box.addEventListener('click', () => {
+                    box.classList.toggle('checked');
+                    const input = box.querySelector('input');
+                    input.checked = !input.checked;
+                });
+            });
+        }
+    
+            // Formular-Submit wird jetzt über den finalen Button gesteuert
+        form.onsubmit = (e) => { e.preventDefault(); };
+    
+        // 6. Modal anzeigen
+        modal.classList.add('visible');
+        document.body.classList.add('modal-open');
+    }
+
+    closeCheckinModal() {
+        const modal = document.getElementById('checkin-modal');
+        if (modal) modal.classList.remove('visible');
+        if (checkinTimerInterval) clearInterval(checkinTimerInterval);
+        document.body.classList.remove('modal-open');
+        document.documentElement.classList.remove('modal-open');
+    
+        // If the modal was closed without completing, proceed to the dashboard.
+        // This prevents the user from being stuck if this was the initial login modal.
+        const todayString = new Date().toISOString().split('T')[0];
+        const hasAlreadyCheckedIn = db.checkin.some(c =>
+            c.Mitarbeiter === authenticatedUserData._id &&
+            c.Datum && c.Datum.startsWith(todayString) &&
+            (c.Stimmung !== null && c.Stimmung !== undefined)
+        );
+        if (!hasAlreadyCheckedIn) {
+            proceedToDashboard(authenticatedUserData._id);
+        }
+    }
+
     updateScopeButtons() {
         this.scopeGroupBtn.classList.toggle('active', this.scope === 'group');
         this.scopeStructureBtn.classList.toggle('active', this.scope === 'structure');
@@ -13944,9 +13779,17 @@ class StimmungsDashboardView {
 
         if (todaysCheckin) {
             this.editTodayCheckinBtn.classList.remove('hidden');
-            this.editTodayCheckinBtn.onclick = () => openCheckinModal(true); // true für Bearbeitungsmodus
+            this.editTodayCheckinBtn.onclick = () => this.openCheckinModal(true); // true für Bearbeitungsmodus
+            this.startTodayCheckinBtn.classList.add('hidden'); // Start-Button ausblenden, wenn Check-in existiert
         } else {
             this.editTodayCheckinBtn.classList.add('hidden');
+            // NEU: Start-Button nur anzeigen, wenn der Nutzer die Berechtigung hat
+            const hasCheckinAccess = authenticatedUserData.Checkin === true || String(authenticatedUserData.Checkin).toLowerCase() === 'true';
+            if (hasCheckinAccess) {
+                this.startTodayCheckinBtn.classList.remove('hidden');
+            } else {
+                this.startTodayCheckinBtn.classList.add('hidden');
+            }
         }
 
         // 3. Rufe die Render-Funktionen mit den gefilterten Daten auf
@@ -13955,9 +13798,9 @@ class StimmungsDashboardView {
         this.renderStimmungDistribution(filteredCheckins);
         this.renderMotivation(filteredCheckins);
         this.renderTodos(filteredCheckins);
-        this.renderAverageDuration(filteredCheckins); // NEU
-        // NEU: KPI-Warnungen rendern
+        this.renderAverageDuration(filteredCheckins);
         this.renderKpiWarnings(userIdsSet);
+        this.renderProblemeLoesungen(filteredCheckins); // NEU
     }
 
     // Helper function for PQQ calculation for a single user
@@ -14005,19 +13848,13 @@ class StimmungsDashboardView {
 
     renderRedFlags(checkins) {
         this.redFlagsContainer.innerHTML = '';
-        // KORREKTUR: Der alte Filter (c.Motivation === undefined) hat die Red Flags des Leiters ignoriert.
-        // Der neue Filter prüft, ob ein Eintrag überhaupt Matrix-Daten enthält (anhand eines repräsentativen Feldes),
-        // und schließt so sowohl die Einträge der Teammitglieder als auch den des Leiters korrekt mit ein.
         const matrixCheckins = checkins.filter(c => c.TermineEingetragen !== undefined);
-        const questionKeys = ['TermineEingetragen', 'PositiverKontakt', 'ZieleDran', 'SeminarAnwesend', 'RecruitingTermine', 'AktuelleErfolge', 'TodosErledigt'];
+        const questionKeys = ['TermineEingetragen', 'MitarbeiterMotiviert', 'RecruitingAktiv', 'HatErfolge'];
         const questionLabels = {
             'TermineEingetragen': 'Termine eingetragen?',
-            'PositiverKontakt': 'Positiver Kontakt?',
-            'ZieleDran': 'An Zielen dran?',
-            'SeminarAnwesend': 'Seminar anwesend?',
-            'RecruitingTermine': 'Recruitingtermine?',
-            'AktuelleErfolge': 'Aktuelle Erfolge?',
-            'TodosErledigt': 'PG-Todos erledigt?'
+            'MitarbeiterMotiviert': 'Mitarbeiter motiviert?',
+            'RecruitingAktiv': 'Will & tut MA Recruiting?',
+            'HatErfolge': 'Hat MA Erfolge?'
         };
 
         const flagCounts = questionKeys.reduce((acc, key) => {
@@ -14027,9 +13864,6 @@ class StimmungsDashboardView {
 
         matrixCheckins.forEach(checkin => {
             questionKeys.forEach(key => {
-                // KORREKTUR: Eine "Red Flag" ist jeder Zustand, der nicht 'x' ist.
-                // Dies schließt leere Felder (null, undefined, '') und den booleschen Wert `false` mit ein,
-                // was der Logik "alles was kein 'x' ist, ist falsch" entspricht.
                 if (checkin[key] !== 'x') {
                     flagCounts[key]++;
                 }
@@ -14049,7 +13883,7 @@ class StimmungsDashboardView {
         sortedFlags.forEach(([key, count]) => {
             const percentage = maxCount > 0 ? (count / maxCount) * 100 : 0;
             container.innerHTML += `
-                <div class="flex items-center gap-4">
+                <div class="flex items-center gap-4" title="${questionLabels[key]}">
                     <div class="w-48 text-sm text-skt-blue-light text-right">${questionLabels[key]}</div>
                     <div class="flex-1 bg-gray-200 rounded-full h-6">
                         <div class="bg-skt-red-accent h-6 rounded-full flex items-center justify-end pr-2 text-white font-bold text-sm" style="width: ${percentage}%">
@@ -14262,7 +14096,295 @@ class StimmungsDashboardView {
         });
     }
 
+// NEU: Rendert die "Probleme & Lösungen"-Sektion
+    renderProblemeLoesungen(checkins) {
+        if (!this.problemeLoesungenContainer) return;
+        this.problemeLoesungenContainer.innerHTML = '';
 
+        // Filtere nur die Check-ins, die von der Führungskraft für das Team gemacht wurden
+        // (erkennbar daran, dass keine eigene Motivation/Stimmung gesetzt ist).
+        // KORREKTUR: Berücksichtige ALLE Check-ins (auch den des Leiters), um Probleme & Lösungen für alle anzuzeigen.
+        // Die Logik, die Motivation/Stimmung prüft, ist nicht mehr nötig, da wir jetzt die Antworten in den `answerField`s prüfen.
+        const relevantCheckins = checkins;
+        const problemMap = {
+            'IstMotiviert': {
+                question: 'Mitarbeiter nicht motiviert',
+                answerField: 'MotivationAntwort'
+            },
+            'WillRekrutieren': {
+                question: 'Mitarbeiter rekrutiert nicht',
+                answerField: 'RecruitingAntwort'
+            },
+            'HatErfolg': {
+                question: 'Mitarbeiter hat keine Erfolge',
+                answerField: 'ErfolgAntwort'
+            }
+        };
+
+        const problemsByMitarbeiter = {};
+
+        relevantCheckins.forEach(checkin => {
+            const mitarbeiterId = checkin.Mitarbeiter;
+            if (!mitarbeiterId) return;
+
+            Object.keys(problemMap).forEach(problemKey => {
+                // Wenn die Checkbox NICHT angehakt ist ('x') UND eine Antwort existiert
+                if (checkin[problemKey] !== 'x' && checkin[problemMap[problemKey].answerField]) {
+                    if (!problemsByMitarbeiter[mitarbeiterId]) {
+                        const user = findRowById('mitarbeiter', mitarbeiterId);
+                        problemsByMitarbeiter[mitarbeiterId] = {
+                            name: user ? user.Name : 'Unbekannt',
+                            problems: []
+                        };
+                    }
+                    problemsByMitarbeiter[mitarbeiterId].problems.push({
+                        question: problemMap[problemKey].question,
+                        answer: checkin[problemMap[problemKey].answerField],
+                        date: new Date(checkin.Datum)
+                    });
+                }
+            });
+        });
+
+        const mitarbeiterIdsWithProblems = Object.keys(problemsByMitarbeiter);
+
+        if (mitarbeiterIdsWithProblems.length === 0) {
+            this.problemeLoesungenContainer.innerHTML = '<p class="text-center text-gray-500">Keine Probleme und Lösungsansätze im ausgewählten Zeitraum gefunden.</p>';
+            return;
+        }
+
+        let html = '';
+        mitarbeiterIdsWithProblems.forEach(mitarbeiterId => {
+            const data = problemsByMitarbeiter[mitarbeiterId];
+            // Sortiere Probleme nach Datum, neueste zuerst
+            data.problems.sort((a, b) => b.date - a.date);
+
+            html += `
+                <div class="bg-skt-grey-light p-4 rounded-lg">
+                    <h4 class="font-bold text-skt-blue text-lg">${data.name}</h4>
+                    <div class="mt-3 space-y-4">
+                        ${data.problems.map(p => `
+                            <div class="p-3 bg-white rounded-md border-l-4 border-skt-red-accent">
+                                <p class="font-semibold text-skt-red-accent">${p.question}</p>
+                                <blockquote class="mt-2 pl-3 border-l-2 border-gray-200 text-gray-700 italic">
+                                    "${_escapeHtml(p.answer)}"
+                                </blockquote>
+                                <p class="text-xs text-right text-gray-400 mt-1">${p.date.toLocaleDateString('de-DE')}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        });
+
+        this.problemeLoesungenContainer.innerHTML = html;
+    }
+
+    
+    _showCheckinStep(step) {
+        this.checkinStep = step;
+        document.querySelectorAll('.checkin-step').forEach(s => s.classList.add('hidden'));
+        const currentStepEl = document.getElementById(`checkin-step-${step}`);
+        if (currentStepEl) currentStepEl.classList.remove('hidden');
+
+        const nextBtn = document.getElementById('checkin-next-btn');
+        const backBtn = document.getElementById('checkin-back-btn');
+        const saveBtn = document.getElementById('save-checkin-btn');
+
+        backBtn.classList.toggle('hidden', step === 1);
+        nextBtn.classList.toggle('hidden', step === 4);
+        saveBtn.classList.toggle('hidden', step !== 4);
+        
+        document.getElementById('checkin-modal-title').textContent = `Täglicher Check-in (Schritt ${step}/4)`;
+    }
+
+    _createFollowUpQuestion(name, key, question, value) {
+        return `<div>
+                    <label for="checkin-${key}-${name}" class="block text-sm font-medium text-gray-700 mb-1">${question}</label>
+                    <textarea id="checkin-${key}-${name}" data-key="${key}" data-name="${name}" rows="2" class="modern-input checkin-followup-input">${_escapeHtml(value || '')}</textarea>
+                </div>`;
+    }
+
+    async _prepareAndShowStep4() {
+        const kpiContainer = document.getElementById('checkin-kpi-warnings-container');
+        kpiContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        this._showCheckinStep(4);
+
+        const userIds = this.checkinData.step2.map(m => m.id);
+        const warnings = [];
+        const users = userIds.map(id => findRowById('mitarbeiter', id)).filter(Boolean);
+
+        users.forEach(user => {
+            if (user.Status === 'Ausgeschieden') return;
+            const { warnings: userWarnings } = getIndividualKpiData(user);
+            if (userWarnings.length > 0) {
+                warnings.push({ name: user.Name, reasons: userWarnings });
+            }
+        });
+
+        this.checkinData.kpiWarnings = warnings;
+
+        if (warnings.length === 0) {
+            kpiContainer.innerHTML = '<p class="text-center text-gray-500 col-span-full py-4">Keine KPI-Warnungen. Alles im grünen Bereich!</p>';
+        } else {
+            kpiContainer.innerHTML = warnings.map(warning => `
+                <div class="p-3 bg-red-50 border-l-4 border-skt-red-accent rounded-r-lg">
+                    <p class="font-bold text-skt-blue">${warning.name}</p>
+                    <ul class="list-disc list-inside mt-1">
+                        ${warning.reasons.map(reason => `<li class="text-sm text-red-700">${_escapeHtml(reason)}</li>`).join('')}
+                    </ul>
+                </div>
+            `).join('');
+        }
+    }
+
+    
+
+    _collectStep1_MotivationData() {
+        const leaderData = {
+            motivation: document.getElementById('checkin-motivation').value,
+            stimmung: parseInt(document.getElementById('checkin-stimmung').value, 10),
+            todos: this._serializeCheckinTodos()
+        };
+        return leaderData;
+    }
+
+    _collectStep2_TeamMatrixData() {
+        const teamMatrix = [];
+        document.querySelectorAll('.checkin-matrix-row').forEach(row => {
+            const mitarbeiterId = row.dataset.mitarbeiterId;
+            const matrixData = { id: mitarbeiterId };
+            const zielInput = row.querySelector('[data-key="ZielLautFK"]'); // KORREKTUR: Wählt das Element (jetzt textarea) über das data-key Attribut aus.
+            matrixData.ZielLautFK = zielInput ? zielInput.value : '';
+            row.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                // KORREKTUR: Der Status der Checkbox wird jetzt über die Klasse des Elternelements '.custom-checkbox'
+                // bestimmt, da der Klick-Handler nur diese Klasse ändert, nicht aber die 'checked'-Eigenschaft des Inputs.
+                const customCheckbox = checkbox.closest('.custom-checkbox');
+                const isChecked = customCheckbox ? customCheckbox.classList.contains('checked') : checkbox.checked;
+                matrixData[checkbox.dataset.key] = isChecked;
+            });
+            teamMatrix.push(matrixData);
+        });
+        return teamMatrix;
+    }
+
+    _collectStep3_FollowUpData() {
+        const followUpData = {};
+        document.querySelectorAll('.checkin-followup-input').forEach(textarea => {
+            const key = textarea.dataset.key;
+            const name = textarea.dataset.name;
+            const user = db.mitarbeiter.find(m => m.Name === name);
+            if (user) {
+                if (!followUpData[user._id]) {
+                    followUpData[user._id] = {};
+                }
+                followUpData[user._id][key] = textarea.value;
+            }
+        });
+        return followUpData;
+    }
+
+    _serializeCheckinTodos() {
+        const todosContainer = document.getElementById('checkin-todos-container');
+        const lines = [];
+        Array.from(todosContainer.children).forEach(child => {
+            if (child.classList.contains('pg-todo-item')) {
+                const checkbox = child.querySelector('.pg-todo-checkbox');
+                const isChecked = checkbox.classList.contains('checked');
+                const textInput = child.querySelector('.pg-todo-text');
+                if (textInput) {
+                    lines.push(`${isChecked ? '- [x]' : '- [ ]'} ${textInput.value}`);
+                }
+            } else if (child.classList.contains('pg-heading-item')) {
+                const textInput = child.querySelector('.pg-heading-text');
+                if (textInput) lines.push(textInput.value);
+            } else if (child.classList.contains('pg-empty-line')) {
+                lines.push('');
+            }
+        });
+        return lines.join('\n');
+    }
+
+    _handleCheckinBack() {
+        if (this.checkinStep > 1) {
+            this._showCheckinStep(this.checkinStep - 1);
+        }
+    }
+
+    async _handleCheckinNext() {
+        if (this.checkinStep === 1) {
+            this.checkinData.step1 = this._collectStep1_MotivationData();
+            this._showCheckinStep(2);
+        } else if (this.checkinStep === 2) {
+            const teamMatrix = this._collectStep2_TeamMatrixData();
+            
+            let isValid = true;
+            teamMatrix.forEach(memberData => {
+                if (!memberData.ZielLautFK.trim()) {
+                    const row = document.querySelector(`.checkin-matrix-row[data-mitarbeiter-id="${memberData.id}"]`);
+                    const input = row.querySelector('.checkin-ziel-input');
+                    if (input) input.style.borderColor = 'red';
+                    isValid = false;
+                }
+            });
+
+            if (!isValid) {
+                alert('Bitte für jeden Mitarbeiter ein Ziel eintragen.');
+                return;
+            }
+
+            this.checkinData.step2 = teamMatrix;
+
+            const followUpContainer = document.getElementById('checkin-follow-up-container');
+            followUpContainer.innerHTML = '';
+            let followUpsNeeded = 0;
+
+            // KORREKTUR: Lade die heutigen Check-ins (sowohl vom Leiter als auch vom Team), um bestehende Antworten vorzufüllen.
+            const todayString = new Date().toISOString().split('T')[0];
+            const todaysCheckins = db.checkin.filter(c => c.Datum && c.Datum.startsWith(todayString));
+            const checkinsById = _.keyBy(todaysCheckins, 'Mitarbeiter');
+
+            this.checkinData.step2.forEach(memberData => {
+                const member = findRowById('mitarbeiter', memberData.id);
+                let memberHtml = '';
+                // Finde den passenden Check-in für den Mitarbeiter.
+                // Für den Leiter ist es der Eintrag mit Stimmung, für Teammitglieder der ohne.
+                const existingCheckin = Object.values(checkinsById).find(c => {
+                    const isLeaderEntry = c.Stimmung !== undefined && c.Stimmung !== null;
+                    return c.Mitarbeiter === memberData.id && (memberData.id === authenticatedUserData._id ? isLeaderEntry : !isLeaderEntry);
+                }) || {};
+                
+                if (!memberData.IstMotiviert) {
+                    const existingAnswer = existingCheckin.MotivationAntwort || '';
+                    memberHtml += this._createFollowUpQuestion(member.Name, 'MotivationAntwort', 'Was tust du um den Mitarbeiter zu motivieren?', existingAnswer);
+                    followUpsNeeded++;
+                }
+                if (!memberData.WillRekrutieren) {
+                    const existingAnswer = existingCheckin.RecruitingAntwort || '';
+                    memberHtml += this._createFollowUpQuestion(member.Name, 'RecruitingAntwort', 'Was tust du um den Mitarbeiter zum Recruiting zu bringen?', existingAnswer);
+                    followUpsNeeded++;
+                }
+                if (!memberData.HatErfolg) {
+                    const existingAnswer = existingCheckin.ErfolgAntwort || '';
+                    memberHtml += this._createFollowUpQuestion(member.Name, 'ErfolgAntwort', 'Was tust du um den Mitarbeiter zu Erfolg zu führen?', existingAnswer);
+                    followUpsNeeded++;
+                }
+
+                if (memberHtml) {
+                    followUpContainer.innerHTML += `<div class="p-4 bg-gray-50 rounded-lg border"><h5 class="font-bold text-skt-blue">${member.Name}</h5><div class="space-y-4 mt-2">${memberHtml}</div></div>`;
+                }
+            });
+
+            if (followUpsNeeded > 0) {
+                this._showCheckinStep(3);
+            } else {
+                await this._prepareAndShowStep4();
+            }
+        } else if (this.checkinStep === 3) {
+            this.checkinData.step3 = this._collectStep3_FollowUpData();
+            await this._prepareAndShowStep4();
+        }
+    }
 
     renderTodos(checkins) {
         this.todosContainer.innerHTML = '';
@@ -14305,16 +14427,94 @@ class StimmungsDashboardView {
             `;
         }).join('');
             
-        
     }
 
-    
+    async _handleCheckinFinalSubmit() {
+        const saveBtn = document.getElementById('save-checkin-btn');
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<div class="loader-small mx-auto"></div>';
+
+        const kpiAntworten = document.getElementById('checkin-kpi-antworten').value;
+        const step1Data = this.checkinData.step1;
+        const step2Data = this.checkinData.step2;
+        const step3Data = this.checkinData.step3 || {};
+
+        const leiterId = authenticatedUserData._id;
+        const leaderCheckinMatrixData = step2Data.find(m => m.id === leiterId);
+        const leaderFollowUp = step3Data[leiterId] || {};
+
+        const todayString = new Date().toISOString().split('T')[0];
+        const existingLeaderCheckin = db.checkin.find(c => c.Mitarbeiter === leiterId && c.Datum.startsWith(todayString) && c.Motivation);
+        const initialDuration = existingLeaderCheckin?.Dauer || 0;
+        const durationInSeconds = checkinStartTime ? initialDuration + Math.round((Date.now() - checkinStartTime) / 1000) : initialDuration;
+
+        const leaderEntryData = {
+            [COLUMN_MAPS.checkin.Datum]: todayString,
+            [COLUMN_MAPS.checkin.Mitarbeiter]: [leiterId],
+            [COLUMN_MAPS.checkin.Motivation]: step1Data.motivation,
+            [COLUMN_MAPS.checkin.Stimmung]: step1Data.stimmung,
+            [COLUMN_MAPS.checkin.Todos]: step1Data.todos,
+            [COLUMN_MAPS.checkin.Dauer]: durationInSeconds,
+            [COLUMN_MAPS.checkin.ZielLautFK]: leaderCheckinMatrixData.ZielLautFK,
+            [COLUMN_MAPS.checkin.TermineEingetragen]: leaderCheckinMatrixData.TermineEingetragen ? 'x' : '',
+            [COLUMN_MAPS.checkin.IstMotiviert]: leaderCheckinMatrixData.IstMotiviert ? 'x' : '',
+            [COLUMN_MAPS.checkin.WillRekrutieren]: leaderCheckinMatrixData.WillRekrutieren ? 'x' : '',
+            [COLUMN_MAPS.checkin.HatErfolg]: leaderCheckinMatrixData.HatErfolg ? 'x' : '',
+            [COLUMN_MAPS.checkin.MotivationAntwort]: leaderFollowUp.MotivationAntwort || null,
+            [COLUMN_MAPS.checkin.RecruitingAntwort]: leaderFollowUp.RecruitingAntwort || null,
+            [COLUMN_MAPS.checkin.ErfolgAntwort]: leaderFollowUp.ErfolgAntwort || null,
+            [COLUMN_MAPS.checkin.KPIAntworten]: kpiAntworten,
+        };
+
+        const entriesToSave = [];
+        entriesToSave.push({ rowId: existingLeaderCheckin?._id, data: leaderEntryData });
+
+        step2Data.filter(m => m.id !== leiterId).forEach(memberData => {
+            const existingTeamCheckin = db.checkin.find(c => c.Mitarbeiter === memberData.id && c.Datum.startsWith(todayString) && !c.Motivation);
+            const teamEntry = {
+                rowId: existingTeamCheckin?._id,
+                data: {
+                    [COLUMN_MAPS.checkin.Datum]: todayString,
+                    [COLUMN_MAPS.checkin.Mitarbeiter]: [memberData.id],
+                    [COLUMN_MAPS.checkin.ZielLautFK]: memberData.ZielLautFK,
+                    [COLUMN_MAPS.checkin.TermineEingetragen]: memberData.TermineEingetragen ? 'x' : '',
+                    [COLUMN_MAPS.checkin.IstMotiviert]: memberData.IstMotiviert ? 'x' : '',
+                    [COLUMN_MAPS.checkin.WillRekrutieren]: memberData.WillRekrutieren ? 'x' : '', // KORREKTUR: teamFollowUp war nicht definiert.
+                    [COLUMN_MAPS.checkin.HatErfolg]: memberData.HatErfolg ? 'x' : '', // KORREKTUR: teamFollowUp war nicht definiert.
+                    [COLUMN_MAPS.checkin.MotivationAntwort]: (step3Data[memberData.id] || {}).MotivationAntwort || null,
+                    [COLUMN_MAPS.checkin.RecruitingAntwort]: (step3Data[memberData.id] || {}).RecruitingAntwort || null,
+                    [COLUMN_MAPS.checkin.ErfolgAntwort]: (step3Data[memberData.id] || {}).ErfolgAntwort || null,
+                }
+            };
+            entriesToSave.push(teamEntry);
+        });
+
+        let allSuccess = true;
+        for (const entry of entriesToSave) {
+            const result = await addOrUpdateCheckinEntry(entry.rowId, entry.data);
+            if (!result) { allSuccess = false; break; }
+        }
+
+        if (allSuccess) {
+            localStorage.setItem(`lastCheckin-${leiterId}`, todayString);
+            localStorage.removeItem(CACHE_PREFIX + 'checkin');
+            db.checkin = await seaTableQuery('Checkin');
+            normalizeAllData();
+            this.closeCheckinModal();
+            if (currentView === 'stimmungs-dashboard') { switchView('stimmungs-dashboard'); } 
+            else { await proceedToDashboard(leiterId); }
+        } else {
+            alert('Fehler beim Speichern des Check-ins.');
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = 'Check-in abschließen';
+        }
+    }
 }
 
 async function loadAndInitStimmungsDashboardView() {
     const container = dom.stimmungsDashboardView;
     const editBtn = document.getElementById('edit-today-checkin-btn');
-    
+
     try {
         const response = await fetch("./stimmungs-dashboard.html");
         if (!response.ok) throw new Error(`Die Datei 'stimmungs-dashboard.html' konnte nicht gefunden werden.`);
@@ -14344,6 +14544,9 @@ async function loadAndInitStimmungsDashboardView() {
         container.innerHTML = `<p class="text-red-500 text-center">${error.message}</p>`;
     }
 }
+
+
+
 
 // Mache Kernfunktionen global verfügbar für andere Module/Dateien
 window.SKT_APP = {

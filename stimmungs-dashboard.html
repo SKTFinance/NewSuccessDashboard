@@ -21,6 +21,10 @@
                 <span>Ø Dauer:</span>
                 <span id="average-checkin-duration-header-value" class="font-bold text-skt-blue">--:--</span>
             </div>
+            <!-- NEU: Button zum manuellen Starten des Check-ins -->
+            <button id="start-today-checkin-btn" class="hidden bg-skt-green-accent text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-green-700 transition-colors">
+                <i class="fas fa-play mr-2"></i>Heutigen Check-in starten
+            </button>
             <!-- Edit Button -->
             <button id="edit-today-checkin-btn" class="hidden bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors">
                 <i class="fas fa-edit mr-2"></i>Heutigen Check-in bearbeiten
@@ -59,6 +63,15 @@
         <div class="lg:col-span-3 bg-white rounded-2xl p-6 shadow-lg">
             <h3 class="text-xl font-bold text-skt-blue mb-4">KPI Warnungen (<span id="kpi-warning-count">0</span>)</h3>
             <div id="stimmungs-kpi-warnings-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto pr-2">
+                <!-- Inhalt wird per JS generiert -->
+            </div>
+        </div>
+
+        <!-- NEU: Probleme und Lösungen -->
+        <div class="lg:col-span-3 bg-white rounded-2xl p-6 shadow-lg">
+            <h3 class="text-xl font-bold text-skt-blue mb-4">Probleme & Lösungen</h3>
+            <p class="text-sm text-gray-500 mb-4">Negativ beantwortete Fragen aus den Team-Checks und die dazugehörigen Lösungsansätze der Führungskraft.</p>
+            <div id="stimmungs-probleme-loesungen-container" class="space-y-6 max-h-[600px] overflow-y-auto pr-2">
                 <!-- Inhalt wird per JS generiert -->
             </div>
         </div>
