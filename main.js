@@ -1651,9 +1651,9 @@ function updateUiForUserRoles() {
     const user = authenticatedUserData;
     if (!user || !user.Name) return;
 
-    // Wettbewerb visibility
-    const wettbewerbAllowedUsers = ["Jason Schreiber", "Samuel Königslehner"];
-    const showWettbewerb = wettbewerbAllowedUsers.includes(user.Name.trim());
+    // Wettbewerb visibility - KORREKTUR: Der Wettbewerb ist jetzt für alle Führungskräfte sichtbar.
+    // Die Funktion isUserLeader prüft, ob der Benutzer die entsprechende Karrierestufe hat.
+    const showWettbewerb = isUserLeader(user);
 
     // Wettbewerb: Immer sichtbar (mobil + desktop), wenn Berechtigung da ist.
     if (dom.wettbewerbHeaderBtnWrapper) {
@@ -13359,13 +13359,8 @@ function switchView(viewName) {
   } else if (viewName === 'stimmungs-dashboard') {
     loadAndInitStimmungsDashboardView();
   } else if (viewName === 'wettbewerb') { // NEU
-    const wettbewerbAllowedUsers = ["Jason Schreiber", "Samuel Königslehner"];
-    if (!authenticatedUserData || !wettbewerbAllowedUsers.includes(authenticatedUserData.Name.trim())) {
-        alert('Du hast keine Berechtigung für diese Ansicht.');
-        switchView('dashboard');
-        return;
-    }
-      loadAndInitWettbewerbView();
+    // KORREKTUR: Die Berechtigungsprüfung erfolgt jetzt in updateUiForUserRoles, die den Button ein-/ausblendet.
+    loadAndInitWettbewerbView();
   }
 }
 
