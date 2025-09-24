@@ -80,6 +80,7 @@ let HIERARCHY_CACHE = null;
 let checkinStartTime = null; // NEU: Zeitstempel für den Start des Check-ins
 let checkinTimerInterval = null; // NEU: Intervall für den Check-in-Timer
 
+let lastCheckinDateCheck = null; // NEU: Datum der letzten Check-in-Prüfung
 // --- NEU: Gekapselte Instanzen für jede Ansicht ---
 let appointmentsViewInstance = null;
 let timeTravelDate = null; // NEU
@@ -9703,6 +9704,42 @@ async function initializeBildschirmView() {
     }
 }
 
+// --- NEU: Periodische Prüfung auf neuen Tag für den Check-in ---
+function startDailyCheckinTrigger() {
+    // Prüfe alle 60 Sekunden, ob ein neuer Tag begonnen hat.
+    setInterval(async () => {
+        // Führe die Prüfung nicht aus, wenn bereits ein Modal offen ist oder der Benutzer nicht eingeloggt ist.
+        if (document.querySelector('.modal-overlay.visible') || !authenticatedUserData?._id) {
+            return;
+        }
+
+        const todayString = new Date().toISOString().split('T')[0];
+
+        // Wenn es die erste Prüfung ist oder sich der Tag geändert hat
+        if (lastCheckinDateCheck !== todayString) {
+            console.log(`[Checkin-Trigger] Neuer Tag erkannt: ${todayString}. Prüfe auf fälligen Check-in.`);
+            lastCheckinDateCheck = todayString; // Datum sofort aktualisieren
+
+            const userHasCheckinEnabled = authenticatedUserData.Checkin === true || String(authenticatedUserData.Checkin).toLowerCase() === 'true';
+            if (!userHasCheckinEnabled) {
+                console.log('[Checkin-Trigger] Benutzer hat Check-in nicht aktiviert.');
+                return;
+            }
+
+            const hasAlreadyCheckedIn = db.checkin.some(c =>
+                c.Mitarbeiter === authenticatedUserData._id &&
+                c.Datum && c.Datum.startsWith(todayString) &&
+                (c.Stimmung !== null && c.Stimmung !== undefined)
+            );
+
+            if (!hasAlreadyCheckedIn && window.innerWidth > 768) {
+                console.log('[Checkin-Trigger] Check-in ist fällig und wird geöffnet.');
+                await stimmungsDashboardViewInstance.openCheckinModal();
+            }
+        }
+    }, 60 * 1000); // 60000 ms = 1 Minute
+}
+
 // --- INITIALISIERUNG & EVENT LISTENERS ---
 
 function setupEventListeners() {
@@ -10312,6 +10349,9 @@ async function initializeDashboard() {
   setupEventListeners();
   setupSwipeToBack(); // NEU: Swipe-Geste initialisieren
   isInitializing = false;
+
+  // NEU: Starte die periodische Prüfung für den täglichen Check-in
+  startDailyCheckinTrigger();
 }
 async function proceedToDashboard(userId) {
     viewHistory = [userId];
