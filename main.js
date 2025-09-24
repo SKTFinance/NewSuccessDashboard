@@ -3625,6 +3625,9 @@ async function fetchAndRenderOnboarding(mitarbeiterId) {
     }
     teamMembers = teamMembers.filter(member => member && member.Startdatum);
 
+    // NEU: Sortiere die Teammitglieder nach Startdatum (älteste zuerst).
+    teamMembers.sort((a, b) => new Date(a.Startdatum) - new Date(b.Startdatum));
+
     // NEU: UI des Toggles aktualisieren
     document.getElementById('onboarding-group-btn').classList.toggle('active', scope === 'group');
     document.getElementById('onboarding-structure-btn').classList.toggle('active', scope === 'structure');
@@ -3663,11 +3666,17 @@ async function renderLeaderOnboardingView(teamMembers) {
     const warningIcon = progressData.hasOverdueCriticalStep
         ? '<i class="fas fa-exclamation-triangle text-skt-red-accent ml-2" title="Kritischer Schritt überfällig!"></i>'
         : '';
+    
+    // NEU: Startdatum für die subtile Anzeige formatieren.
+    const startDate = new Date(member.Startdatum).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
     card.innerHTML = `
         <div class="flex justify-between items-center mb-1">
             <p class="font-bold text-skt-blue flex items-center">${member.Name}${warningIcon}</p>
             <p class="font-semibold text-skt-blue-light">${progressData.percentage.toFixed(0)}%</p>
+        </div>
+        <div class="flex justify-end items-center mb-1">
+            <p class="text-xs text-gray-400">Start: ${startDate}</p>
         </div>
         <div class="w-full bg-gray-200 rounded-full h-4 shadow-inner relative">
             <div class="bg-skt-red-accent h-4 rounded-full absolute top-0 left-0 transition-all duration-700 ease-out" style="width: ${progressData.sollPercentage.toFixed(0)}%; z-index: 1;" data-tooltip="Soll-Fortschritt"></div>
