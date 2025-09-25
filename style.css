@@ -324,14 +324,8 @@ summary::-webkit-details-marker {
     transform: rotate(45deg) translateY(-1px) scale(1); /* Wird sichtbar */
 }
 
-.timeline-item {
-    opacity: 0;
-    animation: slideIn 0.5s ease-out forwards;
-}
-@keyframes slideIn {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-}
+/* KORREKTUR: Die Slide-In-Animation wurde entfernt, um ein "Neuladen"-Gefühl zu vermeiden. */
+.timeline-item { }
 
 /* UPDATE: Eingerückte Aufgaben vs. nicht eingerückte Meilensteine */
 .timeline-item-major {
@@ -354,6 +348,16 @@ summary::-webkit-details-marker {
 .timeline-item-major.completed::before,
 .timeline-item-major.due::before {
     background-color: var(--color-accent-green);
+}
+.timeline-item-minor .timeline-content {
+    position: relative; /* Wichtig für die Positionierung des Buttons */
+}
+
+.onboarding-step-toggle {
+    position: absolute;
+    bottom: -0.5rem; /* -8px */
+    right: -0.5rem; /* -8px */
+    z-index: 10;
 }
 
 .timeline-item-minor {

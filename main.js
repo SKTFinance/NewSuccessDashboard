@@ -1222,27 +1222,42 @@ async function loadAllData() {
   if (!seaTableAccessToken) return false;
 
   // Lade Spalten-Mappings aus Cache oder API
-  let cachedColumnMaps = loadFromCache("column_maps", 60);
+  let cachedColumnMaps = loadFromCache("column_maps", 1440); // Cache für 24h, da sich die Struktur selten ändert
   if (cachedColumnMaps) {
-    // console.log("Lade Spalten-Mappings aus dem Cache.");
     COLUMN_MAPS = cachedColumnMaps.maps;
     METADATA.tables = cachedColumnMaps.meta;
   } else {
-    // console.log("Lade Spalten-Mappings von der API.");
     COLUMN_MAPS = await fetchColumnMaps();
     if (Object.keys(COLUMN_MAPS).length === 0) return false;
     saveToCache("column_maps", { maps: COLUMN_MAPS, meta: METADATA.tables });
-    console.log('Geladene Tabellen-Metadaten:', METADATA.tables); // NEU: Log für Tabellenstruktur
   }
-
-  // NEU: Füge die Fallback-Map für Checkin hinzu, falls sie nicht von der API kommt.
   if (!COLUMN_MAPS.checkin) {
     COLUMN_MAPS.checkin = CHECKIN_COLUMN_MAP_FALLBACK;
   }
 
+  // KORREKTUR: Lade die Mitarbeiter-Tabelle IMMER zuerst und separat.
+  // Dies ist entscheidend für den Login-Screen und die Datenaktualität.
+  // Wir verwenden einen kurzen Cache von 5 Minuten, um die API bei schnellen Neuladungen zu schonen.
+  let mitarbeiterData = loadFromCache('mitarbeiter', 5);
+  if (!mitarbeiterData) {
+      console.log(`%c[DATENLADEN] %cLade 'Mitarbeiter' von der API...`, 'color: #17a2b8; font-weight: bold;', 'color: black;');
+      mitarbeiterData = await seaTableQuery("Mitarbeiter");
+      saveToCache("mitarbeiter", mitarbeiterData);
+  }
+  db.mitarbeiter = mitarbeiterData;
+
+  // Prüfe, ob die Mitarbeiterdaten veraltet sind (älter als 5 Minuten).
+  // Wenn ja, erzwinge ein Neuladen aller anderen kritischen Tabellen.
+  let forceRefresh = false;
+  const mitarbeiterCacheInfo = getCacheItemInfo('mitarbeiter');
+  const isMitarbeiterCacheStale = !mitarbeiterCacheInfo || (new Date().getTime() - mitarbeiterCacheInfo.timestamp > 5 * 60 * 1000);
+  if (isMitarbeiterCacheStale) {
+      forceRefresh = true;
+      console.warn('[CACHE-INVALIDIERUNG] Mitarbeiter-Cache ist veraltet (> 5 Min). Lade alle Daten neu.');
+  }
+
   setStatus("Lade Stammdaten...");
-  const tablesToLoad = [
-    "Mitarbeiter",
+  const otherTablesToLoad = [
     "Karriereplan",
     "Einarbeitungsschritte",
     "Monatsplanung",
@@ -1254,15 +1269,14 @@ async function loadAllData() {
     "PG",
     "Bürostandorte",
     "Checkin",
-    "Umsatz", // NEU: Umsatzdaten global laden, um Hinweise im Kalender zu ermöglichen
   ];
-
+  
   console.log('%c[DATENLADEN] %cStarte das Laden der Stammdaten...', 'color: #17a2b8; font-weight: bold;', 'color: black;');
   console.time('[DATENLADEN] Gesamtladezeit Stammdaten');
 
-  for (const tableName of tablesToLoad) {
+  for (const tableName of otherTablesToLoad) {
     const key = tableName.toLowerCase();
-    let cachedData = loadFromCache(key, 60); // Cache für 60 Minuten
+    let cachedData = forceRefresh ? null : loadFromCache(key, 60); // Cache für 60 Minuten, bei forceRefresh ignorieren
 
     if (cachedData) {
       console.log(`%c[DATENLADEN] %cLade '${tableName}' aus dem Cache.`, 'color: #17a2b8; font-weight: bold;', 'color: black;');
@@ -1285,21 +1299,31 @@ async function loadAllData() {
           );
           return false; // Stoppe die Initialisierung
         }
-        // NEU: Logge den Fehler nicht, wenn die Checkin-Tabelle nicht existiert.
-        // Dies ermöglicht eine sanfte Einführung der Funktion, ohne dass die DB sofort angepasst werden muss.
-        if (tableName !== 'Checkin') {
-            console.error(`Konnte '${tableName}' nicht von der API laden.`);
-        }
       }
     }
     if (key === 'checkin') {
         console.log(`%c[DATENLADEN-DEBUG] %cInhalt der Tabelle 'Checkin':`, 'color: #d4af37; font-weight: bold;', 'color: black;', db[key]);
     }
   }
+
+  // Lade nur die Umsätze der letzten 3 Monate
+  const threeMonthsAgo = new Date();
+  threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  const startDateIso = threeMonthsAgo.toISOString().split('T')[0];
+  const umsatzQuery = `SELECT * FROM Umsatz WHERE Datum >= '${startDateIso}'`;
+  console.log(`%c[DATENLADEN] %cLade 'Umsatz' der letzten 3 Monate von der API...`, 'color: #17a2b8; font-weight: bold;', 'color: black;');
+  const umsatzData = await seaTableSqlQuery(umsatzQuery, true);
+  if (umsatzData) {
+      db.umsatz = mapSqlResults(umsatzData, 'Umsatz');
+      saveToCache('umsatz', db.umsatz);
+      console.log(`%c[DATENLADEN] %c'Umsatz' geladen und gecached (${db.umsatz.length} Zeilen).`, 'color: #17a2b8; font-weight: bold;', 'color: black;');
+  } else {
+      console.error(`Konnte 'Umsatz' nicht von der API laden.`);
+  }
+
   console.timeEnd('[DATENLADEN] Gesamtladezeit Stammdaten');
 
   normalizeAllData();
-  // console.log("Stammdaten geladen und zwischengespeichert.");
   return true;
 }
 
@@ -1336,6 +1360,16 @@ function loadFromCache(key, maxAgeMinutes = 60) {
   } catch (e) {
     return null;
   }
+}
+
+function getCacheItemInfo(key) {
+    try {
+        const itemStr = localStorage.getItem(CACHE_PREFIX + key);
+        if (!itemStr) return null;
+        return JSON.parse(itemStr); // Gibt das ganze Objekt { timestamp, data } zurück
+    } catch (e) {
+        return null;
+    }
 }
 
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -1469,6 +1503,38 @@ function getMonthlyCycleDatesForDate(date) {
     return { startDate, endDate };
 }
 
+function triggerConfetti(element) {
+    const rect = element.getBoundingClientRect();
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const particleCount = 30; // Mehr Partikel
+    const colors = ['#d4af37', '#38bdf8', '#27ae60', '#f97316', '#8e44ad'];
+
+    for (let i = 0; i < particleCount; i++) {
+        const particle = document.createElement('div');
+        particle.style.position = 'fixed';
+        particle.style.left = `${x}px`;
+        particle.style.top = `${y}px`;
+        particle.style.width = `${Math.random() * 8 + 5}px`; // Größere Partikel
+        particle.style.height = `${Math.random() * 8 + 5}px`; // Größere Partikel
+        particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        particle.style.borderRadius = '50%';
+        particle.style.opacity = '1';
+        particle.style.zIndex = '9999';
+        particle.style.pointerEvents = 'none';
+        particle.style.transition = 'transform 0.8s cubic-bezier(0.1, 0.9, 0.2, 1), opacity 0.8s ease-out';
+
+        document.body.appendChild(particle);
+
+        const angle = Math.random() * 360;
+        const radius = Math.random() * 100 + 40; // Fliegen weiter
+        const translateX = Math.cos(angle * Math.PI / 180) * radius;
+        const translateY = Math.sin(angle * Math.PI / 180) * radius;
+
+        setTimeout(() => { particle.style.transform = `translate(${translateX}px, ${translateY}px) scale(0)`; particle.style.opacity = '0'; }, 10);
+        setTimeout(() => { particle.remove(); }, 810);
+    }
+}
 // --- NEU: UI-Einstellungen im LocalStorage speichern/laden ---
 function getUiSettings() {
     try {
@@ -1779,6 +1845,10 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   const currentMonthName = startDate.toLocaleString("de-DE", { month: "long" });
   const currentYear = startDate.getFullYear();
 
+  // NEU: Verwende die `HistorischerUmsatz` Spalte aus den Mitarbeiterdaten.
+  // Die `totalEhResults` Variable wird nicht mehr benötigt.
+  const totalEh = users.reduce((acc, user) => { acc[user._id] = user.HistorischerUmsatz || 0; return acc; }, {});
+
   // NEU: Finde den nächsten Infoabend, um die korrekten Plandaten zu laden.
   const nextInfoDateForPlan = findNextInfoDateAfter(getCurrentDate());
   const nextInfoDateStringForPlan = nextInfoDateForPlan.toISOString().split('T')[0];
@@ -1799,40 +1869,29 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   // NEU: Capitalbank-ID für den Filter holen
   const capitalbank = db.gesellschaften.find(g => g.Gesellschaft === 'Capitalbank');
   const capitalbankId = capitalbank ? capitalbank._id : null;
-  let capitalbankFilter = '';
   const dashboardLog = (message, ...data) => console.log(`%c[DASHBOARD_DATA_DEBUG] %c${message}`, 'color: #007bff; font-weight: bold;', 'color: black;', ...data);
   dashboardLog(`Lade Monats-EH für ${users.length} Mitarbeiter...`);
 
-  // Lade alle relevanten Umsätze und filtere in JS, um SQL-Probleme zu umgehen.
-  const userNames = users.map(u => u.Name).filter(Boolean);
-  const userNamesSql = userNames.map(name => `'${escapeSql(name)}'`).join(',');
-
-  const ehQuery = `SELECT Mitarbeiter_ID, Gesellschaft_ID, EH FROM Umsatz WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}' AND Mitarbeiter_ID IN (${userNamesSql})`;
+  // KORREKTUR: Verwende die gleiche, robuste SQL-Abfrage wie in der FK-Rennliste, um Datenkonsistenz sicherzustellen.
+  // Dies behebt die Diskrepanz zwischen Dashboard und Auswertung.
+  let capitalbankFilter = '';
+  if (capitalbankId) {
+      capitalbankFilter = ` AND NOT (\`Gesellschaft_ID\` IS NOT NULL AND \`Gesellschaft_ID\` LIKE '%${capitalbankId}%')`;
+  }
+  const ehQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`ehIst\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}'${capitalbankFilter} GROUP BY \`Mitarbeiter_ID\``;
   dashboardLog('Sende Abfrage für Monats-EH:', ehQuery);
-  const ehResultRaw = await seaTableSqlQuery(ehQuery, true);
-  const allEhRows = mapSqlResults(ehResultRaw || [], "Umsatz");
-  dashboardLog(`Habe ${allEhRows.length} Umsatz-Zeilen für den Monat erhalten.`);
-
-  // Für die Standard-EH-Anzeige werden ALLE Umsätze gezählt. Die Filterung für die Geld-Ansicht
-  // geschieht in der `calculateAllStructureEarnings`-Funktion, die für die Euro-Werte zuständig ist.
-  const ehByMitarbeiter = _.groupBy(allEhRows, row => row.Mitarbeiter_ID?.[0]?.row_id);
-  const ehResults = Object.entries(ehByMitarbeiter).map(([mitarbeiterId, umsaetze]) => {
-      const totalEh = umsaetze.reduce((sum, u) => sum + (u.EH || 0), 0);
-      return {
-          Mitarbeiter_ID: [{ row_id: mitarbeiterId }],
-          ehIst: totalEh
-      };
-  });
+  const ehResultRaw = await seaTableSqlQuery(ehQuery, true); // convert_link_id ist wichtig
+  const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
   dashboardLog('Aggregierte Monats-EH (ungefiltert):', ehResults);
   
   // Definitionen für Termin-Status
   // "Gehalten" zählt nur Termine mit Status 'Gehalten'.
   const AT_STATUS_GEHALTEN = ["Gehalten"];
   const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
-  // KORREKTUR: Falsche Status für "gehaltene" ETs entfernt (z.B. Storno, Ausgemacht).
+  // KORREKTUR: Falsche Status für "gehaltene" ETs entfernt (z.B. Storno, Ausgemacht). Storno wird jetzt mitgezählt.
   const ET_STATUS_GEHALTEN = ["Gehalten", "Info Eingeladen", "Weiterer ET", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
   // NEU: Definition für ausgemachte ETs, die "Ausgemacht" und alle "Gehalten"-Stati umfasst.
-  const ET_STATUS_AUSGEMACHT = ["Ausgemacht", ...ET_STATUS_GEHALTEN].filter(s => s !== 'Storno');
+  const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Info Eingeladen", "Weiterer ET", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter", "Verschoben"];
 
   return users.map((user) => {
     // 1. Plandaten und EH-Daten holen
@@ -1841,19 +1900,7 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
     const infoPlan = infoPlanResults.find(p => p.Mitarbeiter_ID === user._id) || {};
     const eh =
       ehResults.find(
-        (e) =>
-          e.Mitarbeiter_ID &&
-          Array.isArray(e.Mitarbeiter_ID) &&
-          e.Mitarbeiter_ID[0] &&
-          e.Mitarbeiter_ID[0].row_id === user._id
-      ) || {};
-    const totalEh =
-      totalEhResults.find(
-        (te) =>
-          te.Mitarbeiter_ID &&
-          Array.isArray(te.Mitarbeiter_ID) &&
-          te.Mitarbeiter_ID[0] &&
-          te.Mitarbeiter_ID[0].row_id === user._id
+        (e) => e.Mitarbeiter_ID && Array.isArray(e.Mitarbeiter_ID) && e.Mitarbeiter_ID[0] && e.Mitarbeiter_ID[0].row_id === user._id // KORREKTUR: Greife auf die row_id zu
       ) || {};
     // Termindaten aus dem Cache nach Benutzer filtern.
     const userTermineImMonat = termineImMonat.filter((t) => t.Mitarbeiter_ID === user._id);
@@ -1886,10 +1933,9 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
       etZiel = infoPlan["ET_Ziel"] || 0, // KORREKTUR: ET-Ziel aus der Infoplanung nehmen
       ehIst = eh.ehIst || 0;
     const atSoll =
-      user.EHproATQuote && ehZiel > 0
-        ? Math.round(ehZiel / user.EHproATQuote)
-        : 0;
-    const totalCurrentEh = totalEh.totalEh || 0;
+      user.EHproATQuote && ehZiel > 0 ? Math.round(ehZiel / user.EHproATQuote) : 0;
+    // NEU: Verwende den Wert aus der Mitarbeiter-Tabelle.
+    const totalCurrentEh = user.HistorischerUmsatz || 0;
     // NEU: Zähle Termine in der Vergangenheit mit Status "Ausgemacht"
     const today = new Date(getCurrentDate()); // KORREKTUR: Kopie erstellen, um Seiteneffekte zu vermeiden.
     today.setHours(0, 0, 0, 0);
@@ -1899,9 +1945,7 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
         t.Datum && new Date(t.Datum) < today &&
         t.Absage !== true // NEU: Stornierte Termine ausschließen
     ).length;
-    const anzahlGeworbenerMA = db.mitarbeiter.filter( // KORREKTUR: Zähle nur aktive Mitarbeiter
-      (m) => m.Werber === user._id && m.Status !== 'Ausgeschieden'
-    ).length;
+    const anzahlGeworbenerMA = db.mitarbeiter.filter(m => m.Werber === user._id && m.Status !== 'Ausgeschieden').length;
     const position = user.Karrierestufe || "";
 
     return {
@@ -1919,11 +1963,9 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
       outstandingAppointmentsCount,
       recruitedEmployees: anzahlGeworbenerMA,
       isTrainee:
-        position.toLowerCase().includes("trainee") ||
-        (position.toLowerCase().includes("ga") && position.length < 5),
+        position.toLowerCase().includes("trainee") || (position.toLowerCase().includes("ga") && position.length < 5),
       isLeader:
-        !position.toLowerCase().includes("trainee") &&
-        (!position.toLowerCase().includes("ga") || position.length >= 5),
+        !position.toLowerCase().includes("trainee") && (!position.toLowerCase().includes("ga") || position.length >= 5),
     };
   });
 }
@@ -3385,9 +3427,7 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
   // NEU: Header-Animation basierend auf den Leistungsdaten aktualisieren
   updateHeaderAnimation(personalData);
 
-  currentlyViewedUserData = user;
-  dom.welcomeHeader.textContent = `Willkommen, ${user.Name}`;
-  dom.userPosition.textContent = user.Karrierestufe;
+  currentlyViewedUserData = user; dom.welcomeHeader.textContent = `Willkommen, ${user.Name}`; dom.userPosition.textContent = user.Karrierestufe;
 
   // KORREKTUR: Setze den aktiven Zustand der Ansichts-Buttons basierend auf der geladenen Einstellung.
   currentLeadershipViewMode = loadUiSetting('leadershipViewMode', 'list');
@@ -3739,12 +3779,19 @@ async function renderLeaderOnboardingView(teamMembers) {
   }
 }
 
-async function getOnboardingProgressForTrainee(traineeId) {
+async function getOnboardingProgressForTrainee(traineeId, forceRefresh = false) {
   const user = findRowById("mitarbeiter", traineeId);
   if (!user || !user.Name)
     return { percentage: 0, sollPercentage: 0, totalSteps: 0, hasOverdueCriticalStep: false }; // NEU
 
-  // Daten aus dem Cache verwenden statt einer neuen SQL-Abfrage
+  // KORREKTUR: Caching-Problem beim Aufbauseminar beheben.
+  // Wenn `forceRefresh` true ist, werden die Einarbeitungsdaten neu von der DB geladen.
+  if (forceRefresh) {
+      localStorage.removeItem(CACHE_PREFIX + 'einarbeitung');
+      db.einarbeitung = await seaTableQuery('Einarbeitung');
+      normalizeAllData();
+  }
+
   const userEinarbeitung = db.einarbeitung.filter(e => e.Mitarbeiter_ID === traineeId);
 
   const allSteps = db.einarbeitungsschritte;
@@ -4231,8 +4278,9 @@ async function handleOnboardingStepToggle(event) {
     checkboxElement.style.opacity = '0.5';
 
     let success = false;
-    if (!isCurrentlyCompleted) { // If it's not currently completed, we want to add an entry.
+    if (!isCurrentlyCompleted) {
         success = await addOnboardingEntry(traineeId, stepId);
+        if (success) triggerConfetti(checkboxElement); // KORREKTUR: Confetti nach erfolgreichem Speichern auslösen.
     } else {
         // KORREKTUR: Die ID des zu löschenden Eintrags muss zuerst gefunden werden.
         const entryToDelete = db.einarbeitung.find(e => e.Mitarbeiter_ID === traineeId && e.Schritt_ID === stepId);
@@ -4247,7 +4295,10 @@ async function handleOnboardingStepToggle(event) {
         localStorage.removeItem(CACHE_PREFIX + 'einarbeitung');
         db.einarbeitung = await seaTableQuery('Einarbeitung'); // Nur Einarbeitungsdaten neu laden
         normalizeAllData();
-        await renderTraineeOnboardingView(traineeId);
+        // KORREKTUR: Beim Rendern nach einer Änderung `forceRefresh` auf true setzen,
+        // um sicherzustellen, dass der Status des Aufbauseminars korrekt neu berechnet wird.
+        const progressData = await getOnboardingProgressForTrainee(traineeId, true);
+        await renderTraineeOnboardingView(traineeId, progressData);
         // NEU: Nach der Aktualisierung prüfen, ob der Banner für kritische Schritte
         // ausgeblendet werden muss, falls der letzte kritische Schritt erledigt wurde.
         // Dies stellt sicher, dass die Dashboard-Ansicht konsistent ist.
@@ -4464,6 +4515,17 @@ class AppointmentsView {
         this.infoabendSortConfig = {
             column: 'Terminpartner', direction: 'asc'
         };
+        // NEU: Lade die gespeicherten Filtereinstellungen oder setze die Standardwerte.
+        // KORREKTUR: 'PG' und 'Sonstiges' zu den standardmäßig aktivierten Kategorien hinzugefügt.
+        const defaultCategories = ['AT', 'BT', 'ST', 'ET', 'Immo', 'NT', 'PG', 'Sonstiges'];
+        this.savedCategoryFilter = loadUiSetting('appointmentsCategoryFilter', defaultCategories);
+        this.savedShowCancelled = loadUiSetting('appointmentsShowCancelled', false);
+        this.savedShowHeld = loadUiSetting('appointmentsShowHeld', true); // Standardmäßig jetzt true
+    }
+
+    _saveCategoryFilters() {
+        const selectedCategories = Array.from(this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+        saveUiSetting('appointmentsCategoryFilter', selectedCategories);
     }
 
     // NEU: Methode zum Initialisieren der globalen Modal-Elemente und Listener
@@ -5106,9 +5168,8 @@ class AppointmentsView {
             checkbox.className = 'h-5 w-5 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light';
             checkbox.value = value;
             checkbox.checked = isChecked; // KORREKTUR: Der Event-Listener muss über die Instanz aufgerufen werden, um den korrekten Kontext sicherzustellen.
-            checkbox.addEventListener('change', () => {
-                appointmentsViewInstance._renderAppointmentStats(appointmentsViewInstance.dateAndSearchFilteredAppointments);
-            });
+            // NEU: Speichere die Filtereinstellungen bei jeder Änderung.
+            checkbox.addEventListener('change', () => { this._saveCategoryFilters(); this._renderAppointmentStats(); });
             const span = document.createElement('span');
             span.textContent = label;
             wrapper.appendChild(checkbox);
@@ -5116,8 +5177,10 @@ class AppointmentsView {
             this.statsCategoryFilterPanel.appendChild(wrapper);        };
 
         categories.filter(cat => [...relevantCategories, ...specialCategories].includes(cat)).forEach(cat => {
-            const isDefaultVisible = relevantCategories.includes(cat);
-            createCheckbox(cat, cat, isDefaultVisible);
+            // NEU: Verwende die geladenen Einstellungen, um den Status zu setzen.
+            const isChecked = this.savedCategoryFilter.includes(cat);
+            createCheckbox(cat, cat, isChecked);
+
         });
 
         // Buttons für "Alle auswählen" und "Alle entfernen" wurden entfernt.
@@ -5144,14 +5207,19 @@ class AppointmentsView {
         
         // KORREKTUR: Der Event-Listener wird direkt hier gesetzt, um sicherzustellen, dass er immer existiert.
         const cancelledToggle = document.getElementById('appointments-show-cancelled');
-        if (cancelledToggle) cancelledToggle.addEventListener('change', () => {
-            // KORREKTUR: Der Aufruf muss über die Instanz erfolgen.
-            appointmentsViewInstance._renderAppointmentStats(appointmentsViewInstance.dateAndSearchFilteredAppointments);
-        });
+        if (cancelledToggle) {
+            cancelledToggle.checked = this.savedShowCancelled;
+            cancelledToggle.addEventListener('change', () => {
+                saveUiSetting('appointmentsShowCancelled', cancelledToggle.checked);
+                this._renderAppointmentStats();
+            });
+        }
 
         const heldToggle = document.getElementById('appointments-show-held');
-        if (heldToggle) heldToggle.addEventListener('change', () => appointmentsViewInstance._renderAppointmentStats(appointmentsViewInstance.dateAndSearchFilteredAppointments));
-
+        if (heldToggle) {
+            heldToggle.checked = this.savedShowHeld;
+            heldToggle.addEventListener('change', () => { saveUiSetting('appointmentsShowHeld', heldToggle.checked); this._renderAppointmentStats(); });
+        }
         const headerWrapper = document.createElement('div');
         headerWrapper.className = 'flex justify-between items-center mb-2';
         headerWrapper.innerHTML = `<h4 class="font-semibold text-skt-blue">Kategorien</h4>`;
@@ -5174,8 +5242,8 @@ class AppointmentsView {
             </button>
         `;
         headerWrapper.appendChild(actionsWrapper);
-        document.getElementById('select-all-cats').addEventListener('click', () => { this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true); this._renderAppointmentStats(); });
-        document.getElementById('deselect-all-cats').addEventListener('click', () => { this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false); this._renderAppointmentStats(); });
+        document.getElementById('select-all-cats').addEventListener('click', () => { this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true); this._saveCategoryFilters(); this._renderAppointmentStats(); });
+        document.getElementById('deselect-all-cats').addEventListener('click', () => { this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false); this._saveCategoryFilters(); this._renderAppointmentStats(); });
     }
 
     // NEU: Funktion zum Befüllen des Gruppen-Filters
@@ -6936,6 +7004,12 @@ class AppointmentsView {
                 saveBtn.classList.add('bg-skt-green-accent');
 
                 if (isAtGehalten) {
+                    // KORREKTUR: Cache für Termine invalidieren und neu laden, damit der Status des AT sofort aktualisiert wird.
+                    localStorage.removeItem(CACHE_PREFIX + 'termine');
+                    db.termine = await seaTableQuery('Termine');
+                    normalizeAllData();
+                    appointmentsLog('Termin-Cache invalidiert und Daten neu geladen für BT-Folge-Modal.');
+
                     this._openBtFollowUpModal(originalTermin);
                     return;
                 }
@@ -8176,6 +8250,11 @@ class UmsatzView {
 
             if (!isEdit) {
                 this.lastSavedUmsatz = { Kunde: kunde, Mitarbeiter_ID: mitarbeiterId };
+                // NEU: Nach dem Hinzufügen eines neuen Umsatzes die Mitarbeiterdaten neu laden,
+                // damit der `HistorischerUmsatz` sofort aktualisiert wird.
+                umsatzLog('Lade Mitarbeiterdaten neu, um den Gesamtumsatz zu aktualisieren...');
+                db.mitarbeiter = await seaTableQuery("Mitarbeiter");
+                saveToCache("mitarbeiter", db.mitarbeiter);
             } else { // Im Edit-Modus Cache leeren
                 this.lastSavedUmsatz = null;
             }
@@ -8283,6 +8362,17 @@ class AuswertungView {
         this.fkRennlisteStructureBtn = document.getElementById('fk-rennliste-structure-btn'); // NEU
         this.fkRennlisteView = document.getElementById('fk-rennliste-view');
         this.naechstesInfoView = document.getElementById('naechstes-info-view');
+        // KORREKTUR: Die DOM-Elemente für die Planungsansicht müssen hier geholt werden.
+        this.planungenView = document.getElementById('planungen-view');
+        if (this.planungenView) {
+            this.planungenListContainer = this.planungenView.querySelector('#planungen-list-container');
+            this.planungenMonthSelect = this.planungenView.querySelector('#planungen-month-select');
+            this.planungenYearSelect = this.planungenView.querySelector('#planungen-year-select');
+        } else {
+            this.planungenListContainer = null;
+            this.planungenMonthSelect = null;
+            this.planungenYearSelect = null;
+        }
         this.planungenTab = document.getElementById('planungen-tab'); // NEU
         this.planungenView = document.getElementById('planungen-view'); // NEU // NEU
         return this.ranglisteTab && this.aktivitaetenTab && this.fkRennlisteTab && this.planungenTab && this.kpisTab && this.ranglisteView && this.aktivitaetenView && this.fkRennlisteView && this.planungenView && this.kpisView;
@@ -8333,6 +8423,20 @@ class AuswertungView {
         if (isLeader) {
             this.aktivitaetenStructureFilter.classList.remove('hidden');
             this.fkRennlisteStructureFilter.classList.remove('hidden');
+
+            // KORREKTUR: Dropdowns befüllen, wenn sie leer sind.
+            if (this.aktivitaetenStructureFilter.options.length === 0) {
+                this.aktivitaetenStructureFilter.add(new Option('Alle Strukturen', 'all'));
+                this.aktivitaetenStructureFilter.add(new Option('Meine Struktur', 'mine'));
+            }
+            if (this.fkRennlisteStructureFilter.options.length === 0) {
+                this.fkRennlisteStructureFilter.add(new Option('Alle Strukturen', 'all'));
+                this.fkRennlisteStructureFilter.add(new Option('Meine Struktur', 'mine'));
+            }
+            if (this.aktivitaetenRoleFilter.options.length === 0) {
+                this.aktivitaetenRoleFilter.add(new Option('Einzelpersonen', 'individual'));
+                this.aktivitaetenRoleFilter.add(new Option('Führungskräfte', 'leader'));
+            }
         }
 
         // NEU: UI basierend auf geladenen Einstellungen aktualisieren
@@ -8779,9 +8883,6 @@ class AuswertungView {
             const terminDate = new Date(t.Datum);
             return terminDate >= startDate && terminDate <= endDate;
         });
-        // KORREKTUR: Abgesagte/stornierte Termine aus der Zählung ausschließen.
-        termineData = termineData.filter(t => t.Absage !== true && t.Status !== 'Storno');
-
         // KORREKTUR: Verwende die exakt gleiche Zähl-Logik wie auf dem Dashboard für Konsistenz.
         const AT_STATUS_GEHALTEN = ["Gehalten"];
         const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
@@ -9150,10 +9251,10 @@ class AuswertungView {
 
     async renderPlanungen() {
         auswertungLog('Render Planungen View');
-        const viewContainer = document.getElementById('planungen-view');
+        const viewContainer = this.planungenView;
         if (!viewContainer) return;
-        const listContainer = viewContainer.querySelector('#planungen-list-container');
-        listContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        this.planungenListContainer.innerHTML = '<div class="loader mx-auto"></div>';
+
 
         const monthSelect = viewContainer.querySelector('#planungen-month-select');
         const yearSelect = viewContainer.querySelector('#planungen-year-select');
@@ -9201,9 +9302,9 @@ class AuswertungView {
         const usersById = _.keyBy(combinedData, 'id');
 
         const leaders = allActiveUsers.filter(u => isUserLeader(u) && u.Status !== 'Ausgeschieden').sort((a, b) => a.Name.localeCompare(b.Name));
-        listContainer.innerHTML = '';
+        this.planungenListContainer.innerHTML = '';
 
-        const activeGroups = [];
+        let activeGroups = [];
         const passiveGroups = [];
 
         leaders.forEach(leader => {
@@ -9268,13 +9369,14 @@ class AuswertungView {
             }
 
             return `
-                <div class="grid grid-cols-7 gap-4 items-center py-2 px-4 cursor-pointer hover:bg-gray-100 rounded-md" data-userid="${user.id}">
+                <div class="grid grid-cols-8 gap-4 items-center py-2 px-4 cursor-pointer hover:bg-gray-100 rounded-md" data-userid="${user.id}">
                     <div class="col-span-2 font-semibold text-skt-blue">${user.name}</div>
                     <div class="text-center ${etGoalClass}">${user.etGoal}</div>
                     <div class="text-center ${ursprungsEhGoalClass}">${user.ursprungsEhGoal}</div>
                     <div class="text-center ${ehGoalClass}">${user.ehGoal}</div>
                     <div class="text-center font-bold ${planChangeColor}">${planChangeHtml}</div>
                     <div class="text-center font-bold ${pqqColor}">${pqq.toFixed(0)}%</div>
+                    <div class="text-center text-gray-400 hover:text-skt-blue"><i class="fas fa-pen"></i></div>
                 </div>
             `;
         };
@@ -9295,12 +9397,13 @@ class AuswertungView {
             }
 
             const sumRowHtml = `
-                <div class="grid grid-cols-7 gap-4 items-center py-2 px-4 bg-skt-blue-light text-white rounded-b-md">
+                <div class="grid grid-cols-8 gap-4 items-center py-2 px-4 bg-skt-blue-light text-white rounded-b-md">
                     <div class="col-span-2 font-bold">SUMME</div>
                     <div class="text-center font-bold">${group.sums.etGoal}</div>
                     <div class="text-center font-bold">${group.sums.ursprungsEhGoal}</div>
                     <div class="text-center font-bold">${group.sums.ehGoal}</div>
                     <div class="text-center font-bold ${sumPlanChangeColorClass}">${sumPlanChangeHtml}</div>
+                    <div class="text-center font-bold"></div>
                     <div class="text-center font-bold"></div>
                 </div>
             `;
@@ -9317,21 +9420,20 @@ class AuswertungView {
             return groupContainer;
         };
 
-        activeGroups.forEach(group => {
-            listContainer.appendChild(renderGroup(group));
-        });
+        activeGroups.forEach(group => this.planungenListContainer.appendChild(renderGroup(group)));
 
-        if (passiveGroups.length > 0) {
+        // KORREKTUR: Stelle sicher, dass die passive Sektion nur gerendert wird, wenn sie Gruppen enthält.
+        if (passiveGroups.length > 0) { 
             const passiveSection = document.createElement('div');
             passiveSection.className = 'mt-12';
             passiveSection.innerHTML = `<h3 class="text-2xl font-bold text-skt-blue mb-4 border-t pt-4">Passive Gruppen (ohne Planung)</h3>`;
             passiveGroups.forEach(group => {
                 passiveSection.appendChild(renderGroup(group));
             });
-            listContainer.appendChild(passiveSection);
+            this.planungenListContainer.appendChild(passiveSection);
         }
 
-        listContainer.querySelectorAll('[data-userid]').forEach(row => { // Make it async
+        this.planungenListContainer.querySelectorAll('[data-userid]').forEach(row => { // Make it async
             row.addEventListener('click', async () => {
                 const userId = row.dataset.userid;
                 await this.logPQQCalculationForUser(userId, selectedMonth, selectedYear);
@@ -9778,7 +9880,7 @@ function setupEventListeners() {
   dom.settingsBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     closeMoreToolsMenu(); // Schließt das andere Menü, falls offen
-
+    dom.clearCacheBtn.textContent = 'Logout'; // KORREKTUR: Text zurücksetzen
     if (dom.settingsMenu.classList.contains("hidden")) {
       dom.settingsMenu.classList.remove("hidden");
       setTimeout(() => dom.settingsMenu.classList.add("visible"), 10);
@@ -10179,59 +10281,6 @@ function setupSwipeToBack() {
     }
 }
 
-
-async function loadAndCacheTotalEh() {
-    const totalEhCacheKey = 'total-eh-results-v2'; // Neuer Cache-Key, um alte Formate zu invalidieren
-    let cachedResults = loadFromCache(totalEhCacheKey, 240); // Cache für 4 Stunden. HINWEIS: Manuelles Löschen des Caches kann für Tests nötig sein.
-
-    if (cachedResults) {
-        console.log('%c[DATENLADEN] %cGesamt-EH aus dem Cache geladen.', 'color: #17a2b8; font-weight: bold;', 'color: black;');
-        totalEhResults = cachedResults; // Die gecachten Daten sind bereits im richtigen Format
-        return true;
-    }
-
-    console.log(`%c[DATENLADEN] %cGesamte Umsatz-Tabelle wird von der API geladen (langsame, aber stabile Abfrage)...`, 'color: #17a2b8; font-weight: bold;', 'color: red;');
-    console.time('[DATENLADEN] Dauer für Gesamt-Umsatz-Tabellenabfrage');
-    const allUmsatzRowsRaw = await seaTableQuery('Umsatz');
-    console.timeEnd('[DATENLADEN] Dauer für Gesamt-Umsatz-Tabellenabfrage');
-
-    if (!allUmsatzRowsRaw) {
-        console.error('[DATENLADEN] Die Abfrage der Umsatz-Tabelle ist fehlgeschlagen.');
-        setStatus("Kritischer Fehler: Die Umsatzdaten konnten nicht geladen werden.", true);
-        return false;
-    }
-
-    // KORREKTUR: Capitalbank-Umsätze vor der Aggregation herausfiltern.
-    const capitalbank = db.gesellschaften.find(g => g.Gesellschaft === 'Capitalbank');
-    const capitalbankId = capitalbank ? capitalbank._id : null;
-
-    const filteredUmsatzRows = allUmsatzRowsRaw.filter(row => {
-        if (!capitalbankId) return true;
-        const gesellschaftIdLink = row[COLUMN_MAPS.umsatz.Gesellschaft_ID];
-        if (!gesellschaftIdLink || !Array.isArray(gesellschaftIdLink) || gesellschaftIdLink.length === 0) {
-            return true; // Umsätze ohne Gesellschaft behalten
-        }
-        return !gesellschaftIdLink.some(link => link.row_id === capitalbankId);
-    });
-
-    const umsatzByMitarbeiter = _.groupBy(filteredUmsatzRows, row => row[COLUMN_MAPS.umsatz.Mitarbeiter_ID]?.[0]?.row_id);
-    const calculatedResults = Object.entries(umsatzByMitarbeiter).map(([mitarbeiterId, umsaetze]) => {
-        const totalEh = umsaetze.reduce((sum, u) => sum + (u[COLUMN_MAPS.umsatz.EH] || 0), 0);
-        return { Mitarbeiter_ID: [{ row_id: mitarbeiterId }], totalEh: totalEh };
-    });
-    
-    if (calculatedResults) {
-        saveToCache(totalEhCacheKey, calculatedResults);
-        console.log('%c[DATENLADEN] %cGesamt-EH geladen und im Cache gespeichert.', 'color: #17a2b8; font-weight: bold;', 'color: black;');
-        totalEhResults = calculatedResults;
-        return true;
-    } else {
-        console.error('[DATENLADEN] Die Abfrage für Gesamt-EH ist fehlgeschlagen und hat null zurückgegeben.');
-        setStatus("Kritischer Fehler: Die Gesamtumsätze konnten nicht geladen werden. Bitte versuchen Sie es später erneut.", true);
-        return false; // Signal failure
-    }
-}
-
 let isInitializing = false;
 async function initializeDashboard() {
   // NEU: Routing für die Bildschirm-Ansicht
@@ -10256,7 +10305,7 @@ async function initializeDashboard() {
   // KORREKTUR: Lade UI-Einstellungen, bevor die Daten geladen werden.
   currentLeadershipViewMode = loadUiSetting('leadershipViewMode', 'list');
 
-  const dataLoaded = await loadAllData();
+  const dataLoaded = await loadAllData(); // Die Funktion prüft jetzt intern, ob ein Refresh nötig ist.
 
   if (!dataLoaded) {
     setStatus("Initialisierung fehlgeschlagen. Bitte Seite neu laden.", true);
@@ -10277,21 +10326,11 @@ async function initializeDashboard() {
       console.warn('[Checkin-Setup] Keine Metadaten für Tabelle "Checkin" in der Datenbank gefunden. Es wird die Fallback-Struktur verwendet.');
   }
 
-  // NEU: Lade die Gesamt-EH-Daten, BEVOR das Dashboard gerendert wird.
-  setStatus("Lade Gesamtumsätze (dies kann einen Moment dauern)...");
-  const totalEhLoaded = await loadAndCacheTotalEh();
-
   // NEU: Instanz der AppointmentsView erstellen und Modal-Listener initialisieren
   appointmentsViewInstance = new AppointmentsView();
   appointmentsViewInstance._initSharedElementsAndListeners();
   
   if (!stimmungsDashboardViewInstance) stimmungsDashboardViewInstance = new StimmungsDashboardView();
-
-  if (!totalEhLoaded) {
-      // loadAndCacheTotalEh setzt bereits die Fehlermeldung
-      isInitializing = false;
-      return;
-  }
 
   // KORREKTUR: Im Zeitreise-Modus nur Mitarbeiter anzeigen, die zu diesem Zeitpunkt schon da waren.
   let usersForLogin = db.mitarbeiter.filter((m) => m.Name && m.Status !== 'Ausgeschieden');
@@ -10920,17 +10959,8 @@ async function applyAutomaticPromotionToDatabase(mitarbeiterId) {
     }
 
     // 1. Lade die aktuellen Gesamt-EH des Mitarbeiters direkt aus der Datenbank.
-    const totalEhQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`totalEh\` FROM \`Umsatz\` GROUP BY \`Mitarbeiter_ID\``;
-    const totalEhResultsRaw = await seaTableSqlQuery(totalEhQuery, false);
-    const totalEhResults = mapSqlResults(totalEhResultsRaw || [], "Umsatz");
-    const userEhData = totalEhResults.find(
-        (te) =>
-          te.Mitarbeiter_ID &&
-          Array.isArray(te.Mitarbeiter_ID) &&
-          te.Mitarbeiter_ID[0] &&
-          te.Mitarbeiter_ID[0].row_id === mitarbeiterId
-      ) || {};
-    const totalEh = userEhData.totalEh || 0;
+    // NEU: Verwende die `HistorischerUmsatz` Spalte aus den Mitarbeiterdaten.
+    const totalEh = user.HistorischerUmsatz || 0;
 
     const recruitedEmployees = db.mitarbeiter.filter(m => m.Werber === mitarbeiterId).length;
 
