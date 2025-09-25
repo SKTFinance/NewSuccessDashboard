@@ -1,0 +1,120 @@
+<!-- Ansicht für Planung & Businessplan -->
+<div id="planung-module-root" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h2 class="text-3xl font-bold text-skt-blue">Planung & Vision</h2>
+        <!-- NEU: Dropdown für Führungskräfte -->
+        <div id="planung-user-select-container" class="hidden w-full sm:w-auto sm:max-w-xs">
+            <label for="planung-user-select" class="block text-sm font-medium text-gray-700 mb-1">Mitarbeiter auswählen</label>
+            <select id="planung-user-select" class="modern-select"></select>
+        </div>
+    </div>
+
+    <!-- Reiter-Navigation -->
+    <div class="border-b border-gray-200 mb-6">
+        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+            <button id="planung-tab-monatsplanung" class="planung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue">
+                Monatsplanung
+            </button>
+            <button id="planung-tab-businessplan" class="planung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                Businessplan
+            </button>
+        </nav>
+    </div>
+
+    <!-- Inhalt für Monatsplanung -->
+    <div id="planung-content-monatsplanung">
+        <!-- NEU: KPI-Dashboard -->
+        <div class="mb-8">
+            <h3 class="text-xl font-semibold text-skt-blue mb-4">Deine aktuellen Kennzahlen</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                <div class="bg-skt-grey-light p-4 rounded-lg shadow-inner">
+                    <p class="text-sm font-medium text-skt-blue-light" data-tooltip="Planungsqualitätsquote des Vormonats">PQQ</p>
+                    <p id="planung-kpi-pqq" class="text-2xl font-bold text-skt-blue mt-1">-</p>
+                </div>
+                <div class="bg-skt-grey-light p-4 rounded-lg shadow-inner">
+                    <p class="text-sm font-medium text-skt-blue-light" data-tooltip="Terminausfallquote der letzten 30 Tage">Terminausfall</p>
+                    <p id="planung-kpi-ausfallquote" class="text-2xl font-bold text-skt-blue mt-1">-</p>
+                </div>
+                <div class="bg-skt-grey-light p-4 rounded-lg shadow-inner">
+                    <p class="text-sm font-medium text-skt-blue-light" data-tooltip="Durchschnittliche EH pro gehaltenem BT mit Umsatz (letzte 90 Tage)">Ø EH / BT</p>
+                    <p id="planung-kpi-eh-pro-bt" class="text-2xl font-bold text-skt-blue mt-1">-</p>
+                </div>
+                <div class="bg-skt-grey-light p-4 rounded-lg shadow-inner">
+                    <p class="text-sm font-medium text-skt-blue-light" data-tooltip="Durchschnittliche EH pro gehaltenem AT (letzter Monat)">Ø EH / AT</p>
+                    <p id="planung-kpi-eh-pro-at" class="text-2xl font-bold text-skt-blue mt-1">-</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bestehendes Planungsformular -->
+        <form id="monatsplanung-form" class="space-y-6 max-w-2xl mx-auto">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                    <label for="monatsplanung-month-select" class="block text-sm font-medium text-gray-700">Monat</label>
+                    <select id="monatsplanung-month-select" required class="modern-select mt-1"></select>
+                </div>
+                <div>
+                    <label for="monatsplanung-year-input" class="block text-sm font-medium text-gray-700">Jahr</label>
+                    <input type="number" id="monatsplanung-year-input" required class="modern-input mt-1">
+                </div>
+            </div>
+            <div>
+                <label for="monatsplanung-eh-goal" class="block text-sm font-medium text-gray-700">EH Ziel</label>
+                <input type="number" id="monatsplanung-eh-goal" required class="modern-input mt-1">
+            </div>
+            <div class="border-t border-gray-200 pt-6">
+                <h3 class="text-lg font-semibold text-skt-blue mb-4">Infoplanung</h3>
+                <div>
+                    <label for="monatsplanung-et-goal" class="block text-sm font-medium text-gray-700">ET Ziel</label>
+                    <input type="number" id="monatsplanung-et-goal" required class="modern-input mt-1">
+                </div>
+                <div class="mt-4">
+                    <label for="monatsplanung-infoabend-date" class="block text-sm font-medium text-gray-700">Zugehöriger Infoabend</label>
+                    <div class="input-wrapper mt-1">
+                        <input type="date" id="monatsplanung-infoabend-date" disabled class="modern-input bg-gray-100 cursor-not-allowed">
+                    </div>
+                    <p class="mt-1 text-xs text-gray-500">Dieses Datum wird automatisch auf den nächsten Infoabend gesetzt.</p>
+                </div>
+            </div>
+            <div class="pt-4 flex justify-end">
+                <button type="submit" id="save-monatsplanung-btn" class="bg-skt-blue text-white font-semibold py-2 px-6 rounded-lg hover:bg-skt-blue-light transition-colors">Planung speichern</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Inhalt für Businessplan -->
+    <div id="planung-content-businessplan" class="hidden">
+        <form id="businessplan-form" class="space-y-6">
+            <input type="hidden" id="businessplan-id">
+            <div>
+                <label for="businessplan-vision" class="block text-sm font-medium text-gray-700 mb-1">Was ist deine Vision?</label>
+                <textarea id="businessplan-vision" rows="3" class="modern-input" placeholder="Beschreibe deine langfristige Vision..."></textarea>
+            </div>
+            <div>
+                <label for="businessplan-ziel" class="block text-sm font-medium text-gray-700 mb-1">Was ist dein erstes großes Ziel auf diesem Weg?</label>
+                <input type="text" id="businessplan-ziel" class="modern-input" placeholder="z.B. Beförderung zum GST, finanzielles Ziel, ...">
+            </div>
+            <div>
+                <label for="businessplan-warum" class="block text-sm font-medium text-gray-700 mb-1">Warum möchtest du dieses Ziel erreichen?</label>
+                <textarea id="businessplan-warum" rows="3" class="modern-input" placeholder="Was ist deine intrinsische Motivation?"></textarea>
+            </div>
+            <div>
+                <label for="businessplan-change" class="block text-sm font-medium text-gray-700 mb-1">Was verändert sich für dich, wenn du dieses Ziel erreicht hast?</label>
+                <textarea id="businessplan-change" rows="3" class="modern-input" placeholder="Beschreibe die positiven Auswirkungen auf dein Leben."></textarea>
+            </div>
+            <div>
+                <label for="businessplan-datum" class="block text-sm font-medium text-gray-700 mb-1">Wann willst du dieses Ziel erreichen?</label>
+                <div class="input-wrapper"><input type="date" id="businessplan-datum" class="modern-input w-full"></div>
+            </div>
+            <div>
+                <label for="businessplan-todos-container" class="block text-sm font-medium text-gray-700 mb-1">Welche konkreten Schritte musst du umsetzen, um dieses Ziel zu erreichen?</label>
+                <div id="businessplan-todos-container" class="modern-input p-3 overflow-y-auto" style="min-height: 150px; background-color: #f9fafb;">
+                    <!-- To-Do-Liste wird hier per JS generiert -->
+                </div>
+            </div>
+            <div class="pt-4 flex justify-end">
+                <button type="submit" id="save-businessplan-btn" class="bg-skt-blue text-white font-semibold py-2 px-6 rounded-lg hover:bg-skt-blue-light transition-colors">Businessplan speichern</button>
+            </div>
+        </form>
+    </div>
+</div>

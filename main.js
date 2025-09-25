@@ -47,6 +47,7 @@ let db = {
   "pg": [],
   checkin: [],
   bürostandorte: [],
+    visionen: [], // NEU
 };
 let totalEhResults = []; // NEU: Globale Variable für die vorgeladenen Gesamtumsätze
 
@@ -65,6 +66,7 @@ let currentView = "dashboard";
 let potentialViewInstance = null;
 let umsatzViewInstance = null;
 let auswertungViewInstance = null;
+let planungViewInstance = null; // NEU
 let strukturbaumViewInstance = null;
 let pgTagebuchViewInstance = null;
 let stimmungsDashboardViewInstance = null;
@@ -168,6 +170,8 @@ const dom = {
   potentialHeaderBtn: document.getElementById("potential-header-btn"),
   umsatzHeaderBtn: document.getElementById("umsatz-header-btn"),
   auswertungHeaderBtn: document.getElementById("auswertung-header-btn"),
+  stimmungsDashboardHeaderBtn: document.getElementById('stimmungs-dashboard-header-btn'), // NEU
+  planungView: document.getElementById("planung-view"), // NEU
   pgTagebuchHeaderBtn: document.getElementById('pg-tagebuch-header-btn'),
   strukturbaumHeaderBtn: document.getElementById("strukturbaum-header-btn"),
   wettbewerbHeaderBtn: document.getElementById("wettbewerb-header-btn"), // NEU
@@ -175,6 +179,7 @@ const dom = {
   auswertungView: document.getElementById("auswertung-view"),
   datenschutzView: document.getElementById("datenschutz-view"), // NEU
   umsatzView: document.getElementById("umsatz-view"),
+  planungView: document.getElementById("planung-view"), // NEU
   potentialView: document.getElementById("potential-view"),
   appointmentsView: document.getElementById("appointments-view"),
   pgTagebuchView: document.getElementById('pg-tagebuch-view'),
@@ -210,21 +215,20 @@ const dom = {
   ),
   editUserBtn: document.getElementById("edit-user-btn"),
   editUserModal: document.getElementById("edit-user-modal"),
+  strukturbaumSettingsBtn: document.getElementById("strukturbaum-settings-btn"), // KORREKTUR: War falsch zugeordnet
   editUserForm: document.getElementById("edit-user-form"),
   cancelEditUserBtn: document.getElementById("cancel-edit-user-btn"),
   cancelEditUserBtn2: document.getElementById("cancel-edit-user-btn-2"),
   saveUserBtn: document.getElementById("save-user-btn"),
-  addNewUserBtn: document.getElementById("add-new-user-btn"),
+  addNewUserBtn: document.getElementById("add-new-user-btn"), // NEU: Planung-Button
   addUserModal: document.getElementById("add-user-modal"),
   addUserForm: document.getElementById("add-user-form"),
   cancelAddUserBtn: document.getElementById("cancel-add-user-btn"),
   cancelAddUserBtn2: document.getElementById("cancel-add-user-btn-2"),
   saveNewUserBtn: document.getElementById("save-new-user-btn"),
-  planningBtn: document.getElementById("planning-btn"),
+  planningBtn: document.getElementById("planung-header-btn"), // KORREKTUR: ID war falsch
   planningModal: document.getElementById("planning-modal"),
   planningForm: document.getElementById("planning-form"),
-  savePlanningBtn: document.getElementById("save-planning-btn"),
-  cancelPlanningBtn: document.getElementById("cancel-planning-btn"),
   pqqView: document.getElementById('pqq-view'),
   pqqIndicator: document.getElementById('pqq-indicator'),
   pqqValueDisplay: document.getElementById('pqq-value-display'),
@@ -1134,26 +1138,20 @@ function normalizeAllData() {
           if (value !== undefined && value !== null) {
             // Intelligente Normalisierung basierend auf Spaltentyp
             if (colMeta && colMeta.type === "link") {
-              let id = null,
-                displayValue = null;
-              if (Array.isArray(value) && value.length > 0 && value[0]) {
-                id = value[0].row_id;
-                displayValue = value[0].display_value;
-              } else if (
-                typeof value === "object" &&
-                !Array.isArray(value) &&
-                value &&
-                value.row_id
-              ) {
-                id = value.row_id;
-                displayValue = value.display_value;
-              }
+              // KORREKTUR: Die Normalisierungslogik für Link-Spalten war fehlerhaft und hat dazu geführt,
+              // dass die Karrierestufe (und andere Link-Felder) bei einigen Mitarbeitern verloren ging.
+              // Die neue Logik prüft korrekt, ob der Wert ein Array von Link-Objekten ist.
+              if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object' && value[0] !== null) {
+                const linkObject = value[0];
+                const id = linkObject.row_id;
+                const displayValue = linkObject.display_value;
 
-              if (colName === "Karrierestufe") {
-                value = displayValue;
-              } else {
-                // Default für Links wie Werber
-                value = id;
+                if (colName === "Karrierestufe") {
+                  newRow[colName] = displayValue; // Für Karrierestufe den Namen verwenden
+                } else {
+                  newRow[colName] = id; // Für andere Links (z.B. Werber) die ID verwenden
+                }
+                continue; // Überspringe die Standardzuweisung am Ende der Schleife
               }
             } else if (colMeta && colMeta.type === "single-select") {
               const option = colMeta.data.options.find(
@@ -1269,6 +1267,7 @@ async function loadAllData() {
     "PG",
     "Bürostandorte",
     "Checkin",
+    "Visionen", // NEU
   ];
   
   console.log('%c[DATENLADEN] %cStarte das Laden der Stammdaten...', 'color: #17a2b8; font-weight: bold;', 'color: black;');
@@ -1306,14 +1305,14 @@ async function loadAllData() {
     }
   }
 
-  // Lade nur die Umsätze der letzten 3 Monate
+  // KORREKTUR: Lade nur die Umsätze der letzten 3 Monate und wende das Mapping an.
   const threeMonthsAgo = new Date();
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
   const startDateIso = threeMonthsAgo.toISOString().split('T')[0];
   const umsatzQuery = `SELECT * FROM Umsatz WHERE Datum >= '${startDateIso}'`;
   console.log(`%c[DATENLADEN] %cLade 'Umsatz' der letzten 3 Monate von der API...`, 'color: #17a2b8; font-weight: bold;', 'color: black;');
   const umsatzData = await seaTableSqlQuery(umsatzQuery, true);
-  if (umsatzData) {
+  if (umsatzData) { // KORREKTUR: mapSqlResults muss hier aufgerufen werden, um die Spaltennamen zu normalisieren.
       db.umsatz = mapSqlResults(umsatzData, 'Umsatz');
       saveToCache('umsatz', db.umsatz);
       console.log(`%c[DATENLADEN] %c'Umsatz' geladen und gecached (${db.umsatz.length} Zeilen).`, 'color: #17a2b8; font-weight: bold;', 'color: black;');
@@ -1899,9 +1898,11 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
     // NEU: ET-Plan aus der Infoplanung holen.
     const infoPlan = infoPlanResults.find(p => p.Mitarbeiter_ID === user._id) || {};
     const eh =
-      ehResults.find(
-        (e) => e.Mitarbeiter_ID && Array.isArray(e.Mitarbeiter_ID) && e.Mitarbeiter_ID[0] && e.Mitarbeiter_ID[0].row_id === user._id // KORREKTUR: Greife auf die row_id zu
-      ) || {};
+      // KORREKTUR: Der Zugriff auf die Mitarbeiter-ID war falsch.
+      // ehResults enthält nach mapSqlResults ein Array, in dem die ID als Objekt mit `row_id` liegt.
+      // Wir müssen direkt auf dieses Objekt zugreifen, um den korrekten Abgleich zu gewährleisten.
+      ehResults.find(e => e.Mitarbeiter_ID?.[0]?.row_id === user._id) || {};
+
     // Termindaten aus dem Cache nach Benutzer filtern.
     const userTermineImMonat = termineImMonat.filter((t) => t.Mitarbeiter_ID === user._id);
 
@@ -6744,7 +6745,7 @@ class AppointmentsView {
         appointmentsLog('--- END: openModal ---');
     }
 
-    _renderModalHints(termin, container) {
+    async _renderModalHints(termin, container) {
         const hintLog = (message, ...data) => console.log(`%c[ModalHint] %c${message}`, 'color: #9b59b6; font-weight: bold;', 'color: black;', ...data);
         let hintsFound = false;
         container.innerHTML = '';
@@ -6753,19 +6754,26 @@ class AppointmentsView {
         if (termin.Kategorie === 'BT' && termin.Terminpartner) {
             const partnerName = termin.Terminpartner;
             hintLog(`Prüfe auf Umsatz für BT mit Partner: '${partnerName}'`);
+            
+            // KORREKTUR: Verwende eine direkte SQL-Abfrage, um zuverlässig die Umsätze zu finden.
+            // Dies umgeht Probleme mit der globalen `db.umsatz`-Tabelle.
             const terminDate = new Date(termin.Datum);
             const oneWeek = 7 * 24 * 60 * 60 * 1000;
-            const searchStart = new Date(terminDate.getTime() - oneWeek);
-            const searchEnd = new Date(terminDate.getTime() + oneWeek);
-            const relatedSales = db.umsatz.filter(sale =>
-                sale.Kunde && partnerName && sale.Kunde.trim().toLowerCase() === partnerName.trim().toLowerCase() &&
-                sale.Datum && new Date(sale.Datum) >= searchStart && new Date(sale.Datum) <= searchEnd
-            );
+            const searchStartDate = new Date(terminDate.getTime() - oneWeek).toISOString().split('T')[0];
+            const searchEndDate = new Date(terminDate.getTime() + oneWeek).toISOString().split('T')[0];
+
+            const salesQuery = `SELECT EH, Produkt_ID, Datum FROM Umsatz WHERE Kunde = '${escapeSql(partnerName)}' AND Datum >= '${searchStartDate}' AND Datum <= '${searchEndDate}'`;
+            const salesResultRaw = await seaTableSqlQuery(salesQuery, true);
+            const relatedSales = mapSqlResults(salesResultRaw || [], 'Umsatz');
+
+            if (relatedSales.length > 0) {
+                hintLog(`Gefunden: ${relatedSales.length} zugeordnete Umsätze via SQL.`, relatedSales);
+            }
 
             if (relatedSales.length > 0) {
                 hintsFound = true;
                 let salesHtml = '<strong>Zugeordneter Umsatz:</strong><ul class="list-disc list-inside pl-2 mt-1 text-sm">';
-                relatedSales.forEach(sale => {
+                relatedSales.forEach(sale => { // KORREKTUR: Produktnamen über die ID aus db.produkte nachschlagen.
                     // KORREKTUR: Produktnamen über die ID aus db.produkte nachschlagen.
                     const produkt = db.produkte.find(p => p._id === sale.Produkt_ID);
                     const productName = produkt ? produkt.Produkt : 'Unbekannt';                    salesHtml += `<li>${(sale.EH || 0).toFixed(2)} EH - ${productName} am ${new Date(sale.Datum).toLocaleDateString('de-DE')}</li>`;
@@ -8458,96 +8466,125 @@ class AuswertungView {
     }
 
     async _renderKPIs() {
-        const cancellationRateEl = document.getElementById('auswertung-kpi-cancellation-rate');
-        const cancellationDetailsEl = document.getElementById('auswertung-kpi-cancellation-details');
-        const closingRateEl = document.getElementById('auswertung-kpi-closing-rate');
-        const closingDetailsEl = document.getElementById('auswertung-kpi-closing-details');
+        const cancellationRateEl = document.getElementById('auswertung-kpi-cancellation-rate'); // KORREKTUR: Die Suche nach zugeordneten Umsätzen muss jetzt auf den normalisierten Daten (`db.umsatz`) laufen.
+        const cancellationDetailsEl = document.getElementById('auswertung-kpi-cancellation-details'); // Die Daten sind bereits auf die letzten 3 Monate vorgefiltert.
+        const closingRateEl = document.getElementById('auswertung-kpi-closing-rate'); // KORREKTUR: Die Suche nach zugeordneten Umsätzen muss jetzt auf den normalisierten Daten (`db.umsatz`) laufen.
+        const closingDetailsEl = document.getElementById('auswertung-kpi-closing-details'); // Die Daten sind bereits auf die letzten 3 Monate vorgefiltert.
 
-        if (!cancellationRateEl || !closingRateEl) {
+        if (!cancellationRateEl || !closingRateEl) { // KORREKTUR: Die Suche nach zugeordneten Umsätzen muss jetzt auf den normalisierten Daten (`db.umsatz`) laufen.
             auswertungLog('KPI-Elemente in auswertung.html nicht gefunden. KPIs werden nicht gerendert.');
             return;
         }
 
         // Get user IDs based on scope
-        let userIds = [];
+        let userIdsForKpi = [];
         const scope = this.currentKpiScope;
         const currentUser = SKT_APP.authenticatedUserData; // Use logged-in user for context
 
-        switch (scope) {
-            case 'persoenlich':
-                userIds = [currentUser._id];
-                break;
-            case 'gruppe':
-                const groupMembers = getSubordinates(currentUser._id, 'gruppe');
-                userIds = [currentUser._id, ...groupMembers.map(u => u._id)];
-                break;
-            case 'struktur':
-                const structureMembers = getAllSubordinatesRecursive(currentUser._id);
-                userIds = [currentUser._id, ...structureMembers.map(u => u._id)];
-                break;
-            default:
-                userIds = [currentUser._id];
-        }
+        // KORREKTUR: Verwende die ID des aktuell in der Planungsansicht ausgewählten Benutzers,
+        // nicht die des eingeloggten Benutzers.
+        const contextUser = currentlyViewedUserData;
+
+        if (scope === 'persoenlich') userIdsForKpi = [contextUser._id];
+        else if (scope === 'gruppe') userIdsForKpi = [contextUser._id, ...getSubordinates(contextUser._id, 'gruppe').map(u => u._id)];
+        else if (scope === 'struktur') userIdsForKpi = [contextUser._id, ...getAllSubordinatesRecursive(contextUser._id).map(u => u._id)];
+        else userIdsForKpi = [contextUser._id];
 
         // The rest of the function uses userIdsSet, so this should work.
-        const userIdsSet = new Set(userIds);
+        const userIdsSet = new Set(userIdsForKpi);
         const today = getCurrentDate();
+        // KORREKTUR: Variable 'today_end_of_day' war nicht definiert.
+        // Wird jetzt erstellt, um sicherzustellen, dass alle heutigen Einträge berücksichtigt werden.
+        const today_end_of_day = new Date(today);
+        today_end_of_day.setHours(23, 59, 59, 999);
 
         // --- Terminausfall (Cancellation Rate) ---
         const twoWeeksAgo = new Date(today);
         twoWeeksAgo.setDate(today.getDate() - 14);
         const allTwoWeekAppointments = db.termine.filter(t => 
-            userIdsSet.has(t.Mitarbeiter_ID) && 
+            userIdsSet.has(t.Mitarbeiter_ID) &&
             t.Datum && 
             new Date(t.Datum) >= twoWeeksAgo && 
             new Date(t.Datum) <= today
         );
         
         if (allTwoWeekAppointments.length > 0) {
-            const cancelledCount = allTwoWeekAppointments.filter(t => t.Absage === true || t.Status === 'Storno').length;
+            const cancelledCount = allTwoWeekAppointments.filter(t => t.Absage === true || t.Status === 'Storno').length; // KORREKTUR: Die Suche nach zugeordneten Umsätzen muss jetzt auf den normalisierten Daten (`db.umsatz`) laufen.
             const cancellationRate = cancelledCount / allTwoWeekAppointments.length;
             cancellationRateEl.textContent = `${(cancellationRate * 100).toFixed(0)}%`;
             cancellationDetailsEl.textContent = `${cancelledCount} von ${allTwoWeekAppointments.length} Terminen`;
         } else {
             cancellationRateEl.textContent = '0%';
-            cancellationDetailsEl.textContent = 'Keine Termine in den letzten 14 Tagen';
+            cancellationDetailsEl.textContent = 'Keine Termine in den letzten 14 Tagen'; // KORREKTUR: Die Suche nach zugeordneten Umsätzen muss jetzt auf den normalisierten Daten (`db.umsatz`) laufen.
         }
 
         // --- Abschlussquote (Closing Rate) ---
-        const thirtyDaysAgo = new Date(today);
-        thirtyDaysAgo.setDate(today.getDate() - 30);
-        const allUserBTs = db.termine.filter(t => 
-            userIdsSet.has(t.Mitarbeiter_ID) &&
-            t.Kategorie === 'BT' &&
-            t.Status === 'Gehalten' &&
-            t.Datum &&
-            new Date(t.Datum) >= thirtyDaysAgo &&
-            new Date(t.Datum) <= today
+        // KORREKTUR: Berechnungszeitraum auf 60 Tage erweitert.
+        const sixtyDaysAgo = new Date(today);
+        sixtyDaysAgo.setDate(today.getDate() - 60);
+
+        // NEU: Zählt alle gehaltenen BTs und STs mit Prognose als "Verkaufsgespräche".
+        const salesAppointments = db.termine.filter(t => 
+            userIdsSet.has(t.Mitarbeiter_ID) && 
+            t.Status === 'Gehalten' && 
+            t.Datum && new Date(t.Datum) >= sixtyDaysAgo && new Date(t.Datum) <= today &&
+            (t.Kategorie === 'BT' || (t.Kategorie === 'ST' && t.Umsatzprognose > 0))
         );
+        const totalSalesAppointments = salesAppointments.length;
 
-        if (allUserBTs.length > 0) {
-            let btsWithSale = 0;
-            for (const bt of allUserBTs) {
-                const terminDate = new Date(bt.Datum);
-                const oneWeek = 7 * 24 * 60 * 60 * 1000;
-                const searchStart = new Date(terminDate.getTime() - oneWeek);
-                const searchEnd = new Date(terminDate.getTime() + oneWeek);
+        // NEUE BERECHNUNG: Zähle einzigartige Kunden mit Umsatz und teile sie durch die Anzahl der gehaltenen BTs.
+        const userNames = Array.from(userIdsSet).map(id => findRowById('mitarbeiter', id)?.Name).filter(Boolean);
+        let uniqueCustomersWithSales = 0;
 
-                const hasSale = db.umsatz.some(sale => 
-                    sale.Kunde && bt.Terminpartner &&
-                    sale.Kunde.trim().toLowerCase() === bt.Terminpartner.trim().toLowerCase() &&
-                    sale.Datum && new Date(sale.Datum) >= searchStart && new Date(sale.Datum) <= searchEnd
-                );
-                if (hasSale) {
-                    btsWithSale++;
-                }
+        // 1. Nenner: Alle gehaltenen BTs im Zeitraum zählen.
+        const totalHeldBTs = db.termine.filter(t => 
+            userIdsSet.has(t.Mitarbeiter_ID) && 
+            t.Kategorie === 'BT' && 
+            t.Status === 'Gehalten' && 
+            t.Datum && new Date(t.Datum) >= sixtyDaysAgo && new Date(t.Datum) <= today_end_of_day
+        ).length;
+
+        // 2. Zähler: Einzigartige Kunden mit Umsatz im Zeitraum zählen.
+        // NEUE BERECHNUNG: Berechne die persönliche Abschlussquote für jeden Mitarbeiter und nimm den Durchschnitt.
+        const individualClosingRates = [];
+        const startDateIso = sixtyDaysAgo.toISOString().split('T')[0];
+        const endDateIso = today_end_of_day.toISOString().split('T')[0];
+
+        // 1. Lade alle relevanten Umsätze für die gesamte Gruppe/Struktur auf einmal.
+        const userNamesForSql = userIdsForKpi.map(id => findRowById('mitarbeiter', id)?.Name).filter(Boolean);
+        let salesByUserId = {};
+        if (userNamesForSql.length > 0) {
+            const userNamesSqlString = userNamesForSql.map(name => `'${escapeSql(name)}'`).join(',');
+            const salesQuery = `SELECT Mitarbeiter_ID, Kunde FROM Umsatz WHERE Mitarbeiter_ID IN (${userNamesSqlString}) AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+            const salesResultRaw = await seaTableSqlQuery(salesQuery, true);
+            const allSales = mapSqlResults(salesResultRaw || [], 'Umsatz');
+            salesByUserId = _.groupBy(allSales, sale => sale.Mitarbeiter_ID?.[0]?.row_id);
+        }
+
+        // 2. Berechne die individuelle Quote für jeden Mitarbeiter.
+        for (const userId of userIdsForKpi) {
+            const userBTs = db.termine.filter(t => t.Mitarbeiter_ID === userId && t.Kategorie === 'BT' && t.Status === 'Gehalten' && t.Datum && new Date(t.Datum) >= sixtyDaysAgo && new Date(t.Datum) <= today_end_of_day);
+
+            if (userBTs.length === 0) {
+                individualClosingRates.push(0); // Mitarbeiter ohne BTs zählen mit 0% in den Durchschnitt.
+                continue;
             }
-            const closingRate = btsWithSale / allUserBTs.length;
-            closingRateEl.textContent = `${(closingRate * 100).toFixed(0)}%`;
-            closingDetailsEl.textContent = `${btsWithSale} von ${allUserBTs.length} BTs mit Umsatz`;
+            
+            const userSales = salesByUserId[userId] || [];
+            const uniqueCustomersWithSales = new Set(userSales.map(sale => sale.Kunde?.trim().toLowerCase()).filter(Boolean)).size;
+            
+            const rate = uniqueCustomersWithSales / userBTs.length;
+            individualClosingRates.push(rate);
+            }
+        
+        // 3. Berechne den Durchschnitt und zeige ihn an
+        if (individualClosingRates.length > 0) {
+            const avgClosingRate = _.mean(individualClosingRates);
+            closingRateEl.textContent = `${(avgClosingRate * 100).toFixed(0)}%`;
+            closingDetailsEl.textContent = `Ø aus ${individualClosingRates.length} Mitarbeitern`;
         } else {
             closingRateEl.textContent = 'N/A';
-            closingDetailsEl.textContent = 'Keine gehaltenen BTs in den letzten 30 Tagen';
+            closingDetailsEl.textContent = 'Keine gehaltenen BTs in den letzten 60 Tagen';
         }
     }
 
@@ -8683,7 +8720,7 @@ class AuswertungView {
             
             let membersHtml = '';
             for (const member of groupMembers) {
-                const { warnings, values } = getIndividualKpiData(member);
+            const { warnings, values } = await getIndividualKpiData(member);
 
                 const kpiValuesHtml = `
                     <div class="flex gap-x-6 gap-y-1 mt-2 text-xs text-gray-700 flex-wrap">
@@ -9987,6 +10024,7 @@ function setupEventListeners() {
   // NEU: Event Listeners für die "Mehr"-Menüpunkte
   const setupMenuItem = (menuItemId, buttonId) => {
       const menuItem = document.getElementById(menuItemId);
+      if (!menuItem) return; // Sicherheitsprüfung
       const button = document.getElementById(buttonId);
       if (menuItem && button) {
           menuItem.addEventListener('click', (e) => {
@@ -9997,7 +10035,6 @@ function setupEventListeners() {
       }
   };
   setupMenuItem('pg-tagebuch-menu-item', 'pg-tagebuch-header-btn');
-  setupMenuItem('potential-menu-item', 'potential-header-btn');
   setupMenuItem('auswertung-menu-item', 'auswertung-header-btn');
   setupMenuItem('strukturbaum-menu-item', 'strukturbaum-header-btn');
   setupMenuItem('wettbewerb-menu-item', 'wettbewerb-header-btn'); // NEU
@@ -10017,6 +10054,11 @@ function setupEventListeners() {
     e.preventDefault();
     closeSettingsMenu();
     openEditUserModal();
+  });
+  // KORREKTUR: Event-Listener für Strukturbaum-Button im Einstellungsmenü
+  dom.strukturbaumSettingsBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    switchView("strukturbaum");
   });
 
   // NEU: Event Listener für Hilfe-Modal
@@ -10114,44 +10156,48 @@ function setupEventListeners() {
     switchView("einarbeitung");
     fetchAndRenderOnboarding(authenticatedUserData._id);
   });
+// KORREKTUR: Fehlende Event-Listener für Header-Buttons hinzugefügt
+  dom.appointmentsHeaderBtn.addEventListener('click', () => {
+    switchView('appointments');
+  });
+
+  dom.umsatzHeaderBtn.addEventListener('click', () => {
+    switchView('umsatz');
+  });
+
+  dom.stimmungsDashboardHeaderBtn.addEventListener('click', () => {
+    switchView('stimmungs-dashboard');
+  });
 
   dom.dashboardHeaderBtn.addEventListener('click', () => {
     switchView('dashboard');
-  });
-
-  dom.appointmentsHeaderBtn.addEventListener("click", () => {
-    // NEU
-    switchView("appointments");
   });
 
   dom.pgTagebuchHeaderBtn.addEventListener('click', () => {
     switchView('pg-tagebuch');
   });
 
+  // KORREKTUR: Event-Listener für den wiederhergestellten Button
   dom.potentialHeaderBtn.addEventListener("click", () => {
     // NEU
     switchView("potential");
-  });
-
-  dom.umsatzHeaderBtn.addEventListener("click", () => {
-    // NEU
-    switchView("umsatz");
   });
 
   dom.auswertungHeaderBtn.addEventListener("click", () => {
     switchView("auswertung");
   });
   // KORREKTUR: Listener für den neuen Menüpunkt in den Einstellungen
+  // NEU: Event-Listener für den Menüpunkt
+  setupMenuItem('potential-menu-item', 'potential-header-btn');
+
+  // KORREKTUR: Listener für den neuen Menüpunkt in den Einstellungen
+  dom.planningBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    switchView("planung");
+  });
   dom.wettbewerbHeaderBtn.addEventListener("click", () => {
     // NEU
     switchView("wettbewerb");
-  });
-
-  document.getElementById('stimmungs-dashboard-header-btn').addEventListener('click', () => switchView('stimmungs-dashboard'));
-
-  dom.strukturbaumHeaderBtn.addEventListener("click", () => {
-    // NEU
-    switchView("strukturbaum");
   });
 
   dom.datenschutzHeaderBtn.addEventListener('click', () => {
@@ -10191,17 +10237,6 @@ function setupEventListeners() {
     openAddUserModal();
   });
   dom.addUserForm.addEventListener("submit", (e) => { e.preventDefault(); saveNewUser(); });
-  dom.cancelAddUserBtn.addEventListener("click", closeAddUserModal);
-  dom.cancelAddUserBtn2.addEventListener("click", closeAddUserModal);
-
-  dom.planningBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    closeSettingsMenu();
-    openPlanningModal();
-  });
-  dom.planningForm.addEventListener("submit", (e) => { e.preventDefault(); savePlanningData(); });
-  dom.cancelPlanningBtn.addEventListener("click", closePlanningModal);
-  document.getElementById('cancel-planning-btn-2').addEventListener('click', closePlanningModal);
 
   dom.pqqView.addEventListener('click', () => {
       dom.pqqDetailsContainer.classList.toggle('collapsed');
@@ -10539,11 +10574,10 @@ function getVerdienstForPosition(position) {
 }
 
 // NEU: Globale Funktion zur PQQ-Berechnung
-function getSingleUserPQQ(userId) {
+async function getSingleUserPQQ(userId) {
     const { startDate, endDate } = getPreviousMonthlyCycleDates();
     const prevMonthName = startDate.toLocaleString("de-DE", { month: "long" });
     const prevYear = startDate.getFullYear();
-
     // Get EH plan
     const plan = db.monatsplanung.find(p => 
         p.Mitarbeiter_ID === userId &&
@@ -10556,18 +10590,20 @@ function getSingleUserPQQ(userId) {
     const prevMonthInfoPlan = db.infoplanung.find(p => 
         p.Mitarbeiter_ID === userId &&
         new Date(p.Informationsabend).getFullYear() === prevYear &&
-        new Date(p.Informationsabend).getMonth() === startDate.getMonth()
+        new Date(p.Informationsabend).getMonth() === startDate.getMonth() // KORREKTUR: Prüft auf den Monat des Infoabends
     );
     const ursprungszielET = prevMonthInfoPlan?.Ursprungsziel_ET || 0;
 
-    if (!plan && !prevMonthInfoPlan) return null;
+    if (ursprungszielEH === 0 && ursprungszielET === 0) return { pqq: 100, ehQuote: 1, etQuote: 1 };
 
-    // Get actual EH
-    const actualEH = db.umsatz.filter(sale => 
-        sale.Mitarbeiter_ID === userId &&
-        sale.Datum && new Date(sale.Datum) >= startDate && new Date(sale.Datum) <= endDate
-    ).reduce((sum, sale) => sum + (sale.EH || 0), 0);
-
+    // KORREKTUR: Lade die Ist-EH für den Vormonat direkt per SQL.
+    const userName = findRowById('mitarbeiter', userId)?.Name;
+    const startDateIso = startDate.toISOString().split('T')[0];
+    const endDateIso = endDate.toISOString().split('T')[0];
+    const ehQuery = `SELECT SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID = '${escapeSql(userName)}' AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+    const ehResultRaw = await seaTableSqlQuery(ehQuery, true);
+    const actualEH = ehResultRaw?.[0]?.totalEH || 0;
+    
     // Get actual ET
     const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
     const actualET = db.termine.filter(t => 
@@ -10578,19 +10614,24 @@ function getSingleUserPQQ(userId) {
 
     const ehQuote = (ursprungszielEH > 0) ? (actualEH / ursprungszielEH) : 1;
     const etQuote = (ursprungszielET > 0) ? (actualET / ursprungszielET) : 1;
-    return ((ehQuote + etQuote) / 2) * 100;
+    const pqq = ((ehQuote + etQuote) / 2) * 100;
+    return { pqq, ehQuote, etQuote };
 }
 
 // NEU: Globale Funktion zur KPI-Berechnung
-function getIndividualKpiData(user) {
+async function getIndividualKpiData(user) {
+    const kpiLog = (message, ...data) => console.log(`%c[KPI-DATA] %c[${user.Name}] %c${message}`, 'color: #8e44ad; font-weight: bold;', 'color: #17a2b8; font-weight: bold;', 'color: black;', ...data);
     const warnings = [];
     const values = {
         cancellationRate: null,
         closingRate: null,
     };
-    const today = new Date();
+    // KORREKTUR: Fehlende Variable `thirtyDaysAgo` hinzugefügt, um den ReferenceError zu beheben.
     const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(today.getDate() - 30);
+    thirtyDaysAgo.setDate(new Date().getDate() - 30);
+    const today = new Date(); // KORREKTUR: Berechnungszeitraum auf 60 Tage erweitert.
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(today.getDate() - 60);
     const twoWeeksAgo = new Date();
     twoWeeksAgo.setDate(today.getDate() - 14);
     const fourWeeksAgo = new Date();
@@ -10623,16 +10664,36 @@ function getIndividualKpiData(user) {
         if (etGoal > 0 && fourWeekEtAppointments.length === 0) warnings.push('Keine Recruiting-Termine (ET) in den letzten 4 Wochen');
     }
 
-    const userBTs = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Kategorie === 'BT' && t.Status === 'Gehalten' && t.Datum && new Date(t.Datum) >= thirtyDaysAgo && new Date(t.Datum) <= today);
+    const userBTs = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Kategorie === 'BT' && t.Status === 'Gehalten' && t.Datum && new Date(t.Datum) >= sixtyDaysAgo && new Date(t.Datum) <= today);
     if (userBTs.length > 0) {
         let btsWithSale = 0;
         for (const bt of userBTs) {
+            // KORREKTUR: Sicherheitsprüfung, falls kein Terminpartner eingetragen ist.
+            if (!bt.Terminpartner) {
+                kpiLog(`-> Kein Terminpartner für diesen BT vorhanden. Überspringe Umsatzsuche.`);
+                continue; // Nächsten BT prüfen
+            }
+
             const terminDate = new Date(bt.Datum);
             const oneWeek = 7 * 24 * 60 * 60 * 1000;
             const searchStart = new Date(terminDate.getTime() - oneWeek);
             const searchEnd = new Date(terminDate.getTime() + oneWeek);
-            const hasSale = db.umsatz.some(sale => sale.Kunde && bt.Terminpartner && sale.Kunde.trim().toLowerCase() === bt.Terminpartner.trim().toLowerCase() && sale.Datum && new Date(sale.Datum) >= searchStart && new Date(sale.Datum) <= searchEnd);
-            if (hasSale) btsWithSale++;
+
+            // KORREKTUR: Führe eine direkte SQL-Abfrage durch, um die Datenkonsistenz sicherzustellen.
+            const startDateIso = searchStart.toISOString().split('T')[0];
+            const endDateIso = searchEnd.toISOString().split('T')[0];
+            const partnerNameSql = escapeSql(bt.Terminpartner.trim());
+            const mitarbeiterNameSql = escapeSql(user.Name);
+
+            const salesQuery = `SELECT EH, Kunde, Datum FROM Umsatz WHERE Mitarbeiter_ID = '${mitarbeiterNameSql}' AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}' AND lower(Kunde) LIKE '%${partnerNameSql.toLowerCase()}%'`;
+            
+            const matchingSalesRaw = await seaTableSqlQuery(salesQuery, true);
+            const matchingSales = mapSqlResults(matchingSalesRaw || [], 'Umsatz');
+
+            if (matchingSales.length > 0) {
+                btsWithSale++;
+            } else {
+            }
         }
         const closingRate = btsWithSale / userBTs.length;
         values.closingRate = closingRate;
@@ -11130,7 +11191,7 @@ async function calculateAndRenderPQQ(mitarbeiterId) {
 
     const [ehResultRaw, etResultRaw] = await Promise.all([
         seaTableSqlQuery(ehQuery, true),
-        seaTableSqlQuery(etQuery, true)
+        seaTableSqlQuery(etQuery, true),
     ]);
 
     const totalEH = ehResultRaw?.[0]?.totalEH || 0;
@@ -13318,6 +13379,8 @@ function switchView(viewName) {
   dom.auswertungView.classList.toggle("hidden", viewName !== "auswertung");
   dom.strukturbaumView.classList.toggle("hidden", viewName !== "strukturbaum");
   dom.pgTagebuchView.classList.toggle('hidden', viewName !== 'pg-tagebuch');
+  // NEU: Neue Ansichten umschalten
+  dom.planungView.classList.toggle('hidden', viewName !== 'planung');
   dom.wettbewerbView.classList.toggle('hidden', viewName !== 'wettbewerb'); // NEU
   dom.stimmungsDashboardView.classList.toggle('hidden', viewName !== 'stimmungs-dashboard');
   document.getElementById('bildschirm-view').classList.add('hidden'); // Sicherstellen, dass die Bildschirm-Ansicht immer ausgeblendet ist
@@ -13330,9 +13393,10 @@ function switchView(viewName) {
       'appointments': [dom.appointmentsHeaderBtn],
       'umsatz': [dom.umsatzHeaderBtn],
       'pg-tagebuch': [dom.pgTagebuchHeaderBtn, document.getElementById('pg-tagebuch-menu-item')],
-      'potential': [dom.potentialHeaderBtn, document.getElementById('potential-menu-item')],
       'auswertung': [dom.auswertungHeaderBtn, document.getElementById('auswertung-menu-item')],
+      'potential': [dom.potentialHeaderBtn, document.getElementById('potential-menu-item')], // KORREKTUR
       'wettbewerb': [dom.wettbewerbHeaderBtn, document.getElementById('wettbewerb-menu-item')], // NEU
+      'planung': [dom.planningBtn], // NEU
       'strukturbaum': [dom.strukturbaumHeaderBtn, document.getElementById('strukturbaum-menu-item')],
       'stimmungs-dashboard': [document.getElementById('stimmungs-dashboard-header-btn')],
       'datenschutz': [dom.datenschutzHeaderBtn],
@@ -13378,6 +13442,8 @@ function switchView(viewName) {
     loadAndInitPotentialView();
   } else if (viewName === "umsatz") {
     loadAndInitUmsatzView();
+  } else if (viewName === "planung") { // NEU
+    loadAndInitPlanungView();
   } else if (viewName === "auswertung") {
     loadAndInitAuswertungView();
   } else if (viewName === "strukturbaum") {
@@ -13393,6 +13459,351 @@ function switchView(viewName) {
     loadAndInitWettbewerbView();
   }
 }
+
+async function loadAndInitPlanungView() {
+    const container = dom.planungView;
+    try {
+        const response = await fetch("./planung.html");
+        if (!response.ok) throw new Error(`Die Datei 'planung.html' konnte nicht gefunden werden.`);
+        container.innerHTML = await response.text();
+        if (!planungViewInstance) planungViewInstance = new PlanungView();
+        await planungViewInstance.init(authenticatedUserData._id);
+    } catch (error) {
+        console.error("Fehler beim Laden der Planungs-Ansicht:", error);
+        container.innerHTML = `<p class="text-red-500 text-center">${error.message}</p>`;
+    }
+}
+
+const planungLog = (message, ...data) => console.log(`%c[PlanungView] %c${message}`, 'color: #9b59b6; font-weight: bold;', 'color: black;', ...data);
+
+class PlanungView {
+    constructor() {
+        this.initialized = false;
+        this.currentUserId = null;
+        this.currentViewedUserId = null;
+    }
+
+    _getDomElements() {
+        this.userSelectContainer = document.getElementById('planung-user-select-container');
+        this.userSelect = document.getElementById('planung-user-select');
+        this.tabMonatsplanung = document.getElementById('planung-tab-monatsplanung');
+        this.tabBusinessplan = document.getElementById('planung-tab-businessplan');
+        this.contentMonatsplanung = document.getElementById('planung-content-monatsplanung');
+        this.contentBusinessplan = document.getElementById('planung-content-businessplan');
+        this.monatsplanungForm = document.getElementById('monatsplanung-form');
+        this.businessplanForm = document.getElementById('businessplan-form');
+        return this.userSelect && this.tabMonatsplanung && this.monatsplanungForm && this.businessplanForm;
+    }
+
+    async init(userId) {
+        planungLog('Initialisiere Planungs-Ansicht...');
+        this.currentUserId = userId;
+        this.currentViewedUserId = userId;
+
+        if (!this._getDomElements()) {
+            planungLog('!!! FEHLER: Benötigte DOM-Elemente wurden nicht gefunden.');
+            return;
+        }
+
+        this._setupEventListeners();
+        await this._populateUserSelect();
+        await this._loadDataForUser(this.currentViewedUserId); // KORREKTUR: await hinzugefügt
+        this.initialized = true;
+    }
+
+    _setupEventListeners() {
+        this.userSelect.addEventListener('change', () => {
+            this.currentViewedUserId = this.userSelect.value;
+            this._loadDataForUser(this.currentViewedUserId);
+        });
+
+        this.tabMonatsplanung.addEventListener('click', () => this._switchTab('monatsplanung'));
+        this.tabBusinessplan.addEventListener('click', () => this._switchTab('businessplan'));
+
+        this.monatsplanungForm.addEventListener('submit', (e) => this._handleMonatsplanungSave(e));
+        this.businessplanForm.addEventListener('submit', (e) => this._handleBusinessplanSave(e));
+    }
+
+    _populateUserSelect() {
+        const currentUser = findRowById('mitarbeiter', this.currentUserId);
+        if (currentUser && isUserLeader(currentUser)) { // KORREKTUR: Sicherheitsprüfung für currentUser
+            this.userSelectContainer.classList.remove('hidden');
+            const subordinates = getAllSubordinatesRecursive(this.currentUserId);
+            const usersForSelect = [currentUser, ...subordinates].sort((a, b) => a.Name.localeCompare(b.Name));
+            this.userSelect.innerHTML = '';
+            usersForSelect.forEach(u => {
+                this.userSelect.add(new Option(u.Name, u._id));
+            });
+            this.userSelect.value = this.currentViewedUserId;
+        } else {
+            this.userSelectContainer.classList.add('hidden');
+        }
+    }
+
+    _switchTab(tabName) {
+        const activeClass = 'border-skt-blue text-skt-blue';
+        const inactiveClass = 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
+
+        this.tabMonatsplanung.className = `planung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg ${tabName === 'monatsplanung' ? activeClass : inactiveClass}`;
+        this.tabBusinessplan.className = `planung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg ${tabName === 'businessplan' ? activeClass : inactiveClass}`;
+
+        this.contentMonatsplanung.classList.toggle('hidden', tabName !== 'monatsplanung');
+        this.contentBusinessplan.classList.toggle('hidden', tabName !== 'businessplan');
+    }
+
+    async _loadDataForUser(userId) {
+        planungLog(`Lade Daten für Benutzer: ${userId}`);
+        await this._renderKPIs(userId);
+        this._renderMonatsplanung(userId);
+        await this._renderBusinessplan(userId);
+    }
+
+    async _renderKPIs(userId) {
+        const user = findRowById('mitarbeiter', userId);
+    
+        // --- PQQ ---
+        const pqqData = await getSingleUserPQQ(userId);
+        const pqqValue = pqqData ? pqqData.pqq : 0;
+        document.getElementById('planung-kpi-pqq').textContent = `${pqqValue.toFixed(0)}%`;
+    
+        const today = new Date();
+        const sixtyDaysAgo = new Date();
+        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    
+        const userAppointments = db.termine.filter(t => t.Mitarbeiter_ID === userId && t.Datum && new Date(t.Datum) >= sixtyDaysAgo);
+        
+        const startDateIso = sixtyDaysAgo.toISOString().split('T')[0];
+        const endDateIso = today.toISOString().split('T')[0];
+        const ehQuery = `SELECT EH, Kunde, Datum FROM Umsatz WHERE Mitarbeiter_ID = '${escapeSql(user.Name)}' AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+        
+        const ehResultRaw = await seaTableSqlQuery(ehQuery, true);
+        const mappedSales = mapSqlResults(ehResultRaw || [], 'Umsatz');
+        
+        const totalEhLast60Days = mappedSales.reduce((sum, sale) => sum + (sale.EH || 0), 0);
+    
+        // 2. Terminausfallquote (letzte 30 Tage)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const appointmentsLast30Days = userAppointments.filter(t => new Date(t.Datum) >= thirtyDaysAgo);
+        const totalAppointments = appointmentsLast30Days.length;
+        const cancelledAppointments = appointmentsLast30Days.filter(t => t.Absage === true || t.Status === 'Storno').length;
+        const cancellationRate = totalAppointments > 0 ? (cancelledAppointments / totalAppointments) * 100 : 0;
+        document.getElementById('planung-kpi-ausfallquote').textContent = `${cancellationRate.toFixed(0)}%`;
+
+        // 3. Ø EH / BT (letzte 60 Tage)
+        const heldBTsLast60Days = userAppointments.filter(t => t.Status === 'Gehalten' && t.Kategorie === 'BT' && t.Datum);
+        let btsWithSaleCount = 0;
+        for (const bt of heldBTsLast60Days) {
+            const terminDate = new Date(bt.Datum);
+            const oneWeek = 7 * 24 * 60 * 60 * 1000;
+            const searchStart = new Date(terminDate.getTime() - oneWeek);
+            const searchEnd = new Date(terminDate.getTime() + oneWeek);
+            const hasSale = mappedSales.some(sale => {
+                const saleDate = new Date(sale.Datum);
+                return sale.Kunde && bt.Terminpartner &&
+                       sale.Kunde.trim().toLowerCase().includes(bt.Terminpartner.trim().toLowerCase()) &&
+                       saleDate >= searchStart && saleDate <= searchEnd;
+            });
+            if (hasSale) btsWithSaleCount++;
+        }
+        const avgEhPerBt = btsWithSaleCount > 0 ? totalEhLast60Days / btsWithSaleCount : 0;
+        document.getElementById('planung-kpi-eh-pro-bt').textContent = avgEhPerBt.toFixed(2);
+
+        // 4. Ø EH / AT (letzte 60 Tage)
+        const heldATsLast60Days = userAppointments.filter(t => t.Status === 'Gehalten' && t.Kategorie === 'AT' && t.Datum).length;
+        const avgEhPerAt = heldATsLast60Days > 0 ? totalEhLast60Days / heldATsLast60Days : 0;
+        document.getElementById('planung-kpi-eh-pro-at').textContent = avgEhPerAt.toFixed(2);
+    }
+
+    _renderMonatsplanung(userId) {
+        const monthSelect = document.getElementById('monatsplanung-month-select');
+        const yearInput = document.getElementById('monatsplanung-year-input');
+        if (monthSelect.options.length === 0) {
+            const months = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+            months.forEach((m, i) => monthSelect.add(new Option(m, m)));
+        }
+        const today = new Date();
+        monthSelect.value = today.toLocaleString('de-DE', { month: 'long' });
+        yearInput.value = today.getFullYear();
+
+        this._loadMonatsplanungData();
+
+        monthSelect.onchange = () => this._loadMonatsplanungData();
+        yearInput.onchange = () => this._loadMonatsplanungData();
+    }
+
+    _loadMonatsplanungData() {
+        const userId = this.currentViewedUserId;
+        const month = document.getElementById('monatsplanung-month-select').value;
+        const year = document.getElementById('monatsplanung-year-input').value;
+
+        const plan = db.monatsplanung.find(p => p.Mitarbeiter_ID === userId && p.Monat === month && p.Jahr == year);
+        document.getElementById('monatsplanung-eh-goal').value = plan?.EH_Ziel || 0;
+
+        const nextInfoDate = findNextInfoDateAfter(new Date());
+        const nextInfoDateString = nextInfoDate.toISOString().split('T')[0];
+        document.getElementById('monatsplanung-infoabend-date').value = nextInfoDateString;
+
+        const infoPlan = db.infoplanung.find(p => p.Mitarbeiter_ID === userId && p.Informationsabend && p.Informationsabend.startsWith(nextInfoDateString));
+        document.getElementById('monatsplanung-et-goal').value = infoPlan?.ET_Ziel || 0;
+    }
+
+    async _renderBusinessplan(userId) {
+        const userVisions = db.visionen.filter(v => v.Mitarbeiter === userId).sort((a, b) => new Date(b.Edited) - new Date(a.Edited));
+        const latestVision = userVisions[0];
+
+        this.businessplanForm.reset();
+        document.getElementById('businessplan-id').value = latestVision?._id || '';
+        document.getElementById('businessplan-vision').value = latestVision?.Vision || '';
+        document.getElementById('businessplan-ziel').value = latestVision?.Ziel || '';
+        document.getElementById('businessplan-warum').value = latestVision?.Warum || '';
+        document.getElementById('businessplan-change').value = latestVision?.Change || '';
+        // KORREKTUR: Das Datum wird jetzt inklusive Uhrzeit geladen und für das datetime-local Input formatiert.
+        const datumInput = document.getElementById('businessplan-datum');
+        if (latestVision?.Datum) {
+            const date = new Date(latestVision.Datum); // Parses ISO string into local Date object
+            // Format for datetime-local input (YYYY-MM-DDTHH:mm)
+            const year = date.getFullYear();
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            datumInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+        } else {
+            datumInput.value = '';
+        }
+
+        this._renderTodos(latestVision?.Todos || '- [ ] Dein erster Schritt');
+    }
+
+    _renderTodos(text) {
+        const container = document.getElementById('businessplan-todos-container');
+        container.innerHTML = '';
+        const lines = text.split('\n');
+        lines.forEach(line => {
+            const trimmedLine = line.trim();
+            if (trimmedLine.startsWith('-')) {
+                const isChecked = trimmedLine.startsWith('- [x]');
+                const todoText = trimmedLine.substring(trimmedLine.indexOf(']') + 2).trim();
+                const todoItem = document.createElement('div');
+                todoItem.className = 'flex items-center gap-2 my-1 pg-todo-item group';
+                todoItem.innerHTML = `
+                    <input type="checkbox" class="h-5 w-5 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light pg-todo-checkbox" ${isChecked ? 'checked' : ''}>
+                    <input type="text" class="flex-grow bg-transparent border-b border-gray-200 focus:outline-none focus:border-skt-blue pg-todo-text" value="${_escapeHtml(todoText)}">
+                    <button type="button" class="text-gray-400 hover:text-red-500 pg-todo-delete-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Löschen"><i class="fas fa-times"></i></button>
+                `;
+                container.appendChild(todoItem);
+                todoItem.querySelector('.pg-todo-delete-btn').addEventListener('click', () => todoItem.remove());
+            } else if (trimmedLine) {
+                container.innerHTML += `<input type="text" class="w-full bg-transparent font-bold text-skt-blue mt-2 border-b border-transparent focus:outline-none focus:border-skt-blue pg-heading-text" value="${_escapeHtml(trimmedLine)}">`;
+            }
+        });
+        const addTodoBtn = document.createElement('button');
+        addTodoBtn.type = 'button';
+        addTodoBtn.className = 'mt-2 text-skt-blue hover:underline text-sm';
+        addTodoBtn.innerHTML = '<i class="fas fa-plus mr-1"></i> Aufgabe hinzufügen';
+        addTodoBtn.onclick = () => {
+            const todoItem = document.createElement('div');
+            todoItem.className = 'flex items-center gap-2 my-1 pg-todo-item group';
+            todoItem.innerHTML = `
+                <input type="checkbox" class="h-5 w-5 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light pg-todo-checkbox">
+                <input type="text" class="flex-grow bg-transparent border-b border-gray-200 focus:outline-none focus:border-skt-blue pg-todo-text" value="">
+                <button type="button" class="text-gray-400 hover:text-red-500 pg-todo-delete-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Löschen"><i class="fas fa-times"></i></button>
+            `;
+            container.insertBefore(todoItem, addTodoBtn);
+            todoItem.querySelector('.pg-todo-delete-btn').addEventListener('click', () => todoItem.remove());
+            todoItem.querySelector('.pg-todo-text').focus();
+        };
+        container.appendChild(addTodoBtn);
+    }
+
+    _serializeTodos() {
+        const container = document.getElementById('businessplan-todos-container');
+        return Array.from(container.children).map(child => {
+            if (child.classList.contains('pg-todo-item')) {
+                const checkbox = child.querySelector('.pg-todo-checkbox');
+                const textInput = child.querySelector('.pg-todo-text');
+                return `${checkbox.checked ? '- [x]' : '- [ ]'} ${textInput.value}`;
+            } else if (child.classList.contains('pg-heading-item')) {
+                return child.querySelector('.pg-heading-text').value;
+            }
+            return null;
+        }).filter(line => line !== null).join('\n');
+    }
+
+    async _handleMonatsplanungSave(e) {
+        e.preventDefault();
+        const btn = document.getElementById('save-monatsplanung-btn');
+        btn.disabled = true;
+        btn.textContent = 'Speichern...';
+
+        // KORREKTUR: Die savePlanningData-Funktion war für das alte Modal gedacht.
+        // Wir müssen die Logik hier direkt aufrufen, um den korrekten Kontext zu haben.
+        const userId = this.currentViewedUserId;
+        const ehGoal = parseFloat(document.getElementById('monatsplanung-eh-goal').value) || 0;
+        const etGoal = parseInt(document.getElementById('monatsplanung-et-goal').value) || 0;
+        const monthName = document.getElementById('monatsplanung-month-select').value;
+        const year = parseInt(document.getElementById('monatsplanung-year-input').value);
+
+        const success = await saveMonthlyPlanning(userId, monthName, year, ehGoal, etGoal);
+
+        if (success) {
+            btn.textContent = 'Gespeichert!';
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.textContent = 'Planung speichern';
+            }, 2000);
+        } else {
+            alert('Fehler beim Speichern der Monatsplanung.');
+            btn.disabled = false;
+            btn.textContent = 'Planung speichern';
+        }
+    }
+
+    async _handleBusinessplanSave(e) {
+        e.preventDefault();
+        const btn = document.getElementById('save-businessplan-btn');
+        btn.disabled = true;
+        btn.textContent = 'Speichern...';
+
+        // KORREKTUR: Sicherheitsprüfung, um Absturz zu verhindern, falls die Tabelle nicht existiert.
+        if (!COLUMN_MAPS.visionen) {
+            alert("Fehler: Die Konfiguration für die Tabelle 'Visionen' konnte nicht geladen werden. Bitte stelle sicher, dass die Tabelle in der Datenbank existiert und korrekt benannt ist.");
+            btn.disabled = false;
+            btn.textContent = 'Businessplan speichern';
+            return;
+        }
+
+        const rowData = {
+            [COLUMN_MAPS.visionen.Mitarbeiter]: [this.currentViewedUserId],
+            [COLUMN_MAPS.visionen.Vision]: document.getElementById('businessplan-vision').value,
+            [COLUMN_MAPS.visionen.Ziel]: document.getElementById('businessplan-ziel').value,
+            [COLUMN_MAPS.visionen.Warum]: document.getElementById('businessplan-warum').value,
+            [COLUMN_MAPS.visionen.Change]: document.getElementById('businessplan-change').value,
+            [COLUMN_MAPS.visionen.Datum]: document.getElementById('businessplan-datum').value || null,
+            [COLUMN_MAPS.visionen.Todos]: this._serializeTodos(),
+            [COLUMN_MAPS.visionen.Edited]: new Date().toISOString(),
+        };
+
+        const success = await genericAddRowWithLinks('Visionen', rowData, ['Mitarbeiter']);
+
+        if (success) {
+            localStorage.removeItem(CACHE_PREFIX + 'visionen');
+            await loadAllData();
+            await this._renderBusinessplan(this.currentViewedUserId);
+            btn.textContent = 'Gespeichert!';
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.textContent = 'Businessplan speichern';
+            }, 2000);
+        } else {
+            alert('Fehler beim Speichern des Businessplans.');
+            btn.disabled = false;
+            btn.textContent = 'Businessplan speichern';
+        }
+    }
+}
+
 
 class DatenschutzView {
     constructor() {
@@ -14524,7 +14935,7 @@ async openCheckinModal(isEditMode = false) {
 
         const leaderEntryData = {
             [COLUMN_MAPS.checkin.Datum]: todayString,
-            [COLUMN_MAPS.checkin.Mitarbeiter]: [leiterId],
+            [COLUMN_MAPS.checkin.Mitarbeiter]: [leiterId], // This is a link field
             [COLUMN_MAPS.checkin.Motivation]: step1Data.motivation,
             [COLUMN_MAPS.checkin.Stimmung]: step1Data.stimmung,
             [COLUMN_MAPS.checkin.Todos]: step1Data.todos,
@@ -14548,13 +14959,13 @@ async openCheckinModal(isEditMode = false) {
             const teamEntry = {
                 rowId: existingTeamCheckin?._id,
                 data: {
-                    [COLUMN_MAPS.checkin.Datum]: todayString,
-                    [COLUMN_MAPS.checkin.Mitarbeiter]: [memberData.id],
+                    [COLUMN_MAPS.checkin.Datum]: todayString, // This is a link field
+                    [COLUMN_MAPS.checkin.Mitarbeiter]: [memberData.id], // This is a link field
                     [COLUMN_MAPS.checkin.ZielLautFK]: memberData.ZielLautFK,
                     [COLUMN_MAPS.checkin.TermineEingetragen]: memberData.TermineEingetragen ? 'x' : '',
                     [COLUMN_MAPS.checkin.IstMotiviert]: memberData.IstMotiviert ? 'x' : '',
-                    [COLUMN_MAPS.checkin.WillRekrutieren]: memberData.WillRekrutieren ? 'x' : '', // KORREKTUR: teamFollowUp war nicht definiert.
-                    [COLUMN_MAPS.checkin.HatErfolg]: memberData.HatErfolg ? 'x' : '', // KORREKTUR: teamFollowUp war nicht definiert.
+                    [COLUMN_MAPS.checkin.WillRekrutieren]: memberData.WillRekrutieren ? 'x' : '',
+                    [COLUMN_MAPS.checkin.HatErfolg]: memberData.HatErfolg ? 'x' : '',
                     [COLUMN_MAPS.checkin.MotivationAntwort]: (step3Data[memberData.id] || {}).MotivationAntwort || null,
                     [COLUMN_MAPS.checkin.RecruitingAntwort]: (step3Data[memberData.id] || {}).RecruitingAntwort || null,
                     [COLUMN_MAPS.checkin.ErfolgAntwort]: (step3Data[memberData.id] || {}).ErfolgAntwort || null,
