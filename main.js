@@ -4925,9 +4925,6 @@ class AppointmentsView {
         this.startDateInput.addEventListener('change', debouncedFetchAndRender);
         this.endDateInput.addEventListener('change', debouncedFetchAndRender);
         // NEU: Event-Listener für den manuellen Start-Button
-        if (this.startTodayCheckinBtn) {
-            this.startTodayCheckinBtn.addEventListener('click', () => this.openCheckinModal(false));
-        }
         this.searchInput.addEventListener('input', _.debounce(e => {
             this.filterText = e.target.value; this.render();
         }, 350));
@@ -13955,6 +13952,11 @@ class StimmungsDashboardView {
         this.startDateInput.addEventListener('change', () => { this.startDate = new Date(this.startDateInput.value); debouncedRender(); });
         this.endDateInput.addEventListener('change', () => { this.endDate = new Date(this.endDateInput.value); debouncedRender(); });
 
+        // KORREKTUR: Der Event-Listener für den Start-Button gehört hierher.
+        if (this.startTodayCheckinBtn) {
+            this.startTodayCheckinBtn.addEventListener('click', () => this.openCheckinModal(false));
+        }
+
 
         await this.fetchAndRender();
         this.initialized = true;
@@ -14534,21 +14536,21 @@ async openCheckinModal(isEditMode = false) {
     }
 
     // NEU: Rendert die KPI-basierten Warnungen für die Struktur/Gruppe
-    renderKpiWarnings(userIds) {
+    async renderKpiWarnings(userIds) {
         if (!this.kpiWarningsContainer) return;
 
         this.kpiWarningsContainer.innerHTML = '<div class="loader mx-auto"></div>';
         const kpiWarningCountEl = document.getElementById('kpi-warning-count');
 
         const warnings = [];
-        const users = Array.from(userIds).map(id => findRowById('mitarbeiter', id)).filter(Boolean);
+        const users = Array.from(userIds).map(id => findRowById('mitarbeiter', id)).filter(Boolean).filter(u => u.Status !== 'Ausgeschieden');
 
-        users.forEach(user => {
-            if (user.Status === 'Ausgeschieden') return;
-
-            // NEU: Verwende die globale Funktion
-            const { warnings: userWarnings } = getIndividualKpiData(user);
-
+        // KORREKTUR: Verwende eine for...of-Schleife mit await, da getIndividualKpiData asynchron ist.
+        for (const user of users) {
+            const { warnings: userWarnings } = await getIndividualKpiData(user);
+            
+            // KORREKTUR: Prüfe, ob userWarnings definiert ist, bevor auf .length zugegriffen wird.
+            if (userWarnings && userWarnings.length > 0) {
             if (userWarnings.length > 0) {
                 warnings.push({
                     name: user.Name,
@@ -14556,7 +14558,8 @@ async openCheckinModal(isEditMode = false) {
                     reasons: userWarnings
                 });
             }
-        });
+            }
+        }
 
         if (kpiWarningCountEl) kpiWarningCountEl.textContent = warnings.length;
         if (warnings.length === 0) {
