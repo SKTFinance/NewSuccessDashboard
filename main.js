@@ -1726,7 +1726,9 @@ function updateUiForUserRoles() {
     }
 
     // Stimmungsdashboard: Auf Desktop sichtbar, auf Mobil im Menü, wenn Berechtigung da ist.
-    const hasStimmungsAccess = user.Checkin === true || String(user.Checkin).toLowerCase() === 'true';
+    // KORREKTUR: Trainees sollen das Stimmungsdashboard nicht sehen, auch wenn es für sie aktiviert wäre.
+    // Es ist nur für Führungskräfte gedacht.
+    const hasStimmungsAccess = (user.Checkin === true || String(user.Checkin).toLowerCase() === 'true') && isUserLeader(user);
     const stimmungsDashboardHeaderBtn = document.getElementById('stimmungs-dashboard-header-btn');
     if (stimmungsDashboardHeaderBtn) {
         stimmungsDashboardHeaderBtn.classList.toggle('sm:flex', hasStimmungsAccess);
@@ -8702,65 +8704,7 @@ class AuswertungView {
                 break;
         }
     }
-
-    async _renderEmployeeKpiList() {
-        const container = document.getElementById('auswertung-kpi-employee-list');
-        if (!container) return;
-        container.innerHTML = '<div class="loader mx-auto"></div>';
-
-        const leaders = db.mitarbeiter.filter(m => isUserLeader(m) && m.Status !== 'Ausgeschieden').sort((a, b) => a.Name.localeCompare(b.Name));
-        
-        let finalHtml = '';
-
-        for (const leader of leaders) {
-            const groupMembers = [leader, ...getSubordinates(leader._id, 'gruppe')];
-            
-            let membersHtml = '';
-            for (const member of groupMembers) {
-            const { warnings, values } = await getIndividualKpiData(member);
-
-                const kpiValuesHtml = `
-                    <div class="flex gap-x-6 gap-y-1 mt-2 text-xs text-gray-700 flex-wrap">
-                        <div>
-                            <span class="font-semibold text-skt-blue-light">Terminausfall:</span>
-                            <span class="font-bold">${values.cancellationRate !== null ? (values.cancellationRate * 100).toFixed(0) + '%' : 'N/A'}</span>
-                        </div>
-                        <div>
-                            <span class="font-semibold text-skt-blue-light">Abschlussquote:</span>
-                            <span class="font-bold">${values.closingRate !== null ? (values.closingRate * 100).toFixed(0) + '%' : 'N/A'}</span>
-                        </div>
-                    </div>
-                `;
-
-                if (warnings.length > 0) {
-                    membersHtml += `
-                        <div class="p-3 bg-red-50 border-l-4 border-skt-red-accent rounded-r-lg">
-                            <p class="font-bold text-skt-blue">${member.Name}</p>
-                            <ul class="list-disc list-inside mt-1">
-                                ${warnings.map(reason => `<li class="text-sm text-red-700">${_escapeHtml(reason)}</li>`).join('')}
-                            </ul>
-                            ${kpiValuesHtml}
-                        </div>
-                    `;
-                } else {
-                    membersHtml += `
-                        <div class="p-3 bg-green-50 border-l-4 border-skt-green-accent rounded-r-lg">
-                            <p class="font-bold text-skt-blue flex items-center">
-                                ${member.Name}
-                                <i class="fas fa-check-circle text-skt-green-accent ml-2"></i>
-                            </p>
-                            ${kpiValuesHtml}
-                        </div>
-                    `;
-                }
-            }
-
-            finalHtml += `<div class="mb-8"><h4 class="text-xl font-bold text-skt-blue mb-4">${leader.Name}</h4><div class="space-y-3">${membersHtml}</div></div>`;
-        }
-
-        container.innerHTML = finalHtml || '<p class="text-center text-gray-500">Keine Mitarbeiter zum Anzeigen gefunden.</p>';
-    }
-
+     
     async renderRangliste() {
         this.ranglisteListContainer.innerHTML = '<div class="loader mx-auto"></div>';
         const { startDate, endDate } = this.currentRanglisteTimespan === 'woche'
@@ -9862,6 +9806,17 @@ function startDailyCheckinTrigger() {
                 return;
             }
 
+            // NEU: Prüfen, ob heute ein Check-in-Tag ist.
+            const checkinDays = (authenticatedUserData.CheckinDays || '').split(',');
+            const dayMap = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+            const currentDay = dayMap[new Date().getDay()];
+            
+            // Wenn Tage definiert sind, aber der heutige nicht dabei ist, abbrechen.
+            if (checkinDays.length > 0 && checkinDays[0] !== '' && !checkinDays.includes(currentDay)) {
+                console.log(`[Checkin-Trigger] Check-in für heute übersprungen. ${currentDay} ist nicht in [${checkinDays.join(', ')}].`);
+                return;
+            }
+
             const hasAlreadyCheckedIn = db.checkin.some(c =>
                 c.Mitarbeiter === authenticatedUserData._id &&
                 c.Datum && c.Datum.startsWith(todayString) &&
@@ -10391,16 +10346,26 @@ async function initializeDashboard() {
         document.getElementById("dashboard-content").classList.remove("hidden");
         await showPrivacyConsentView();
     } else if (authenticatedUserData.Checkin) {
-        // KORREKTUR: Prüfen, ob in der DB bereits ein Check-in für heute existiert.
+        // KORREKTUR: Prüfe, ob heute ein Check-in-Tag ist, bevor das Modal geöffnet wird.
+        const userHasCheckinEnabled = authenticatedUserData.Checkin === true || String(authenticatedUserData.Checkin).toLowerCase() === 'true';
+        const checkinDays = (authenticatedUserData.CheckinDays || '').split(',');
+        const dayMap = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+        const currentDay = dayMap[new Date().getDay()];
+        const isCheckinDay = !(checkinDays.length > 0 && checkinDays[0] !== '' && !checkinDays.includes(currentDay));
+
         const todayString = new Date().toISOString().split('T')[0];
         const hasAlreadyCheckedIn = db.checkin.some(c =>
             c.Mitarbeiter === authenticatedUserData._id &&
             c.Datum && c.Datum.startsWith(todayString) &&
             (c.Stimmung !== null && c.Stimmung !== undefined)
         );
-
-        // NEU: Check-in-Modal nur auf Geräten > 768px Breite anzeigen
-        if (!hasAlreadyCheckedIn && window.innerWidth > 768) {
+        
+        // Modal nur anzeigen, wenn:
+        // 1. Check-in für den Nutzer generell aktiv ist.
+        // 2. Heute ein ausgewählter Check-in-Tag ist.
+        // 3. Noch kein Check-in für heute gemacht wurde.
+        // 4. Wir uns nicht auf einem kleinen Bildschirm befinden.
+        if (userHasCheckinEnabled && isCheckinDay && !hasAlreadyCheckedIn && window.innerWidth > 768) {
             document.getElementById("user-select-screen").classList.add("hidden");
             document.getElementById("dashboard-content").classList.remove("hidden");
             await stimmungsDashboardViewInstance.openCheckinModal();
@@ -10617,6 +10582,7 @@ async function getSingleUserPQQ(userId) {
 
 // NEU: Globale Funktion zur KPI-Berechnung
 async function getIndividualKpiData(user) {
+    const log = (message, ...data) => console.log(`%c[KPI-DATA] %c[${user.Name}] %c${message}`, 'color: #8e44ad; font-weight: bold;', 'color: #17a2b8; font-weight: bold;', 'color: black;', ...data);
     const kpiLog = (message, ...data) => console.log(`%c[KPI-DATA] %c[${user.Name}] %c${message}`, 'color: #8e44ad; font-weight: bold;', 'color: #17a2b8; font-weight: bold;', 'color: black;', ...data);
     const warnings = [];
     const values = {
@@ -10638,7 +10604,14 @@ async function getIndividualKpiData(user) {
     const currentMonthName = cycleStartDate.toLocaleString('de-DE', { month: 'long' });
     const currentYear = cycleStartDate.getFullYear();
     const plan = db.monatsplanung.find(p => p.Mitarbeiter_ID === user._id && p.Monat === currentMonthName && p.Jahr === currentYear);
-    if (!plan || !plan.EH_Ziel || plan.EH_Ziel <= 0) return { warnings, values };
+    log('Suche Monatsplan...', { user: user.Name, month: currentMonthName, year: currentYear, planFound: !!plan });
+    // KORREKTUR: Stelle sicher, dass immer ein gültiges Objekt zurückgegeben wird, auch wenn kein Plan existiert.
+    // Dies ist die robustere Lösung, die das Problem an der Wurzel behebt.
+    if (!plan || !plan.EH_Ziel || plan.EH_Ziel <= 0) {
+        kpiLog('Kein aktiver Plan für diesen Monat gefunden. Überspringe KPI-Berechnung.');
+        return { warnings, values };
+    }
+    log('Plan gefunden. EH-Ziel:', plan.EH_Ziel);
 
     const twoWeekAppointments = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Datum && new Date(t.Datum) >= twoWeeksAgo && new Date(t.Datum) <= today);
     if (twoWeekAppointments.length > 0) {
@@ -10647,11 +10620,13 @@ async function getIndividualKpiData(user) {
         values.cancellationRate = cancellationRate;
         if (cancellationRate >= 0.5) warnings.push(`Hoher Terminausfall (${(cancellationRate * 100).toFixed(0)}% in 2 Wochen)`);
     }
+    log('Terminausfallquote berechnet:', values.cancellationRate);
 
     const userStartDate = new Date(user.Startdatum);
     if (userStartDate <= fourWeeksAgo) {
         const fourWeekAppointments = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Datum && new Date(t.Datum) >= fourWeeksAgo && new Date(t.Datum) <= today && ['AT', 'BT', 'ET'].includes(t.Kategorie));
         if (fourWeekAppointments.length < 5) warnings.push(`Geringe Aktivität (${fourWeekAppointments.length} Termine in 4 Wochen)`);
+        log('Aktivitätsrate geprüft. Termine in 4 Wochen:', fourWeekAppointments.length);
 
         const nextInfoDateForPlan = findNextInfoDateAfter(today);
         const nextInfoDateStringForPlan = nextInfoDateForPlan.toISOString().split('T')[0];
@@ -10659,47 +10634,16 @@ async function getIndividualKpiData(user) {
         const etGoal = infoPlan?.ET_Ziel || 0;
         const fourWeekEtAppointments = fourWeekAppointments.filter(t => t.Kategorie === 'ET');
         if (etGoal > 0 && fourWeekEtAppointments.length === 0) warnings.push('Keine Recruiting-Termine (ET) in den letzten 4 Wochen');
+        log('Recruiting-Aktivität geprüft. ET-Ziel:', etGoal, 'ETs in 4 Wochen:', fourWeekEtAppointments.length);
     }
 
     const userBTs = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Kategorie === 'BT' && t.Status === 'Gehalten' && t.Datum && new Date(t.Datum) >= sixtyDaysAgo && new Date(t.Datum) <= today);
-    if (userBTs.length > 0) {
-        let btsWithSale = 0;
-        for (const bt of userBTs) {
-            // KORREKTUR: Sicherheitsprüfung, falls kein Terminpartner eingetragen ist.
-            if (!bt.Terminpartner) {
-                kpiLog(`-> Kein Terminpartner für diesen BT vorhanden. Überspringe Umsatzsuche.`);
-                continue; // Nächsten BT prüfen
-            }
-
-            const terminDate = new Date(bt.Datum);
-            const oneWeek = 7 * 24 * 60 * 60 * 1000;
-            const searchStart = new Date(terminDate.getTime() - oneWeek);
-            const searchEnd = new Date(terminDate.getTime() + oneWeek);
-
-            // KORREKTUR: Führe eine direkte SQL-Abfrage durch, um die Datenkonsistenz sicherzustellen.
-            const startDateIso = searchStart.toISOString().split('T')[0];
-            const endDateIso = searchEnd.toISOString().split('T')[0];
-            const partnerNameSql = escapeSql(bt.Terminpartner.trim());
-            const mitarbeiterNameSql = escapeSql(user.Name);
-
-            const salesQuery = `SELECT EH, Kunde, Datum FROM Umsatz WHERE Mitarbeiter_ID = '${mitarbeiterNameSql}' AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}' AND lower(Kunde) LIKE '%${partnerNameSql.toLowerCase()}%'`;
-            
-            const matchingSalesRaw = await seaTableSqlQuery(salesQuery, true);
-            const matchingSales = mapSqlResults(matchingSalesRaw || [], 'Umsatz');
-
-            if (matchingSales.length > 0) {
-                btsWithSale++;
-            } else {
-            }
-        }
-        const closingRate = btsWithSale / userBTs.length;
-        values.closingRate = closingRate;
-        const noSaleRate = 1 - closingRate;
-        if (userBTs.length >= 2 && noSaleRate > 0.4) warnings.push(`Niedrige Abschlussquote (${(noSaleRate * 100).toFixed(0)}% der BTs ohne direkten Umsatz)`);
-    }
-
-    const pqq = getSingleUserPQQ(user._id);
-    if (pqq !== null && pqq < 50) warnings.push(`PQQ unter 50% (${pqq.toFixed(0)}%)`);
+    
+    // KORREKTUR: `await` war hier zwingend erforderlich, da getSingleUserPQQ asynchron ist.
+    log('Prüfe PQQ...');
+    const pqqData = await getSingleUserPQQ(user._id);
+    log('PQQ-Daten erhalten:', pqqData);
+    if (pqqData && pqqData.pqq < 50) warnings.push(`PQQ unter 50% (${pqqData.pqq.toFixed(0)}%)`);
 
     if (isUserLeader(user)) {
         const groupMembers = getSubordinates(user._id, 'gruppe');
@@ -10743,7 +10687,71 @@ async function getIndividualKpiData(user) {
         }
     }
 
+    log('KPI-Berechnung abgeschlossen. Gefundene Warnungen:', warnings);
+    // FINALE KORREKTUR: Stelle sicher, dass die Funktion unter allen Umständen ein gültiges Objekt zurückgibt.
     return { warnings, values };
+}
+
+async function _renderEmployeeKpiList() {
+    const container = document.getElementById('auswertung-kpi-employee-list');
+    if (!container) return;
+    container.innerHTML = '<div class="loader mx-auto"></div>';
+
+    const leaders = db.mitarbeiter.filter(m => isUserLeader(m) && m.Status !== 'Ausgeschieden')
+                                  .sort((a, b) => a.Name.localeCompare(b.Name));
+    
+    const allUserIds = new Set();
+    const groupMap = new Map();
+    for (const leader of leaders) {
+        allUserIds.add(leader._id);
+        const groupMembers = [leader, ...getSubordinates(leader._id, 'gruppe')];
+        groupMap.set(leader._id, groupMembers);
+        groupMembers.forEach(m => allUserIds.add(m._id));
+    }
+
+    const allUsers = Array.from(allUserIds).map(id => findRowById('mitarbeiter', id)).filter(Boolean);
+    const userNamesForSql = allUsers.map(u => `'${escapeSql(u.Name)}'`).join(',');
+
+    const today = new Date();
+    const sixtyDaysAgo = new Date(new Date().setDate(today.getDate() - 60));
+    const startDateIso = sixtyDaysAgo.toISOString().split('T')[0];
+    const endDateIso = today.toISOString().split('T')[0];
+
+    // OPTIMIERUNG: Eine einzige SQL-Abfrage für alle relevanten Umsätze.
+    const salesQuery = `SELECT Mitarbeiter_ID, EH, Kunde, Datum FROM Umsatz WHERE Mitarbeiter_ID IN (${userNamesForSql}) AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+    const salesDataRaw = await seaTableSqlQuery(salesQuery, true);
+    const allSales = mapSqlResults(salesDataRaw || [], 'Umsatz');
+    const salesByUserId = _.groupBy(allSales, sale => sale.Mitarbeiter_ID?.[0]?.row_id);
+
+    let finalHtml = '';
+
+    for (const leader of leaders) {
+        const groupMembers = groupMap.get(leader._id) || [];
+        
+        let membersHtml = '';
+        for (const member of groupMembers) {
+            // OPTIMIERUNG: getIndividualKpiData wird nicht mehr aufgerufen.
+            // Die Logik wird hier direkt mit den vorgeladenen Daten ausgeführt.
+            const { warnings, values } = await _calculateKpisForUser(member, salesByUserId[member._id] || []);
+
+            const kpiValuesHtml = `
+                <div class="flex gap-x-6 gap-y-1 mt-2 text-xs text-gray-700 flex-wrap">
+                    <div><span class="font-semibold text-skt-blue-light">Terminausfall:</span> <span class="font-bold">${values.cancellationRate !== null ? (values.cancellationRate * 100).toFixed(0) + '%' : 'N/A'}</span></div>
+                    <div><span class="font-semibold text-skt-blue-light">Abschlussquote:</span> <span class="font-bold">${values.closingRate !== null ? (values.closingRate * 100).toFixed(0) + '%' : 'N/A'}</span></div>
+                </div>
+            `;
+
+            if (warnings.length > 0) {
+                membersHtml += `<div class="p-3 bg-red-50 border-l-4 border-skt-red-accent rounded-r-lg"><p class="font-bold text-skt-blue">${member.Name}</p><ul class="list-disc list-inside mt-1">${warnings.map(reason => `<li class="text-sm text-red-700">${_escapeHtml(reason)}</li>`).join('')}</ul>${kpiValuesHtml}</div>`;
+            } else {
+                membersHtml += `<div class="p-3 bg-green-50 border-l-4 border-skt-green-accent rounded-r-lg"><p class="font-bold text-skt-blue flex items-center">${member.Name}<i class="fas fa-check-circle text-skt-green-accent ml-2"></i></p>${kpiValuesHtml}</div>`;
+            }
+        }
+
+        finalHtml += `<div class="mb-8"><h4 class="text-xl font-bold text-skt-blue mb-4">${leader.Name}</h4><div class="space-y-3">${membersHtml}</div></div>`;
+    }
+
+    container.innerHTML = finalHtml || '<p class="text-center text-gray-500">Keine Mitarbeiter zum Anzeigen gefunden.</p>';
 }
 
 async function calculateAllStructureEarnings(memberIds, startDate, endDate) {
@@ -11070,6 +11078,65 @@ async function applyAutomaticPromotionToDatabase(mitarbeiterId) {
         }
     }
     return false; // Keine Beförderung durchgeführt.
+}
+async function _calculateKpisForUser(user, userSales = []) {
+    const warnings = [];
+    const values = { cancellationRate: null, closingRate: null };
+    const today = new Date();
+    const twoWeeksAgo = new Date(new Date().setDate(today.getDate() - 14));
+    const fourWeeksAgo = new Date(new Date().setDate(today.getDate() - 28));
+    const sixtyDaysAgo = new Date(new Date().setDate(today.getDate() - 60));
+
+    // Cancellation Rate
+    const twoWeekAppointments = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Datum && new Date(t.Datum) >= twoWeeksAgo && new Date(t.Datum) <= today);
+    if (twoWeekAppointments.length > 0) {
+        const cancelledCount = twoWeekAppointments.filter(t => t.Absage === true || t.Status === 'Storno').length;
+        values.cancellationRate = cancelledCount / twoWeekAppointments.length;
+        if (values.cancellationRate >= 0.5) warnings.push(`Hoher Terminausfall (${(values.cancellationRate * 100).toFixed(0)}% in 2 Wochen)`);
+    }
+
+    // Closing Rate
+    const userBTs = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Kategorie === 'BT' && t.Status === 'Gehalten' && t.Datum && new Date(t.Datum) >= sixtyDaysAgo && new Date(t.Datum) <= today);
+    if (userBTs.length > 0) {
+        let btsWithSale = 0;
+        for (const bt of userBTs) {
+            if (!bt.Terminpartner) continue;
+            const terminDate = new Date(bt.Datum);
+            const oneWeek = 7 * 24 * 60 * 60 * 1000;
+            const searchStart = new Date(terminDate.getTime() - oneWeek);
+            const searchEnd = new Date(terminDate.getTime() + oneWeek);
+            const partnerNameLower = bt.Terminpartner.trim().toLowerCase();
+
+            const hasSale = userSales.some(sale => {
+                const saleDate = new Date(sale.Datum);
+                return sale.Kunde && sale.Kunde.trim().toLowerCase().includes(partnerNameLower) && saleDate >= searchStart && saleDate <= searchEnd;
+            });
+
+            if (hasSale) btsWithSale++;
+        }
+        values.closingRate = btsWithSale / userBTs.length;
+        const noSaleRate = 1 - values.closingRate;
+        if (userBTs.length >= 2 && noSaleRate > 0.4) warnings.push(`Niedrige Abschlussquote (${(noSaleRate * 100).toFixed(0)}% der BTs ohne direkten Umsatz)`);
+    }
+
+    // Other KPIs (Low Activity, Recruiting, PQQ)
+    const userStartDate = new Date(user.Startdatum);
+    if (userStartDate <= fourWeeksAgo) {
+        const fourWeekAppointments = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Datum && new Date(t.Datum) >= fourWeeksAgo && new Date(t.Datum) <= today && ['AT', 'BT', 'ET'].includes(t.Kategorie));
+        if (fourWeekAppointments.length < 5) warnings.push(`Geringe Aktivität (${fourWeekAppointments.length} Termine in 4 Wochen)`);
+
+        const nextInfoDateForPlan = findNextInfoDateAfter(today);
+        const nextInfoDateStringForPlan = nextInfoDateForPlan.toISOString().split('T')[0];
+        const infoPlan = db.infoplanung.find(p => p.Mitarbeiter_ID === user._id && p.Informationsabend && p.Informationsabend.startsWith(nextInfoDateStringForPlan));
+        const etGoal = infoPlan?.ET_Ziel || 0;
+        const fourWeekEtAppointments = fourWeekAppointments.filter(t => t.Kategorie === 'ET');
+        if (etGoal > 0 && fourWeekEtAppointments.length === 0) warnings.push('Keine Recruiting-Termine (ET) in den letzten 4 Wochen');
+    }
+
+    const pqqData = await getSingleUserPQQ(user._id);
+    if (pqqData && pqqData.pqq < 50) warnings.push(`PQQ unter 50% (${pqqData.pqq.toFixed(0)}%)`);
+
+    return { warnings, values };
 }
 
 async function handleAIAssistantClick() {
@@ -12570,16 +12637,24 @@ function openEditUserModal() {
     // NEU: Handle Check-in logic
     const checkinContainer = document.getElementById('edit-checkin-container');
     const checkinCheckbox = document.getElementById('edit-checkin-enabled');
-    
-    // Checkbox nur für Führungskräfte anzeigen und den Status des bearbeiteten Benutzers setzen
-    if (isUserLeader(authenticatedUserData)) {
-        checkinContainer.classList.remove('hidden');
-        checkinContainer.classList.add('flex');
-        checkinCheckbox.checked = user.Checkin === true;
-    } else {
-        checkinContainer.classList.add('hidden');
-        checkinContainer.classList.remove('flex');
-    }
+    const checkinDaysContainer = document.getElementById('edit-checkin-days-container');
+
+    // KORREKTUR: Die Check-in-Einstellungen sollen für alle Benutzer sichtbar sein.
+    checkinContainer.classList.remove('hidden');
+    checkinContainer.classList.add('flex');
+    checkinCheckbox.checked = user.Checkin === true;
+
+    // Sichtbarkeit der Tagesauswahl steuern und Checkboxen setzen
+    checkinDaysContainer.classList.toggle('hidden', !checkinCheckbox.checked);
+    const savedDays = (user.CheckinDays || '').split(',').map(d => d.trim());
+    checkinDaysContainer.querySelectorAll('.checkin-day-checkbox').forEach(cb => {
+        cb.checked = savedDays.includes(cb.dataset.day);
+    });
+
+    // Event-Listener, um die Tagesauswahl ein-/auszublenden
+    checkinCheckbox.onchange = (e) => {
+        checkinDaysContainer.classList.toggle('hidden', !e.target.checked);
+    };
 
     dom.editUserModal.classList.add('visible');
     document.body.classList.add('modal-open');
@@ -12625,6 +12700,13 @@ async function saveUserData() {
       // Annahme: Die Spalte in der DB heißt 'Checkin' und ist vom Typ Boolean (Checkbox).
       dataToUpdate.Checkin = document.getElementById('edit-checkin-enabled').checked;
   }
+  // KORREKTUR: CheckinDays immer speichern, wenn die Checkbox aktiviert ist.
+  const checkinDaysContainer = document.getElementById('edit-checkin-days-container');
+  if (checkinContainer && !checkinContainer.classList.contains('hidden') && dataToUpdate.Checkin === true) {
+      const selectedDays = Array.from(checkinDaysContainer.querySelectorAll('.checkin-day-checkbox:checked'))
+          .map(cb => cb.dataset.day);
+      dataToUpdate.CheckinDays = selectedDays.join(',');
+  }
 
   const mitarbeiterTableMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'mitarbeiter');
   const setClauses = [];
@@ -12642,6 +12724,10 @@ async function saveUserData() {
       else if (colMeta.type === 'number') formattedValue = parseFloat(value) || 0;
       else if (colMeta.type === 'checkbox') formattedValue = value ? "true" : "false";
       else formattedValue = `'${escapeSql(String(value))}'`;
+      // KORREKTUR: Wenn das Feld CheckinDays ist und leer ist, soll es als leerer String gespeichert werden, nicht als 'NULL'.
+      if (keyName === 'CheckinDays' && value === '') {
+          formattedValue = "''";
+      }
       
       setClauses.push(`\`${colName}\` = ${formattedValue}`);
   }
@@ -13919,6 +14005,7 @@ class StimmungsDashboardView {
         this.motivationContainer = document.getElementById('stimmungs-motivation-container');
         this.todosContainer = document.getElementById('stimmungs-todos-container');
         this.editTodayCheckinBtn = document.getElementById('edit-today-checkin-btn');
+        this.teamCheckinsContainer = document.getElementById('stimmungs-team-checkins-container'); // NEU
         this.avgDurationHeaderContainer = document.getElementById('average-checkin-duration-header-container'); // NEU
         this.avgDurationHeaderValue = document.getElementById('average-checkin-duration-header-value'); // NEU
         this.problemeLoesungenContainer = document.getElementById('stimmungs-probleme-loesungen-container'); // NEU
@@ -14002,6 +14089,14 @@ async openCheckinModal(isEditMode = false) {
         const stimmungSlider = document.getElementById('checkin-stimmung');
         const stimmungValue = document.getElementById('checkin-stimmung-value');
         const todosContainer = document.getElementById('checkin-todos-container'); // NEU: Logik für mehrstufigen Check-in
+
+        // NEU: Rollenspezifische UI-Anpassungen
+        const isLeader = isUserLeader(authenticatedUserData);
+        document.getElementById('checkin-step-2').style.display = isLeader ? '' : 'none';
+        document.getElementById('checkin-step-3').style.display = isLeader ? '' : 'none';
+        document.getElementById('checkin-step-4').style.display = isLeader ? '' : 'none';
+        document.getElementById('checkin-step-trainee-2').style.display = !isLeader ? '' : 'none';
+        document.getElementById('checkin-step-trainee-3').style.display = !isLeader ? '' : 'none';
         this.checkinStep = 1;
         this.checkinData = {};
         this._showCheckinStep(1);
@@ -14021,11 +14116,14 @@ async openCheckinModal(isEditMode = false) {
         const todayString = new Date().toISOString().split('T')[0];
         checkinLog('Heutiger Check-in des Leiters:', leaderCheckin);
     
-        const teamCheckins = isEditMode ? db.checkin.filter(c => 
-            getSubordinates(authenticatedUserData._id, 'gruppe').map(u => u._id).includes(c.Mitarbeiter) && 
-            c.Datum && c.Datum.startsWith(todayString) && 
-            (c.Stimmung === undefined || c.Stimmung === null) // Team-Eintrag hat keine Stimmung
-        ) : [];
+        const teamCheckins = isEditMode
+            ? db.checkin.filter(c => {
+                const isTeamMember = getSubordinates(authenticatedUserData._id, 'gruppe').map(u => u._id).includes(c.Mitarbeiter);
+                const isToday = c.Datum && c.Datum.startsWith(todayString);
+                const isTeamEntry = c.Stimmung === undefined || c.Stimmung === null;
+                return isTeamMember && isToday && isTeamEntry;
+            })
+            : [];
         this.teamCheckinsById = _.keyBy(teamCheckins, 'Mitarbeiter');
         checkinLog(`Heutige Check-ins des Teams (${teamCheckins.length} gefunden):`, JSON.parse(JSON.stringify(teamCheckins)));
         checkinLog('Team Check-ins nach ID:', JSON.parse(JSON.stringify(this.teamCheckinsById)));
@@ -14035,6 +14133,12 @@ async openCheckinModal(isEditMode = false) {
         document.getElementById('checkin-motivation').value = leaderCheckin?.Motivation || '';
         stimmungSlider.value = leaderCheckin?.Stimmung || 5;
         document.getElementById('checkin-kpi-antworten').value = leaderCheckin?.KPIAntworten || '';
+        // NEU: Felder für Trainees vorbefüllen
+        // KORREKTUR: Verwende `leaderCheckin` auch für Trainees, da es der Check-in des eingeloggten Benutzers ist.
+        if (!isLeader) {
+            document.getElementById('checkin-eigenziel').value = leaderCheckin?.Eigenziel_FT || '';
+            document.getElementById('checkin-change').value = leaderCheckin?.Change_FT || '';
+        }
         stimmungSlider.dispatchEvent(new Event('input')); // Slider-UI aktualisieren
     
         // 2. To-Do-Liste initialisieren
@@ -14286,6 +14390,7 @@ async openCheckinModal(isEditMode = false) {
         this.renderMotivation(filteredCheckins);
         this.renderTodos(filteredCheckins);
         this.renderAverageDuration(filteredCheckins);
+        this.renderTeamCheckins(filteredCheckins); // NEU
         this.renderKpiWarnings(userIdsSet);
         this.renderProblemeLoesungen(filteredCheckins); // NEU
     }
@@ -14547,17 +14652,17 @@ async openCheckinModal(isEditMode = false) {
 
         // KORREKTUR: Verwende eine for...of-Schleife mit await, da getIndividualKpiData asynchron ist.
         for (const user of users) {
-            const { warnings: userWarnings } = await getIndividualKpiData(user);
+            const kpiData = await getIndividualKpiData(user);
             
-            // KORREKTUR: Prüfe, ob userWarnings definiert ist, bevor auf .length zugegriffen wird.
-            if (userWarnings && userWarnings.length > 0) {
-            if (userWarnings.length > 0) {
+            // KORREKTUR VOM 27.07: Die Funktion kann `undefined` zurückgeben.
+            // Wir müssen zuerst prüfen, ob `kpiData` existiert, bevor wir darauf zugreifen.
+            if (kpiData && kpiData.warnings && kpiData.warnings.length > 0) {
+                const userWarnings = kpiData.warnings;
                 warnings.push({
                     name: user.Name,
                     id: user._id,
                     reasons: userWarnings
                 });
-            }
             }
         }
 
@@ -14668,22 +14773,69 @@ async openCheckinModal(isEditMode = false) {
         this.problemeLoesungenContainer.innerHTML = html;
     }
 
+    // NEU: Rendert die Check-ins der Trainees
+    renderTeamCheckins(checkins) {
+        if (!this.teamCheckinsContainer) return;
+        this.teamCheckinsContainer.innerHTML = '';
+
+        // Filtere nur die Check-ins von Trainees (erkennbar am Feld "Traineeantwort")
+        const traineeCheckins = checkins.filter(c => c.Traineeantwort === true);
+
+        if (traineeCheckins.length === 0) {
+            this.teamCheckinsContainer.innerHTML = '<p class="text-center text-gray-500">Keine Team-Check-ins im ausgewählten Zeitraum gefunden.</p>';
+            return;
+        }
+
+        // Sortiere nach Datum, neueste zuerst
+        traineeCheckins.sort((a, b) => new Date(b.Datum) - new Date(a.Datum));
+
+        let html = '';
+        traineeCheckins.forEach(checkin => {
+            const trainee = findRowById('mitarbeiter', checkin.Mitarbeiter);
+            if (!trainee) return;
+
+            html += `
+                <div class="bg-skt-grey-light p-4 rounded-lg">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="font-bold text-skt-blue text-lg">${trainee.Name}</h4>
+                        <span class="text-sm text-gray-500">${new Date(checkin.Datum).toLocaleDateString('de-DE')}</span>
+                    </div>
+                    <div class="space-y-3 text-sm">
+                        <div class="p-2 bg-white rounded-md"><strong>Großes Ziel:</strong> ${_escapeHtml(checkin.Eigenziel_FT || '-')}</div>
+                        <div class="p-2 bg-white rounded-md"><strong>Heutiger Beitrag:</strong> ${_escapeHtml(checkin.Change_FT || '-')}</div>
+                    </div>
+                </div>
+            `;
+        });
+
+        this.teamCheckinsContainer.innerHTML = html;
+    }
+
+
+
     
     _showCheckinStep(step) {
         this.checkinStep = step;
-        document.querySelectorAll('.checkin-step').forEach(s => s.classList.add('hidden'));
-        const currentStepEl = document.getElementById(`checkin-step-${step}`);
-        if (currentStepEl) currentStepEl.classList.remove('hidden');
+        const isLeader = isUserLeader(authenticatedUserData);
 
+        document.querySelectorAll('.checkin-step').forEach(s => s.classList.add('hidden'));
+
+        // KORREKTUR: Wählt die korrekte ID für den Schritt basierend auf der Rolle des Benutzers aus.
+        const stepId = (isLeader || step === 1) 
+            ? `checkin-step-${step}` 
+            : `checkin-step-trainee-${step}`;
+        const currentStepEl = document.getElementById(stepId);
+        if (currentStepEl) currentStepEl.classList.remove('hidden');
+        
         const nextBtn = document.getElementById('checkin-next-btn');
         const backBtn = document.getElementById('checkin-back-btn');
         const saveBtn = document.getElementById('save-checkin-btn');
 
         backBtn.classList.toggle('hidden', step === 1);
-        nextBtn.classList.toggle('hidden', step === 4);
-        saveBtn.classList.toggle('hidden', step !== 4);
-        
-        document.getElementById('checkin-modal-title').textContent = `Täglicher Check-in (Schritt ${step}/4)`;
+        nextBtn.classList.toggle('hidden', step >= (isUserLeader(authenticatedUserData) ? 4 : 3));
+        saveBtn.classList.toggle('hidden', step < (isUserLeader(authenticatedUserData) ? 4 : 3));
+
+        document.getElementById('checkin-modal-title').textContent = `Täglicher Check-in (Schritt ${step}/${isLeader ? 4 : 3})`;
     }
 
     _createFollowUpQuestion(name, key, question, value) {
@@ -14696,20 +14848,33 @@ async openCheckinModal(isEditMode = false) {
     async _prepareAndShowStep4() {
         const kpiContainer = document.getElementById('checkin-kpi-warnings-container');
         kpiContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        const log = (message, ...data) => console.log(`%c[Checkin-Step4] %c${message}`, 'color: #2ecc71; font-weight: bold;', 'color: black;', ...data);
+        log('Starte Vorbereitung für Schritt 4 (KPI-Warnungen).');
+
         this._showCheckinStep(4);
 
         const userIds = this.checkinData.step2.map(m => m.id);
         const warnings = [];
         const users = userIds.map(id => findRowById('mitarbeiter', id)).filter(Boolean);
+        log(`Verarbeite ${users.length} Benutzer:`, users.map(u => u.Name));
 
-        users.forEach(user => {
-            if (user.Status === 'Ausgeschieden') return;
-            const { warnings: userWarnings } = getIndividualKpiData(user);
+        // KORREKTUR: Die forEach-Schleife wurde durch eine for...of-Schleife ersetzt,
+        // um `await` korrekt verwenden zu können, da getIndividualKpiData asynchron ist.
+        for (const user of users) {
+            log(`--- Starte KPI-Prüfung für: ${user.Name} ---`);
+            if (user.Status === 'Ausgeschieden') continue;
+
+            // KORREKTUR: Dein Vorschlag wurde umgesetzt. Dies ist die robusteste Lösung.
+            // Sie fängt sowohl `undefined` Rückgabewerte als auch fehlende `warnings`-Eigenschaften ab.
+            const kpiResult = await getIndividualKpiData(user);
+            log(`Ergebnis von getIndividualKpiData für ${user.Name}:`, kpiResult);
+
+            const { warnings: userWarnings = [] } = kpiResult || {};
+            log(`Destrukturierte 'userWarnings' für ${user.Name}:`, userWarnings);
             if (userWarnings.length > 0) {
                 warnings.push({ name: user.Name, reasons: userWarnings });
             }
-        });
-
+        }
         this.checkinData.kpiWarnings = warnings;
 
         if (warnings.length === 0) {
@@ -14724,6 +14889,7 @@ async openCheckinModal(isEditMode = false) {
                 </div>
             `).join('');
         }
+        container.innerHTML = finalHtml || '<p class="text-center text-gray-500">Keine Mitarbeiter zum Anzeigen gefunden.</p>';
     }
 
     
@@ -14800,77 +14966,85 @@ async openCheckinModal(isEditMode = false) {
     }
 
     async _handleCheckinNext() {
-        if (this.checkinStep === 1) {
-            this.checkinData.step1 = this._collectStep1_MotivationData();
-            this._showCheckinStep(2);
-        } else if (this.checkinStep === 2) {
-            const teamMatrix = this._collectStep2_TeamMatrixData();
-            
-            let isValid = true;
-            teamMatrix.forEach(memberData => {
-                if (!memberData.ZielLautFK.trim()) {
-                    const row = document.querySelector(`.checkin-matrix-row[data-mitarbeiter-id="${memberData.id}"]`);
-                    const input = row.querySelector('.checkin-ziel-input');
-                    if (input) input.style.borderColor = 'red';
-                    isValid = false;
-                }
-            });
+        const isLeader = isUserLeader(authenticatedUserData);
 
-            if (!isValid) {
-                alert('Bitte für jeden Mitarbeiter ein Ziel eintragen.');
-                return;
-            }
-
-            this.checkinData.step2 = teamMatrix;
-
-            const followUpContainer = document.getElementById('checkin-follow-up-container');
-            followUpContainer.innerHTML = '';
-            let followUpsNeeded = 0;
-
-            // KORREKTUR: Lade die heutigen Check-ins (sowohl vom Leiter als auch vom Team), um bestehende Antworten vorzufüllen.
-            const todayString = new Date().toISOString().split('T')[0];
-            const todaysCheckins = db.checkin.filter(c => c.Datum && c.Datum.startsWith(todayString));
-            const checkinsById = _.keyBy(todaysCheckins, 'Mitarbeiter');
-
-            this.checkinData.step2.forEach(memberData => {
-                const member = findRowById('mitarbeiter', memberData.id);
-                let memberHtml = '';
-                // Finde den passenden Check-in für den Mitarbeiter.
-                // Für den Leiter ist es der Eintrag mit Stimmung, für Teammitglieder der ohne.
-                const existingCheckin = Object.values(checkinsById).find(c => {
-                    const isLeaderEntry = c.Stimmung !== undefined && c.Stimmung !== null;
-                    return c.Mitarbeiter === memberData.id && (memberData.id === authenticatedUserData._id ? isLeaderEntry : !isLeaderEntry);
-                }) || {};
+        if (isLeader) {
+            // Leader Flow
+            if (this.checkinStep === 1) {
+                this.checkinData.step1 = this._collectStep1_MotivationData();
+                this._showCheckinStep(2);
+            } else if (this.checkinStep === 2) {
+                const teamMatrix = this._collectStep2_TeamMatrixData();
                 
-                if (!memberData.IstMotiviert) {
-                    const existingAnswer = existingCheckin.MotivationAntwort || '';
-                    memberHtml += this._createFollowUpQuestion(member.Name, 'MotivationAntwort', 'Was tust du um den Mitarbeiter zu motivieren?', existingAnswer);
-                    followUpsNeeded++;
-                }
-                if (!memberData.WillRekrutieren) {
-                    const existingAnswer = existingCheckin.RecruitingAntwort || '';
-                    memberHtml += this._createFollowUpQuestion(member.Name, 'RecruitingAntwort', 'Was tust du um den Mitarbeiter zum Recruiting zu bringen?', existingAnswer);
-                    followUpsNeeded++;
-                }
-                if (!memberData.HatErfolg) {
-                    const existingAnswer = existingCheckin.ErfolgAntwort || '';
-                    memberHtml += this._createFollowUpQuestion(member.Name, 'ErfolgAntwort', 'Was tust du um den Mitarbeiter zu Erfolg zu führen?', existingAnswer);
-                    followUpsNeeded++;
+                let isValid = true;
+                teamMatrix.forEach(memberData => {
+                    if (!memberData.ZielLautFK.trim()) {
+                        const row = document.querySelector(`.checkin-matrix-row[data-mitarbeiter-id="${memberData.id}"]`);
+                        const input = row.querySelector('.checkin-ziel-input');
+                        if (input) input.style.borderColor = 'red';
+                        isValid = false;
+                    }
+                });
+
+                if (!isValid) {
+                    alert('Bitte für jeden Mitarbeiter ein Ziel eintragen.');
+                    return;
                 }
 
-                if (memberHtml) {
-                    followUpContainer.innerHTML += `<div class="p-4 bg-gray-50 rounded-lg border"><h5 class="font-bold text-skt-blue">${member.Name}</h5><div class="space-y-4 mt-2">${memberHtml}</div></div>`;
-                }
-            });
+                this.checkinData.step2 = teamMatrix;
 
-            if (followUpsNeeded > 0) {
-                this._showCheckinStep(3);
-            } else {
+                const followUpContainer = document.getElementById('checkin-follow-up-container');
+                followUpContainer.innerHTML = '';
+                let followUpsNeeded = 0;
+
+                const todayString = new Date().toISOString().split('T')[0];
+                const todaysCheckins = db.checkin.filter(c => c.Datum && c.Datum.startsWith(todayString));
+                const checkinsById = _.keyBy(todaysCheckins, 'Mitarbeiter');
+
+                this.checkinData.step2.forEach(memberData => {
+                    const member = findRowById('mitarbeiter', memberData.id);
+                    let memberHtml = '';
+                    const existingCheckin = Object.values(checkinsById).find(c => {
+                        const isLeaderEntry = c.Stimmung !== undefined && c.Stimmung !== null;
+                        return c.Mitarbeiter === memberData.id && (memberData.id === authenticatedUserData._id ? isLeaderEntry : !isLeaderEntry);
+                    }) || {};
+                    
+                    if (!memberData.IstMotiviert) {
+                        memberHtml += this._createFollowUpQuestion(member.Name, 'MotivationAntwort', 'Was tust du um den Mitarbeiter zu motivieren?', existingCheckin.MotivationAntwort || '');
+                        followUpsNeeded++;
+                    }
+                    if (!memberData.WillRekrutieren) {
+                        memberHtml += this._createFollowUpQuestion(member.Name, 'RecruitingAntwort', 'Was tust du um den Mitarbeiter zum Recruiting zu bringen?', existingCheckin.RecruitingAntwort || '');
+                        followUpsNeeded++;
+                    }
+                    if (!memberData.HatErfolg) {
+                        memberHtml += this._createFollowUpQuestion(member.Name, 'ErfolgAntwort', 'Was tust du um den Mitarbeiter zu Erfolg zu führen?', existingCheckin.ErfolgAntwort || '');
+                        followUpsNeeded++;
+                    }
+
+                    if (memberHtml) {
+                        followUpContainer.innerHTML += `<div class="p-4 bg-gray-50 rounded-lg border"><h5 class="font-bold text-skt-blue">${member.Name}</h5><div class="space-y-4 mt-2">${memberHtml}</div></div>`;
+                    }
+                });
+
+                if (followUpsNeeded > 0) {
+                    this._showCheckinStep(3);
+                } else {
+                    await this._prepareAndShowStep4();
+                }
+            } else if (this.checkinStep === 3) {
+                this.checkinData.step3 = this._collectStep3_FollowUpData();
                 await this._prepareAndShowStep4();
             }
-        } else if (this.checkinStep === 3) {
-            this.checkinData.step3 = this._collectStep3_FollowUpData();
-            await this._prepareAndShowStep4();
+        } else {
+            // Trainee Flow
+            if (this.checkinStep === 1) {
+                this.checkinData.step1 = this._collectStep1_MotivationData();
+                this._showCheckinStep(2);
+            } else if (this.checkinStep === 2) {
+                this.checkinData.traineeStep2 = { eigenziel: document.getElementById('checkin-eigenziel').value };
+                this._showCheckinStep(3);
+            }
         }
     }
 
@@ -14922,60 +15096,88 @@ async openCheckinModal(isEditMode = false) {
         saveBtn.disabled = true;
         saveBtn.innerHTML = '<div class="loader-small mx-auto"></div>';
 
-        const kpiAntworten = document.getElementById('checkin-kpi-antworten').value;
-        const step1Data = this.checkinData.step1;
-        const step2Data = this.checkinData.step2;
-        const step3Data = this.checkinData.step3 || {};
-
-        const leiterId = authenticatedUserData._id;
-        const leaderCheckinMatrixData = step2Data.find(m => m.id === leiterId);
-        const leaderFollowUp = step3Data[leiterId] || {};
-
+        // KORREKTUR: Variable an den Anfang der Funktion verschoben, damit sie im gesamten Scope verfügbar ist.
         const todayString = new Date().toISOString().split('T')[0];
-        const existingLeaderCheckin = db.checkin.find(c => c.Mitarbeiter === leiterId && c.Datum.startsWith(todayString) && c.Motivation);
-        const initialDuration = existingLeaderCheckin?.Dauer || 0;
-        const durationInSeconds = checkinStartTime ? initialDuration + Math.round((Date.now() - checkinStartTime) / 1000) : initialDuration;
-
-        const leaderEntryData = {
-            [COLUMN_MAPS.checkin.Datum]: todayString,
-            [COLUMN_MAPS.checkin.Mitarbeiter]: [leiterId], // This is a link field
-            [COLUMN_MAPS.checkin.Motivation]: step1Data.motivation,
-            [COLUMN_MAPS.checkin.Stimmung]: step1Data.stimmung,
-            [COLUMN_MAPS.checkin.Todos]: step1Data.todos,
-            [COLUMN_MAPS.checkin.Dauer]: durationInSeconds,
-            [COLUMN_MAPS.checkin.ZielLautFK]: leaderCheckinMatrixData.ZielLautFK,
-            [COLUMN_MAPS.checkin.TermineEingetragen]: leaderCheckinMatrixData.TermineEingetragen ? 'x' : '',
-            [COLUMN_MAPS.checkin.IstMotiviert]: leaderCheckinMatrixData.IstMotiviert ? 'x' : '',
-            [COLUMN_MAPS.checkin.WillRekrutieren]: leaderCheckinMatrixData.WillRekrutieren ? 'x' : '',
-            [COLUMN_MAPS.checkin.HatErfolg]: leaderCheckinMatrixData.HatErfolg ? 'x' : '',
-            [COLUMN_MAPS.checkin.MotivationAntwort]: leaderFollowUp.MotivationAntwort || null,
-            [COLUMN_MAPS.checkin.RecruitingAntwort]: leaderFollowUp.RecruitingAntwort || null,
-            [COLUMN_MAPS.checkin.ErfolgAntwort]: leaderFollowUp.ErfolgAntwort || null,
-            [COLUMN_MAPS.checkin.KPIAntworten]: kpiAntworten,
-        };
 
         const entriesToSave = [];
-        entriesToSave.push({ rowId: existingLeaderCheckin?._id, data: leaderEntryData });
+        const isLeader = isUserLeader(authenticatedUserData);
 
-        step2Data.filter(m => m.id !== leiterId).forEach(memberData => {
-            const existingTeamCheckin = db.checkin.find(c => c.Mitarbeiter === memberData.id && c.Datum.startsWith(todayString) && !c.Motivation);
-            const teamEntry = {
-                rowId: existingTeamCheckin?._id,
-                data: {
-                    [COLUMN_MAPS.checkin.Datum]: todayString, // This is a link field
-                    [COLUMN_MAPS.checkin.Mitarbeiter]: [memberData.id], // This is a link field
-                    [COLUMN_MAPS.checkin.ZielLautFK]: memberData.ZielLautFK,
-                    [COLUMN_MAPS.checkin.TermineEingetragen]: memberData.TermineEingetragen ? 'x' : '',
-                    [COLUMN_MAPS.checkin.IstMotiviert]: memberData.IstMotiviert ? 'x' : '',
-                    [COLUMN_MAPS.checkin.WillRekrutieren]: memberData.WillRekrutieren ? 'x' : '',
-                    [COLUMN_MAPS.checkin.HatErfolg]: memberData.HatErfolg ? 'x' : '',
-                    [COLUMN_MAPS.checkin.MotivationAntwort]: (step3Data[memberData.id] || {}).MotivationAntwort || null,
-                    [COLUMN_MAPS.checkin.RecruitingAntwort]: (step3Data[memberData.id] || {}).RecruitingAntwort || null,
-                    [COLUMN_MAPS.checkin.ErfolgAntwort]: (step3Data[memberData.id] || {}).ErfolgAntwort || null,
-                }
+        if (isLeader) {
+            // Leader Flow
+            const kpiAntworten = document.getElementById('checkin-kpi-antworten').value;
+            const step1Data = this.checkinData.step1;
+            const step2Data = this.checkinData.step2;
+            const step3Data = this.checkinData.step3 || {};
+
+            const leiterId = authenticatedUserData._id;
+            const leaderCheckinMatrixData = step2Data.find(m => m.id === leiterId);
+            const leaderFollowUp = step3Data[leiterId] || {};
+            const existingLeaderCheckin = db.checkin.find(c => c.Mitarbeiter === leiterId && c.Datum.startsWith(todayString) && c.Motivation);
+            const initialDuration = existingLeaderCheckin?.Dauer || 0;
+            const durationInSeconds = checkinStartTime ? initialDuration + Math.round((Date.now() - checkinStartTime) / 1000) : initialDuration;
+
+            const leaderEntryData = {
+                [COLUMN_MAPS.checkin.Datum]: todayString,
+                [COLUMN_MAPS.checkin.Mitarbeiter]: [leiterId],
+                [COLUMN_MAPS.checkin.Motivation]: step1Data.motivation,
+                [COLUMN_MAPS.checkin.Stimmung]: step1Data.stimmung,
+                [COLUMN_MAPS.checkin.Todos]: step1Data.todos,
+                [COLUMN_MAPS.checkin.Dauer]: durationInSeconds,
+                [COLUMN_MAPS.checkin.ZielLautFK]: leaderCheckinMatrixData.ZielLautFK,
+                [COLUMN_MAPS.checkin.TermineEingetragen]: leaderCheckinMatrixData.TermineEingetragen ? 'x' : '',
+                [COLUMN_MAPS.checkin.IstMotiviert]: leaderCheckinMatrixData.IstMotiviert ? 'x' : '',
+                [COLUMN_MAPS.checkin.WillRekrutieren]: leaderCheckinMatrixData.WillRekrutieren ? 'x' : '',
+                [COLUMN_MAPS.checkin.HatErfolg]: leaderCheckinMatrixData.HatErfolg ? 'x' : '',
+                [COLUMN_MAPS.checkin.MotivationAntwort]: leaderFollowUp.MotivationAntwort || null,
+                [COLUMN_MAPS.checkin.RecruitingAntwort]: leaderFollowUp.RecruitingAntwort || null,
+                [COLUMN_MAPS.checkin.ErfolgAntwort]: leaderFollowUp.ErfolgAntwort || null,
+                [COLUMN_MAPS.checkin.KPIAntworten]: kpiAntworten,
             };
-            entriesToSave.push(teamEntry);
-        });
+            entriesToSave.push({ rowId: existingLeaderCheckin?._id, data: leaderEntryData });
+
+            step2Data.filter(m => m.id !== leiterId).forEach(memberData => {
+                const existingTeamCheckin = db.checkin.find(c => c.Mitarbeiter === memberData.id && c.Datum.startsWith(todayString) && !c.Motivation);
+                const teamEntry = {
+                    rowId: existingTeamCheckin?._id,
+                    data: {
+                        [COLUMN_MAPS.checkin.Datum]: todayString,
+                        [COLUMN_MAPS.checkin.Mitarbeiter]: [memberData.id],
+                        [COLUMN_MAPS.checkin.ZielLautFK]: memberData.ZielLautFK,
+                        [COLUMN_MAPS.checkin.TermineEingetragen]: memberData.TermineEingetragen ? 'x' : '',
+                        [COLUMN_MAPS.checkin.IstMotiviert]: memberData.IstMotiviert ? 'x' : '',
+                        [COLUMN_MAPS.checkin.WillRekrutieren]: memberData.WillRekrutieren ? 'x' : '',
+                        [COLUMN_MAPS.checkin.HatErfolg]: memberData.HatErfolg ? 'x' : '',
+                        [COLUMN_MAPS.checkin.MotivationAntwort]: (step3Data[memberData.id] || {}).MotivationAntwort || null,
+                        [COLUMN_MAPS.checkin.RecruitingAntwort]: (step3Data[memberData.id] || {}).RecruitingAntwort || null,
+                        [COLUMN_MAPS.checkin.ErfolgAntwort]: (step3Data[memberData.id] || {}).ErfolgAntwort || null,
+                    }
+                };
+                entriesToSave.push(teamEntry);
+            });
+        } else {
+            // Trainee Flow
+            const step1Data = this.checkinData.step1;
+            const traineeStep2Data = this.checkinData.traineeStep2;
+            const traineeStep3Data = { change: document.getElementById('checkin-change').value };
+
+            const traineeId = authenticatedUserData._id;
+            const existingTraineeCheckin = db.checkin.find(c => c.Mitarbeiter === traineeId && c.Datum.startsWith(todayString));
+            const initialDuration = existingTraineeCheckin?.Dauer || 0;
+            const durationInSeconds = checkinStartTime ? initialDuration + Math.round((Date.now() - checkinStartTime) / 1000) : initialDuration;
+
+            const traineeEntryData = {
+                [COLUMN_MAPS.checkin.Datum]: todayString,
+                [COLUMN_MAPS.checkin.Mitarbeiter]: [traineeId],
+                [COLUMN_MAPS.checkin.Motivation]: step1Data.motivation,
+                [COLUMN_MAPS.checkin.Stimmung]: step1Data.stimmung,
+                [COLUMN_MAPS.checkin.Todos]: step1Data.todos,
+                [COLUMN_MAPS.checkin.Dauer]: durationInSeconds,
+                [COLUMN_MAPS.checkin.Eigenziel_FT]: traineeStep2Data.eigenziel,
+                [COLUMN_MAPS.checkin.Change_FT]: traineeStep3Data.change,
+                [COLUMN_MAPS.checkin.Traineeantwort]: true, // Mark this as a trainee entry
+            };
+            entriesToSave.push({ rowId: existingTraineeCheckin?._id, data: traineeEntryData });
+        }
 
         let allSuccess = true;
         for (const entry of entriesToSave) {
@@ -14984,13 +15186,13 @@ async openCheckinModal(isEditMode = false) {
         }
 
         if (allSuccess) {
-            localStorage.setItem(`lastCheckin-${leiterId}`, todayString);
+            localStorage.setItem(`lastCheckin-${authenticatedUserData._id}`, todayString);
             localStorage.removeItem(CACHE_PREFIX + 'checkin');
             db.checkin = await seaTableQuery('Checkin');
             normalizeAllData();
             this.closeCheckinModal();
             if (currentView === 'stimmungs-dashboard') { switchView('stimmungs-dashboard'); } 
-            else { await proceedToDashboard(leiterId); }
+            else { await proceedToDashboard(authenticatedUserData._id); }
         } else {
             alert('Fehler beim Speichern des Check-ins.');
             saveBtn.disabled = false;
@@ -15025,7 +15227,14 @@ async function loadAndInitStimmungsDashboardView() {
                 gridContainer.insertAdjacentHTML('beforeend', kpiWarningsHtml);
             }
         }
-        if (!stimmungsDashboardViewInstance) stimmungsDashboardViewInstance = new StimmungsDashboardView();
+
+        // KORREKTUR: Warte einen Frame, um sicherzustellen, dass das HTML gerendert wurde,
+        // bevor die init-Methode darauf zugreift. Dies behebt den "TypeError: Load failed".
+        await new Promise(resolve => requestAnimationFrame(resolve));
+
+        if (!stimmungsDashboardViewInstance) {
+            stimmungsDashboardViewInstance = new StimmungsDashboardView();
+        }
         await stimmungsDashboardViewInstance.init();
     } catch (error) {
         console.error("Fehler beim Laden des Stimmungsdashboards:", error);
