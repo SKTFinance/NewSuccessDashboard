@@ -1451,12 +1451,13 @@ function findRowById(tableName, id) {
 }
 
 // NEU: Funktion, um die Hierarchie nach oben zu durchlaufen
-function getAncestors(userId, levels = 3) {
+function getAncestors(userId, levels = 99) { // KORREKTUR: Unbegrenzte Level, um alle Vorgesetzten zu finden.
     const ancestors = [];
     let currentUser = findRowById('mitarbeiter', userId);
     let currentLevel = 0;
     while (currentUser && currentUser.Werber && currentLevel < levels) {
         const manager = findRowById('mitarbeiter', currentUser.Werber);
+        // Füge den Manager nur hinzu, wenn er existiert und nicht ausgeschieden ist.
         if (manager && manager.Status !== 'Ausgeschieden') {
             ancestors.push(manager);
             currentUser = manager;
@@ -4680,13 +4681,13 @@ class AppointmentsView {
         // KORREKTUR: Das Haupt-Dropdown wird jetzt dynamisch befüllt, um "Kalender von..." zu integrieren.
         const isLeader = SKT_APP.isUserLeader(SKT_APP.authenticatedUserData);
         const savedScope = loadUiSetting('appointmentsScope', isLeader ? 'group' : 'personal');
-        this.statsScopeFilter.innerHTML = '';
         const scopeOptions = [
             { value: 'personal', text: 'Meine Termine' },
             { value: 'group', text: 'Meine Gruppe' },
             { value: 'structure', text: 'Meine Struktur' },
             { value: 'user_select', text: 'Kalender von...' }
         ];
+        this.statsScopeFilter.innerHTML = '';
         scopeOptions.forEach(opt => {
             if (opt.value === 'personal' || opt.value === 'user_select' || isLeader) {
                 this.statsScopeFilter.add(new Option(opt.text, opt.value));
@@ -4694,7 +4695,8 @@ class AppointmentsView {
         });
         this.statsScopeFilter.value = savedScope;
 
-        this.statsScopeFilter.classList.toggle('hidden', !isLeader); // isLeader ist bereits oben deklariert
+        // KORREKTUR: Das Dropdown ist jetzt für alle sichtbar.
+        this.statsScopeFilter.classList.remove('hidden');
         
         // KORREKTUR: Logik überarbeitet, um zuerst den Scope zu bestimmen und dann die UI zu aktualisieren
         // 1. Bestimme den finalen Scope (aus Pending-Wert oder aus LocalStorage)
@@ -4921,6 +4923,11 @@ class AppointmentsView {
     }
 
     setupEventListeners() {
+        // KORREKTUR: Verhindere, dass Listener mehrfach hinzugefügt werden.
+        if (this.listenersAttached) {
+            return;
+        }
+
         // KORREKTUR: Filter-Änderungen rufen nur noch render() auf, nicht mehr fetchAndRender().
         // KORREKTUR VOM 25.07: Muss fetchAndRender aufrufen, damit auch Zeiträume außerhalb des initialen 3-Monats-Fensters geladen werden.
         const debouncedFetchAndRender = _.debounce(() => this.fetchAndRender(), 350);
@@ -5002,7 +5009,7 @@ class AppointmentsView {
         this.weekNavPrevBtn.addEventListener('click', () => this._navigateWeekCalendar(-7));
         this.weekNavNextBtn.addEventListener('click', () => this._navigateWeekCalendar(7));
         this.weekPeriodDisplay.addEventListener('click', () => this._resetWeekCalendarToToday());
-        // Der `weekCalendarViewModeSelect` wird nicht mehr verwendet, der Listener ist am Haupt-Scope-Filter.
+
         // KORREKTUR: Ruft die Haupt-Render-Funktion auf, um sicherzustellen, dass alle Daten und Filter
         // korrekt neu angewendet werden, wenn ein Benutzer im Dropdown ausgewählt wird.
         this.weekCalendarUserSelect.addEventListener('change', () => this.render());
@@ -5010,6 +5017,8 @@ class AppointmentsView {
         // NEU: Event-Listener für Zoom-Buttons
         this.weekZoomInBtn.addEventListener('click', () => this._zoomWeekCalendar(5));
         this.weekZoomOutBtn.addEventListener('click', () => this._zoomWeekCalendar(-5));
+
+        this.listenersAttached = true; // Markiere, dass die Listener gesetzt wurden.
     }
 
     _updateStatusDropdown(category, currentStatus = null) {
@@ -5631,26 +5640,22 @@ class AppointmentsView {
     }    
 
     async _populateWeekCalendarUserSelect() {
-         const select = this.weekCalendarUserSelect;
-         if (!select) return;
- 
-         const currentVal = select.value; // Wert merken
-         select.innerHTML = '';
- 
-         // Lade den eingeloggten Benutzer, seine Struktur und seinen direkten Vorgesetzten
-         const me = SKT_APP.authenticatedUserData;
-         const myStructure = await SKT_APP.getAllSubordinatesRecursive(me._id);
-         const manager = me.Werber ? SKT_APP.findRowById('mitarbeiter', me.Werber) : null;
- 
+        const select = this.weekCalendarUserSelect;
+        if (!select) return;
 
-         const userSet = new Set([me, ...myStructure]);
-         if (manager && manager.Status !== 'Ausgeschieden') {
+        const currentVal = select.value; // Wert merken
+        select.innerHTML = '';
 
-             userSet.add(manager);
-         }
- 
+        // Lade den eingeloggten Benutzer, seine gesamte Struktur und alle seine Vorgesetzten.
+        const me = SKT_APP.authenticatedUserData;
+        const myStructure = SKT_APP.getAllSubordinatesRecursive(me._id);
+        const myAncestors = getAncestors(me._id, 99); // Alle Ebenen nach oben
 
-         Array.from(userSet)
+        const userSet = new Set([me, ...myStructure, ...myAncestors]);
+        // Entferne eventuelle Duplikate und filtere ausgeschiedene Mitarbeiter heraus.
+        const uniqueUsers = Array.from(userSet).filter(user => user && user.Status !== 'Ausgeschieden');
+
+        uniqueUsers
              .sort((a, b) => a.Name.localeCompare(b.Name))
              .forEach(user => {
                  select.add(new Option(user.Name, user._id));
@@ -5667,7 +5672,10 @@ class AppointmentsView {
 
     // KORREKTUR: Komplette Neugestaltung der Kalender-Render-Logik
     _renderWeekCalendar(appointmentsToRender) {
-        if (!this.weekCalendarBody || this.statsWeekView.classList.contains('hidden')) return;
+        // KORREKTUR: Sicherheitsprüfung, um den TypeError zu verhindern.
+        if (!this.weekCalendarBody || this.statsWeekView.classList.contains('hidden') || !appointmentsToRender) {
+            return;
+        }
         const slotHeight = this.weekCalendarSlotHeight; // NEU
 
         const viewMode = this.statsScopeFilter.value;
@@ -5906,9 +5914,9 @@ class AppointmentsView {
     }
 
     _navigateWeekCalendar(days) {
-        // KORREKTUR V2: Erstelle zuerst eine saubere Kopie des Datums.
-        // Modifiziere dann die Kopie und weise sie zu. Dies verhindert den "Doppelsprung"-Fehler zuverlässig,
-        // da das Originalobjekt (`this.calendarWeekStartDate`) nicht mehr verändert wird, bevor das neue Datum erstellt wird.
+        // FINALE KORREKTUR V4: Das Springen im Kalender wird hier endgültig behoben.
+        // Wir erstellen eine neue Date-Instanz und weisen sie erst am Ende zu,
+        // um jegliche Mutation des Originalobjekts `this.calendarWeekStartDate` während der Berechnung zu vermeiden.
         const newDate = new Date(this.calendarWeekStartDate);
         newDate.setDate(newDate.getDate() + days);
         this.calendarWeekStartDate = newDate;
@@ -5916,10 +5924,15 @@ class AppointmentsView {
     }
 
     _resetWeekCalendarToToday() {
-        const today = new Date(getCurrentDate()); // KORREKTUR: Kopie erstellen, um Seiteneffekte zu vermeiden.
-        const day = today.getDay();
-        const diff = today.getDate() - day + (day === 0 ? -6 : 1);
-        const monday = new Date(today.setDate(diff));
+        // KORREKTUR: Erstelle eine saubere Kopie des Datums, um Seiteneffekte und das "Springen" zu verhindern.
+        const todayCopy = new Date(getCurrentDate());
+        // KORREKTUR: Setze die Stunden zurück, um konsistente Berechnungen zu gewährleisten.
+        todayCopy.setHours(0, 0, 0, 0);
+
+        const day = todayCopy.getDay();
+        const diff = todayCopy.getDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(todayCopy); // Erstelle eine weitere Kopie für die Berechnung
+        monday.setDate(diff);
         this.calendarWeekStartDate = monday;
         this.calendarWeekStartDate.setHours(0, 0, 0, 0);
         this._renderAppointmentStats();

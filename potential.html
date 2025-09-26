@@ -30,9 +30,9 @@
                     <option value="nicht abgehoben 1">Nicht abgehoben 1</option>
                     <option value="nicht abgehoben 2">Nicht abgehoben 2</option>
                     <option value="nicht abgehoben 3">Nicht abgehoben 3</option>
-                    <option value="Kunde fehlgeschlagen">Kunde fehlgeschlagen</option>
+                    <option value="Kunde abgelehnt">Kunde abgelehnt</option>
                     <option value="Kunde">Kunde</option>
-                    <option value="Mitarbeiter fehlgeschlagen">Mitarbeiter fehlgeschlagen</option>
+                    <option value="Mitarbeiter abgelehnt">Mitarbeiter abgelehnt</option>
                     <option value="Mitarbeiter">Mitarbeiter</option>
                     <option value="nächste TP">Nächste TP</option>
                     <option value="sperre">Gesperrt</option>
@@ -87,9 +87,9 @@
                     <option value="nicht abgehoben 1">Nicht abgehoben 1</option>
                     <option value="nicht abgehoben 2">Nicht abgehoben 2</option>
                     <option value="nicht abgehoben 3">Nicht abgehoben 3</option>
-                    <option value="Kunde fehlgeschlagen">Kunde fehlgeschlagen</option>
+                    <option value="Kunde abgelehnt">Kunde abgelehnt</option>
                     <option value="Kunde">Kunde</option>
-                    <option value="Mitarbeiter fehlgeschlagen">Mitarbeiter fehlgeschlagen</option>
+                    <option value="Mitarbeiter abgelehnt">Mitarbeiter abgelehnt</option>
                     <option value="Mitarbeiter">Mitarbeiter</option>
                     <option value="nächste TP">Nächste TP</option>
                     <option value="sperre">Gesperrt</option>
@@ -123,7 +123,7 @@
         <h3 class="text-2xl font-bold text-skt-blue mb-6">Termin festlegen</h3>
         <form id="schedule-form" class="space-y-4">
             <input type="hidden" id="schedule-potential-id">
-            <div><label for="schedule-date" class="block text-sm font-medium text-gray-700">Datum</label><input type="date" id="schedule-date" required class="modern-input"></div>
+            <div><label for="schedule-date" class="block text-sm font-medium text-gray-700">Datum & Uhrzeit</label><input type="datetime-local" id="schedule-date" required class="modern-input"></div>
             <div><label for="schedule-category" class="block text-sm font-medium text-gray-700">Kategorie</label><select id="schedule-category" required class="modern-select"></select></div>
             <div><label for="schedule-status" class="block text-sm font-medium text-gray-700">Status</label><select id="schedule-status" required class="modern-select"></select></div>
             <div class="pt-4 flex justify-end space-x-3">
