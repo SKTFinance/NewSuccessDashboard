@@ -1,7 +1,11 @@
 <!-- Ansicht für die Potential-Verwaltung -->
 <div id="potential-module-root" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-        <h2 id="potential-title" class="text-3xl font-bold text-skt-blue">Potentialbearbeitung</h2>
+        <div class="flex items-center gap-4">
+            <h2 id="potential-title" class="text-3xl font-bold text-skt-blue">Potentialbearbeitung</h2>
+            <!-- KORREKTUR: Eindeutige ID für den Button vergeben -->
+            <button id="potential-lead-center-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors flex items-center gap-2" title="Lead-Center"><i class="fas fa-bullhorn"></i><span class="hidden sm:inline">Lead Center</span></button>
+        </div>
     </div>
 
     <!-- Filter und Aktionen -->

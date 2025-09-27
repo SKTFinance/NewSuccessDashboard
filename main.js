@@ -48,6 +48,7 @@ let db = {
   checkin: [],
   bürostandorte: [],
     visionen: [], // NEU
+    leads: [], // NEU
 };
 let totalEhResults = []; // NEU: Globale Variable für die vorgeladenen Gesamtumsätze
 
@@ -68,6 +69,7 @@ let umsatzViewInstance = null;
 let auswertungViewInstance = null;
 let planungViewInstance = null; // NEU
 let strukturbaumViewInstance = null;
+let leadCenterViewInstance = null; // NEU
 let pgTagebuchViewInstance = null;
 let stimmungsDashboardViewInstance = null;
 let wettbewerbViewInstance = null; // NEU
@@ -171,7 +173,6 @@ const dom = {
   umsatzHeaderBtn: document.getElementById("umsatz-header-btn"),
   auswertungHeaderBtn: document.getElementById("auswertung-header-btn"),
   stimmungsDashboardHeaderBtn: document.getElementById('stimmungs-dashboard-header-btn'), // NEU
-  planungView: document.getElementById("planung-view"), // NEU
   pgTagebuchHeaderBtn: document.getElementById('pg-tagebuch-header-btn'),
   strukturbaumHeaderBtn: document.getElementById("strukturbaum-header-btn"),
   wettbewerbHeaderBtn: document.getElementById("wettbewerb-header-btn"), // NEU
@@ -179,15 +180,15 @@ const dom = {
   auswertungView: document.getElementById("auswertung-view"),
   datenschutzView: document.getElementById("datenschutz-view"), // NEU
   umsatzView: document.getElementById("umsatz-view"),
-  planungView: document.getElementById("planung-view"), // NEU
   potentialView: document.getElementById("potential-view"),
+  leadCenterView: document.getElementById('lead-center-view'), // NEU
   appointmentsView: document.getElementById("appointments-view"),
   pgTagebuchView: document.getElementById('pg-tagebuch-view'),
   stimmungsDashboardView: document.getElementById('stimmungs-dashboard-view'),
   einarbeitungTitle: document.getElementById("einarbeitung-title"),
   traineeOnboardingView: document.getElementById("trainee-onboarding-view"),
   wettbewerbView: document.getElementById("wettbewerb-view"), // NEU
-  leaderOnboardingView: document.getElementById("leader-onboarding-view"),
+  planungView: document.getElementById("planung-view"), // NEU
   pgTagebuchView: document.getElementById('pg-tagebuch-view'),
   stimmungsDashboardView: document.getElementById('stimmungs-dashboard-view'),
   strukturbaumView: document.getElementById("strukturbaum-view"),
@@ -1268,6 +1269,7 @@ async function loadAllData() {
     "Bürostandorte",
     "Checkin",
     "Visionen", // NEU
+    "Leads", // NEU
   ];
   
   console.log('%c[DATENLADEN] %cStarte das Laden der Stammdaten...', 'color: #17a2b8; font-weight: bold;', 'color: black;');
@@ -1730,6 +1732,10 @@ function updateUiForUserRoles() {
     // KORREKTUR: Trainees sollen das Stimmungsdashboard nicht sehen, auch wenn es für sie aktiviert wäre.
     // Es ist nur für Führungskräfte gedacht.
     const hasStimmungsAccess = (user.Checkin === true || String(user.Checkin).toLowerCase() === 'true') && isUserLeader(user);
+
+    // NEU: Sichtbarkeit für Lead-Center-Button
+    const hasLeadAccess = user.SiehtLeads === true;
+
     const stimmungsDashboardHeaderBtn = document.getElementById('stimmungs-dashboard-header-btn');
     if (stimmungsDashboardHeaderBtn) {
         stimmungsDashboardHeaderBtn.classList.toggle('sm:flex', hasStimmungsAccess);
@@ -6872,10 +6878,11 @@ class AppointmentsView {
             const originalTermin = isNewAppointment ? null : this.allAppointments.find(t => t._id === rowId);
             const newStatus = this.form.querySelector('#appointment-status').value;
             const newCategory = this.form.querySelector('#appointment-category').value;
-            const isAtGehalten = 
-                !isNewAppointment && 
-                originalTermin.Kategorie === 'AT' && 
-                newStatus === 'Gehalten' && 
+            const isAtGehalten =
+                !isNewAppointment && // Only for existing appointments
+                originalTermin && // Check if originalTermin exists
+                originalTermin.Kategorie === 'AT' &&
+                newStatus === 'Gehalten' &&
                 originalTermin.Status !== 'Gehalten';
             // Log individual form values
             const mitarbeiterId = this.form.querySelector('#appointment-user').value;
@@ -7397,6 +7404,7 @@ class PotentialView {
         this.downloadBtn = document.getElementById('download-template-btn');
         this.importBtn = document.getElementById('import-excel-btn');
         this.fileInput = document.getElementById('potential-import-input');
+        // KORREKTUR: leadCenterBtn wird jetzt innerhalb der Funktion geholt.
         return this.listContainer && this.modal && this.form && this.scheduleModal && this.scheduleForm && this.searchInput && this.scopeFilter && this.statusFilter && this.addBtn && this.downloadBtn && this.importBtn && this.fileInput;
     }
 
@@ -7530,7 +7538,15 @@ class PotentialView {
     setupEventListeners() {
         this.addBtn.addEventListener('click', () => this.openModal());
         this.downloadBtn.addEventListener('click', () => this.downloadExcelTemplate());
-        
+
+        // NEU: Event-Listener für den Lead-Center-Button
+        const leadCenterBtn = document.getElementById('potential-lead-center-btn');
+        if (leadCenterBtn) {
+            const hasLeadAccess = SKT_APP.authenticatedUserData.SiehtLeads === true;
+            leadCenterBtn.classList.toggle('hidden', !hasLeadAccess);
+            leadCenterBtn.addEventListener('click', () => switchView('lead-center'));
+        }
+
         this.importBtn.addEventListener('click', () => this.fileInput.click());
         this.fileInput.addEventListener('change', (e) => this.handleFileImport(e));
         
@@ -10153,8 +10169,6 @@ function setupEventListeners() {
   });
   // KORREKTUR: Listener für den neuen Menüpunkt in den Einstellungen
   // NEU: Event-Listener für den Menüpunkt
-  setupMenuItem('potential-menu-item', 'potential-header-btn');
-
   // KORREKTUR: Listener für den neuen Menüpunkt in den Einstellungen
   dom.planningBtn.addEventListener("click", (e) => {
     e.preventDefault();
@@ -13471,6 +13485,7 @@ function switchView(viewName) {
   dom.einarbeitungView.classList.toggle("hidden", viewName !== "einarbeitung");
   dom.appointmentsView.classList.toggle("hidden", viewName !== "appointments");
   dom.potentialView.classList.toggle("hidden", viewName !== "potential");
+  dom.leadCenterView.classList.toggle('hidden', viewName !== 'lead-center'); // NEU
   dom.datenschutzView.classList.toggle("hidden", viewName !== "datenschutz");
   dom.umsatzView.classList.toggle("hidden", viewName !== "umsatz");
   dom.auswertungView.classList.toggle("hidden", viewName !== "auswertung");
@@ -13492,8 +13507,9 @@ function switchView(viewName) {
       'pg-tagebuch': [dom.pgTagebuchHeaderBtn, document.getElementById('pg-tagebuch-menu-item')],
       'auswertung': [dom.auswertungHeaderBtn, document.getElementById('auswertung-menu-item')],
       'potential': [dom.potentialHeaderBtn, document.getElementById('potential-menu-item')], // KORREKTUR
+      'lead-center': [dom.leadCenterHeaderBtn, document.getElementById('lead-center-menu-item')], // NEU
       'wettbewerb': [dom.wettbewerbHeaderBtn, document.getElementById('wettbewerb-menu-item')], // NEU
-      'planung': [dom.planningBtn], // NEU
+      'planung': [dom.planningBtn, document.getElementById('planung-menu-item')], // NEU
       'strukturbaum': [dom.strukturbaumHeaderBtn, document.getElementById('strukturbaum-menu-item')],
       'stimmungs-dashboard': [document.getElementById('stimmungs-dashboard-header-btn')],
       'datenschutz': [dom.datenschutzHeaderBtn],
@@ -13551,6 +13567,8 @@ function switchView(viewName) {
     loadAndInitPGTagebuchView();
   } else if (viewName === 'stimmungs-dashboard') {
     loadAndInitStimmungsDashboardView();
+  } else if (viewName === 'lead-center') { // NEU
+    loadAndInitLeadCenterView();
   } else if (viewName === 'wettbewerb') { // NEU
     // KORREKTUR: Die Berechtigungsprüfung erfolgt jetzt in updateUiForUserRoles, die den Button ein-/ausblendet.
     loadAndInitWettbewerbView();
@@ -13567,6 +13585,368 @@ async function loadAndInitPlanungView() {
         await planungViewInstance.init(authenticatedUserData._id);
     } catch (error) {
         console.error("Fehler beim Laden der Planungs-Ansicht:", error);
+        container.innerHTML = `<p class="text-red-500 text-center">${error.message}</p>`;
+    }
+}
+
+const leadCenterLog = (message, ...data) => console.log(`%c[LeadCenter] %c${message}`, 'color: #f39c12; font-weight: bold;', 'color: black;', ...data);
+
+class LeadCenterView {
+    constructor() {
+        this.initialized = false;
+        this.lanes = [
+            'offen', 'nicht erreicht', 'Termin vereinbart', 'nicht möglich',
+            'will ich nicht', 'Absage', 'Gehalten - Nicht abgeschlossen', 'Gehalten - Abgeschlossen'
+        ];
+        this.laneColors = {
+            'offen': 'bg-blue-100 border-blue-300',
+            'nicht erreicht': 'bg-yellow-100 border-yellow-300',
+            'Termin vereinbart': 'bg-green-100 border-green-300',
+            'nicht möglich': 'bg-gray-200 border-gray-400',
+            'will ich nicht': 'bg-orange-100 border-orange-300',
+            'Absage': 'bg-red-100 border-red-300',
+            'Gehalten - Nicht abgeschlossen': 'bg-purple-100 border-purple-300',
+            'Gehalten - Abgeschlossen': 'bg-teal-100 border-teal-300',
+        };
+    }
+
+    _getDomElements() {
+        this.boardContainer = document.getElementById('kanban-board');
+        this.scopeFilter = document.getElementById('lead-center-scope-filter');
+        this.campaignFilter = document.getElementById('lead-center-campaign-filter');
+        this.searchFilter = document.getElementById('lead-center-search-filter');
+        // NEU: DOM-Elemente für das Detail-Modal
+        this.detailsModal = document.getElementById('lead-details-modal');
+        // KORREKTUR: Tabs und Content-Bereiche holen
+        this.tabKanban = document.getElementById('lead-center-tab-kanban');
+        this.tabAnalytics = document.getElementById('lead-center-tab-analytics');
+        this.contentKanban = document.getElementById('lead-center-content-kanban');
+        this.contentAnalytics = document.getElementById('lead-center-content-analytics');
+        this.detailsForm = document.getElementById('lead-details-form');
+        this.closeDetailsModalBtn = document.getElementById('close-lead-details-modal-btn');
+        this.scheduleAppointmentBtn = document.getElementById('lead-schedule-appointment-btn');
+
+        return this.boardContainer;
+    }
+
+    async init() {
+        leadCenterLog('Initialisiere Lead-Center...');
+        if (!this._getDomElements()) {
+            leadCenterLog('!!! FEHLER: Benötigte DOM-Elemente nicht gefunden.');
+            return;
+        }
+        this._setupEventListeners();
+        this._populateFilters();
+        await this.render();
+        this.initialized = true;
+    }
+
+    _switchTab(tabName) {
+        const activeClass = 'border-skt-blue text-skt-blue';
+        const inactiveClass = 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
+
+        this.tabKanban.className = `lead-center-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg ${tabName === 'kanban' ? activeClass : inactiveClass}`;
+        this.tabAnalytics.className = `lead-center-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg ${tabName === 'analytics' ? activeClass : inactiveClass}`;
+
+        this.contentKanban.classList.toggle('hidden', tabName !== 'kanban');
+        this.contentAnalytics.classList.toggle('hidden', tabName !== 'analytics');
+        document.getElementById('lead-center-filter-bar').classList.toggle('hidden', tabName !== 'kanban');
+    }
+
+    _setupEventListeners() {
+        const debouncedRender = _.debounce(() => this.render(), 300);
+        this.scopeFilter.addEventListener('change', debouncedRender);
+        this.campaignFilter.addEventListener('change', debouncedRender);
+        this.searchFilter.addEventListener('input', debouncedRender);
+        // KORREKTUR: Event-Listener für Tabs
+        this.tabKanban.addEventListener('click', () => this._switchTab('kanban'));
+        this.tabAnalytics.addEventListener('click', () => this._switchTab('analytics'));
+
+        // NEU: Listener für das Detail-Modal
+        this.closeDetailsModalBtn.addEventListener('click', () => this.closeDetailsModal());
+        this.detailsModal.addEventListener('click', (e) => { if (e.target === this.detailsModal) this.closeDetailsModal(); });
+        this.detailsForm.addEventListener('submit', (e) => this.handleDetailsFormSubmit(e));
+        this.scheduleAppointmentBtn.addEventListener('click', (event) => this.handleScheduleAppointment(event));
+    }
+
+    _populateFilters() {
+        // Scope Filter
+        const isLeader = isUserLeader(authenticatedUserData);
+        this.scopeFilter.classList.toggle('hidden', !isLeader);
+        if (!isLeader) {
+            this.scopeFilter.value = 'personal';
+        }
+
+        // Campaign Filter
+        const campaigns = _.uniq(db.leads.map(lead => lead.Kampagne).filter(Boolean)).sort();
+        this.campaignFilter.innerHTML = '<option value="all">Alle Kampagnen</option>';
+        campaigns.forEach(campaign => {
+            this.campaignFilter.add(new Option(campaign, campaign));
+        });
+    }
+
+    async render() {
+        this.boardContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        
+        // 1. Get all leads and apply filters
+        let leadsToRender = this._getFilteredLeads();
+        leadCenterLog(`Rendere Kanban-Board mit ${leadsToRender.length} Leads.`);
+
+        const leadsByStatus = _.groupBy(leadsToRender, 'Status');
+
+        this.boardContainer.innerHTML = '';
+        this.lanes.forEach(laneStatus => {
+            const laneLeads = leadsByStatus[laneStatus] || [];
+            const laneEl = this._createLane(laneStatus, laneLeads);
+            this.boardContainer.appendChild(laneEl);
+        });
+
+        this._initSortable();
+    }
+
+    _getFilteredLeads() {
+        const allLeads = db.leads || [];
+        const scope = this.scopeFilter.value;
+        const selectedCampaign = this.campaignFilter.value;
+        const searchText = this.searchFilter.value.toLowerCase();
+
+        // Filter by Scope
+        let userIds = new Set();
+        if (scope === 'personal') {
+            userIds.add(authenticatedUserData._id);
+        } else if (scope === 'group') {
+            userIds.add(authenticatedUserData._id);
+            getSubordinates(authenticatedUserData._id, 'gruppe').forEach(u => userIds.add(u._id));
+        } else { // structure
+            userIds.add(authenticatedUserData._id);
+            getAllSubordinatesRecursive(authenticatedUserData._id).forEach(u => userIds.add(u._id));
+        }
+
+        return allLeads.filter(lead => {
+            const mitarbeiter = findRowById('mitarbeiter', lead.Mitarbeiter);
+            const leadName = `${lead.Vorname || ''} ${lead.Nachname || ''}`.toLowerCase();
+
+            const scopeMatch = userIds.has(lead.Mitarbeiter);
+            const campaignMatch = selectedCampaign === 'all' || lead.Kampagne === selectedCampaign;
+            const searchMatch = !searchText || leadName.includes(searchText) || (mitarbeiter && mitarbeiter.Name.toLowerCase().includes(searchText));
+
+            return scopeMatch && campaignMatch && searchMatch;
+        });
+    }
+
+    _createLane(status, leads) {
+        const colorClass = this.laneColors[status] || 'bg-gray-100 border-gray-300';
+        const laneEl = document.createElement('div');
+        laneEl.className = 'flex-shrink-0 w-80 h-full flex flex-col';
+        laneEl.innerHTML = `
+            <div class="p-3 rounded-t-lg border-b-2 ${colorClass}">
+                <h3 class="font-semibold text-skt-blue">${status} <span class="text-gray-500 font-normal">(${leads.length})</span></h3>
+            </div>
+            <div class="flex-grow p-2 bg-skt-grey-light rounded-b-lg overflow-y-auto kanban-lane" data-status="${status}">
+                ${leads.map(lead => this._createCard(lead)).join('')}
+            </div>
+        `;
+        return laneEl;
+    }
+
+    _createCard(lead) {
+        const mitarbeiter = findRowById('mitarbeiter', lead.Mitarbeiter);
+        return `
+            <div class="bg-white p-3 rounded-md shadow border border-gray-200 mb-3 cursor-pointer" data-lead-id="${lead._id}">
+                <div class="flex justify-between items-start">
+                    <p class="font-bold text-skt-blue">${lead.Vorname} ${lead.Nachname}</p>
+                    <i class="fas fa-arrows-alt text-gray-300 cursor-grab active:cursor-grabbing handle"></i>
+                </div>
+                <p class="text-sm text-gray-600 mt-1">${lead.Kampagne}</p>
+                <div class="mt-2 pt-2 border-t text-xs text-gray-500">
+                    <p><i class="fas fa-phone-alt fa-fw mr-1 text-gray-400"></i>${lead.Telefonnummer || 'N/A'}</p>
+                    <p class="mt-1"><i class="fas fa-user fa-fw mr-1 text-gray-400"></i>${mitarbeiter ? mitarbeiter.Name : 'N/A'}</p>
+                </div>
+            </div>
+        `;
+    }
+
+    _initSortable() {
+        const lanes = this.boardContainer.querySelectorAll('.kanban-lane');
+        lanes.forEach(lane => {
+            new Sortable(lane, {
+                group: 'kanban',
+                handle: '.handle', // Definiert den Drag-Handle
+                animation: 150,
+                onEnd: async (evt) => {
+                    const itemEl = evt.item;
+                    const leadId = itemEl.dataset.leadId;
+                    const newStatus = evt.to.dataset.status;
+                    leadCenterLog(`Lead ${leadId} wurde in Lane '${newStatus}' verschoben.`);
+
+                    // Update in der Datenbank
+                    const tableName = 'Leads';
+                    const statusColKey = COLUMN_MAPS.leads.Status;
+                    const rowData = { [statusColKey]: newStatus };
+
+                    const success = await seaTableUpdateRow(tableName, leadId, rowData);
+
+                    if (success) {
+                        leadCenterLog('Status-Update in DB erfolgreich.');
+                        // Lokale Daten aktualisieren und neu rendern
+                        const leadInDb = db.leads.find(l => l._id === leadId);
+                        if (leadInDb) leadInDb.Status = newStatus; // Update local data
+                        this.render(); // Einfachstes Vorgehen: neu rendern
+                    } else {
+                        leadCenterLog('!!! FEHLER: Status-Update in DB fehlgeschlagen.');
+                        alert('Fehler beim Aktualisieren des Status. Die Ansicht wird neu geladen.');
+                        this.render(); // Bei Fehler zurücksetzen
+                    }
+                }
+            });
+        });
+
+        // NEU: Klick-Listener für das Öffnen des Modals
+        this.boardContainer.querySelectorAll('.bg-white[data-lead-id]').forEach(card => {
+            card.addEventListener('click', (e) => {
+                // Verhindert, dass das Modal geöffnet wird, wenn man den Drag-Handle klickt
+                if (e.target.closest('.handle')) return;
+                const leadId = card.dataset.leadId;
+                this.openDetailsModal(leadId);
+            });
+        });
+    }
+
+    openDetailsModal(leadId) {
+        const lead = db.leads.find(l => l._id === leadId);
+        if (!lead) {
+            leadCenterLog(`Konnte Lead mit ID ${leadId} nicht finden.`);
+            return;
+        }
+
+        this.detailsForm.reset();
+        document.getElementById('lead-details-id').value = lead._id;
+        document.getElementById('lead-details-modal-title').textContent = `${lead.Vorname} ${lead.Nachname}`;
+
+        // Read-only Felder
+        document.getElementById('lead-details-campaign').textContent = lead.Kampagne || '-';
+        const mitarbeiter = findRowById('mitarbeiter', lead.Mitarbeiter);
+        document.getElementById('lead-details-mitarbeiter').textContent = mitarbeiter ? mitarbeiter.Name : 'N/A';
+        document.getElementById('lead-details-phone').textContent = lead.Telefonnummer || '-';
+        document.getElementById('lead-details-email').textContent = lead.Email || '-';
+        document.getElementById('lead-details-info').innerHTML = lead.Info ? marked.parse(lead.Info) : '<p class="text-gray-500">Keine Info vorhanden.</p>';
+
+        // Editable Felder
+        const statusSelect = document.getElementById('lead-details-status');
+        statusSelect.innerHTML = '';
+        this.lanes.forEach(lane => statusSelect.add(new Option(lane, lane)));
+        statusSelect.value = lead.Status || 'offen';
+
+        document.getElementById('lead-details-umsatz').value = lead.Umsatz || '';
+        document.getElementById('lead-details-hinweis').value = lead.Hinweis || '';
+
+        this.detailsModal.classList.add('visible');
+        document.body.classList.add('modal-open');
+    }
+
+    closeDetailsModal() {
+        this.detailsModal.classList.remove('visible');
+        document.body.classList.remove('modal-open');
+    }
+
+    async handleDetailsFormSubmit(e) {
+        e.preventDefault();
+        const saveBtn = document.getElementById('save-lead-details-btn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Speichern...';
+
+        const leadId = document.getElementById('lead-details-id').value;
+        const rowData = {
+            [COLUMN_MAPS.leads.Status]: document.getElementById('lead-details-status').value,
+            [COLUMN_MAPS.leads.Umsatz]: parseFloat(document.getElementById('lead-details-umsatz').value) || null,
+            [COLUMN_MAPS.leads.Hinweis]: document.getElementById('lead-details-hinweis').value,
+        };
+
+        const success = await seaTableUpdateRow('Leads', leadId, rowData);
+
+        if (success) {
+            // Lokale Daten aktualisieren
+            const leadInDb = db.leads.find(l => l._id === leadId);
+            if (leadInDb) {
+                leadInDb.Status = rowData[COLUMN_MAPS.leads.Status];
+                leadInDb.Umsatz = rowData[COLUMN_MAPS.leads.Umsatz];
+                leadInDb.Hinweis = rowData[COLUMN_MAPS.leads.Hinweis];
+            }
+            this.closeDetailsModal();
+            await this.render(); // Board neu rendern, um Änderungen anzuzeigen
+        } else {
+            alert('Fehler beim Speichern der Änderungen.');
+        }
+
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Speichern';
+    }
+
+    async handleScheduleAppointment(event) {
+        event.preventDefault();
+        leadCenterLog('--- START: handleScheduleAppointment ---');
+
+        const leadId = document.getElementById('lead-details-id').value;
+        const lead = db.leads.find(l => l._id === leadId);
+        if (!lead) return;
+
+        leadCenterLog(`Lege Termin für Lead an: ${lead.Vorname} ${lead.Nachname} (ID: ${leadId})`);
+        this.closeDetailsModal();
+
+        const terminMap = SKT_APP.COLUMN_MAPS.termine;
+        if (!terminMap) {
+            alert('Fehler: Die Spaltenkonfiguration für Termine konnte nicht geladen werden.');
+            return;
+        }
+
+        const rowData = {
+            [terminMap.Mitarbeiter_ID]: [lead.Mitarbeiter],
+            [terminMap.Terminpartner]: `${lead.Vorname} ${lead.Nachname}`,
+            [terminMap.Hinweis]: lead.Info || `Lead-Info: ${lead.Info}`,
+            [terminMap.Status]: 'Ausgemacht', // KORREKTUR: Status direkt auf "Ausgemacht" setzen.
+            [terminMap.Kategorie]: 'AT' // Setzt eine Standardkategorie
+        };
+
+        const newTerminId = await SKT_APP.seaTableAddTermin(rowData);
+
+        if (newTerminId) {
+            leadCenterLog(`Termin mit ID ${newTerminId} erfolgreich angelegt. Lade Daten neu und öffne Bearbeitungsmodal.`);
+            // KORREKTUR: Lead-Status sofort aktualisieren.
+            await seaTableUpdateRow('Leads', leadId, { [COLUMN_MAPS.leads.Status]: 'Termin vereinbart' });
+            // KORREKTUR: Lokale Daten aktualisieren, um den neuen Status im Kanban-Board anzuzeigen.
+            const leadInDb = db.leads.find(l => l._id === leadId);
+            if (leadInDb) leadInDb.Status = 'Termin vereinbart';
+            await this.render(); // Kanban-Board neu rendern.
+            // KORREKTUR: Neuen Termin im Termin-Modal zum Bearbeiten öffnen.
+            const newTermin = await findRowByIdAfterCreation('Termine', newTerminId);
+            if (newTermin && appointmentsViewInstance) {
+                appointmentsViewInstance.openModal(newTermin);
+            }
+        } else {
+            alert('Fehler beim Anlegen des Termins.');
+        }
+    }
+}
+async function findRowByIdAfterCreation(tableName, rowId) {
+    // This helper ensures the local database is up-to-date before finding the new row.
+    const cacheKey = `${CACHE_PREFIX}${tableName.toLowerCase()}`;
+    localStorage.removeItem(cacheKey);
+    db[tableName.toLowerCase()] = await seaTableQuery(tableName);
+    normalizeAllData();
+    return findRowById(tableName, rowId);
+}
+
+
+async function loadAndInitLeadCenterView() {
+    const container = dom.leadCenterView;
+    try {
+        const response = await fetch("./lead-center.html");
+        if (!response.ok) throw new Error(`Die Datei 'lead-center.html' konnte nicht gefunden werden.`);
+        container.innerHTML = await response.text();
+        if (!leadCenterViewInstance) leadCenterViewInstance = new LeadCenterView();
+        await leadCenterViewInstance.init();
+    } catch (error) {
+        console.error("Fehler beim Laden der Lead-Center-Ansicht:", error);
         container.innerHTML = `<p class="text-red-500 text-center">${error.message}</p>`;
     }
 }
@@ -14044,7 +14424,7 @@ class StimmungsDashboardView {
         this.scopeStructureBtn.addEventListener('click', () => { this.scope = 'structure'; saveUiSetting('stimmungsScope', 'structure'); this.updateScopeButtons(); debouncedRender(); });
         this.startDateInput.addEventListener('change', () => { this.startDate = new Date(this.startDateInput.value); debouncedRender(); });
         this.endDateInput.addEventListener('change', () => { this.endDate = new Date(this.endDateInput.value); debouncedRender(); });
-
+        
         // KORREKTUR: Der Event-Listener für den Start-Button gehört hierher.
         if (this.startTodayCheckinBtn) {
             this.startTodayCheckinBtn.addEventListener('click', () => this.openCheckinModal(false));

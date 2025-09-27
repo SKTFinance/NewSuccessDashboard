@@ -1,0 +1,97 @@
+<!-- Ansicht für das Lead-Center -->
+<div id="lead-center-module-root" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg flex flex-col">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h2 class="text-3xl font-bold text-skt-blue">Lead-Center</h2>
+    </div>
+
+    <!-- Reiter-Navigation -->
+    <div class="border-b border-gray-200 mb-6">
+        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+            <button id="lead-center-tab-kanban" class="lead-center-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue">
+                Kanban-Board
+            </button>
+            <button id="lead-center-tab-analytics" class="lead-center-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                Auswertung
+            </button>
+        </nav>
+    </div>
+
+    <!-- Filter-Leiste -->
+    <div id="lead-center-filter-bar" class="bg-skt-grey-light p-4 rounded-xl mb-6 border border-gray-200">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <div>
+                <label for="lead-center-search-filter" class="block text-sm font-medium text-gray-700 mb-1">Suchen</label>
+                <input type="text" id="lead-center-search-filter" placeholder="Lead oder Mitarbeiter suchen..." class="modern-input">
+            </div>
+            <div>
+                <label for="lead-center-campaign-filter" class="block text-sm font-medium text-gray-700 mb-1">Kampagne</label>
+                <select id="lead-center-campaign-filter" class="modern-select">
+                    <option value="all">Alle Kampagnen</option>
+                </select>
+            </div>
+            <div>
+                <label for="lead-center-scope-filter" class="block text-sm font-medium text-gray-700 mb-1">Anzeigen für</label>
+                <select id="lead-center-scope-filter" class="modern-select">
+                    <option value="personal">Meine Leads</option>
+                    <option value="group">Meine Gruppe</option>
+                    <option value="structure">Meine Struktur</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inhalt für Kanban-Board -->
+    <div id="lead-center-content-kanban" class="flex-grow overflow-x-auto pb-4">
+        <div id="kanban-board" class="flex space-x-4 h-full">
+            <!-- Lanes werden hier dynamisch per JS eingefügt -->
+        </div>
+    </div>
+
+    <!-- Inhalt für Auswertung -->
+    <div id="lead-center-content-analytics" class="hidden">
+        <div class="text-center py-16">
+            <i class="fas fa-chart-pie fa-4x text-skt-grey-medium mb-4"></i>
+            <h3 class="text-xl font-semibold text-skt-blue">Auswertung in Kürze verfügbar</h3>
+            <p class="text-gray-500 mt-2">Dieser Bereich wird derzeit entwickelt.</p>
+        </div>
+    </div>
+</div>
+
+<!-- NEU: Modal zum Bearbeiten eines Leads -->
+<div id="lead-details-modal" class="modal-overlay">
+    <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-2xl w-full relative max-h-[90vh] overflow-y-auto">
+        <button id="close-lead-details-modal-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
+        <h3 id="lead-details-modal-title" class="text-2xl font-bold text-skt-blue mb-6">Lead-Details</h3>
+        <form id="lead-details-form" class="space-y-4">
+            <input type="hidden" id="lead-details-id">
+            
+            <!-- Read-only fields -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                <div><p class="font-semibold text-skt-blue-light">Kampagne</p><p id="lead-details-campaign" class="text-gray-800"></p></div>
+                <div><p class="font-semibold text-skt-blue-light">Mitarbeiter</p><p id="lead-details-mitarbeiter" class="text-gray-800"></p></div>
+                <div><p class="font-semibold text-skt-blue-light">Telefon</p><p id="lead-details-phone" class="text-gray-800"></p></div>
+                <div><p class="font-semibold text-skt-blue-light">Email</p><p id="lead-details-email" class="text-gray-800"></p></div>
+            </div>
+            <div class="prose prose-sm max-w-none bg-gray-50 p-3 rounded-md border">
+                <p class="font-semibold text-skt-blue-light">Info</p>
+                <div id="lead-details-info"></div>
+            </div>
+
+            <!-- Editable fields -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
+                <div><label for="lead-details-status" class="block text-sm font-medium text-gray-700">Status</label><select id="lead-details-status" class="modern-select"></select></div>
+                <div><label for="lead-details-umsatz" class="block text-sm font-medium text-gray-700">Umsatz (EH)</label><input type="number" step="0.01" id="lead-details-umsatz" class="modern-input"></div>
+            </div>
+            <div><label for="lead-details-hinweis" class="block text-sm font-medium text-gray-700">Hinweis</label><textarea id="lead-details-hinweis" rows="3" class="modern-input"></textarea></div>
+            
+            <div class="pt-4 flex justify-between items-center">
+                <button type="button" id="lead-schedule-appointment-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors flex items-center justify-center">
+                    <i class="fas fa-calendar-check mr-2"></i>Termin vereinbaren
+                </button>
+                <div class="flex space-x-3">
+                    <button type="submit" id="save-lead-details-btn" class="bg-skt-green-accent text-white font-semibold py-2 px-5 rounded-lg hover:bg-green-700 transition-colors">Speichern</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
