@@ -104,7 +104,8 @@
             </div>
             <div>
                 <label for="businessplan-datum" class="block text-sm font-medium text-gray-700 mb-1">Wann willst du dieses Ziel erreichen?</label>
-                <div class="input-wrapper"><input type="date" id="businessplan-datum" class="modern-input w-full"></div>
+                <!-- KORREKTUR: Der Input-Typ wurde auf datetime-local geändert, um das Speicherproblem zu beheben. -->
+                <div class="input-wrapper"><input type="datetime-local" id="businessplan-datum" class="modern-input w-full"></div>
             </div>
             <div>
                 <label for="businessplan-todos-container" class="block text-sm font-medium text-gray-700 mb-1">Welche konkreten Schritte musst du umsetzen, um dieses Ziel zu erreichen?</label>

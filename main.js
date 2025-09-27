@@ -13687,28 +13687,18 @@ class PlanungView {
         const cancellationRate = totalAppointments > 0 ? (cancelledAppointments / totalAppointments) * 100 : 0;
         document.getElementById('planung-kpi-ausfallquote').textContent = `${cancellationRate.toFixed(0)}%`;
 
-        // 3. Ø EH / BT (letzte 60 Tage)
+        // 3. Ø EH / BT (letzte 60 Tage) - NEUE BERECHNUNG
         const heldBTsLast60Days = userAppointments.filter(t => t.Status === 'Gehalten' && t.Kategorie === 'BT' && t.Datum);
-        let btsWithSaleCount = 0;
-        for (const bt of heldBTsLast60Days) {
-            const terminDate = new Date(bt.Datum);
-            const oneWeek = 7 * 24 * 60 * 60 * 1000;
-            const searchStart = new Date(terminDate.getTime() - oneWeek);
-            const searchEnd = new Date(terminDate.getTime() + oneWeek);
-            const hasSale = mappedSales.some(sale => {
-                const saleDate = new Date(sale.Datum);
-                return sale.Kunde && bt.Terminpartner &&
-                       sale.Kunde.trim().toLowerCase().includes(bt.Terminpartner.trim().toLowerCase()) &&
-                       saleDate >= searchStart && saleDate <= searchEnd;
-            });
-            if (hasSale) btsWithSaleCount++;
-        }
-        const avgEhPerBt = btsWithSaleCount > 0 ? totalEhLast60Days / btsWithSaleCount : 0;
+        const avgEhPerBt = heldBTsLast60Days.length > 0 ? totalEhLast60Days / heldBTsLast60Days.length : 0;
         document.getElementById('planung-kpi-eh-pro-bt').textContent = avgEhPerBt.toFixed(2);
 
-        // 4. Ø EH / AT (letzte 60 Tage)
-        const heldATsLast60Days = userAppointments.filter(t => t.Status === 'Gehalten' && t.Kategorie === 'AT' && t.Datum).length;
-        const avgEhPerAt = heldATsLast60Days > 0 ? totalEhLast60Days / heldATsLast60Days : 0;
+        // 4. Ø EH / AT (letzte 60 Tage) - NEUE BERECHNUNG
+        // KORREKTUR: Die Logik für ATs muss auch STs mit Prognose > 1 berücksichtigen, um konsistent zu sein.
+        const heldATsLast60Days = userAppointments.filter(t => 
+            t.Status === 'Gehalten' && 
+            (t.Kategorie === 'AT' || (t.Kategorie === 'ST' && t.Umsatzprognose > 1))
+        );
+        const avgEhPerAt = heldATsLast60Days.length > 0 ? totalEhLast60Days / heldATsLast60Days.length : 0;
         document.getElementById('planung-kpi-eh-pro-at').textContent = avgEhPerAt.toFixed(2);
     }
 
@@ -14905,7 +14895,6 @@ async openCheckinModal(isEditMode = false) {
                 </div>
             `).join('');
         }
-        container.innerHTML = finalHtml || '<p class="text-center text-gray-500">Keine Mitarbeiter zum Anzeigen gefunden.</p>';
     }
 
     
