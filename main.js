@@ -12983,6 +12983,46 @@ function closePlanningModal() {
     document.body.classList.remove('modal-open');
 }
 
+async function saveMonthlyPlanning(userId, monthName, year, ehGoal, etGoal) {
+    const nextInfoDate = findNextInfoDateAfter(new Date());
+    const nextInfoDateString = nextInfoDate.toISOString().split('T')[0];
+
+    // 1. Handle Infoplanung (ET Goal)
+    const existingInfoPlan = db.infoplanung.find(p => p.Mitarbeiter_ID === userId && p.Informationsabend && p.Informationsabend.startsWith(nextInfoDateString));
+    let infoPlanSuccess = false;
+    if (existingInfoPlan) {
+        const sql = `UPDATE \`Infoplanung\` SET \`ET_Ziel\` = ${etGoal} WHERE \`_id\` = '${existingInfoPlan._id}'`;
+        infoPlanSuccess = await seaTableSqlQuery(sql, false) !== null;
+    } else {
+        const infoPlanRowData = {
+            [COLUMN_MAPS.infoplanung.Informationsabend]: nextInfoDateString,
+            [COLUMN_MAPS.infoplanung.ET_Ziel]: etGoal,
+            [COLUMN_MAPS.infoplanung.Mitarbeiter_ID]: [userId],
+        };
+        infoPlanSuccess = await addPlanningRowToDatabase('Infoplanung', infoPlanRowData, 'Mitarbeiter_ID');
+    }
+
+    // 2. Handle Monatsplanung (EH Goal)
+    const existingPlan = db.monatsplanung.find(p => p.Mitarbeiter_ID === userId && p.Monat === monthName && p.Jahr === year);
+    let success = false;
+    if (existingPlan) {
+        // KORREKTUR: Das Feld 'Ursprungsziel_EH' ist eine Formelspalte und darf nicht direkt beschrieben werden.
+        // Das hat den gesamten SQL-UPDATE-Befehl fehlschlagen lassen.
+        const sql = `UPDATE \`Monatsplanung\` SET \`EH_Ziel\` = ${ehGoal} WHERE \`_id\` = '${existingPlan._id}'`;
+        success = await seaTableSqlQuery(sql, false) !== null;
+    } else {
+        const rowData = {
+            [COLUMN_MAPS.monatsplanung.Monat]: monthName,
+            [COLUMN_MAPS.monatsplanung.Jahr]: year,
+            [COLUMN_MAPS.monatsplanung.EH_Ziel]: ehGoal,
+            [COLUMN_MAPS.monatsplanung.Mitarbeiter_ID]: [userId],
+        };
+        success = await addPlanningRowToDatabase('Monatsplanung', rowData, 'Mitarbeiter_ID');
+    }
+
+    return success && infoPlanSuccess;
+}
+
 async function savePlanningData() {
     dom.savePlanningBtn.disabled = true;
     dom.savePlanningBtn.textContent = 'Speichern...';
@@ -12994,47 +13034,8 @@ async function savePlanningData() {
     const year = parseInt(document.getElementById('planning-year-input').value);
     const nextInfoDateIso = document.getElementById('planning-infoabend-date').value;
 
-    const existingInfoPlan = db.infoplanung.find(p => p.Mitarbeiter_ID === userId && p.Informationsabend && p.Informationsabend.startsWith(nextInfoDateIso));
-    const existingPlan = db.monatsplanung.find(p =>
-        p.Mitarbeiter_ID === userId &&
-        p.Monat === monthName &&
-        p.Jahr === year
-    );
-
-    let infoPlanSuccess = false;
-    if (existingInfoPlan) {
-        const sql = `UPDATE \`Infoplanung\` SET \`ET_Ziel\` = ${etGoal} WHERE \`_id\` = '${existingInfoPlan._id}'`;
-        infoPlanSuccess = await seaTableSqlQuery(sql, false) !== null;
-    }
-    // KORREKTUR: Wenn kein Info-Plan existiert, einen neuen anlegen.
-    else {
-        const infoPlanRowData = {
-            [COLUMN_MAPS.infoplanung.Informationsabend]: nextInfoDateIso,
-            [COLUMN_MAPS.infoplanung.ET_Ziel]: etGoal,
-            [COLUMN_MAPS.infoplanung.Mitarbeiter_ID]: [userId],
-        };
-        infoPlanSuccess = await addPlanningRowToDatabase('Infoplanung', infoPlanRowData, 'Mitarbeiter_ID');
-    }
-
-    let success = false;
-    if (existingPlan) {
-        // Update existing plan
-        // KORREKTUR: ET_Ziel wird nicht mehr in der Monatsplanung gespeichert.
-        const sql = `UPDATE \`Monatsplanung\` SET \`EH_Ziel\` = ${ehGoal} WHERE \`_id\` = '${existingPlan._id}'`;
-        const result = await seaTableSqlQuery(sql, false);
-        success = result !== null;
-    } else {
-        // Create new plan
-        const rowData = {
-            [COLUMN_MAPS.monatsplanung.Monat]: monthName,
-            [COLUMN_MAPS.monatsplanung.Jahr]: year,
-            [COLUMN_MAPS.monatsplanung.EH_Ziel]: ehGoal,
-            [COLUMN_MAPS.monatsplanung.Mitarbeiter_ID]: [userId],
-        };
-        success = await addPlanningRowToDatabase('Monatsplanung', rowData, 'Mitarbeiter_ID');
-    }
-
-    if (success && infoPlanSuccess) {
+    const success = await saveMonthlyPlanning(userId, monthName, year, ehGoal, etGoal);
+    if (success) {
         localStorage.removeItem(CACHE_PREFIX + 'monatsplanung');
         localStorage.removeItem(CACHE_PREFIX + 'infoplanung'); // NEU: Auch Infoplanung-Cache leeren
         await loadAllData();
@@ -13840,11 +13841,13 @@ class PlanungView {
         const etGoal = parseInt(document.getElementById('monatsplanung-et-goal').value) || 0;
         const monthName = document.getElementById('monatsplanung-month-select').value;
         const year = parseInt(document.getElementById('monatsplanung-year-input').value);
-
         const success = await saveMonthlyPlanning(userId, monthName, year, ehGoal, etGoal);
 
         if (success) {
             btn.textContent = 'Gespeichert!';
+            localStorage.removeItem(CACHE_PREFIX + 'monatsplanung');
+            localStorage.removeItem(CACHE_PREFIX + 'infoplanung');
+            await loadAllData();
             setTimeout(() => {
                 btn.disabled = false;
                 btn.textContent = 'Planung speichern';
