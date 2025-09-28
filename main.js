@@ -14519,8 +14519,7 @@ class StimmungsDashboardView {
     constructor() {
         this.initialized = false;
         this.scope = 'group';
-        this.startDate = null;
-        this.endDate = null;
+        this.selectedDate = null; // NEU: Einzelnes Datum statt Bereich
         // NEU: Status für den mehrstufigen Check-in
         this.checkinStep = 1;
         this.checkinData = {};
@@ -14550,8 +14549,7 @@ class StimmungsDashboardView {
         // Neue Elemente
         this.scopeGroupBtn = document.getElementById('stimmungs-group-btn');
         this.scopeStructureBtn = document.getElementById('stimmungs-structure-btn');
-        this.startDateInput = document.getElementById('stimmungs-start-date');
-        this.endDateInput = document.getElementById('stimmungs-end-date');
+        this.datePicker = document.getElementById('stimmungs-date-picker'); // NEU
         this.distributionChartContainer = document.getElementById('stimmungs-distribution-chart-container');
         this.kpiWarningsContainer = document.getElementById('stimmungs-kpi-warnings-container');
 
@@ -14566,7 +14564,7 @@ class StimmungsDashboardView {
         this.avgDurationHeaderValue = document.getElementById('average-checkin-duration-header-value'); // NEU
         this.problemeLoesungenContainer = document.getElementById('stimmungs-probleme-loesungen-container'); // NEU
         this.startTodayCheckinBtn = document.getElementById('start-today-checkin-btn'); // NEU
-        return this.scopeGroupBtn && this.scopeStructureBtn && this.startDateInput && this.endDateInput && this.distributionChartContainer && this.redFlagsContainer && this.chartContainer && this.motivationContainer && this.todosContainer && this.editTodayCheckinBtn && this.kpiWarningsContainer && this.avgDurationHeaderContainer && this.avgDurationHeaderValue && this.problemeLoesungenContainer && this.startTodayCheckinBtn;
+        return this.scopeGroupBtn && this.scopeStructureBtn && this.datePicker && this.distributionChartContainer && this.redFlagsContainer && this.chartContainer && this.motivationContainer && this.todosContainer && this.editTodayCheckinBtn && this.kpiWarningsContainer && this.avgDurationHeaderContainer && this.avgDurationHeaderValue && this.problemeLoesungenContainer && this.startTodayCheckinBtn;
     }
 
     async init() {
@@ -14575,25 +14573,20 @@ class StimmungsDashboardView {
             return;
         }
         // Event Listener für den Bearbeiten-Button
-        this.editTodayCheckinBtn.addEventListener('click', () => this.openCheckinModal(true));
-// Initialisiere Datumsauswahl (letzte 30 Tage)
-        this.endDate = new Date();
-        this.startDate = new Date();
-        this.startDate.setDate(this.endDate.getDate() - 30);
-        this.startDateInput.value = this.startDate.toISOString().split('T')[0];
-        this.endDateInput.value = this.endDate.toISOString().split('T')[0];
+        this.editTodayCheckinBtn.addEventListener('click', () => this.openCheckinModal(true)); // Initialisiere Datumsauswahl auf heute
+        this.selectedDate = new Date();
+        this.datePicker.value = this.selectedDate.toISOString().split('T')[0];
 
         // Lade gespeicherte Einstellungen
         this.scope = loadUiSetting('stimmungsScope', 'group');
         this.scopeGroupBtn.classList.toggle('active', this.scope === 'group');
         this.scopeStructureBtn.classList.toggle('active', this.scope === 'structure');
 
-        // Event Listeners
+        // Event Listeners (Debounced Render wird jetzt bei Datumsänderung aufgerufen)
         const debouncedRender = _.debounce(() => this.fetchAndRender(), 300);
         this.scopeGroupBtn.addEventListener('click', () => { this.scope = 'group'; saveUiSetting('stimmungsScope', 'group'); this.updateScopeButtons(); debouncedRender(); });
         this.scopeStructureBtn.addEventListener('click', () => { this.scope = 'structure'; saveUiSetting('stimmungsScope', 'structure'); this.updateScopeButtons(); debouncedRender(); });
-        this.startDateInput.addEventListener('change', () => { this.startDate = new Date(this.startDateInput.value); debouncedRender(); });
-        this.endDateInput.addEventListener('change', () => { this.endDate = new Date(this.endDateInput.value); debouncedRender(); });
+        this.datePicker.addEventListener('change', () => { this.selectedDate = new Date(this.datePicker.value); debouncedRender(); });
         
         // KORREKTUR: Der Event-Listener für den Start-Button gehört hierher.
         if (this.startTodayCheckinBtn) {
@@ -14907,11 +14900,19 @@ async openCheckinModal(isEditMode = false) {
         }
         const userIdsSet = new Set(userIds);
 
-        // 2. Filtere Check-ins nach Benutzern und Datum
+        // 2. Filtere Check-ins basierend auf dem ausgewählten Datum
+        const singleDayEndDate = new Date(this.selectedDate);
+        singleDayEndDate.setHours(23, 59, 59, 999);
+        const sevenDaysAgo = new Date(this.selectedDate);
+        sevenDaysAgo.setDate(this.selectedDate.getDate() - 6);
+        sevenDaysAgo.setHours(0, 0, 0, 0);
+
         const filteredCheckins = db.checkin.filter(c => {
             if (!c.Datum || !userIdsSet.has(c.Mitarbeiter)) return false;
             const checkinDate = new Date(c.Datum);
-            return checkinDate >= this.startDate && checkinDate <= this.endDate;
+            // KORREKTUR: Der Filterbereich wird jetzt dynamisch basierend auf dem 7-Tage-Fenster gesetzt.
+            // Alle Render-Funktionen greifen auf diesen gefilterten Datensatz zu.
+            return checkinDate >= sevenDaysAgo && checkinDate <= singleDayEndDate;
         });
 
         // NEU: Logik für den "Bearbeiten"-Button
@@ -14940,15 +14941,15 @@ async openCheckinModal(isEditMode = false) {
         }
 
         // 3. Rufe die Render-Funktionen mit den gefilterten Daten auf
-        this.renderRedFlags(filteredCheckins);
-        this.renderStimmungChart(filteredCheckins);
-        this.renderStimmungDistribution(filteredCheckins);
-        this.renderMotivation(filteredCheckins);
-        this.renderTodos(filteredCheckins);
-        this.renderAverageDuration(filteredCheckins);
-        this.renderTeamCheckins(filteredCheckins); // NEU
+        this.renderRedFlags(filteredCheckins); // Benötigt 7-Tage-Daten
+        this.renderStimmungChart(filteredCheckins); // Benötigt 7-Tage-Daten
+        this.renderStimmungDistribution(filteredCheckins.filter(c => c.Datum.startsWith(this.selectedDate.toISOString().split('T')[0])));
+        this.renderMotivation(filteredCheckins.filter(c => c.Datum.startsWith(this.selectedDate.toISOString().split('T')[0])));
+        this.renderTodos(filteredCheckins.filter(c => c.Datum.startsWith(this.selectedDate.toISOString().split('T')[0])));
+        this.renderAverageDuration(filteredCheckins.filter(c => c.Datum.startsWith(this.selectedDate.toISOString().split('T')[0])));
+        this.renderTeamCheckins(filteredCheckins.filter(c => c.Datum.startsWith(this.selectedDate.toISOString().split('T')[0]))); // NEU
         this.renderKpiWarnings(userIdsSet);
-        this.renderProblemeLoesungen(filteredCheckins); // NEU
+        this.renderProblemeLoesungen(filteredCheckins.filter(c => c.Datum.startsWith(this.selectedDate.toISOString().split('T')[0]))); // NEU
     }
 
     // Helper function for PQQ calculation for a single user
@@ -15605,15 +15606,15 @@ async openCheckinModal(isEditMode = false) {
 
     renderTodos(checkins) {
         this.todosContainer.innerHTML = '';
-        // KORREKTUR: Verwende das heutige Datum, da die Karte "Heutige To-Dos" heißt.
-        const today = new Date();
-        const displayDateString = today.toISOString().split('T')[0];
+        // KORREKTUR: Verwende das ausgewählte Datum.
+        const displayDate = new Date(this.selectedDate);
+        const displayDateString = displayDate.toISOString().split('T')[0];
         // KORREKTUR: Prüfe, ob 'Motivation' truthy ist, um nur "Haupt-Check-ins" zu berücksichtigen.
         const displayDateCheckins = checkins.filter(c => c.Motivation && c.Todos && c.Datum.startsWith(displayDateString));
 
         if (displayDateCheckins.length === 0) {
-            // KORREKTUR: Gib das heutige Datum in der Meldung aus.
-            this.todosContainer.innerHTML = `<p class="text-center text-gray-500">Keine To-Dos für heute (${today.toLocaleDateString('de-DE')}) gefunden.</p>`;
+            // KORREKTUR: Gib das ausgewählte Datum in der Meldung aus.
+            this.todosContainer.innerHTML = `<p class="text-center text-gray-500">Keine To-Dos für den ${displayDate.toLocaleDateString('de-DE')} gefunden.</p>`;
             return;
         }
 

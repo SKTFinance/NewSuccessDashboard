@@ -9,11 +9,10 @@
                 <button id="stimmungs-group-btn" class="active">Gruppe</button>
                 <button id="stimmungs-structure-btn">Struktur</button>
             </div>
-            <!-- Date Pickers -->
+            <!-- Date Picker -->
             <div class="flex items-center gap-2">
-                <input type="date" id="stimmungs-start-date" class="modern-input w-40">
-                <span class="text-gray-500">bis</span>
-                <input type="date" id="stimmungs-end-date" class="modern-input w-40">
+                <label for="stimmungs-date-picker" class="text-sm font-medium text-gray-700">Datum:</label>
+                <input type="date" id="stimmungs-date-picker" class="modern-input w-40">
             </div>
             <!-- NEU: Average Duration -->
             <div id="average-checkin-duration-header-container" class="hidden items-center gap-2 text-skt-blue-light font-semibold">
@@ -69,7 +68,7 @@
 
         <!-- NEU: Probleme und Lösungen -->
         <div class="lg:col-span-3 bg-white rounded-2xl p-6 shadow-lg">
-            <h3 class="text-xl font-bold text-skt-blue mb-4">Probleme & Lösungen</h3>
+            <h3 class="text-xl font-bold text-skt-blue mb-4">Probleme & Lösungen (FKs)</h3>
             <p class="text-sm text-gray-500 mb-4">Negativ beantwortete Fragen aus den Team-Checks und die dazugehörigen Lösungsansätze der Führungskraft.</p>
             <div id="stimmungs-probleme-loesungen-container" class="space-y-6 max-h-[600px] overflow-y-auto pr-2">
                 <!-- Inhalt wird per JS generiert -->
@@ -78,8 +77,8 @@
 
         <!-- NEU: Team Check-ins -->
         <div class="lg:col-span-3 bg-white rounded-2xl p-6 shadow-lg">
-            <h3 class="text-xl font-bold text-skt-blue mb-4">Team Check-ins</h3>
-            <p class="text-sm text-gray-500 mb-4">Antworten deiner Trainees aus deren täglichem Check-in.</p>
+            <h3 class="text-xl font-bold text-skt-blue mb-4">Team Check-ins (FTs)</h3>
+            <p class="text-sm text-gray-500 mb-4">Antworten deiner FTs aus deren täglichem Check-in.</p>
             <div id="stimmungs-team-checkins-container" class="space-y-6 max-h-[600px] overflow-y-auto pr-2">
                 <!-- Inhalt wird per JS generiert -->
             </div>
