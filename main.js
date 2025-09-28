@@ -1571,7 +1571,9 @@ async function showConfirmationModal(text, title = 'Bestätigung', okText = 'Bes
         }
 
         titleEl.textContent = title;
-        textEl.textContent = text;
+        // KORREKTUR: Verwende innerHTML anstelle von textContent, damit HTML-Tags
+        // wie <ul> und <li> korrekt als Liste gerendert werden.
+        textEl.innerHTML = text;
         confirmOkBtn.textContent = okText;
         confirmCancelBtn.classList.toggle('hidden', !cancelText);
         confirmCancelBtn.textContent = cancelText;
@@ -14585,11 +14587,13 @@ class StimmungsDashboardView {
         this.todosContainer = document.getElementById('stimmungs-todos-container');
         this.editTodayCheckinBtn = document.getElementById('edit-today-checkin-btn');
         this.teamCheckinsContainer = document.getElementById('stimmungs-team-checkins-container'); // NEU
+        this.checkinQuoteContainer = document.getElementById('checkin-quote-container'); // NEU
+        this.checkinQuoteValue = document.getElementById('checkin-quote-value'); // NEU
         this.avgDurationHeaderContainer = document.getElementById('average-checkin-duration-header-container'); // NEU
         this.avgDurationHeaderValue = document.getElementById('average-checkin-duration-header-value'); // NEU
         this.problemeLoesungenContainer = document.getElementById('stimmungs-probleme-loesungen-container'); // NEU
         this.startTodayCheckinBtn = document.getElementById('start-today-checkin-btn'); // NEU
-        return this.scopeGroupBtn && this.scopeStructureBtn && this.datePicker && this.distributionChartContainer && this.redFlagsContainer && this.chartContainer && this.motivationContainer && this.todosContainer && this.editTodayCheckinBtn && this.kpiWarningsContainer && this.avgDurationHeaderContainer && this.avgDurationHeaderValue && this.problemeLoesungenContainer && this.startTodayCheckinBtn;
+        return this.scopeGroupBtn && this.scopeStructureBtn && this.datePicker && this.distributionChartContainer && this.redFlagsContainer && this.chartContainer && this.motivationContainer && this.todosContainer && this.editTodayCheckinBtn && this.kpiWarningsContainer && this.avgDurationHeaderContainer && this.avgDurationHeaderValue && this.problemeLoesungenContainer && this.startTodayCheckinBtn && this.checkinQuoteContainer && this.checkinQuoteValue;
     }
 
     async init() {
@@ -14974,6 +14978,7 @@ async openCheckinModal(isEditMode = false) {
         this.renderAverageDuration(filteredCheckins.filter(c => c.Datum.startsWith(this.selectedDate.toISOString().split('T')[0])));
         this.renderTeamCheckins(filteredCheckins.filter(c => c.Datum.startsWith(this.selectedDate.toISOString().split('T')[0]))); // NEU
         this.renderKpiWarnings(userIdsSet);
+        this.renderCheckinQuote(userIdsSet); // NEU
         this.renderProblemeLoesungen(filteredCheckins.filter(c => c.Datum.startsWith(this.selectedDate.toISOString().split('T')[0]))); // NEU
     }
 
@@ -15068,6 +15073,52 @@ async openCheckinModal(isEditMode = false) {
             `;
         });
         this.redFlagsContainer.appendChild(container);
+    }
+
+    // NEU: Rendert die Check-in-Quote
+    renderCheckinQuote(userIds) {
+        const dayMap = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+        const selectedDayOfWeek = dayMap[this.selectedDate.getDay()];
+        const selectedDateString = this.selectedDate.toISOString().split('T')[0];
+
+        // 1. Finde alle Benutzer, die heute einen Check-in machen sollten.
+        const usersInScope = db.mitarbeiter.filter(u => userIds.has(u._id) && u.Status !== 'Ausgeschieden');
+        const expectedCheckinUsers = usersInScope.filter(user => {
+            const hasCheckinEnabled = user.Checkin === true;
+            if (!hasCheckinEnabled) return false;
+            const checkinDays = (user.CheckinDays || '').split(',');
+            // Wenn keine Tage definiert sind, wird an jedem Tag ein Check-in erwartet.
+            // Ansonsten muss der aktuelle Wochentag in der Liste sein.
+            return checkinDays.length === 0 || checkinDays[0] === '' || checkinDays.includes(selectedDayOfWeek);
+        });
+
+        // 2. Finde alle Benutzer, die heute tatsächlich einen Check-in gemacht haben.
+        const completedCheckinUserIds = new Set(
+            db.checkin
+                .filter(c => c.Datum && c.Datum.startsWith(selectedDateString) && (c.Stimmung !== undefined && c.Stimmung !== null))
+                .map(c => c.Mitarbeiter)
+        );
+
+        const completedCount = expectedCheckinUsers.filter(u => completedCheckinUserIds.has(u._id)).length;
+        const expectedCount = expectedCheckinUsers.length;
+
+        // 3. UI aktualisieren
+        this.checkinQuoteContainer.classList.remove('hidden');
+        this.checkinQuoteValue.textContent = `${completedCount}/${expectedCount} Check-ins`;
+
+        // 4. Klick-Event für die Liste der fehlenden Check-ins hinzufügen
+        const missingUsers = expectedCheckinUsers.filter(u => !completedCheckinUserIds.has(u._id));
+        this.checkinQuoteContainer.onclick = () => {
+            if (missingUsers.length > 0) {
+                const userListHtml = missingUsers.map(u => `<li>${u.Name}</li>`).join('');
+                showConfirmationModal(
+                    `Folgende Mitarbeiter haben ihren Check-in für den ${this.selectedDate.toLocaleDateString('de-DE')} noch nicht gemacht:<ul>${userListHtml}</ul>`,
+                    'Fehlende Check-ins', 'OK', ''
+                );
+            } else {
+                showConfirmationModal('Alle erwarteten Check-ins für heute wurden bereits gemacht. Super!', 'Keine fehlenden Check-ins', 'OK', '');
+            }
+        };
     }
 
     renderStimmungChart(checkins) {
