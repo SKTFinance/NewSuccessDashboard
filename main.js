@@ -13615,6 +13615,7 @@ class LeadCenterView {
         this.scopeFilter = document.getElementById('lead-center-scope-filter');
         this.campaignFilter = document.getElementById('lead-center-campaign-filter');
         this.searchFilter = document.getElementById('lead-center-search-filter');
+        this.refreshBtn = document.getElementById('lead-center-refresh-btn'); // NEU
         // NEU: DOM-Elemente für das Detail-Modal
         this.detailsModal = document.getElementById('lead-details-modal');
         // KORREKTUR: Tabs und Content-Bereiche holen
@@ -13626,7 +13627,7 @@ class LeadCenterView {
         this.closeDetailsModalBtn = document.getElementById('close-lead-details-modal-btn');
         this.scheduleAppointmentBtn = document.getElementById('lead-schedule-appointment-btn');
 
-        return this.boardContainer;
+        return this.boardContainer && this.refreshBtn;
     }
 
     async init() {
@@ -13657,6 +13658,137 @@ class LeadCenterView {
             this._renderAnalytics();
         }
     }
+    _renderAnalytics() {
+        leadCenterLog('Rendere Analytics-Ansicht...');
+        const leads = this._getFilteredLeads();
+
+        // 1. KPIs
+        const totalLeads = leads.length;
+        const closedLeads = leads.filter(l => l.Status === 'Gehalten - Abgeschlossen');
+        const closedCount = closedLeads.length;
+        const closingRate = totalLeads > 0 ? (closedCount / totalLeads) * 100 : 0;
+        const totalRevenue = closedLeads.reduce((sum, l) => sum + (l.Umsatz || 0), 0);
+        const appointmentLeads = leads.filter(l => l.Status === 'Termin vereinbart' || l.Status.startsWith('Gehalten'));
+        const appointmentRate = totalLeads > 0 ? (appointmentLeads.length / totalLeads) * 100 : 0;
+
+        document.getElementById('lead-kpi-total').textContent = totalLeads;
+        document.getElementById('lead-kpi-closing-rate').textContent = `${closingRate.toFixed(1)}%`;
+        document.getElementById('lead-kpi-total-revenue').textContent = `${totalRevenue.toLocaleString('de-DE')} EH`;
+        document.getElementById('lead-kpi-appointment-rate').textContent = `${appointmentRate.toFixed(1)}%`;
+
+        // 2. Status Pie Chart
+        const statusCounts = _.countBy(leads, 'Status');
+        const pieChartData = Object.entries(statusCounts).map(([status, count]) => ({
+            label: status,
+            value: count,
+            color: this.laneColors[status] ? this.laneColors[status].replace('bg-', 'border-').replace('-100', '-300') : 'border-gray-300' // Heuristic for color
+        })).sort((a, b) => b.value - a.value);
+
+        const pieContainer = document.getElementById('lead-status-pie-chart-container');
+        const legendContainer = document.getElementById('lead-status-pie-chart-legend');
+        pieContainer.innerHTML = '';
+        legendContainer.innerHTML = '';
+
+        if (totalLeads > 0) {
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute('viewBox', '0 0 64 64');
+            svg.classList.add('pie-chart-svg');
+            let accumulatedPercentage = 0;
+
+            pieChartData.forEach(item => {
+                const percentage = (item.value / totalLeads) * 100;
+                const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                circle.setAttribute('cx', '32');
+                circle.setAttribute('cy', '32');
+                circle.setAttribute('r', '16');
+                // FINALE KORREKTUR: Die Logik zum Parsen der Tailwind-Klassen ist fehleranfällig.
+                // Stattdessen wird jetzt eine dedizierte, robuste Farbzuordnung verwendet,
+                // um sicherzustellen, dass jeder Status eine eindeutige Farbe erhält,
+                // ähnlich wie beim Kampagnen-Diagramm.
+                const colorValue = this._getColorForStatus(item.label);
+                circle.style.stroke = colorValue.trim();
+                circle.style.strokeDasharray = `${percentage} 100`;
+                circle.style.strokeDashoffset = -accumulatedPercentage;
+                svg.appendChild(circle);
+                accumulatedPercentage += percentage;
+
+                const legendItem = document.createElement('div');
+                legendItem.className = 'legend-item';
+                legendItem.innerHTML = `<div class="legend-color-dot" style="background-color: ${colorValue.trim()};"></div><div class="legend-label">${item.label}</div><div class="legend-value">${item.value}</div>`;
+                legendContainer.appendChild(legendItem);
+            });
+            pieContainer.appendChild(svg);
+        } else {
+            pieContainer.innerHTML = '<p class="text-gray-500">Keine Daten</p>';
+        }
+
+        // 3. Leads by Campaign Pie Chart
+        const leadsByCampaign = _.countBy(leads, 'Kampagne');
+        const campaignChartData = Object.entries(leadsByCampaign).map(([campaign, count], index) => ({
+            label: campaign || 'Unbekannt',
+            value: count,
+            color: this._getColorForIndex(index) // Use a helper to get a color
+        })).sort((a, b) => b.value - a.value);
+
+        const campaignPieContainer = document.getElementById('lead-campaign-pie-chart-container');
+        const campaignLegendContainer = document.getElementById('lead-campaign-pie-chart-legend');
+        campaignPieContainer.innerHTML = '';
+        campaignLegendContainer.innerHTML = '';
+
+        if (totalLeads > 0 && campaignChartData.length > 0) {
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute('viewBox', '0 0 64 64');
+            svg.classList.add('pie-chart-svg');
+            let accumulatedPercentage = 0;
+
+            campaignChartData.forEach(item => {
+                const percentage = (item.value / totalLeads) * 100;
+                const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                circle.setAttribute('cx', '32');
+                circle.setAttribute('cy', '32');
+                circle.setAttribute('r', '16');
+                circle.style.stroke = item.color;
+                circle.style.strokeDasharray = `${percentage} 100`;
+                circle.style.strokeDashoffset = -accumulatedPercentage;
+                svg.appendChild(circle);
+                accumulatedPercentage += percentage;
+
+                const legendItem = document.createElement('div');
+                legendItem.className = 'legend-item';
+                legendItem.innerHTML = `<div class="legend-color-dot" style="background-color: ${item.color};"></div><div class="legend-label">${item.label}</div><div class="legend-value">${item.value}</div>`;
+                campaignLegendContainer.appendChild(legendItem);
+            });
+            campaignPieContainer.appendChild(svg);
+        } else {
+            campaignPieContainer.innerHTML = '<p class="text-gray-500">Keine Daten</p>';
+        }
+    }
+    _getColorForIndex(index) {
+        // A set of predefined, distinct colors for charts.
+        const colors = [
+            '#002147', '#f97316', '#3b82f6', '#27ae60', '#8e44ad', 
+            '#f1c40f', '#FF6347', '#d4af37', '#043C64', '#14b8a6'
+        ];
+        // Use the modulo operator to cycle through colors if there are more items than colors.
+        return colors[index % colors.length];
+    }
+
+    _getColorForStatus(status) {
+        // Dedizierte Farbzuordnung für jeden Status, um die Probleme mit dem CSS-Parsing zu beheben.
+        const statusColorMap = {
+            'offen': '#3b82f6', // blue-500
+            'nicht erreicht': '#f59e0b', // amber-500
+            'Termin vereinbart': '#22c55e', // green-500
+            'nicht möglich': '#6b7280', // gray-500
+            'will ich nicht': '#f97316', // orange-500
+            'Absage': '#ef4444', // red-500
+            'Gehalten - Nicht abgeschlossen': '#8b5cf6', // violet-500
+            'Gehalten - Abgeschlossen': '#14b8a6', // teal-500
+            'default': '#a1a1aa' // zinc-400
+        };
+        return statusColorMap[status] || statusColorMap['default'];
+    }
+    
     _setupEventListeners() {
         const debouncedRender = _.debounce(() => this.render(), 300);
         this.scopeFilter.addEventListener('change', debouncedRender);
@@ -13665,12 +13797,42 @@ class LeadCenterView {
         // KORREKTUR: Event-Listener für Tabs
         this.tabKanban.addEventListener('click', () => this._switchTab('kanban'));
         this.tabAnalytics.addEventListener('click', () => this._switchTab('analytics'));
+        // NEU: Event-Listener für den Aktualisieren-Button
+        this.refreshBtn.addEventListener('click', async () => {
+            await this._refreshLeads();
+        });
 
         // NEU: Listener für das Detail-Modal
         this.closeDetailsModalBtn.addEventListener('click', () => this.closeDetailsModal());
         this.detailsModal.addEventListener('click', (e) => { if (e.target === this.detailsModal) this.closeDetailsModal(); });
         this.detailsForm.addEventListener('submit', (e) => this.handleDetailsFormSubmit(e));
         this.scheduleAppointmentBtn.addEventListener('click', (event) => this.handleScheduleAppointment(event));
+    }
+    async _refreshLeads() {
+        leadCenterLog('Aktualisiere Leads von der Datenbank...');
+        const btn = this.refreshBtn;
+        const btnText = btn.querySelector('#lead-refresh-btn-text');
+        const loader = btn.querySelector('.loader-small');
+
+        btn.disabled = true;
+        btnText.classList.add('hidden');
+        loader.classList.remove('hidden');
+
+        try {
+            // Cache für Leads leeren und neu von der API laden
+            localStorage.removeItem(CACHE_PREFIX + 'leads');
+            db.leads = await seaTableQuery('Leads');
+            normalizeAllData(); // Wichtig, um die neuen Daten zu normalisieren
+            leadCenterLog(`${db.leads.length} Leads erfolgreich neu geladen.`);
+            await this.render(); // Ansicht mit den neuen Daten neu aufbauen
+        } catch (error) {
+            leadCenterLog('!!! FEHLER beim Aktualisieren der Leads:', error);
+            alert('Ein Fehler ist beim Aktualisieren der Leads aufgetreten.');
+        } finally {
+            btn.disabled = false;
+            btnText.classList.remove('hidden');
+            loader.classList.add('hidden');
+        }
     }
 
     _populateFilters() {

@@ -18,7 +18,7 @@
 
     <!-- Filter-Leiste -->
     <div id="lead-center-filter-bar" class="bg-skt-grey-light p-4 rounded-xl mb-6 border border-gray-200">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
             <div>
                 <label for="lead-center-search-filter" class="block text-sm font-medium text-gray-700 mb-1">Suchen</label>
                 <input type="text" id="lead-center-search-filter" placeholder="Lead oder Mitarbeiter suchen..." class="modern-input">
@@ -36,6 +36,13 @@
                     <option value="group">Meine Gruppe</option>
                     <option value="structure">Meine Struktur</option>
                 </select>
+            </div>
+            <!-- NEU: Aktualisieren-Button -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">&nbsp;</label> <!-- Platzhalter für Ausrichtung -->
+                <button id="lead-center-refresh-btn" class="bg-skt-blue text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-light transition-colors flex items-center justify-center w-full" style="height: 42px;">
+                    <span id="lead-refresh-btn-text"><i class="fas fa-sync-alt mr-2"></i>Aktualisieren</span><div class="loader-small hidden"></div>
+                </button>
             </div>
         </div>
     </div>
@@ -79,9 +86,10 @@
                 </div>
             </div>
             <div class="bg-skt-grey-light p-6 rounded-xl border border-gray-200">
-                <h3 class="text-lg font-bold text-skt-blue mb-4">Umsatz nach Kampagne</h3>
-                <div id="lead-revenue-by-campaign-chart" class="space-y-3 max-h-64 overflow-y-auto pr-2">
-                    <!-- Bar chart content will be rendered here -->
+                <h3 class="text-lg font-bold text-skt-blue mb-4">Leads nach Kampagne</h3>
+                <div class="flex flex-col md:flex-row items-center gap-4">
+                    <div id="lead-campaign-pie-chart-container" class="w-full md:w-1/2 flex justify-center items-center shrink-0"></div>
+                    <div id="lead-campaign-pie-chart-legend" class="w-full md:w-1/2 self-start"></div>
                 </div>
             </div>
         </div>
