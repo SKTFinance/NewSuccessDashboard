@@ -10017,6 +10017,7 @@ function setupEventListeners() {
       }
   };
   setupMenuItem('pg-tagebuch-menu-item', 'pg-tagebuch-header-btn');
+  setupMenuItem('potential-menu-item', 'potential-header-btn');
   setupMenuItem('auswertung-menu-item', 'auswertung-header-btn');
   setupMenuItem('strukturbaum-menu-item', 'strukturbaum-header-btn');
   setupMenuItem('wettbewerb-menu-item', 'wettbewerb-header-btn'); // NEU
