@@ -13673,10 +13673,33 @@ class LeadCenterView {
         const appointmentLeads = leads.filter(l => l.Status === 'Termin vereinbart' || l.Status.startsWith('Gehalten'));
         const appointmentRate = totalLeads > 0 ? (appointmentLeads.length / totalLeads) * 100 : 0;
 
+        // NEU: Berechnung der durchschnittlichen Zeit im Status "offen"
+        const openLeadsWithHistory = leads.filter(l => l.Status !== 'offen' && l._ctime);
+        let totalHoursInOpen = 0;
+        let processedLeadsCount = 0;
+        openLeadsWithHistory.forEach(lead => {
+            // Finde den ersten Zeitpunkt, an dem der Status NICHT mehr "offen" war.
+            // Wir nehmen an, dass die Historie in der Datenbank nicht verfügbar ist und verwenden _mtime.
+            // _ctime ist der Erstellungszeitpunkt. _mtime der Zeitpunkt der letzten Änderung.
+            const creationTime = new Date(lead._ctime);
+            const modificationTime = new Date(lead._mtime);
+            
+            // Wir gehen davon aus, dass die erste Änderung die Bearbeitung des offenen Leads ist.
+            // Dies ist eine Annäherung, da wir keine detaillierte Statushistorie haben.
+            const hoursInOpen = (modificationTime - creationTime) / (1000 * 60 * 60);
+            if (hoursInOpen >= 0) {
+                totalHoursInOpen += hoursInOpen;
+                processedLeadsCount++;
+            }
+        });
+        const avgHoursInOpen = processedLeadsCount > 0 ? totalHoursInOpen / processedLeadsCount : 0;
+        const avgTimeDisplay = avgHoursInOpen < 24 ? `${avgHoursInOpen.toFixed(1)} Std.` : `${(avgHoursInOpen / 24).toFixed(1)} Tage`;
+
         document.getElementById('lead-kpi-total').textContent = totalLeads;
         document.getElementById('lead-kpi-closing-rate').textContent = `${closingRate.toFixed(1)}%`;
         document.getElementById('lead-kpi-total-revenue').textContent = `${totalRevenue.toLocaleString('de-DE')} EH`;
         document.getElementById('lead-kpi-appointment-rate').textContent = `${appointmentRate.toFixed(1)}%`;
+        document.getElementById('lead-kpi-avg-handle-time').textContent = processedLeadsCount > 0 ? avgTimeDisplay : '-';
 
         // 2. Status Pie Chart
         const statusCounts = _.countBy(leads, 'Status');
