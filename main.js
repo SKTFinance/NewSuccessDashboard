@@ -13651,8 +13651,12 @@ class LeadCenterView {
         this.contentKanban.classList.toggle('hidden', tabName !== 'kanban');
         this.contentAnalytics.classList.toggle('hidden', tabName !== 'analytics');
         document.getElementById('lead-center-filter-bar').classList.toggle('hidden', tabName !== 'kanban');
+        // NEU: Filter auch für Analytics-Tab anzeigen
+        document.getElementById('lead-center-filter-bar').classList.toggle('hidden', false);
+        if (tabName === 'analytics') {
+            this._renderAnalytics();
+        }
     }
-
     _setupEventListeners() {
         const debouncedRender = _.debounce(() => this.render(), 300);
         this.scopeFilter.addEventListener('change', debouncedRender);
@@ -13700,6 +13704,10 @@ class LeadCenterView {
             const laneEl = this._createLane(laneStatus, laneLeads);
             this.boardContainer.appendChild(laneEl);
         });
+
+        if (this.contentAnalytics && !this.contentAnalytics.classList.contains('hidden')) {
+            this._renderAnalytics();
+        }
 
         this._initSortable();
     }

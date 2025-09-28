@@ -49,10 +49,41 @@
 
     <!-- Inhalt für Auswertung -->
     <div id="lead-center-content-analytics" class="hidden">
-        <div class="text-center py-16">
-            <i class="fas fa-chart-pie fa-4x text-skt-grey-medium mb-4"></i>
-            <h3 class="text-xl font-semibold text-skt-blue">Auswertung in Kürze verfügbar</h3>
-            <p class="text-gray-500 mt-2">Dieser Bereich wird derzeit entwickelt.</p>
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div class="lead-kpi-card">
+                <p class="lead-kpi-label">Leads Gesamt</p>
+                <p id="lead-kpi-total" class="lead-kpi-value">-</p>
+            </div>
+            <div class="lead-kpi-card">
+                <p class="lead-kpi-label">Abschlussquote</p>
+                <p id="lead-kpi-closing-rate" class="lead-kpi-value">-</p>
+            </div>
+            <div class="lead-kpi-card">
+                <p class="lead-kpi-label">Umsatz Gesamt</p>
+                <p id="lead-kpi-total-revenue" class="lead-kpi-value">-</p>
+            </div>
+            <div class="lead-kpi-card">
+                <p class="lead-kpi-label">Terminquote</p>
+                <p id="lead-kpi-appointment-rate" class="lead-kpi-value">-</p>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="bg-skt-grey-light p-6 rounded-xl border border-gray-200">
+                <h3 class="text-lg font-bold text-skt-blue mb-4">Status Verteilung</h3>
+                <div class="flex flex-col md:flex-row items-center gap-4">
+                    <div id="lead-status-pie-chart-container" class="w-full md:w-1/2 flex justify-center items-center shrink-0"></div>
+                    <div id="lead-status-pie-chart-legend" class="w-full md:w-1/2 self-start"></div>
+                </div>
+            </div>
+            <div class="bg-skt-grey-light p-6 rounded-xl border border-gray-200">
+                <h3 class="text-lg font-bold text-skt-blue mb-4">Umsatz nach Kampagne</h3>
+                <div id="lead-revenue-by-campaign-chart" class="space-y-3 max-h-64 overflow-y-auto pr-2">
+                    <!-- Bar chart content will be rendered here -->
+                </div>
+            </div>
         </div>
     </div>
 </div>
