@@ -186,6 +186,7 @@ const dom = {
   pgTagebuchView: document.getElementById('pg-tagebuch-view'),
   stimmungsDashboardView: document.getElementById('stimmungs-dashboard-view'),
   einarbeitungTitle: document.getElementById("einarbeitung-title"),
+  leaderOnboardingView: document.getElementById("leader-onboarding-view"),
   traineeOnboardingView: document.getElementById("trainee-onboarding-view"),
   wettbewerbView: document.getElementById("wettbewerb-view"), // NEU
   planungView: document.getElementById("planung-view"), // NEU
