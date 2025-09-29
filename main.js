@@ -1457,13 +1457,14 @@ function findRowById(tableName, id) {
 function getAncestors(userId, levels = 99) { // KORREKTUR: Unbegrenzte Level, um alle Vorgesetzten zu finden.
     const ancestors = [];
     let currentUser = findRowById('mitarbeiter', userId);
+    let nextManagerId = currentUser?.Werber;
     let currentLevel = 0;
-    while (currentUser && currentUser.Werber && currentLevel < levels) {
-        const manager = findRowById('mitarbeiter', currentUser.Werber);
+    while (nextManagerId && currentLevel < levels) {
+        const manager = findRowById('mitarbeiter', nextManagerId);
         // Füge den Manager nur hinzu, wenn er existiert und nicht ausgeschieden ist.
         if (manager && manager.Status !== 'Ausgeschieden') {
             ancestors.push(manager);
-            currentUser = manager;
+            nextManagerId = manager.Werber; // KORREKTUR: Verwende den Werber des gerade gefundenen Managers für den nächsten Schleifendurchlauf.
             currentLevel++;
         } else {
             // Stop if manager not found or is inactive
@@ -1895,7 +1896,7 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
   dashboardLog('Aggregierte Monats-EH (ungefiltert):', ehResults);
   
-  // Definitionen für Termin-Status
+  // Definitionen für Termin-Status (Storno zählt als "ausgemacht" für ATs)
   // "Gehalten" zählt nur Termine mit Status 'Gehalten'.
   const AT_STATUS_GEHALTEN = ["Gehalten"];
   const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
@@ -1926,7 +1927,11 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
         const isAnalysisAppointment = t.Kategorie === "AT" || (t.Kategorie === "ST" && t.Umsatzprognose > 1);
 
         if (isAnalysisAppointment) {
-          if (AT_STATUS_GEHALTEN.includes(t.Status)) atIst++;
+          // Ein stornierter Termin zählt nicht als "gehalten".
+          if (AT_STATUS_GEHALTEN.includes(t.Status) && t.Status !== 'Storno' && t.Absage !== true) {
+              atIst++;
+          }
+          // Ein stornierter Termin zählt aber als "vereinbart".
           if (AT_STATUS_AUSGEMACHT.includes(t.Status)) atVereinbart++;
         }
     });
@@ -4059,8 +4064,7 @@ function renderTimelineSection(
   container.parentElement.classList.remove('aufbauseminar-blurred');
 
   if (steps.length === 0) {
-    container.innerHTML =
-      '<p class="text-center text-gray-500 mt-4">Für diesen Abschnitt sind keine Schritte vorhanden.</p>';
+    container.innerHTML = '<p class="text-center text-gray-500 mt-4">Für diesen Abschnitt sind keine Schritte vorhanden.</p>';
     if (progressElement) progressElement.style.height = "0%";
     if (dateMarkerContainer) clearChildren(dateMarkerContainer);
     return;
@@ -4120,12 +4124,13 @@ function renderTimelineSection(
         `;
     }
 
-    const threeDaysAgo = new Date(today);
-    threeDaysAgo.setDate(today.getDate() - 3);
+    // KORREKTUR: Die Logik für "mehr als 3 Tage überfällig" wurde korrigiert.
+    const dueDateWithGracePeriod = new Date(step.dueDate);
+    dueDateWithGracePeriod.setDate(dueDateWithGracePeriod.getDate() + 3);
 
     let statusClass = step.completed
       ? "completed"
-      : step.dueDate < threeDaysAgo // KORREKTUR: Erst nach 3 Tagen als "due" markieren
+      : dueDateWithGracePeriod < today // Ein Schritt ist "due", wenn das Fälligkeitsdatum + 3 Tage in der Vergangenheit liegt.
       ? "due"
       : "future";
 
@@ -4690,6 +4695,8 @@ class AppointmentsView {
         // KORREKTUR: Das Haupt-Dropdown wird jetzt dynamisch befüllt, um "Kalender von..." zu integrieren.
         const isLeader = SKT_APP.isUserLeader(SKT_APP.authenticatedUserData);
         const savedScope = loadUiSetting('appointmentsScope', isLeader ? 'group' : 'personal');
+        // NEU: "Kalender von..." als separate Option definieren
+        // KORREKTUR: Die Option "Kalender von..." wurde wieder zur Liste hinzugefügt.
         const scopeOptions = [
             { value: 'personal', text: 'Meine Termine' },
             { value: 'group', text: 'Meine Gruppe' },
@@ -4704,10 +4711,7 @@ class AppointmentsView {
         });
         this.statsScopeFilter.value = savedScope;
 
-        // KORREKTUR: Das Dropdown ist jetzt für alle sichtbar.
-        this.statsScopeFilter.classList.remove('hidden');
-        
-        // KORREKTUR: Logik überarbeitet, um zuerst den Scope zu bestimmen und dann die UI zu aktualisieren
+        // KORREKTUR: Logik überarbeitet, um zuerst den Scope zu bestimmen und dann die UI zu aktualisieren.
         // 1. Bestimme den finalen Scope (aus Pending-Wert oder aus LocalStorage)
         if (pendingAppointmentScope) {
             this.statsScopeFilter.value = pendingAppointmentScope;
@@ -4717,11 +4721,10 @@ class AppointmentsView {
         }
         const finalScope = this.statsScopeFilter.value;
         
-        // 2. Aktualisiere die UI basierend auf dem finalen Scope
+        // 2. Aktualisiere die UI basierend auf dem finalen Scope.
         this.groupFilterContainer.classList.toggle('hidden', !isLeader || finalScope !== 'structure');
         if (isLeader && finalScope === 'structure') {
             this._populateGroupFilter(true);
-            // Prüfe, ob eine Gruppe aus einer anderen Ansicht vorausgewählt werden soll.
             if (pendingAppointmentGroupFilter) {
                 this.groupFilterPanel.querySelectorAll('input:checked').forEach(cb => cb.checked = false);
                 const checkbox = this.groupFilterPanel.querySelector(`input[value="${pendingAppointmentGroupFilter}"]`);
@@ -4735,8 +4738,6 @@ class AppointmentsView {
         if (this.weekCalendarUserSelectContainer) {
             this.weekCalendarUserSelectContainer.classList.toggle('hidden', finalScope !== 'user_select');
         }
-
-        // 3. Verarbeite andere Pending-Werte
         if (pendingAppointmentFilter) {
             this.filterText = pendingAppointmentFilter;
             if (this.searchInput) {
@@ -4751,7 +4752,8 @@ class AppointmentsView {
         if (pendingAppointmentViewMode) {
             this._switchStatsView(pendingAppointmentViewMode);
             pendingAppointmentViewMode = null;
-
+        } else {
+            this._switchStatsView(loadUiSetting('appointmentsViewMode', 'timeline'));
         }
         this._populateCategoryFilter(); // KORREKTUR: Reihenfolge getauscht
 
@@ -4761,10 +4763,6 @@ class AppointmentsView {
         const user = SKT_APP.findRowById('mitarbeiter', this.currentUserId);
         if (user) {
             const titleElement = document.getElementById('appointments-title'); // Titel wird jetzt dynamischer
-            if (titleElement) {
-                titleElement.textContent = `Terminübersicht`;
-            }
-
         }
 
         await this.fetchAndRender();
@@ -5124,13 +5122,15 @@ class AppointmentsView {
         this.statsViewTableBtn.classList.toggle('active', view === 'table');
         this.statsViewInfoBtn.classList.toggle('active', view === 'info');
 
-        // NEU: "Kalender von..."-Option nur in der Wochenansicht anzeigen.
+        // KORREKTUR: Die "Kalender von..."-Option wird jetzt im Haupt-Dropdown angezeigt.
+        // Das separate Dropdown für den Benutzer wird nur sichtbar, wenn diese Option gewählt ist.
         const userSelectOption = this.statsScopeFilter.querySelector('option[value="user_select"]');
-        if (userSelectOption) {
-            userSelectOption.hidden = (view !== 'week');
+        if (this.weekCalendarUserSelectContainer) {
+            this.weekCalendarUserSelectContainer.classList.toggle('hidden', this.statsScopeFilter.value !== 'user_select');
         }
 
-        // Wenn die Ansicht gewechselt wird und "Kalender von..." ausgewählt war, auf "Meine Termine" zurücksetzen.
+        // KORREKTUR: Wenn die Ansicht gewechselt wird und "Kalender von..." ausgewählt war,
+        // wird nicht mehr automatisch zurückgesetzt. Der Benutzer kann in jeder Ansicht bleiben.
         if (view !== 'week' && this.statsScopeFilter.value === 'user_select') {
             this.statsScopeFilter.value = 'personal';
             this.statsScopeFilter.dispatchEvent(new Event('change')); // Stellt sicher, dass die Daten neu geladen werden.
@@ -5139,7 +5139,6 @@ class AppointmentsView {
         if (view === 'info') {
             this.renderNaechstesInfo(true); // true to repopulate dates
         } else if (view === 'week') {
-            this._populateWeekCalendarViewModeSelect();
             this._populateWeekCalendarUserSelect();
             this._handleViewModeChange(); // Setzt die initiale Sichtbarkeit und rendert den Kalender
 
@@ -5147,7 +5146,6 @@ class AppointmentsView {
             this.weekNavPrevBtn.addEventListener('click', () => this._navigateWeekCalendar(-7));
             this.weekNavNextBtn.addEventListener('click', () => this._navigateWeekCalendar(7));
             this.weekPeriodDisplay.addEventListener('click', () => this._resetWeekCalendarToToday());
-            this.weekCalendarViewModeSelect.addEventListener('change', () => this._handleViewModeChange());
             this.weekCalendarUserSelect.addEventListener('change', () => this._renderWeekCalendar());
         }
     }
@@ -5155,13 +5153,10 @@ class AppointmentsView {
     // NEU: Hilfsfunktion, die auf Änderungen im Haupt-Kalender-Dropdown reagiert.
     _handleViewModeChange() {
         const selectedMode = this.weekCalendarViewModeSelect.value;
-        saveUiSetting('weekCalendarViewMode', selectedMode); // Präferenz speichern
-
-        const showUserSelect = selectedMode === 'user_select';
-        this.weekCalendarUserSelectContainer.classList.toggle('hidden', !showUserSelect);
+        this.weekCalendarUserSelectContainer.classList.toggle('hidden', selectedMode !== 'user_select');
 
         // Kalender nach jeder Änderung neu rendern
-            this._renderWeekCalendar();
+        this._renderWeekCalendar();
     }
 
 
@@ -5655,14 +5650,14 @@ class AppointmentsView {
         const currentVal = select.value; // Wert merken
         select.innerHTML = '';
 
-        // Lade den eingeloggten Benutzer, seine gesamte Struktur und alle seine Vorgesetzten.
+        // Lade den eingeloggten Benutzer, seine gesamte Struktur (Downline) und seine gesamte Upline (Vorgesetzte).
         const me = SKT_APP.authenticatedUserData;
         const myStructure = SKT_APP.getAllSubordinatesRecursive(me._id);
         const myAncestors = getAncestors(me._id, 99); // Alle Ebenen nach oben
 
+        // Kombiniere alle Benutzer und filtere Duplikate sowie inaktive Mitarbeiter heraus.
         const userSet = new Set([me, ...myStructure, ...myAncestors]);
-        // Entferne eventuelle Duplikate und filtere ausgeschiedene Mitarbeiter heraus.
-        const uniqueUsers = Array.from(userSet).filter(user => user && user.Status !== 'Ausgeschieden');
+        const uniqueUsers = Array.from(userSet).filter(user => user && user.Status !== 'Ausgeschieden' && user.Name);
 
         uniqueUsers
              .sort((a, b) => a.Name.localeCompare(b.Name))
@@ -6414,57 +6409,95 @@ class AppointmentsView {
     }
 
     _renderPrognosisDetails() {
+        // FINALE KORREKTUR V2: Die Prognose berücksichtigt jetzt den ausgewählten Scope (Persönlich, Gruppe, Struktur).
+        // Die Anzeige wird vor jeder Neuberechnung geleert, um Duplikate zu verhindern.
         const container = this.prognosisDetailsContainer;
         if (!container) return;
-        
-        // KORREKTUR: Stelle sicher, dass die Sektion immer sichtbar ist.
-        const prognosisSection = document.getElementById('prognosis-section');
-        if (prognosisSection) prognosisSection.classList.remove('hidden'); // Entfernt die 'hidden' Klasse
 
+        // KORREKTUR: Container vor dem Rendern leeren, um Duplikate zu vermeiden.
+        container.innerHTML = '';
 
-        // NEU: Logik zur Gruppierung nach Führungskraft
-        const employeeToGroupMap = new Map();
-        const leaders = db.mitarbeiter.filter(m => SKT_APP.isUserLeader(m));
-        leaders.forEach(leader => {
-            employeeToGroupMap.set(leader._id, leader.Name); // Der Leiter gehört zu seiner eigenen Gruppe
-            const groupMembers = SKT_APP.getSubordinates(leader._id, 'gruppe');
-            groupMembers.forEach(member => employeeToGroupMap.set(member._id, leader.Name));
-        });
+        const scope = this.statsScopeFilter.value; // 'personal', 'group', oder 'structure'
+        let userIdsForPrognosis = new Set();
 
-        const prognosisByGroup = {};
-        this.dateAndSearchFilteredAppointments
-            .filter(t => t.Kategorie === 'BT' && t.Status !== 'Storno' && t.Absage !== true && t.Umsatzprognose > 0)
-            .forEach(t => {
-                const employeeId = t.Mitarbeiter_ID?.[0]?.row_id;
-                if (!employeeId) return;
-                const groupName = employeeToGroupMap.get(employeeId) || 'Ohne Gruppe';
-                prognosisByGroup[groupName] = (prognosisByGroup[groupName] || 0) + t.Umsatzprognose;
-            });
+        // 1. Sammle die relevanten Benutzer-IDs basierend auf dem Scope.
+        if (scope === 'personal') {
+            userIdsForPrognosis.add(currentlyViewedUserData._id);
+        } else if (scope === 'group') {
+            // KORREKTUR: In der Gruppenansicht nur die eigenen Prognosen und die der direkten Mitarbeiter anzeigen.
+            if (isUserLeader(currentlyViewedUserData)) {
+                userIdsForPrognosis.add(currentlyViewedUserData._id);
+            }
+            getSubordinates(currentlyViewedUserData._id, 'gruppe').forEach(u => userIdsForPrognosis.add(u._id));
+        } else if (scope === 'structure') {
+            userIdsForPrognosis.add(currentlyViewedUserData._id);
+            getAllSubordinatesRecursive(currentlyViewedUserData._id).forEach(u => userIdsForPrognosis.add(u._id));
+        }
 
-        // NEU: Gesamtprognose berechnen und Titel aktualisieren
-        const totalPrognosis = Object.values(prognosisByGroup).reduce((sum, val) => sum + val, 0);
+        // 2. Filtere alle Termine und gruppiere die Prognosen nach Mitarbeiter.
+        const allRelevantAppointments = [];
+        db.termine
+            .filter(t => {
+                const mitarbeiterId = t.Mitarbeiter_ID?.[0]?.row_id || t.Mitarbeiter_ID;
+                return userIdsForPrognosis.has(mitarbeiterId) &&
+                       (t.Kategorie === 'BT' || t.Kategorie === 'ST') &&
+                       ['Ausgemacht', 'Weiterer BT', 'Verschoben', 'Offen'].includes(t.Status) &&
+                       t.Umsatzprognose > 0 &&
+                       !t.Absage;
+            })
+            .forEach(t => allRelevantAppointments.push(t));
+
+        const totalPrognosis = allRelevantAppointments.reduce((sum, t) => sum + t.Umsatzprognose, 0);
         const titleElement = document.querySelector('#prognosis-section h3');
         if (titleElement) {
             titleElement.textContent = `Umsatzprognose (${totalPrognosis.toLocaleString('de-DE')} EH)`;
         }
 
-        const sortedPrognosis = Object.entries(prognosisByGroup)
-            .sort(([, a], [, b]) => b - a);
-
-        if (sortedPrognosis.length === 0) {
+        if (allRelevantAppointments.length === 0) {
             container.innerHTML = `<div class="h-full flex items-center justify-center text-gray-500">Keine offenen Prognosen vorhanden.</div>`;
             return;
         }
 
-        const list = document.createElement('div');
-        list.className = 'space-y-2';
-        sortedPrognosis.forEach(([name, value]) => {
+        // 3. Logik zur Anzeige: Nach Führungskraft gruppieren (nur in Strukturansicht) oder einzeln anzeigen.
+        let displayData = {};
+        if (scope === 'structure') {
+            // Gruppiere nach Führungskraft
+            allRelevantAppointments.forEach(t => {
+                const employeeId = t.Mitarbeiter_ID?.[0]?.row_id || t.Mitarbeiter_ID;
+                const employee = findRowById('mitarbeiter', employeeId);
+                if (!employee) return;
+
+                let responsibleLeader = employee;
+                // KORREKTUR: Finde die erste übergeordnete Führungskraft (JGST oder höher),
+                // anstatt nur den direkten Vorgesetzten zu nehmen.
+                if (!isUserLeader(employee)) { // Wenn der Mitarbeiter selbst keine FK ist...
+                    // ...suche in der Hierarchie nach oben zur ersten echten FK.
+                    const ancestors = getAncestors(employeeId);
+                    responsibleLeader = ancestors.find(a => isUserLeader(a)) || employee; // Finde die erste FK oder falle auf den Mitarbeiter selbst zurück.
+                }
+                // Stelle sicher, dass die gefundene Person auch wirklich eine FK ist.
+                if (isUserLeader(responsibleLeader)) {
+                    displayData[responsibleLeader._id] = (displayData[responsibleLeader._id] || 0) + t.Umsatzprognose;
+                }
+            });
+        } else {
+            // Gruppiere nach einzelnem Mitarbeiter (für persönliche & Gruppenansicht)
+            allRelevantAppointments.forEach(t => {
+                const employeeId = t.Mitarbeiter_ID?.[0]?.row_id || t.Mitarbeiter_ID;
+                displayData[employeeId] = (displayData[employeeId] || 0) + t.Umsatzprognose;
+            });
+        }
+
+        // 4. Rendere die gruppierten Daten
+        const sortedDisplayData = Object.entries(displayData).sort(([, a], [, b]) => b - a);
+        sortedDisplayData.forEach(([id, value]) => {
+            // KORREKTUR: Der Name wird jetzt aus der ID des Mitarbeiters oder der Führungskraft geholt.
+            const name = findRowById('mitarbeiter', id)?.Name || 'Unbekannt';
             const item = document.createElement('div');
             item.className = 'prognosis-item flex justify-between items-center';
             item.innerHTML = `<span class="font-semibold text-skt-blue text-sm">${name}</span><span class="font-bold text-skt-green-accent">${value.toLocaleString('de-DE')} EH</span>`;
-            list.appendChild(item);
+            container.appendChild(item);
         });
-        container.appendChild(list);
     }
 
     _toggleStatsVisibility() {
@@ -9287,25 +9320,41 @@ class AuswertungView {
         const selectedMonth = parseInt(monthSelect.value);
         const selectedYear = parseInt(yearSelect.value);
         const selectedMonthName = monthSelect.options[selectedMonth].text;
+        
+        // KORREKTUR: ET-Ziel und ET-Ist müssen sich immer auf den NÄCHSTEN Infoabend beziehen, nicht auf den ausgewählten Monat.
+        const nextInfoDate = findNextInfoDateAfter(new Date());
+        const nextInfoDateString = nextInfoDate.toISOString().split('T')[0];
+        
+        // Lade die Plandaten für den nächsten Infoabend.
+        const infoPlanForNextCycle = db.infoplanung.filter(p => p.Informationsabend && p.Informationsabend.startsWith(nextInfoDateString));
+        const infoPlansByUserId = _.keyBy(infoPlanForNextCycle, 'Mitarbeiter_ID');
 
-        const infoPlanForMonth = db.infoplanung.filter(p => new Date(p.Informationsabend).getFullYear() === selectedYear && new Date(p.Informationsabend).toLocaleString('de-DE', { month: 'long' }) === selectedMonthName);
+        // Lade die tatsächlichen ETs für den nächsten Infoabend.
+        const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+        const etsForNextCycle = db.termine.filter(t => t.Kategorie === 'ET' && t.Infoabend && t.Infoabend.startsWith(nextInfoDateString) && ET_STATUS_AUSGEMACHT.includes(t.Status));
+        const etIstByUserId = _.countBy(etsForNextCycle, 'Mitarbeiter_ID');
+
         const allActiveUsers = db.mitarbeiter.filter(m => m.Status !== 'Ausgeschieden');
         const plansForMonth = db.monatsplanung.filter(p => p.Monat === selectedMonthName && p.Jahr === selectedYear);
         const plansByUserId = _.keyBy(plansForMonth, 'Mitarbeiter_ID');
-        const infoPlansByUserId = _.keyBy(infoPlanForMonth, 'Mitarbeiter_ID');
 
         const pqqDataMap = await this.calculatePQQForUserList(allActiveUsers.map(u => u._id), selectedMonth, selectedYear, infoPlansByUserId);
 
+        // KORREKTUR: Die PQQ-Daten werden jetzt korrekt aus dem Objekt extrahiert.
         const combinedData = allActiveUsers.map(user => {
             const plan = plansByUserId[user._id];
+            const pqqData = pqqDataMap[user._id] || { pqq: 0, ehIst: 0, prognose: 0 };
             return {
                 id: user._id,
                 name: user.Name,
                 werberId: user.Werber,
-                ehGoal: plan?.EH_Ziel ?? 0, // KORREKTUR: ET-Ziel wird jetzt aus der Infoplanung geholt.
+                ehGoal: plan?.EH_Ziel ?? 0,
                 ursprungsEhGoal: plan?.Ursprungsziel_EH ?? 0,
-                etGoal: infoPlansByUserId[user._id]?.ET_Ziel ?? 0, // KORREKTUR: ET-Ziel wird jetzt aus der Infoplanung geholt.
-                pqq: pqqDataMap[user._id] ?? 0,
+                etGoal: infoPlansByUserId[user._id]?.ET_Ziel ?? 0,
+                etIst: etIstByUserId[user._id] || 0, // KORREKTUR: ET-Ist aus der neuen Berechnung nehmen.
+                pqq: pqqData.pqq, // PQQ bezieht sich weiterhin auf den Vormonat.
+                ehIst: pqqData.ehIst,
+                prognose: pqqData.prognose,
                 hasPlan: !!plan
             };
         });
@@ -9315,10 +9364,11 @@ class AuswertungView {
         this.planungenListContainer.innerHTML = '';
 
         let activeGroups = [];
-        const passiveGroups = [];
+        let passiveGroups = [];
 
         leaders.forEach(leader => {
             const subordinates = getSubordinates(leader._id, 'gruppe');
+            // KORREKTUR: Füge die ID der Führungskraft zur Liste hinzu, damit sie in der Gruppe erscheint.
             const groupMemberIds = new Set([leader._id, ...subordinates.map(s => s._id)]);
             
             const groupMembersData = Array.from(groupMemberIds).map(id => usersById[id]).filter(Boolean);
@@ -9329,15 +9379,24 @@ class AuswertungView {
             const isGroupPassive = groupMembersData.every(m => m.ehGoal === 0 && m.etGoal === 0);
 
             const groupSums = groupMembersData.reduce((acc, member) => {
-                acc.ehGoal += member.ehGoal;
-                acc.etGoal += member.etGoal;
-                acc.ursprungsEhGoal += member.ursprungsEhGoal;
+                acc.ehGoal += member.ehGoal ?? 0;
+                acc.etGoal += member.etGoal ?? 0;
+                acc.etIst += member.etIst ?? 0; // NEU: ET-Ist summieren
+                acc.ursprungsEhGoal += member.ursprungsEhGoal ?? 0;
+                acc.ehIst += member.ehIst ?? 0;
+                acc.prognose += member.prognose ?? 0;
                 return acc;
-            }, { ehGoal: 0, etGoal: 0, ursprungsEhGoal: 0 });
-
+            
+            }, { ehGoal: 0, etGoal: 0, etIst: 0, ursprungsEhGoal: 0, ehIst: 0, prognose: 0 });
+            
             const groupObject = {
                 leader: leader,
-                members: groupMembersData.sort((a,b) => a.name.localeCompare(b.name)),
+                // KORREKTUR: Sortiere so, dass die Führungskraft immer an erster Stelle steht.
+                members: groupMembersData.sort((a, b) => {
+                    if (a.id === leader._id) return -1;
+                    if (b.id === leader._id) return 1;
+                    return a.name.localeCompare(b.name);
+                }),
                 isPassive: isGroupPassive,
                 sums: groupSums
             };
@@ -9349,23 +9408,36 @@ class AuswertungView {
             }
         });
 
+        // KORREKTUR: Passive Gruppen sollen nur die Führungskraft selbst enthalten, nicht die ganze Gruppe.
+        passiveGroups = passiveGroups.map(g => ({
+            ...g,
+            members: g.members.filter(m => m.id === g.leader._id)
+        }));
+
         const headerHtml = `
-            <div class="grid grid-cols-7 gap-4 items-center py-2 px-4 bg-gray-100 rounded-t-md sticky top-0 z-10">
+            <div class="grid grid-cols-11 gap-4 items-center py-2 px-4 bg-gray-100 rounded-t-md sticky top-0 z-10">
                 <div class="col-span-2 font-bold">Name</div>
                 <div class="text-center font-bold">ET Ziel</div>
+                <div class="text-center font-bold">ET Ist</div>
                 <div class="text-center font-bold">Ursprungs-EH</div>
                 <div class="text-center font-bold">Ziel-EH</div>
+                <div class="text-center font-bold">Ist-EH</div>
+                <div class="text-center font-bold">Prognose</div>
                 <div class="text-center font-bold">Plan-Änd.</div>
                 <div class="text-center font-bold">PQQ</div>
+                <div class="text-center font-bold">Aktion</div>
             </div>`;
 
         const renderUserRow = (user) => {
             const pqq = user.pqq || 0;
             const pqqColor = pqq > 120 ? 'text-skt-green-accent' : pqq >= 80 ? 'text-skt-yellow-accent' : 'text-skt-red-accent';
             
-            const ehGoalClass = user.ehGoal === 0 ? 'zero-goal' : '';
-            const etGoalClass = user.etGoal === 0 ? 'zero-goal' : '';
-            const ursprungsEhGoalClass = user.ursprungsEhGoal === 0 ? 'zero-goal' : '';
+            // NEU: CSS-Klasse für Null-Ziele
+            const ehGoalClass = (user.ehGoal || 0) === 0 ? 'zero-goal' : '';
+            const etGoalClass = (user.etGoal || 0) === 0 ? 'zero-goal' : '';
+            const etIstClass = (user.etIst || 0) === 0 ? 'zero-goal' : ''; // NEU
+            const ursprungsEhGoalClass = (user.ursprungsEhGoal || 0) === 0 ? 'zero-goal' : '';
+            const ehIstClass = (user.ehIst || 0) === 0 ? 'zero-goal' : '';
 
             let planChangeHtml = '-';
             let planChangeColor = '';
@@ -9379,14 +9451,17 @@ class AuswertungView {
             }
 
             return `
-                <div class="grid grid-cols-8 gap-4 items-center py-2 px-4 cursor-pointer hover:bg-gray-100 rounded-md" data-userid="${user.id}">
+                <div class="grid grid-cols-11 gap-4 items-center py-2 px-4 hover:bg-gray-50 rounded-md">
                     <div class="col-span-2 font-semibold text-skt-blue">${user.name}</div>
                     <div class="text-center ${etGoalClass}">${user.etGoal}</div>
+                    <div class="text-center font-bold ${etIstClass}">${user.etIst}</div>
                     <div class="text-center ${ursprungsEhGoalClass}">${user.ursprungsEhGoal}</div>
                     <div class="text-center ${ehGoalClass}">${user.ehGoal}</div>
+                    <div class="text-center font-bold ${ehIstClass}">${(user.ehIst || 0).toLocaleString('de-DE', { maximumFractionDigits: 2 })}</div>
+                    <div class="text-center font-bold">${(user.prognose || 0).toLocaleString('de-DE', { maximumFractionDigits: 0 })}</div>
                     <div class="text-center font-bold ${planChangeColor}">${planChangeHtml}</div>
-                    <div class="text-center font-bold ${pqqColor}">${pqq.toFixed(0)}%</div>
-                    <div class="text-center text-gray-400 hover:text-skt-blue"><i class="fas fa-pen"></i></div>
+                    <div class="text-center font-bold ${pqqColor} cursor-pointer" data-pqq-userid="${user.id}" title="PQQ-Berechnung anzeigen">${pqq.toFixed(0)}%</div>
+                    <div class="text-center text-gray-400 hover:text-skt-blue cursor-pointer" data-edit-userid="${user.id}" title="Planung bearbeiten"><i class="fas fa-pen"></i></div>
                 </div>
             `;
         };
@@ -9407,15 +9482,17 @@ class AuswertungView {
             }
 
             const sumRowHtml = `
-                <div class="grid grid-cols-8 gap-4 items-center py-2 px-4 bg-skt-blue-light text-white rounded-b-md">
+                <div class="grid grid-cols-11 gap-4 items-center py-2 px-4 bg-skt-blue-light text-white rounded-b-md">
                     <div class="col-span-2 font-bold">SUMME</div>
                     <div class="text-center font-bold">${group.sums.etGoal}</div>
+                    <div class="text-center font-bold">${group.sums.etIst}</div>
                     <div class="text-center font-bold">${group.sums.ursprungsEhGoal}</div>
                     <div class="text-center font-bold">${group.sums.ehGoal}</div>
+                    <div class="text-center font-bold">${group.sums.ehIst.toLocaleString('de-DE', { maximumFractionDigits: 2 })}</div>
+                    <div class="text-center font-bold">${group.sums.prognose.toLocaleString('de-DE', { maximumFractionDigits: 0 })}</div>
                     <div class="text-center font-bold ${sumPlanChangeColorClass}">${sumPlanChangeHtml}</div>
                     <div class="text-center font-bold"></div>
-                    <div class="text-center font-bold"></div>
-                </div>
+                    <div class="text-center"></div>
             `;
 
             let groupHtml = `<h4 class="text-xl font-bold text-skt-blue mb-2">${group.leader.Name}</h4>`;
@@ -9443,15 +9520,26 @@ class AuswertungView {
             this.planungenListContainer.appendChild(passiveSection);
         }
 
-        this.planungenListContainer.querySelectorAll('[data-userid]').forEach(row => { // Make it async
-            row.addEventListener('click', async () => {
-                const userId = row.dataset.userid;
-                await this.logPQQCalculationForUser(userId, selectedMonth, selectedYear);
+        // KORREKTUR: Event-Listener für die neuen Edit- und PQQ-Buttons
+        this.planungenListContainer.querySelectorAll('[data-edit-userid]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                // KORREKTUR: Der Submit-Handler für das Planungsmodal muss an diese View gebunden werden,
+                // da die `PlanungView` nicht aktiv ist.
+                document.getElementById('planning-form').onsubmit = (e) => { e.preventDefault(); savePlanningDataFromAuswertung(); };
+
+                const userId = btn.dataset.editUserid;
                 openPlanningModal({ // Then open the modal
                     userId: userId,
                     monthName: selectedMonthName,
                     year: selectedYear,
                 });
+            });
+        });
+
+        this.planungenListContainer.querySelectorAll('[data-pqq-userid]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const userId = btn.dataset.pqqUserid;
+                await this.logPQQCalculationForUser(userId, selectedMonth, selectedYear);
             });
         });
     }
@@ -9469,10 +9557,11 @@ class AuswertungView {
         const prevMonthEndDate = new Date(prevYear, prevMonthDate.getMonth() + 1, 0);
         const prevStartDateIso = prevMonthStartDate.toISOString().split('T')[0];
         const prevEndDateIso = prevMonthEndDate.toISOString().split('T')[0];
-
+        
+        // KORREKTUR: Verwende die übergebenen Infoplan-Daten
         const relevantPlans = db.monatsplanung.filter(p => userIds.includes(p.Mitarbeiter_ID) && p.Monat === prevMonthName && p.Jahr === prevYear);
-        const relevantInfoPlans = preloadedInfoPlans ? Object.values(preloadedInfoPlans) : db.infoplanung.filter(p => userIds.includes(p.Mitarbeiter_ID) && new Date(p.Informationsabend).getFullYear() === prevYear && new Date(p.Informationsabend).getMonth() === prevMonthDate.getMonth());
-
+        const relevantInfoPlans = db.infoplanung.filter(p => userIds.includes(p.Mitarbeiter_ID) && new Date(p.Informationsabend).getFullYear() === prevYear && new Date(p.Informationsabend).getMonth() === prevMonthDate.getMonth());
+        
         const plansByUserId = _.keyBy(relevantPlans, 'Mitarbeiter_ID');
         const infoPlansByUserId = _.keyBy(relevantInfoPlans, 'Mitarbeiter_ID');
 
@@ -9480,13 +9569,28 @@ class AuswertungView {
         if (mitarbeiterNames.length === 0) return pqqDataMap;
         const mitarbeiterNamesSql = mitarbeiterNames.map(name => `'${escapeSql(name)}'`).join(',');
 
+        // NEU: Lade Ist-EH und Prognose für den ausgewählten Monat
+        const selectedStartDate = new Date(forYear, forMonth, 1).toISOString().split('T')[0];
+        const selectedEndDate = new Date(forYear, forMonth + 1, 0).toISOString().split('T')[0];
+        // KORREKTUR: Prognose-Berechnung an die Logik der Termin-Ansicht angepasst (alle zukünftigen Termine).
+        const todayIso = new Date().toISOString().split('T')[0];
+        const istEhQuery = `SELECT Mitarbeiter_ID, SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID IN (${mitarbeiterNamesSql}) AND Datum >= '${selectedStartDate}' AND Datum <= '${selectedEndDate}' GROUP BY Mitarbeiter_ID`;
+        const prognoseQuery = `SELECT Mitarbeiter_ID, SUM(Umsatzprognose) as totalPrognose FROM Termine WHERE Mitarbeiter_ID IN (${mitarbeiterNamesSql}) AND Datum >= '${todayIso}' AND Kategorie IN ('BT', 'ST') AND Status IN ('Ausgemacht', 'Weiterer BT', 'Verschoben', 'Offen') AND (Absage IS NULL OR Absage = false) GROUP BY Mitarbeiter_ID`;
+
         const ehQuery = `SELECT Mitarbeiter_ID, SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID IN (${mitarbeiterNamesSql}) AND Datum >= '${prevStartDateIso}' AND Datum <= '${prevEndDateIso}' GROUP BY Mitarbeiter_ID`;
         const etQuery = `SELECT Mitarbeiter_ID, Status FROM Termine WHERE Mitarbeiter_ID IN (${mitarbeiterNamesSql}) AND Kategorie = 'ET' AND Datum >= '${prevStartDateIso}' AND Datum <= '${prevEndDateIso}'`;
 
-        const [ehResultsRaw, etResultsRaw] = await Promise.all([seaTableSqlQuery(ehQuery, true), seaTableSqlQuery(etQuery, true)]);
+        const [ehResultsRaw, etResultsRaw, istEhResultsRaw, prognoseResultsRaw] = await Promise.all([
+            seaTableSqlQuery(ehQuery, true), 
+            seaTableSqlQuery(etQuery, true),
+            seaTableSqlQuery(istEhQuery, true),
+            seaTableSqlQuery(prognoseQuery, true)
+        ]);
 
         const ehByMitarbeiterId = _.keyBy(mapSqlResults(ehResultsRaw, 'Umsatz').map(r => ({ id: r.Mitarbeiter_ID[0].row_id, totalEH: r.totalEH })), 'id');
         const etByMitarbeiterId = _.groupBy(mapSqlResults(etResultsRaw, 'Termine'), r => r.Mitarbeiter_ID[0].row_id);
+        const istEhByMitarbeiterId = _.keyBy(mapSqlResults(istEhResultsRaw, 'Umsatz').map(r => ({ id: r.Mitarbeiter_ID[0].row_id, totalEH: r.totalEH })), 'id');
+        const prognoseByMitarbeiterId = _.keyBy(mapSqlResults(prognoseResultsRaw, 'Termine').map(r => ({ id: r.Mitarbeiter_ID[0].row_id, totalPrognose: r.totalPrognose })), 'id');
 
         const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
         userIds.forEach(userId => {
@@ -9502,11 +9606,39 @@ class AuswertungView {
             const ehQuote = (ursprungszielEH > 0) ? (totalEH / ursprungszielEH) : (ursprungszielEH === 0 ? 1 : 0);
 
             // KORREKTUR: Formel ist Ist / Ziel
-            const etQuote = (ursprungszielET > 0) ? (totalETAusgemacht / ursprungszielET) : (totalETAusgemacht === 0 ? 1 : 0);
-            pqqDataMap[userId] = ((ehQuote + etQuote) / 2) * 100;
+            const etQuote = (ursprungszielET > 0) ? (totalETAusgemacht / ursprungszielET) : (ursprungszielET === 0 ? 1 : 0);
+            pqqDataMap[userId] = {
+                pqq: ((ehQuote + etQuote) / 2) * 100,
+                etIst: totalETAusgemacht, // NEU: ET-Ist-Wert hinzufügen
+                ehIst: istEhByMitarbeiterId[userId]?.totalEH || 0,
+                prognose: prognoseByMitarbeiterId[userId]?.totalPrognose || 0
+            };
         });
 
         return pqqDataMap;
+    }
+}
+
+// KORREKTUR: Eigene Speicherfunktion für das Planungsmodal, wenn es aus der Auswertungs-Ansicht aufgerufen wird.
+async function savePlanningDataFromAuswertung() {
+    const saveBtn = document.getElementById('save-planning-btn');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Speichern...';
+
+    const userId = document.getElementById('planning-user-select').value;
+    const ehGoal = parseFloat(document.getElementById('planning-eh-goal').value) || 0;
+    const etGoal = parseInt(document.getElementById('planning-et-goal').value) || 0;
+    const monthName = document.getElementById('planning-month-select').value;
+    const year = parseInt(document.getElementById('planning-year-input').value);
+
+    const success = await saveMonthlyPlanning(userId, monthName, year, ehGoal, etGoal);
+    if (success) {
+        // KORREKTUR: Cache leeren, damit die Änderungen sofort sichtbar sind.
+        localStorage.removeItem(CACHE_PREFIX + 'monatsplanung');
+        localStorage.removeItem(CACHE_PREFIX + 'infoplanung');
+        await loadAllData(); // Lädt die Daten neu in den globalen `db`-Speicher.
+        await auswertungViewInstance.renderPlanungen(); // Rendert die Planungs-Tabelle in der Auswertung neu.
+        closePlanningModal();
     }
 }
 
