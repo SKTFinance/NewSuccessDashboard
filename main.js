@@ -14641,6 +14641,11 @@ class LeadCenterView {
         this.tabKanban = document.getElementById('lead-center-tab-kanban');
         this.tabAnalytics = document.getElementById('lead-center-tab-analytics');
         this.contentKanban = document.getElementById('lead-center-content-kanban');
+
+        // KORREKTUR: Die Elemente für die Video-Analyse gehören in diese Klasse.
+        this.tabVideoAnalyse = document.getElementById('lead-center-tab-video-analyse');
+        this.contentVideoAnalyse = document.getElementById('lead-center-content-video-analyse');
+
         this.contentAnalytics = document.getElementById('lead-center-content-analytics');
         this.detailsForm = document.getElementById('lead-details-form');
         this.closeDetailsModalBtn = document.getElementById('close-lead-details-modal-btn');
@@ -14668,6 +14673,8 @@ class LeadCenterView {
         this.tabKanban.className = `lead-center-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg ${tabName === 'kanban' ? activeClass : inactiveClass}`;
         this.tabAnalytics.className = `lead-center-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg ${tabName === 'analytics' ? activeClass : inactiveClass}`;
 
+        this.tabVideoAnalyse.className = `lead-center-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg ${tabName === 'video-analyse' ? activeClass : inactiveClass}`;
+
         this.contentKanban.classList.toggle('hidden', tabName !== 'kanban');
         this.contentAnalytics.classList.toggle('hidden', tabName !== 'analytics');
         document.getElementById('lead-center-filter-bar').classList.toggle('hidden', tabName !== 'kanban');
@@ -14675,6 +14682,8 @@ class LeadCenterView {
         document.getElementById('lead-center-filter-bar').classList.toggle('hidden', false);
         if (tabName === 'analytics') {
             this._renderAnalytics();
+        } else if (tabName === 'video-analyse') {
+            this._renderVideoAnalytics();
         }
     }
     _renderAnalytics() {
@@ -14805,6 +14814,67 @@ class LeadCenterView {
             campaignPieContainer.innerHTML = '<p class="text-gray-500">Keine Daten</p>';
         }
     }
+    _renderVideoAnalytics() {
+        leadCenterLog('Rendere Video-Analytics-Ansicht...');
+        const leads = this._getFilteredLeads();
+        const container = document.getElementById('lead-center-content-video-analyse');
+        if (!container) return;
+
+        // 1. Termine pro Video
+        const appointmentsByVideo = _.countBy(
+            leads.filter(l => l.Status === 'Termin vereinbart' || l.Status.startsWith('Gehalten')),
+            l => l.Video || 'Unbekannt'
+        );
+
+        // 2. Abschlüsse pro Video
+        const closedByVideo = _.countBy(
+            leads.filter(l => l.Status === 'Gehalten - Abgeschlossen'),
+            l => l.Video || 'Unbekannt'
+        );
+
+        container.innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                    <h3 class="text-xl font-bold text-skt-blue mb-4">Termine vereinbart pro Video</h3>
+                    <div id="video-appointments-chart" class="bg-white p-4 rounded-lg shadow"></div>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-skt-blue mb-4">Abschlüsse pro Video</h3>
+                    <div id="video-closed-chart" class="bg-white p-4 rounded-lg shadow"></div>
+                </div>
+            </div>
+        `;
+
+        this._renderBarChart('video-appointments-chart', appointmentsByVideo, 'Termine');
+        this._renderBarChart('video-closed-chart', closedByVideo, 'Abschlüsse');
+    }
+
+    _renderBarChart(containerId, data, unit) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        const sortedData = Object.entries(data).sort(([, a], [, b]) => b - a);
+
+        if (sortedData.length === 0) {
+            container.innerHTML = '<p class="text-center text-gray-500">Keine Daten vorhanden.</p>';
+            return;
+        }
+
+        const maxCount = sortedData[0][1];
+        let chartHtml = '<div class="space-y-3">';
+
+        sortedData.forEach(([video, count]) => {
+            const percentage = maxCount > 0 ? (count / maxCount) * 100 : 0;
+            chartHtml += `
+                <div class="flex items-center gap-4">
+                    <div class="w-28 text-sm text-skt-blue-light text-right truncate" title="${video}">${video}</div>
+                    <div class="flex-1 bg-gray-200 rounded-full h-6"><div class="bg-skt-blue h-6 rounded-full flex items-center justify-end pr-2 text-white font-bold text-sm" style="width: ${percentage}%">${count}</div></div>
+                </div>
+            `;
+        });
+        chartHtml += '</div>';
+        container.innerHTML = chartHtml;
+    }
     _getColorForIndex(index) {
         // A set of predefined, distinct colors for charts.
         const colors = [
@@ -14839,6 +14909,7 @@ class LeadCenterView {
         // KORREKTUR: Event-Listener für Tabs
         this.tabKanban.addEventListener('click', () => this._switchTab('kanban'));
         this.tabAnalytics.addEventListener('click', () => this._switchTab('analytics'));
+        this.tabVideoAnalyse.addEventListener('click', () => this._switchTab('video-analyse'));
         // NEU: Event-Listener für den Aktualisieren-Button
         this.refreshBtn.addEventListener('click', async () => {
             await this._refreshLeads();
@@ -14903,6 +14974,7 @@ class LeadCenterView {
         const leadsByStatus = _.groupBy(leadsToRender, 'Status');
 
         this.boardContainer.innerHTML = '';
+        if (this.contentAnalytics && !this.contentAnalytics.classList.contains('hidden')) this._renderAnalytics();
         this.lanes.forEach(laneStatus => {
             const laneLeads = leadsByStatus[laneStatus] || [];
             const laneEl = this._createLane(laneStatus, laneLeads);
@@ -14911,6 +14983,8 @@ class LeadCenterView {
 
         if (this.contentAnalytics && !this.contentAnalytics.classList.contains('hidden')) {
             this._renderAnalytics();
+        } else if (this.contentVideoAnalyse && !this.contentVideoAnalyse.classList.contains('hidden')) {
+            this._renderVideoAnalytics();
         }
 
         this._initSortable();
@@ -14972,6 +15046,7 @@ class LeadCenterView {
                 <p class="text-sm text-gray-600 mt-1">${lead.Kampagne}</p>
                 <div class="mt-2 pt-2 border-t text-xs text-gray-500">
                     <p><i class="fas fa-phone-alt fa-fw mr-1 text-gray-400"></i>${lead.Telefonnummer || 'N/A'}</p>
+                    <p class="mt-1"><i class="fas fa-video fa-fw mr-1 text-gray-400"></i>${lead.Video || 'N/A'}</p>
                     <p class="mt-1"><i class="fas fa-user fa-fw mr-1 text-gray-400"></i>${mitarbeiter ? mitarbeiter.Name : 'N/A'}</p>
                 </div>
             </div>
