@@ -1430,3 +1430,12 @@ summary::-webkit-details-marker {
     /* Adjust to center the emoji on the path */
     transform: translate(-12px, 8px);
 }
+
+/* NEU: Animation für den Countdown-Balken im ET-Motivations-Modal */
+@keyframes countdownAnimation {
+    from { width: 100%; }
+    to { width: 0%; }
+}
+.countdown-bar-animate > div {
+    animation: countdownAnimation 20s linear forwards;
+}

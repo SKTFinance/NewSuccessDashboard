@@ -270,14 +270,15 @@
                                 <p id="career-progress-percentage" class="text-3xl sm:text-4xl lg:text-5xl font-bold text-skt-blue">0%</p><p class="text-sm text-skt-blue-light mt-1" id="progress-to-next-text">Fortschritt zum ...</p>
                             </div>
                         </div>
-                        <div class="flex-grow md:w-1/2 grid grid-cols-2 gap-4 w-full">
+                        <div class="flex-grow md:w-1/2 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
                             <div class="p-4 bg-skt-grey-light rounded-xl shadow-md flex flex-col items-center justify-center text-center">
                                 <p id="eh-value-title" class="text-xs text-skt-blue-light font-bold" data-tooltip="Deine gesamten erreichten Einheiten">Erreichte EH (insgesamt)</p>
                                 <div class="flex items-center justify-center h-full">
                                     <p id="eh-value-display" class="text-2xl font-bold text-skt-blue mt-1"><span id="current-eh-display">0</span><span id="eh-value-unit"> EH</span></p><i id="eh-checkmark" class="fas fa-check-circle text-5xl text-green-500 hidden"></i>
                                 </div>
                             </div>
-                            <div class="p-4 bg-skt-grey-light rounded-xl shadow-md flex flex-col items-center justify-center text-center">
+                            <!-- NEU: Design an ET-Box angepasst und Container für zusätzliche Infos hinzugefügt -->
+                            <div class="p-4 bg-accent-gold-light rounded-xl shadow-md border-2 border-accent-gold flex flex-col items-center justify-center text-center">
                                 <p id="next-career-goal-label" class="text-xs text-skt-blue-light font-bold">Nächstes Karriereziel</p>
                                 <div id="employee-info-container" class="mt-1 flex flex-col items-center justify-center">
                                     <p class="text-2xl font-bold text-skt-blue" id="employee-count-display">0</p><p id="employee-goal-status" class="text-skt-blue-light text-sm mt-1">...</p>
@@ -286,6 +287,9 @@
                             </div>
                             <div class="p-4 col-span-2 bg-skt-grey-light rounded-xl shadow-md flex flex-col items-center justify-center text-center">
                                 <p id="next-milestone" class="text-skt-blue-light text-sm font-bold">Nächster Meilenstein: <span class="text-skt-blue font-semibold">...</span></p>
+                            </div>
+                            <div id="employee-additional-info-container" class="hidden p-4 col-span-2 bg-accent-gold-light rounded-xl shadow-md border-2 border-accent-gold text-center">
+                                <!-- Inhalt wird per JS generiert -->
                             </div>
                         </div>
                     </div>
@@ -928,6 +932,25 @@
                      </button>
                  </div>
              </form>
+        </div>
+    </div>
+
+    <!-- NEU: Modal für ET-Ziel-Motivation -->
+    <div id="et-motivation-modal" class="modal-overlay">
+        <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full text-center">
+            <h3 class="text-2xl font-bold text-skt-blue mb-4">Ein kleiner Schub für dein Recruiting!</h3>
+            <div id="et-motivation-message" class="text-gray-700 space-y-4 mb-6 prose prose-sm max-w-none text-left">
+                <!-- AI-generierte Nachricht wird hier eingefügt -->
+                <div class="loader mx-auto"></div>
+            </div>
+            <div id="et-motivation-prompt" class="p-4 bg-skt-grey-light rounded-lg border border-gray-200 mb-6 text-sm">
+                <!-- Aufforderung wird hier eingefügt -->
+            </div>
+            <button id="close-et-motivation-btn" class="hidden bg-skt-blue text-white font-semibold py-2 px-6 rounded-lg hover:bg-skt-blue-light transition-colors">
+                Los geht's!
+            </button>
+            <p id="et-motivation-disclaimer" class="text-xs text-gray-400 mt-4"></p>
+            <div id="et-motivation-timer-bar" class="w-full bg-gray-200 rounded-full h-2.5 mt-4"><div class="bg-skt-blue h-2.5 rounded-full"></div></div>
         </div>
     </div>
 

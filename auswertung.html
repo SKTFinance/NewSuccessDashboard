@@ -11,6 +11,9 @@
                 <button id="fk-rennliste-tab" data-view="fk-rennliste" class="auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg">FK-Rennliste</button>
                 <button id="kpis-tab" data-view="kpis" class="auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg">KPIs</button>
                 <button id="planungen-tab" data-view="planungen" class="auswertung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg">Planungen</button>
+            <button id="weekly-ki-tab" class="auswertung-tab hidden whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300" data-view="weekly-ki">
+                Weekly-KI
+            </button>
             </nav>
         </div>
         <div id="rangliste-view" class="auswertung-view-content">
@@ -60,5 +63,19 @@
             <!-- NEU: Mitarbeiter-KPI-Liste -->
             <div id="auswertung-kpi-employee-list" class="mt-12 pt-8 border-t border-gray-200"></div>
         </div>
+    </div>
+</div>
+
+<!-- NEU: Inhalt für Weekly-KI -->
+<div id="weekly-ki-view" class="auswertung-view-content hidden p-6 md:p-8">
+            <div class="text-center mb-8">
+                <button id="generate-weekly-ki-report-btn" class="bg-skt-blue text-white font-semibold py-3 px-6 rounded-lg hover:bg-skt-blue-light transition-colors shadow-md flex items-center justify-center mx-auto">
+                    <i class="fas fa-wand-magic-sparkles mr-2"></i> Wochen-Report erstellen
+                </button>
+            </div>
+            <div id="weekly-ki-report-container" class="prose max-w-none bg-white p-6 rounded-lg shadow-lg">
+                <!-- Der KI-generierte Bericht wird hier eingefügt -->
+            </div>
+    </div>
     </div>
 </div>

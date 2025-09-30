@@ -2547,14 +2547,14 @@ function updateWeeklyProgress() {
      // Priorität 1 (höchste): EH-Soll für den Tag erreicht
      if (ehGoal > 0 && ehCurrent >= ehSoll) {
          videoSrc = './Pokal.mp4';
-     } 
-     // Priorität 2: EH-Ziel < 30% (überschreibt ET-Bedingung)
-     else if (ehGoal > 0 && (ehCurrent / ehGoal) < 0.3) {
-         videoSrc = './EHbitte.mp4';
-     } 
-     // Priorität 3: ET-Ziel < 30%
+     }
+     // KORREKTUR: Priorität 2 ist jetzt das ET-Ziel, um diesem mehr Gewicht zu geben.
      else if (etGoal > 0 && (etCurrent / etGoal) < 0.3) {
          videoSrc = './ETswanted.mp4';
+     }
+     // Priorität 3: EH-Ziel < 30%
+     else if (ehGoal > 0 && (ehCurrent / ehGoal) < 0.3) {
+         videoSrc = './EHbitte.mp4';
      }
  
      // NEU: Dynamische Zuweisung der Filter-Klassen
@@ -2667,8 +2667,10 @@ function updateEmployeeCareerView() {
 
   animateValue(dom.currentEhDisplay, 0, totalCurrentEh, 1500);
 
-  const isTrainee = position && position.toLowerCase().includes('trainee');
-  const isGst = position && position.toLowerCase().includes('geschäftsstellenleiter');
+  // KORREKTUR: JGST wird jetzt wie ein Trainee behandelt, der auf das GST-Ziel hinarbeitet.
+  // isGst prüft jetzt explizit, dass "junior" nicht im Titel steht.
+  const isTrainee = position && (position.toLowerCase().includes('trainee') || position.toLowerCase().includes('jgst'));
+  const isGst = position && position.toLowerCase().includes('geschäftsstellenleiter') && !position.toLowerCase().includes('junior');
 
   // KORREKTUR: Tier-Karten für GST ausblenden
   if (dom.tierCardsContainer) {
@@ -2677,8 +2679,9 @@ function updateEmployeeCareerView() {
 
   // Sonderlogik für Trainee-Rennen zum GST
   if (isTrainee && promotionRaceDate) {
-      const targetDate = new Date(promotionRaceDate).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      dom.nextMilestone.innerHTML = `Chancenseminar am <span class="text-skt-blue font-semibold">${targetDate}</span>`;
+      const targetDate = new Date(promotionRaceDate); // Behalte als Date-Objekt für Berechnungen
+      const formattedTargetDate = targetDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      dom.nextMilestone.innerHTML = `Chancenseminar am <span class="text-skt-blue font-semibold">${formattedTargetDate}</span>`;
       const ehNeeded = 4000; // Festes Ziel für GST
       const progressEh = ehNeeded > 0 ? (totalCurrentEh / ehNeeded) * 100 : 0;
       dom.careerProgressPercentage.textContent = `${Math.min(progressEh, 100).toFixed(1)}%`;
@@ -2686,8 +2689,8 @@ function updateEmployeeCareerView() {
       updateCircleProgress(dom.fortschrittKreisKarriere, 40, progressEh);
       const maNeeded = 3;
       dom.nextCareerGoalLabel.textContent = 'Nächstes Karriereziel GST';
-      dom.employeeCountDisplay.textContent = `${recruitedEmployees} / ${maNeeded} MA`;
-      dom.employeeGoalStatus.textContent = `Zeit bis: ${targetDate}`;
+      dom.employeeCountDisplay.textContent = `${recruitedEmployees} / ${maNeeded} MA`; // KORREKTUR: Formatiertes Datum verwenden
+      dom.employeeGoalStatus.textContent = `Zeit bis: ${formattedTargetDate}`;
       dom.employeeCountDisplay.classList.remove('hidden');
       dom.employeeSlotsContainer.classList.remove('hidden');
       dom.employeeGoalStatus.classList.remove('text-skt-red-accent', 'font-bold');
@@ -2698,6 +2701,57 @@ function updateEmployeeCareerView() {
           slot.className = `employee-slot ${i < recruitedEmployees ? "filled" : ""}`;
           dom.employeeSlotsContainer.appendChild(slot);
       }
+
+      // NEU: Zusätzliche Berechnungen und Anzeige
+      const today = getCurrentDate();
+      let infoabendeCount = 0;
+      let currentDate = new Date(today);
+      while (currentDate <= targetDate) {
+          if (isDateValidInfoabend(currentDate)) {
+              infoabendeCount++;
+          }
+          currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      const missingEmployees = Math.max(0, maNeeded - recruitedEmployees);
+      const totalEtsNeeded = missingEmployees * 10;
+      const etsPerInfoabend = infoabendeCount > 0 ? (totalEtsNeeded / infoabendeCount).toFixed(0) : totalEtsNeeded;
+      
+      const weeksRemaining = (targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 7);
+      const etsPerWeek = weeksRemaining > 0 ? Math.ceil(totalEtsNeeded / weeksRemaining) : totalEtsNeeded;
+
+      // NEU: ETs für den nächsten Infoabend
+      const nextInfoDate = findNextInfoDateAfter(today);
+      const nextInfoDateString = nextInfoDate.toISOString().split('T')[0];
+      const etsForNextInfoabend = db.termine.filter(t =>
+          t.Mitarbeiter_ID === user._id && t.Kategorie === 'ET' &&
+          t.Infoabend && t.Infoabend.startsWith(nextInfoDateString)
+      ).length;
+
+      // ETs diese Woche
+      const { startDate: weekStart, endDate: weekEnd } = getWeeklyCycleDates();
+      const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Info Eingeladen", "Weiterer ET", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter", "Verschoben"];
+      const etsThisWeek = db.termine.filter(t => 
+          t.Mitarbeiter_ID === user._id &&
+          t.Kategorie === 'ET' &&
+          t.Datum && new Date(t.Datum) >= weekStart && new Date(t.Datum) <= weekEnd &&
+          ET_STATUS_AUSGEMACHT.includes(t.Status)
+      ).length;
+
+      const additionalInfoContainer = document.getElementById('employee-additional-info-container');
+      additionalInfoContainer.classList.remove('hidden');
+      additionalInfoContainer.innerHTML = `
+          <p class="text-xs text-gray-500">1 fehlender MA = 10 ETs</p>
+          <div class="mt-2 text-sm space-y-1 font-semibold">
+              <p><strong>Offene ETs:</strong> ${totalEtsNeeded}</p>
+              <p><strong>Infoabende bis Ziel:</strong> ${infoabendeCount}</p>
+              <p><strong>Benötigt pro Infoabend:</strong> Ø ${etsPerInfoabend} ETs</p>
+              <p><strong>Benötigt pro Woche:</strong> Ø ${etsPerWeek} ETs</p>
+              <p class="mt-2 pt-2 border-t border-gray-300"><strong>Nächstes Info:</strong> ${etsForNextInfoabend} / ${etsPerInfoabend} ETs</p>
+              <p class="mt-2 pt-2 border-t border-gray-300"><strong>Diese Woche:</strong> ${etsThisWeek} / ${etsPerWeek} ETs</p>
+          </div>
+      `;
+
   } 
   // Sonderlogik für GST-Rennen zum BL
   else if (isGst && promotionRaceDate) {
@@ -2711,7 +2765,7 @@ function updateEmployeeCareerView() {
       updateCircleProgress(dom.fortschrittKreisKarriere, 40, progressEh);
       const maNeeded = 6;
       dom.nextCareerGoalLabel.textContent = 'Nächstes Karriereziel BL';
-      dom.employeeCountDisplay.textContent = `${recruitedEmployees} / ${maNeeded} MA`;
+      dom.employeeCountDisplay.textContent = `${recruitedEmployees} / ${maNeeded}`;
       dom.employeeGoalStatus.textContent = `Zeit bis: ${targetDate}`;
       dom.employeeCountDisplay.classList.remove('hidden');
       dom.employeeSlotsContainer.classList.remove('hidden');
@@ -2723,6 +2777,8 @@ function updateEmployeeCareerView() {
           slot.className = `employee-slot ${i < recruitedEmployees ? "filled" : ""}`;
           dom.employeeSlotsContainer.appendChild(slot);
       }
+      // NEU: Zusätzliche Info-Box leeren/ausblenden
+      document.getElementById('employee-additional-info-container').classList.add('hidden');
   }
   // Standard-Logik
   else {
@@ -2742,7 +2798,7 @@ function updateEmployeeCareerView() {
           if (promotionRaceDate) {
               const targetDate = new Date(promotionRaceDate).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
               dom.employeeGoalStatus.textContent = `Zeit bis: ${targetDate}`;
-              dom.employeeGoalStatus.classList.remove('text-skt-red-accent', 'font-bold');
+              dom.employeeGoalStatus.classList.remove('text-skt-red-accent', 'font-bold', 'text-center');
               dom.employeeGoalStatus.classList.add('text-skt-blue-light');
               dom.employeeCountDisplay.textContent = `${recruitedEmployees} / ${maNeeded} MA`;
               dom.employeeCountDisplay.classList.remove('hidden');
@@ -2755,14 +2811,17 @@ function updateEmployeeCareerView() {
               }
           } else {
               dom.employeeGoalStatus.textContent = `nächsten Karriere Schritt mit FK klären!`;
-              dom.employeeGoalStatus.classList.remove('text-skt-blue-light');
-              dom.employeeGoalStatus.classList.add('text-skt-red-accent', 'font-bold');
+              dom.employeeGoalStatus.classList.remove('text-skt-blue-light', 'mt-1');
+              dom.employeeGoalStatus.classList.add('text-skt-red-accent', 'font-bold', 'text-center');
               dom.employeeCountDisplay.classList.add('hidden');
               dom.employeeSlotsContainer.classList.add('hidden');
               clearChildren(dom.employeeSlotsContainer);
           }
       } else {
           dom.nextMilestone.innerHTML = "Höchste Stufe erreicht!";
+          dom.employeeCountDisplay.classList.add('hidden');
+          dom.employeeSlotsContainer.classList.add('hidden');
+          dom.employeeGoalStatus.textContent = '';
           dom.careerProgressPercentage.textContent = "100%";
           updateCircleProgress(dom.fortschrittKreisKarriere, 40, 100);
       }
@@ -3565,6 +3624,7 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
   // NEU: Banner für kritische Einarbeitungsschritte anzeigen
   if (isUserLeader(user)) {
       checkAndRenderCriticalOnboardingBanner();
+      await checkAndShowEtMotivationPopup(); // NEU: Motivations-Popup prüfen
   } else {
       const banner = document.getElementById('critical-onboarding-banner');
       if (banner) banner.classList.add('hidden');
@@ -8420,6 +8480,10 @@ class AuswertungView {
         this.kpisTab = document.getElementById('kpis-tab');
         this.kpisView = document.getElementById('kpis-view');
         this.ranglisteView = document.getElementById('rangliste-view');
+        // NEU: Weekly-KI Elemente
+        this.weeklyKiTab = document.getElementById('weekly-ki-tab');
+        this.weeklyKiView = document.getElementById('weekly-ki-view');
+        this.generateWeeklyKiReportBtn = document.getElementById('generate-weekly-ki-report-btn');
         this.ranglisteListContainer = document.getElementById('rangliste-list-container'); // NEU
         this.ranglisteWocheBtn = document.getElementById('rangliste-woche-btn'); // NEU
         this.ranglisteMonatBtn = document.getElementById('rangliste-monat-btn'); // NEU
@@ -8446,8 +8510,8 @@ class AuswertungView {
             this.planungenYearSelect = null;
         }
         this.planungenTab = document.getElementById('planungen-tab'); // NEU
-        this.planungenView = document.getElementById('planungen-view'); // NEU // NEU
-        return this.ranglisteTab && this.aktivitaetenTab && this.fkRennlisteTab && this.planungenTab && this.kpisTab && this.ranglisteView && this.aktivitaetenView && this.fkRennlisteView && this.planungenView && this.kpisView;
+        this.planungenView = document.getElementById('planungen-view');
+        return this.ranglisteTab && this.aktivitaetenTab && this.fkRennlisteTab && this.planungenTab && this.kpisTab && this.ranglisteView && this.aktivitaetenView && this.fkRennlisteView && this.planungenView && this.kpisView && this.weeklyKiTab && this.weeklyKiView;
     }
 
     _getHierarchyForGroup(groupName) {
@@ -8489,6 +8553,11 @@ class AuswertungView {
         if (!this._getDomElements()) {
             auswertungLog('!!! FEHLER: Benötigte DOM-Elemente wurden nicht gefunden.');
             return;
+        }
+
+        // NEU: Sichtbarkeit für den Weekly-KI-Tab steuern
+        if (this.weeklyKiTab) {
+            this.weeklyKiTab.classList.toggle('hidden', authenticatedUserData.Name !== 'Samuel Königslehner');
         }
 
         const isLeader = SKT_APP.isUserLeader(SKT_APP.authenticatedUserData);
@@ -8767,7 +8836,361 @@ class AuswertungView {
             case 'planungen':
                 await this.renderPlanungen();
                 break;
+        case 'weekly-ki':
+                // Initial render is just showing the button, no data loading needed yet.
+                break;
         }
+    }
+
+    setupEventListeners() {
+        document.querySelectorAll('.auswertung-tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                this.currentTab = e.currentTarget.dataset.view;
+                saveUiSetting('auswertungTab', this.currentTab); // NEU
+                this.updateTabs();
+                this.renderCurrentView();
+            });
+        });
+
+        // NEU: Event Listener für Rangliste-Zeitraum
+        document.querySelectorAll('.rangliste-timespan-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.currentRanglisteTimespan = e.currentTarget.dataset.timespan;
+                saveUiSetting('ranglisteTimespan', this.currentRanglisteTimespan);
+                document.querySelectorAll('.rangliste-timespan-btn').forEach(b => b.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+                this.renderRangliste();
+            });
+        });
+
+        // KORREKTUR: Event-Listener für den KI-Button hierher verschoben.
+        if (this.generateWeeklyKiReportBtn) {
+            this.generateWeeklyKiReportBtn.addEventListener('click', () => this.generateWeeklyKiReport());
+        }
+
+        document.querySelectorAll('.aktivitaeten-timespan-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.currentAktivitaetenTimespan = e.currentTarget.dataset.timespan;
+                saveUiSetting('aktivitaetenTimespan', this.currentAktivitaetenTimespan); // NEU
+                document.querySelectorAll('.aktivitaeten-timespan-btn').forEach(b => b.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+                this.renderAktivitaeten();
+            });
+        });
+    }
+
+    async generateWeeklyKiReport() {
+        const reportContainer = document.getElementById('weekly-ki-report-container');
+        const btn = this.generateWeeklyKiReportBtn;
+        if (!reportContainer || !btn) return;
+
+        reportContainer.innerHTML = '<div class="loader mx-auto"></div><p class="text-center mt-4">Sammle Daten und befrage die KI... Dies kann bis zu einer Minute dauern.</p>';
+        btn.disabled = true;
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+
+        try {
+            const prompt = await this._gatherDataAndBuildPrompt();
+            const aiResponse = await this._queryGemini(prompt); // The raw markdown response
+            reportContainer.innerHTML = marked.parse(aiResponse);
+        } catch (error) {
+            console.error("Fehler beim Erstellen des KI-Reports:", error);
+            reportContainer.innerHTML = `<p class="text-red-500 text-center">Ein Fehler ist aufgetreten: ${error.message}</p>`;
+        } finally {
+            btn.disabled = false;
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+    }
+
+    async _queryGemini(prompt) {
+        const apiKey = "AIzaSyAUnqTaKJ1B7mvltFTWvHcz4szfA1YDFek";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+        const systemPrompt = "Du bist ein hochqualifizierter Business-Analyst und Coach für eine Finanzvertriebsorganisation. Deine Aufgabe ist es, wöchentliche Leistungsdaten zu analysieren und einen prägnanten, aufschlussreichen Bericht für den Direktor zu erstellen. Formatiere deine Antwort in klarem, strukturiertem Markdown. Beginne mit einer Management-Zusammenfassung, die die wichtigsten Erkenntnisse und Handlungsempfehlungen hervorhebt. Liste danach die angeforderten Daten in übersichtlichen Tabellen oder Listen auf. Sei direkt, aber konstruktiv in deiner Analyse.";
+
+        const payload = {
+            contents: [{ parts: [{ text: prompt }] }],
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+        };
+
+        const response = await fetch(apiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`API-Anfrage fehlgeschlagen mit Status ${response.status}: ${errorText}`);
+        }
+
+        const result = await response.json();
+        const candidate = result.candidates?.[0];
+
+        if (candidate && candidate.content?.parts?.[0]?.text) {
+            return candidate.content.parts[0].text;
+        } else {
+            throw new Error("Unerwartete oder leere Antwort von der KI.");
+        }
+    }
+
+    async _gatherDataAndBuildPrompt() {
+        // 1. Define Date Range (last 7 days)
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(endDate.getDate() - 7);
+        const startDateIso = startDate.toISOString().split('T')[0];
+        const endDateIso = endDate.toISOString().split('T')[0];
+
+        // 2. Get all active users and separate them
+        const allUsers = db.mitarbeiter.filter(m => m.Status !== 'Ausgeschieden');
+        const leaders = allUsers.filter(u => isUserLeader(u));
+        const nonLeaders = allUsers.filter(u => !isUserLeader(u));
+
+        // 3. Fetch all relevant data for the period
+        const userNamesSql = allUsers.map(u => `'${escapeSql(u.Name)}'`).join(',');
+        const ehQuery = `SELECT Mitarbeiter_ID, SUM(EH) as value FROM Umsatz WHERE Mitarbeiter_ID IN (${userNamesSql}) AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}' GROUP BY Mitarbeiter_ID`;
+        const termineQuery = `SELECT Mitarbeiter_ID, Kategorie, Status FROM Termine WHERE Mitarbeiter_ID IN (${userNamesSql}) AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+
+        const [ehResultsRaw, termineResultsRaw] = await Promise.all([
+            seaTableSqlQuery(ehQuery, true),
+            seaTableSqlQuery(termineQuery, true)
+        ]);
+
+        const ehData = mapSqlResults(ehResultsRaw || [], 'Umsatz');
+        const termineData = mapSqlResults(termineResultsRaw || [], 'Termine');
+
+        const ehByUserId = _.keyBy(ehData.map(e => ({ id: e.Mitarbeiter_ID[0].row_id, value: e.value })), 'id');
+        const termineByUserId = _.groupBy(termineData, t => t.Mitarbeiter_ID[0].row_id);
+
+        // NEU: Lade ET-Ziele aus der Infoplanung
+        const nextInfoDate = findNextInfoDateAfter(new Date());
+        const nextInfoDateString = nextInfoDate.toISOString().split('T')[0];
+        const infoPlanResults = db.infoplanung.filter(p => p.Informationsabend && p.Informationsabend.startsWith(nextInfoDateString));
+        const etGoalsByUserId = _.keyBy(infoPlanResults, 'Mitarbeiter_ID');
+
+        // 4. Process data for each user
+        const processedUsers = allUsers.map(user => {
+            const userTermine = termineByUserId[user._id] || [];
+            const atGehalten = userTermine.filter(t => t.Kategorie === 'AT' && t.Status === 'Gehalten').length;
+            const atAusgemacht = userTermine.filter(t => t.Kategorie === 'AT' && ['Ausgemacht', 'Gehalten'].includes(t.Status)).length;
+            const etGehalten = userTermine.filter(t => t.Kategorie === 'ET' && ['Gehalten', 'Info Eingeladen', 'Weiterer ET', 'Info Bestätigt', 'Info Anwesend', 'Wird Mitarbeiter'].includes(t.Status)).length;
+            const etAusgemacht = userTermine.filter(t => t.Kategorie === 'ET' && ['Ausgemacht', 'Gehalten', 'Info Eingeladen', 'Info Bestätigt', 'Info Anwesend', 'Wird Mitarbeiter', 'Verschoben'].includes(t.Status)).length;
+            const eh = ehByUserId[user._id]?.value || 0;
+
+            // Calculate weekly goals
+            const { startDate: cycleStart, endDate: cycleEnd } = getMonthlyCycleDates();
+            const daysInCycle = (cycleEnd - cycleStart) / (1000 * 60 * 60 * 24);
+            const plan = db.monatsplanung.find(p => p.Mitarbeiter_ID === user._id && p.Monat === cycleStart.toLocaleString('de-DE', { month: 'long' }) && p.Jahr === cycleStart.getFullYear());
+            const ehGoalMonthly = plan?.EH_Ziel || 0;
+            const atGoalMonthly = user.EHproATQuote > 0 && ehGoalMonthly > 0 ? Math.round(ehGoalMonthly / user.EHproATQuote) : 0;
+            // NEU: ET-Ziel aus der Infoplanung holen
+            const etGoalMonthly = etGoalsByUserId[user._id]?.ET_Ziel || 0;
+
+            const weeklyEhGoal = (ehGoalMonthly / daysInCycle) * 7;
+            const weeklyAtGoal = (atGoalMonthly / daysInCycle) * 7;
+            const weeklyEtGoal = (etGoalMonthly / daysInCycle) * 7;
+
+            return {
+                id: user._id,
+                name: user.Name,
+                isLeader: isUserLeader(user),
+                eh, atGehalten, atAusgemacht, etGehalten, etAusgemacht,
+                weeklyEhGoal, weeklyAtGoal, weeklyEtGoal,
+                ehSoll: weeklyEhGoal, // For simplicity, Soll is the weekly goal
+                atSoll: weeklyAtGoal,
+                etSoll: weeklyEtGoal,
+            };
+        });
+
+        // 5. Build the prompt string
+        let prompt = `Analysiere die Leistungsdaten der letzten 7 Tage (${startDate.toLocaleDateString('de-DE')} - ${endDate.toLocaleDateString('de-DE')}) und erstelle einen Bericht.\n\n`;
+
+        prompt += "### Rohdaten zur Analyse:\n";
+        prompt += "#### Einzelpersonen:\n";
+        processedUsers.forEach(u => {
+            prompt += `- ${u.name} (${u.isLeader ? 'FK' : 'MA'}): EH=${u.eh.toFixed(2)}, AT Ausg.=${u.atAusgemacht}, AT Geh.=${u.atGehalten}, ET Ausg.=${u.etAusgemacht}, ET Geh.=${u.etGehalten}. Ziele (Woche): EH=${u.weeklyEhGoal.toFixed(2)}, AT=${u.weeklyAtGoal.toFixed(2)}, ET=${u.weeklyEtGoal.toFixed(2)}\n`;
+        });
+
+        prompt += "\n#### Gruppen (aggregiert):\n";
+        const groupData = leaders.map(leader => {
+            const groupMembers = [leader, ...getSubordinates(leader._id, 'gruppe')];
+            const groupUserIds = new Set(groupMembers.map(m => m._id));
+            const groupProcessedData = processedUsers.filter(u => groupUserIds.has(u.id));
+            const groupStats = groupProcessedData.reduce((acc, user) => {
+                acc.eh += user.eh;
+                acc.atAusgemacht += user.atAusgemacht;
+                acc.atGehalten += user.atGehalten;
+                acc.etAusgemacht += user.etAusgemacht;
+                acc.etGehalten += user.etGehalten;
+                acc.ehSoll += user.ehSoll;
+                acc.atSoll += user.atSoll;
+                acc.etSoll += user.etSoll;
+                return acc;
+            }, { name: leader.Name, eh: 0, atAusgemacht: 0, atGehalten: 0, etAusgemacht: 0, etGehalten: 0, ehSoll: 0, atSoll: 0, etSoll: 0 });
+            prompt += `- Gruppe ${leader.Name}: EH=${groupStats.eh.toFixed(2)}, AT Ausg.=${groupStats.atAusgemacht}, ET Ausg.=${groupStats.etAusgemacht}. Soll: EH=${groupStats.ehSoll.toFixed(2)}, AT=${groupStats.atSoll.toFixed(2)}, ET=${groupStats.etSoll.toFixed(2)}\n`;
+            return { name: leader.Name, ...groupStats };
+        });
+
+        prompt += "\n### Deine Aufgaben:\n";
+        prompt += "1.  **Management Summary:** Fasse die Woche zusammen. Was sind die 2-3 wichtigsten positiven und negativen Auffälligkeiten? Gib 2-3 konkrete Handlungsempfehlungen für den Direktor.\n";
+        prompt += "2.  **Top-Performer:**\n";
+        prompt += "    - Liste die Top 3 Nicht-Führungskräfte nach EH, AT (ausgemacht) und ET (ausgemacht) auf.\n";
+        prompt += "    - Liste die Top 3 Führungskräfte (persönliche Leistung) nach EH, AT (ausgemacht) und ET (ausgemacht) auf.\n";
+        prompt += "    - Welche Gruppe hatte die beste Wochenleistung (höchste aggregierte EH)?\n";
+        prompt += "3.  **Zielerreichung:**\n";
+        prompt += "    - Wer hat sein Wochenziel für EH, AT und ET erreicht oder übertroffen?\n";
+        prompt += "    - Welche Gruppe ist am nächsten an ihrem aggregierten Wochen-Soll (EH, AT, ET)?\n";
+        prompt += "    - Welcher einzelne Mitarbeiter ist am nächsten an seinem persönlichen Wochen-Soll (EH, AT, ET)?\n";
+        prompt += "4.  **Bereiche zur Beobachtung:**\n";
+        prompt += "    - Welche Gruppe hat diese Woche 0 EH gemacht?\n";
+        prompt += "    - Welche Gruppe hat diese Woche 0 ETs ausgemacht?\n";
+        prompt += "    - Welche Gruppen haben die wenigsten ATs ausgemacht?\n";
+        prompt += "    - Wer ist prozentual am weitesten von seinem Soll entfernt (EH, AT, ET)?\n";
+
+        return prompt;
+    }
+
+    async renderFkRennliste() {
+        const container = document.getElementById('fk-rennliste-container');
+        if (!container) return;
+        container.innerHTML = '<div class="loader mx-auto"></div>';
+
+        let leaders = db.mitarbeiter.filter(m => isUserLeader(m) && m.Status !== 'Ausgeschieden');
+
+        // NEU: Filter by structure if selected
+        if (this.fkRennlisteStructureFilter.value === 'mine') {
+            const myStructureIds = new Set([this.currentUserId, ...this.downline.map(u => u._id)]);
+            leaders = leaders.filter(l => myStructureIds.has(l._id));
+        }
+        const { startDate, endDate } = getMonthlyCycleDates();
+
+        // NEU: Zeitbasierte Berechnung für Soll-Werte
+        const { startDate: monthStartDateForSoll, endDate: monthEndDateForSoll } = getMonthlyCycleDates();
+        const todayForSoll = getCurrentDate();
+        const totalDaysInCycleForSoll = (monthEndDateForSoll - monthStartDateForSoll) / (1000 * 60 * 60 * 24);
+        const daysPassedInCycleForSoll = Math.max(0, (todayForSoll - monthStartDateForSoll) / (1000 * 60 * 60 * 24));
+        const timeElapsedPercentageForSoll = totalDaysInCycleForSoll > 0 ? (daysPassedInCycleForSoll / totalDaysInCycleForSoll) * 100 : 0;
+        const effectiveTimePercentageForSoll = Math.max(50, timeElapsedPercentageForSoll);
+        const currentMonthName = monthStartDateForSoll.toLocaleString("de-DE", { month: "long" });
+        const currentYear = monthStartDateForSoll.getFullYear();
+        const planResults = db.monatsplanung.filter(p => p.Monat === currentMonthName && p.Jahr === currentYear);
+
+        const startDateIso = startDate.toISOString().split('T')[0];
+        const endDateIso = endDate.toISOString().split('T')[0];
+
+        // 1. Lade alle EH-Daten für den Zeitraum
+        // KORREKTUR: Capitalbank-Filter hinzufügen.
+        const capitalbank = db.gesellschaften.find(g => g.Gesellschaft === 'Capitalbank');
+        const capitalbankId = capitalbank ? capitalbank._id : null;
+        let capitalbankFilter = '';
+        if (capitalbankId) {
+            capitalbankFilter = ` AND NOT (\`Gesellschaft_ID\` IS NOT NULL AND \`Gesellschaft_ID\` LIKE '%${capitalbankId}%')`;
+        }
+        const ehQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`ehIst\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}'${capitalbankFilter} GROUP BY \`Mitarbeiter_ID\``;
+        const ehResultRaw = await seaTableSqlQuery(ehQuery, true); // KORREKTUR: convert_link_id auf true setzen, um konsistente Datenobjekte zu erhalten.
+        const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
+
+        // 2. Lade alle relevanten Termindaten für den Zeitraum
+        // KORREKTUR: Verwende die vorgeladenen und vollständigen Termindaten aus `db.termine`,
+        // um das 10k-Zeilen-Limit von SQL-Abfragen zu umgehen und Datenkonsistenz sicherzustellen.
+        let termineResults = db.termine.filter(t => {
+            if (!t.Datum) return false;
+            const terminDate = new Date(t.Datum);
+            return terminDate >= startDate && terminDate <= endDate;
+        });
+        // KORREKTUR: Abgesagte/stornierte Termine aus der Zählung ausschließen.
+        termineResults = termineResults.filter(t => t.Absage !== true && t.Status !== 'Storno');
+        // KORREKTUR: Verwende die exakt gleiche Zähl-Logik wie auf dem Dashboard für Konsistenz.
+        const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
+        const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Info Eingeladen", "Weiterer ET", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+
+        // 3. Gruppiere Daten nach Mitarbeiter für schnellen Zugriff
+        // KORREKTUR: Greife auf die `row_id` aus dem verknüpften Objekt zu, das durch `convert_link_id=true` zurückgegeben wird.
+        const ehByMitarbeiter = _.keyBy(ehResults.map(e => ({ id: e.Mitarbeiter_ID?.[0]?.row_id, eh: e.ehIst })), 'id');
+        const termineByMitarbeiter = _.groupBy(termineResults, 'Mitarbeiter_ID'); // KORREKTUR: Nach der Normalisierung ist dies eine direkte ID.
+
+        // 4. Berechne die Strukturdaten für jede Führungskraft
+        const structureDataList = leaders.map(leader => {
+            // NEU: Wähle Mitglieder basierend auf dem Scope-Toggle
+            const structureScope = this.currentFkRennlisteScope === 'structure';
+            const membersForCalc = structureScope ? [leader, ...getAllSubordinatesRecursive(leader._id)] : [leader, ...getSubordinates(leader._id, 'gruppe')];
+            
+            let eh = 0;
+            let at = 0;
+            let et = 0;
+            let atTotalGoal = 0;
+            let etTotalGoal = 0; // NEU: ET-Soll
+
+            for (const member of membersForCalc) {
+                eh += ehByMitarbeiter[member._id]?.eh || 0;
+
+                const memberTermine = termineByMitarbeiter[member._id] || [];
+                memberTermine.forEach(t => {
+                    const isAnalysisAppointment = t.Kategorie === "AT" || (t.Kategorie === "ST" && t.Umsatzprognose > 1);
+                    if (isAnalysisAppointment && AT_STATUS_AUSGEMACHT.includes(t.Status)) {
+                        at++;
+                    } else if (t.Kategorie === "ET" && ET_STATUS_AUSGEMACHT.includes(t.Status)) {
+                        et++;
+                    }
+                });
+
+                const plan = planResults.find(p => p.Mitarbeiter_ID === member._id);
+                const ehZiel = plan?.EH_Ziel || 0;
+                atTotalGoal += member.EHproATQuote && ehZiel > 0 ? Math.round(ehZiel / member.EHproATQuote) : 0;
+                etTotalGoal += plan?.ET_Ziel || 0;
+            }
+            
+            const atSoll = Math.round(atTotalGoal * (effectiveTimePercentageForSoll / 100));
+
+            return {
+                name: leader.Name,
+                rang: leader.Karrierestufe,
+                eh: eh,
+                at: at,
+                atSoll: atSoll,
+                et: et,
+                etSoll: etTotalGoal // NEU
+            };
+        });
+
+        const sortConfig = this.sortConfig.fkRennliste;
+        const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
+        structureDataList.sort((a, b) => {
+            let valA = a[sortConfig.column];
+            let valB = b[sortConfig.column];
+            let comparison = 0;
+            if (typeof valA === 'number' && typeof valB === 'number') {
+                comparison = valA - valB;
+            } else {
+                comparison = collator.compare(String(valA || ''), String(valB || '')); // Fehlerbehebung: Fallback für undefined
+            }
+            return sortConfig.direction === 'asc' ? comparison : -comparison;
+        });
+
+        const tableWrapper = document.createElement('div');
+        tableWrapper.className = 'overflow-x-auto';
+
+        const table = document.createElement('table');
+        table.className = 'appointments-table';
+        // ANPASSUNG: Spalten für Name und Rang hinzugefügt
+        const headers = [
+            { key: 'name', label: 'Führungskraft' }, { key: 'rang', label: 'Rangstufe' },
+            { key: 'eh', label: 'Gesamt EH' }, { key: 'atSoll', label: 'AT Soll' }, { key: 'at', label: 'Gesamt ATs' }, { key: 'etSoll', label: 'ET Soll' },
+            { key: 'et', label: 'Gesamt ETs' } // NEU: ET Soll hinzugefügt
+        ];
+        table.innerHTML = `<thead><tr>${headers.map(h => {
+            const icon = sortConfig.column === h.key ? (sortConfig.direction === 'asc' ? '<i class="fas fa-sort-up sort-icon active"></i>' : '<i class="fas fa-sort-down sort-icon active"></i>') : '<i class="fas fa-sort sort-icon"></i>';
+            return `<th data-sort-key="${h.key}">${h.label} ${icon}</th>`;
+        }).join('')}</tr></thead>`;
+        const tbody = document.createElement('tbody');
+        structureDataList.forEach(s => {
+            tbody.innerHTML += `<tr><td>${s.name}</td><td>${s.rang}</td><td>${s.eh.toFixed(2)}</td><td>${s.atSoll}</td><td>${s.at}</td><td>${s.etSoll}</td><td>${s.et}</td></tr>`;
+        });
+        table.appendChild(tbody);
+        table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('fkRennliste', e.currentTarget.dataset.sortKey)));
+        tableWrapper.appendChild(table);        
+        container.innerHTML = '';
+        container.appendChild(tableWrapper);
     }
      
     async renderRangliste() {
@@ -9616,6 +10039,68 @@ class AuswertungView {
         });
 
         return pqqDataMap;
+    }
+
+    async _renderEmployeeKpiList() {
+        const container = document.getElementById('auswertung-kpi-employee-list');
+        if (!container) return;
+        container.innerHTML = '<div class="loader mx-auto"></div>';
+
+        const leaders = db.mitarbeiter.filter(m => isUserLeader(m) && m.Status !== 'Ausgeschieden')
+                                      .sort((a, b) => a.Name.localeCompare(b.Name));
+        
+        const allUserIds = new Set();
+        const groupMap = new Map();
+        for (const leader of leaders) {
+            allUserIds.add(leader._id);
+            const groupMembers = [leader, ...getSubordinates(leader._id, 'gruppe')];
+            groupMap.set(leader._id, groupMembers);
+            groupMembers.forEach(m => allUserIds.add(m._id));
+        }
+
+        const allUsers = Array.from(allUserIds).map(id => findRowById('mitarbeiter', id)).filter(Boolean);
+        const userNamesForSql = allUsers.map(u => `'${escapeSql(u.Name)}'`).join(',');
+
+        const today = new Date();
+        const sixtyDaysAgo = new Date(new Date().setDate(today.getDate() - 60));
+        const startDateIso = sixtyDaysAgo.toISOString().split('T')[0];
+        const endDateIso = today.toISOString().split('T')[0];
+
+        // OPTIMIERUNG: Eine einzige SQL-Abfrage für alle relevanten Umsätze.
+        const salesQuery = `SELECT Mitarbeiter_ID, EH, Kunde, Datum FROM Umsatz WHERE Mitarbeiter_ID IN (${userNamesForSql}) AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+        const salesDataRaw = await seaTableSqlQuery(salesQuery, true);
+        const allSales = mapSqlResults(salesDataRaw || [], 'Umsatz');
+        const salesByUserId = _.groupBy(allSales, sale => sale.Mitarbeiter_ID?.[0]?.row_id);
+
+        let finalHtml = '';
+
+        for (const leader of leaders) {
+            const groupMembers = groupMap.get(leader._id) || [];
+            
+            let membersHtml = '';
+            for (const member of groupMembers) {
+                // OPTIMIERUNG: getIndividualKpiData wird nicht mehr aufgerufen.
+                // Die Logik wird hier direkt mit den vorgeladenen Daten ausgeführt.
+                const { warnings, values } = await _calculateKpisForUser(member, salesByUserId[member._id] || []);
+
+                const kpiValuesHtml = `
+                    <div class="flex gap-x-6 gap-y-1 mt-2 text-xs text-gray-700 flex-wrap">
+                        <div><span class="font-semibold text-skt-blue-light">Terminausfall:</span> <span class="font-bold">${values.cancellationRate !== null ? (values.cancellationRate * 100).toFixed(0) + '%' : 'N/A'}</span></div>
+                        <div><span class="font-semibold text-skt-blue-light">Abschlussquote:</span> <span class="font-bold">${values.closingRate !== null ? (values.closingRate * 100).toFixed(0) + '%' : 'N/A'}</span></div>
+                    </div>
+                `;
+
+                if (warnings.length > 0) {
+                    membersHtml += `<div class="p-3 bg-red-50 border-l-4 border-skt-red-accent rounded-r-lg"><p class="font-bold text-skt-blue">${member.Name}</p><ul class="list-disc list-inside mt-1">${warnings.map(reason => `<li class="text-sm text-red-700">${_escapeHtml(reason)}</li>`).join('')}</ul>${kpiValuesHtml}</div>`;
+                } else {
+                    membersHtml += `<div class="p-3 bg-green-50 border-l-4 border-skt-green-accent rounded-r-lg"><p class="font-bold text-skt-blue flex items-center">${member.Name}<i class="fas fa-check-circle text-skt-green-accent ml-2"></i></p>${kpiValuesHtml}</div>`;
+                }
+            }
+
+            finalHtml += `<div class="mb-8"><h4 class="text-xl font-bold text-skt-blue mb-4">${leader.Name}</h4><div class="space-y-3">${membersHtml}</div></div>`;
+        }
+
+        container.innerHTML = finalHtml || '<p class="text-center text-gray-500">Keine Mitarbeiter zum Anzeigen gefunden.</p>';
     }
 }
 
@@ -10823,22 +11308,23 @@ async function getIndividualKpiData(user) {
 
         if (monthProgress >= 0.5) {
             const subordinates = getSubordinates(user._id, 'gruppe');
-            const relevantSubordinates = subordinates.filter(sub => {
+            const relevantSubordinateIds = subordinates.map(s => s._id);
+            const relevantSubordinates = subordinates.filter(sub => { // KORREKTUR: Verwende die `sub._id` für den Abgleich.
                 const subPlan = db.monatsplanung.find(p => p.Mitarbeiter_ID === sub._id && p.Monat === currentMonthName && p.Jahr === currentYear);
                 return subPlan && subPlan.EH_Ziel > 0;
             });
 
             if (relevantSubordinates.length > 0) {
+                // KORREKTUR: Lade die Ist-EH-Daten für die relevanten Mitarbeiter direkt per SQL,
+                // um sicherzustellen, dass die Daten aktuell sind und nicht aus einem veralteten Cache stammen.
+                const relevantSubordinateNamesSql = relevantSubordinates.map(s => `'${escapeSql(s.Name)}'`).join(',');
+                const ehQuery = `SELECT Mitarbeiter_ID FROM Umsatz WHERE Mitarbeiter_ID IN (${relevantSubordinateNamesSql}) AND Datum >= '${cycleStart.toISOString().split('T')[0]}' AND Datum <= '${cycleEnd.toISOString().split('T')[0]}' AND EH > 0`;
+                const salesResultsRaw = await seaTableSqlQuery(ehQuery, true);
+                const salesResults = mapSqlResults(salesResultsRaw || [], 'Umsatz');
+                const usersWithSales = new Set(salesResults.map(r => r.Mitarbeiter_ID[0].row_id));
                 let membersWithoutEH = 0;
                 for (const sub of relevantSubordinates) {
-                    const hasEH = db.umsatz.some(sale => 
-                        sale.Mitarbeiter_ID === sub._id && 
-                        sale.Datum && 
-                        new Date(sale.Datum) >= cycleStart && 
-                        new Date(sale.Datum) <= cycleEnd && 
-                        sale.EH > 0
-                    );
-                    if (!hasEH) {
+                    if (!usersWithSales.has(sub._id)) {
                         membersWithoutEH++;
                     }
                 }
@@ -10853,68 +11339,6 @@ async function getIndividualKpiData(user) {
     log('KPI-Berechnung abgeschlossen. Gefundene Warnungen:', warnings);
     // FINALE KORREKTUR: Stelle sicher, dass die Funktion unter allen Umständen ein gültiges Objekt zurückgibt.
     return { warnings, values };
-}
-
-async function _renderEmployeeKpiList() {
-    const container = document.getElementById('auswertung-kpi-employee-list');
-    if (!container) return;
-    container.innerHTML = '<div class="loader mx-auto"></div>';
-
-    const leaders = db.mitarbeiter.filter(m => isUserLeader(m) && m.Status !== 'Ausgeschieden')
-                                  .sort((a, b) => a.Name.localeCompare(b.Name));
-    
-    const allUserIds = new Set();
-    const groupMap = new Map();
-    for (const leader of leaders) {
-        allUserIds.add(leader._id);
-        const groupMembers = [leader, ...getSubordinates(leader._id, 'gruppe')];
-        groupMap.set(leader._id, groupMembers);
-        groupMembers.forEach(m => allUserIds.add(m._id));
-    }
-
-    const allUsers = Array.from(allUserIds).map(id => findRowById('mitarbeiter', id)).filter(Boolean);
-    const userNamesForSql = allUsers.map(u => `'${escapeSql(u.Name)}'`).join(',');
-
-    const today = new Date();
-    const sixtyDaysAgo = new Date(new Date().setDate(today.getDate() - 60));
-    const startDateIso = sixtyDaysAgo.toISOString().split('T')[0];
-    const endDateIso = today.toISOString().split('T')[0];
-
-    // OPTIMIERUNG: Eine einzige SQL-Abfrage für alle relevanten Umsätze.
-    const salesQuery = `SELECT Mitarbeiter_ID, EH, Kunde, Datum FROM Umsatz WHERE Mitarbeiter_ID IN (${userNamesForSql}) AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
-    const salesDataRaw = await seaTableSqlQuery(salesQuery, true);
-    const allSales = mapSqlResults(salesDataRaw || [], 'Umsatz');
-    const salesByUserId = _.groupBy(allSales, sale => sale.Mitarbeiter_ID?.[0]?.row_id);
-
-    let finalHtml = '';
-
-    for (const leader of leaders) {
-        const groupMembers = groupMap.get(leader._id) || [];
-        
-        let membersHtml = '';
-        for (const member of groupMembers) {
-            // OPTIMIERUNG: getIndividualKpiData wird nicht mehr aufgerufen.
-            // Die Logik wird hier direkt mit den vorgeladenen Daten ausgeführt.
-            const { warnings, values } = await _calculateKpisForUser(member, salesByUserId[member._id] || []);
-
-            const kpiValuesHtml = `
-                <div class="flex gap-x-6 gap-y-1 mt-2 text-xs text-gray-700 flex-wrap">
-                    <div><span class="font-semibold text-skt-blue-light">Terminausfall:</span> <span class="font-bold">${values.cancellationRate !== null ? (values.cancellationRate * 100).toFixed(0) + '%' : 'N/A'}</span></div>
-                    <div><span class="font-semibold text-skt-blue-light">Abschlussquote:</span> <span class="font-bold">${values.closingRate !== null ? (values.closingRate * 100).toFixed(0) + '%' : 'N/A'}</span></div>
-                </div>
-            `;
-
-            if (warnings.length > 0) {
-                membersHtml += `<div class="p-3 bg-red-50 border-l-4 border-skt-red-accent rounded-r-lg"><p class="font-bold text-skt-blue">${member.Name}</p><ul class="list-disc list-inside mt-1">${warnings.map(reason => `<li class="text-sm text-red-700">${_escapeHtml(reason)}</li>`).join('')}</ul>${kpiValuesHtml}</div>`;
-            } else {
-                membersHtml += `<div class="p-3 bg-green-50 border-l-4 border-skt-green-accent rounded-r-lg"><p class="font-bold text-skt-blue flex items-center">${member.Name}<i class="fas fa-check-circle text-skt-green-accent ml-2"></i></p>${kpiValuesHtml}</div>`;
-            }
-        }
-
-        finalHtml += `<div class="mb-8"><h4 class="text-xl font-bold text-skt-blue mb-4">${leader.Name}</h4><div class="space-y-3">${membersHtml}</div></div>`;
-    }
-
-    container.innerHTML = finalHtml || '<p class="text-center text-gray-500">Keine Mitarbeiter zum Anzeigen gefunden.</p>';
 }
 
 async function calculateAllStructureEarnings(memberIds, startDate, endDate) {
@@ -11301,6 +11725,97 @@ async function _calculateKpisForUser(user, userSales = []) {
 
     return { warnings, values };
 }
+
+
+async function checkAndShowEtMotivationPopup() {
+    const user = currentlyViewedUserData;
+    const todayString = new Date().toISOString().split('T')[0];
+    const storageKey = `et-motivation-popup-shown-${user._id}-${todayString}`;
+
+    // 1. Prüfen, ob das Popup heute schon gezeigt wurde
+    if (localStorage.getItem(storageKey)) {
+        return;
+    }
+
+    // 2. Prüfen, ob die ET-Zielerreichung unter 30% liegt
+    const { etCurrent, etGoal } = personalData;
+    const etRate = (etGoal > 0) ? (etCurrent / etGoal) : 1;
+
+    if (etRate >= 0.3) {
+        return;
+    }
+
+    // 3. Daten für die KI sammeln
+    const visionData = db.visionen.filter(v => v.Mitarbeiter === user._id).sort((a, b) => new Date(b.Edited) - new Date(a.Edited))[0];
+    const visionText = visionData?.Vision || 'Keine Vision hinterlegt.';
+
+    const currentStage = db.karriereplan.find(k => k.Stufe === user.Karrierestufe);
+    const nextStage = currentStage ? db.karriereplan.filter(p => p.Hierarchie > currentStage.Hierarchie).sort((a, b) => a.Hierarchie - b.Hierarchie)[0] : null;
+    const nextCareerStep = nextStage?.Stufe || 'Nächstes Ziel noch nicht definiert.';
+    const promotionDate = user.Befoerderungsdatum ? new Date(user.Befoerderungsdatum).toLocaleDateString('de-DE') : 'Kein Datum gesetzt.';
+
+    // NEU: Schritt 4 - Zuerst die KI-Nachricht generieren
+    const prompt = `
+        Erstelle eine sehr kurze, motivierende Nachricht (maximal 3 Sätze) für einen Finanzberater namens ${user.Name}.
+        Kontext:
+        - Seine Vision: "${visionText}"
+        - Sein nächster Karriereschritt: ${nextCareerStep} (Zieldatum: ${promotionDate})
+        - Sein aktueller Fortschritt bei Einstellungsterminen (ETs) diesen Monat: ${etCurrent} von ${etGoal} erreicht.
+
+        Die Nachricht muss seine Vision als zentralen Ankerpunkt verwenden. Gehe explizit auf den Inhalt seiner Vision ("${visionText}") ein, anstatt nur "Vision" zu schreiben. Wenn er zb von "finanzieller Freiheit" spricht dann erwähne auch "finanzielle Freiheit" satt "deine Vision" zu sagen. Erinnere ihn wie das Erreichen seines ET-Ziels ihn seiner Vision und seinem nächsten Karriereschritt näherbringt.
+        Sprich ihn direkt mit "Du" an. Die Antwort soll nur aus der Nachricht bestehen, ohne Einleitung oder Verabschiedung. Formatiere die Antwort als HTML mit <p> und <strong> Tags.
+    `;
+
+    console.log('%c[KI-Motivation] %cSende folgenden Prompt an Gemini:', 'color: #8e44ad; font-weight: bold;', 'color: black;', prompt);
+
+    let aiMessage;
+    try {
+        const apiKey = "AIzaSyAUnqTaKJ1B7mvltFTWvHcz4szfA1YDFek";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+        const response = await fetch(apiUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
+        if (!response.ok) throw new Error('API request failed');
+        const result = await response.json();
+        aiMessage = result.candidates[0].content.parts[0].text;
+    } catch (error) {
+        console.error("Fehler bei der Gemini-API:", error);
+        aiMessage = `<p>Denk an dein Ziel, ${nextCareerStep} zu erreichen! Jeder Einstellungstermin bringt dich deiner Vision näher. Du schaffst das!</p>`;
+    }
+
+    // 4. KI-Nachricht generieren und Popup anzeigen
+    const modal = document.getElementById('et-motivation-modal');
+    const messageContainer = document.getElementById('et-motivation-message');
+    const promptContainer = document.getElementById('et-motivation-prompt');
+    const closeBtn = document.getElementById('close-et-motivation-btn');
+    const disclaimerContainer = document.getElementById('et-motivation-disclaimer');
+    const timerBar = document.getElementById('et-motivation-timer-bar');
+
+    // NEU: Schritt 5 - Popup mit der bereits geladenen Nachricht anzeigen
+    messageContainer.innerHTML = aiMessage;
+    modal.classList.add('visible');
+    document.body.classList.add('modal-open');
+    closeBtn.classList.add('hidden');
+    timerBar.classList.remove('countdown-bar-animate');
+    disclaimerContainer.textContent = `Du erhältst diese Nachricht, weil du derzeit unter 30% deines ET-Solls liegst.`;
+
+    const nextInfoDate = findNextInfoDateAfter(new Date()).toLocaleDateString('de-DE');
+    const missingEts = Math.max(0, etGoal - etCurrent);
+    promptContainer.innerHTML = `<strong>Deine Aufgabe heute:</strong> Vereinbare deine <strong>${missingEts} fehlenden ETs</strong> für den nächsten Infoabend am <strong>${nextInfoDate}</strong>!`;
+
+    // 5. Timer und Button-Logik
+    void timerBar.offsetWidth; // Trigger reflow to restart animation
+    timerBar.classList.add('countdown-bar-animate');
+
+    setTimeout(() => {
+        closeBtn.classList.remove('hidden');
+    }, 20000);
+
+    closeBtn.onclick = () => {
+        modal.classList.remove('visible');
+        document.body.classList.remove('modal-open');
+        localStorage.setItem(storageKey, 'true'); // Popup für heute als "gesehen" markieren
+    };
+}
+
 
 async function handleAIAssistantClick() {
   dom.hinweisModalTitle.textContent = "Frag den Adler";
@@ -12013,16 +12528,17 @@ class PGTagebuchView {
 
     async fetchAndRender() {
         this.listContainer.innerHTML = '<div class="loader mx-auto"></div>';
-        const currentUserId = this.currentUserId;
-        const mySubordinateIds = new Set(SKT_APP.getAllSubordinatesRecursive(this.currentUserId).map(u => u._id));
+        // KORREKTUR: Verwende die ID des eingeloggten Benutzers für die Berechtigungsprüfung.
+        const loggedInUserId = authenticatedUserData._id;
+        const mySubordinateIds = new Set(SKT_APP.getAllSubordinatesRecursive(loggedInUserId).map(u => u._id));
 
         this.allPgs = db['pg'].filter(pg => {
             // Ein PG-Eintrag ist sichtbar, wenn der aktuelle Benutzer:
             // 1. Der Leiter des Gesprächs ist.
             // 2. Der Mitarbeiter im Gespräch ist.
             // 3. Ein Vorgesetzter ist und der Mitarbeiter im Gespräch zu seiner Struktur gehört.
-            return pg.Leiter === currentUserId || 
-                   pg.Mitarbeiter === currentUserId || 
+            return pg.Leiter === loggedInUserId || 
+                   pg.Mitarbeiter === loggedInUserId || 
                    mySubordinateIds.has(pg.Mitarbeiter);
         });
 
@@ -14142,6 +14658,13 @@ class LeadCenterView {
     }
 
     openDetailsModal(leadId) {
+        // KORREKTUR: Die DOM-Elemente für das Modal müssen hier neu geholt werden,
+        // da sie dynamisch mit der Ansicht geladen werden.
+        this.detailsModal = document.getElementById('lead-details-modal');
+        this.detailsForm = document.getElementById('lead-details-form');
+        this.closeDetailsModalBtn = document.getElementById('close-lead-details-modal-btn');
+        this.scheduleAppointmentBtn = document.getElementById('lead-schedule-appointment-btn');
+
         const lead = db.leads.find(l => l._id === leadId);
         if (!lead) {
             leadCenterLog(`Konnte Lead mit ID ${leadId} nicht finden.`);
@@ -14152,10 +14675,21 @@ class LeadCenterView {
         document.getElementById('lead-details-id').value = lead._id;
         document.getElementById('lead-details-modal-title').textContent = `${lead.Vorname} ${lead.Nachname}`;
 
-        // Read-only Felder
+        // NEU: Dropdown für Mitarbeiter-Zuweisung befüllen
+        const mitarbeiterSelect = document.getElementById('lead-details-mitarbeiter-select');
+        mitarbeiterSelect.innerHTML = '';
+        const currentUser = findRowById('mitarbeiter', authenticatedUserData._id);
+        const subordinates = getAllSubordinatesRecursive(authenticatedUserData._id);
+        const usersForSelect = [currentUser, ...subordinates].sort((a, b) => a.Name.localeCompare(b.Name));
+        usersForSelect.forEach(u => {
+            mitarbeiterSelect.add(new Option(u.Name, u._id));
+        });
+        // Aktuellen Mitarbeiter auswählen
+        mitarbeiterSelect.value = lead.Mitarbeiter;
+
+        // Andere Felder befüllen
         document.getElementById('lead-details-campaign').textContent = lead.Kampagne || '-';
-        const mitarbeiter = findRowById('mitarbeiter', lead.Mitarbeiter);
-        document.getElementById('lead-details-mitarbeiter').textContent = mitarbeiter ? mitarbeiter.Name : 'N/A';
+        // Das alte Textfeld wird nicht mehr benötigt, da wir jetzt das Dropdown haben.
         document.getElementById('lead-details-phone').textContent = lead.Telefonnummer || '-';
         document.getElementById('lead-details-email').textContent = lead.Email || '-';
         document.getElementById('lead-details-info').innerHTML = lead.Info ? marked.parse(lead.Info) : '<p class="text-gray-500">Keine Info vorhanden.</p>';
@@ -14188,6 +14722,7 @@ class LeadCenterView {
         const rowData = {
             [COLUMN_MAPS.leads.Status]: document.getElementById('lead-details-status').value,
             [COLUMN_MAPS.leads.Umsatz]: parseFloat(document.getElementById('lead-details-umsatz').value) || null,
+            [COLUMN_MAPS.leads.Mitarbeiter]: [document.getElementById('lead-details-mitarbeiter-select').value], // NEU
             [COLUMN_MAPS.leads.Hinweis]: document.getElementById('lead-details-hinweis').value,
         };
 
@@ -14198,6 +14733,7 @@ class LeadCenterView {
             const leadInDb = db.leads.find(l => l._id === leadId);
             if (leadInDb) {
                 leadInDb.Status = rowData[COLUMN_MAPS.leads.Status];
+                leadInDb.Mitarbeiter = rowData[COLUMN_MAPS.leads.Mitarbeiter][0]; // NEU
                 leadInDb.Umsatz = rowData[COLUMN_MAPS.leads.Umsatz];
                 leadInDb.Hinweis = rowData[COLUMN_MAPS.leads.Hinweis];
             }
