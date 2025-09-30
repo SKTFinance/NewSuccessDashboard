@@ -1,13 +1,32 @@
-<!-- Ansicht für den öffentlichen Bildschirm -->
-<div id="bildschirm-module-root" class="bg-skt-blue text-white h-screen flex flex-col p-4 md:p-8">
-    <header class="text-center mb-4 flex-shrink-0">
-        <h1 class="text-5xl font-bold text-gold">SKT Finance Leaderboard</h1>
-        <p class="text-xl text-gray-300 mt-2">Live-Erfolge unserer Top-Berater</p>
-        <!-- NEU: Zoom-Button -->
-        <div class="relative h-8">
-            <button id="zoom-toggle-btn" class="absolute left-1/2 -translate-x-1/2 mt-2 px-4 py-1 bg-skt-blue-light text-white rounded-full text-xs opacity-20 hover:opacity-100 focus:opacity-100 transition-opacity duration-300" title="Zoom umschalten">
-                <i class="fas fa-search-plus mr-1"></i> Zoom
-            </button>
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SKT Leaderboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-skt-blue">
+    <!-- Ansicht für den öffentlichen Bildschirm -->
+    <div id="bildschirm-module-root" class="bg-skt-blue text-white h-screen flex flex-col p-4 md:p-8">
+        <header class="text-center mb-4 flex-shrink-0">
+            <h1 class="text-5xl font-bold text-gold">SKT Finance Leaderboard</h1>
+            <p class="text-xl text-gray-300 mt-2">Live-Erfolge unserer Top-Berater</p>
+            <div class="relative h-8">
+                <button id="zoom-toggle-btn" class="absolute left-1/2 -translate-x-1/2 mt-2 px-4 py-1 bg-skt-blue-light text-white rounded-full text-xs opacity-20 hover:opacity-100 focus:opacity-100 transition-opacity duration-300" title="Zoom umschalten">
+                    <i class="fas fa-search-plus mr-1"></i> Zoom
+                </button>
+            </div>
+        </header>
+        <div id="leaderboard-zoom-wrapper" class="flex-grow min-h-0 transition-transform duration-300 ease-in-out flex items-center justify-center"><div id="leaderboard-slideshow-container" class="relative w-full h-full flex items-center justify-center"><div class="loader-white mx-auto"></div></div></div>
+        <footer class="text-center mt-4 flex-shrink-0"><div id="slideshow-progress-bar-container" class="w-full max-w-2xl mx-auto h-1.5 bg-skt-blue-light rounded-full overflow-hidden mb-2"><div id="slideshow-progress-bar" class="h-full bg-gold"></div></div><p>Daten werden automatisch aktualisiert. Letzte Aktualisierung: <span id="last-updated-time">...</span></p></footer>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+    <script type="module" src="bildschirm_standalone.js"></script>
+</body>
+</html>
         </div>
     </header>
 

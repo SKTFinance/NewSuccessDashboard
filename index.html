@@ -502,11 +502,19 @@
         <!-- Inhalt von workingday-auswertung.html wird hier geladen -->
     </main>
 
-        <!-- NEU: Container für die Bildschirm-Ansicht -->
-    <div id="bildschirm-view" class="hidden">
-        <!-- Inhalt von bildschirm.html wird hier geladen -->
-    
-    </div>
+    <!-- NEU: Container für die Beratungs-Ansicht -->
+    <main id="beratung-view" class="hidden top-level-view">
+        <!-- Inhalt von beratung.html wird hier geladen -->
+    </main>
+
+    <!-- NEU: Container für die Bildschirm-Ansicht.
+         KORREKTUR: Das Element wird als `fixed` positioniert, um über allem zu liegen, wenn es aktiv ist.
+         Der Inhalt wird dynamisch geladen. Die Klassen sorgen für den korrekten blauen Hintergrund. -->
+    <div id="bildschirm-view" class="fixed inset-0 bg-skt-blue flex items-center justify-center top-level-view" style="display: none;"></div>
+
+    <!-- NEU: Container für die Test-Ansicht -->
+    <div id="test-view" class="fixed inset-0 bg-skt-blue flex items-center justify-center top-level-view" style="display: none;"></div>
+
 
     <!-- Modals -->
     <!-- Modal zum Bearbeiten/Hinzufügen von Terminen (zunächst verborgen) -->

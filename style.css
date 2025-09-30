@@ -121,6 +121,13 @@ html.modal-open, body.modal-open {
 .loader { border: 5px solid var(--color-skt-grey-light); border-top: 5px solid var(--color-skt-blue-main); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
+/* NEU: Loader für dunklen Hintergrund */
+.loader-white {
+    border: 5px solid rgba(255, 255, 255, 0.2);
+    border-top: 5px solid white;
+    border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite;
+}
+
 [data-tooltip] { position: relative; cursor: help; }
 [data-tooltip]::after { content: attr(data-tooltip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%) translateY(-8px); background-color: var(--color-skt-blue); color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 500; white-space: nowrap; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; z-index: 100; }
 [data-tooltip]:hover::after { opacity: 1; visibility: visible; }
@@ -490,7 +497,7 @@ summary::-webkit-details-marker {
     display: none; /* KORREKTUR: Standardmäßig ausblenden, um Flackern zu verhindern */
     align-items: center;
     justify-content: center;
-    z-index: 5000; /* KORREKTUR: Erhöht, um sicherzustellen, dass es über allen anderen Elementen liegt */
+    z-index: 1000;
     opacity: 0;
     padding: 1rem; /* Fügt einen Abstand hinzu, damit Modals nicht am Rand kleben */
     visibility: hidden;
@@ -1170,7 +1177,6 @@ summary::-webkit-details-marker {
     animation: progressBarAnimation 7s linear forwards;
 }
 @keyframes progressBarAnimation { from { width: 0%; } to { width: 100%; } }
-
 /* NEU: Stile für die Bildschirm-Ansicht */
 .leaderboard-card {
     background-color: var(--color-skt-blue-light);

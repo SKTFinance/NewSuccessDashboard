@@ -7,7 +7,7 @@ const SEATABLE_DTABLE_UUID = "5b374b51-789c-4aac-a12f-02574f8f4855";
 const CACHE_VERSION = "v1.1";
 const CACHE_PREFIX = `skt-dashboard-cache-${CACHE_VERSION}-`;
 
-let COLUMN_MAPS = {}; // Wird dynamisch gefüllt
+export let COLUMN_MAPS = {}; // Wird dynamisch gefüllt
 // HINWEIS: Dies sollte dynamisch von der API geladen werden.
 // Für die Entwicklung wird es hier hartcodiert, um die Logik zu implementieren.
 const CHECKIN_COLUMN_MAP_FALLBACK = {
@@ -32,8 +32,8 @@ const CHECKIN_COLUMN_MAP_FALLBACK = {
 // --- GLOBALE VARIABLEN ---
 let seaTableAccessToken = null;
 let apiGatewayUrl = null;
-let METADATA = {};
-let db = {
+export let METADATA = {};
+export let db = {
   mitarbeiter: [],
   karriereplan: [],
   einarbeitungsschritte: [],
@@ -50,6 +50,7 @@ let db = {
     visionen: [], // NEU
     workingday: [], // NEU
     leads: [], // NEU
+    beratung: [], // NEU
 };
 let totalEhResults = []; // NEU: Globale Variable für die vorgeladenen Gesamtumsätze
 
@@ -76,6 +77,7 @@ let pgTagebuchViewInstance = null;
 let stimmungsDashboardViewInstance = null;
 let wettbewerbViewInstance = null; // NEU
 let bildschirmViewInstance = null; // NEU
+let beratungViewInstance = null; // NEU
 let datenschutzViewInstance = null; // NEU
 let pendingAppointmentFilter = null;
 let pendingAppointmentViewMode = null;
@@ -169,6 +171,7 @@ const dom = {
   einarbeitungView: document.getElementById("einarbeitung-view"),
   einarbeitungBtn: document.getElementById("einarbeitung-btn"),
   einarbeitungBanner: document.getElementById("einarbeitung-banner"),
+  beratungView: document.getElementById("beratung-view"), // NEU
   dashboardHeaderBtn: document.getElementById("dashboard-header-btn"),
   appointmentsHeaderBtn: document.getElementById("appointments-header-btn"),
   potentialHeaderBtn: document.getElementById("potential-header-btn"),
@@ -268,7 +271,7 @@ const dom = {
 
 // --- SEATABLE API FUNKTIONEN ---
 
-async function getSeaTableAccessToken() {
+export async function getSeaTableAccessToken() {
   try {
     const url = `${SEATABLE_APP_ACCESS_TOKEN_URL}?dtable_uuid=${SEATABLE_DTABLE_UUID}`;
     const response = await fetch(url, {
@@ -413,7 +416,7 @@ async function seaTableSqlQuery(sql, convertLinks = true) {
   return [];
 }
 
-async function seaTableQuery(tableName) {
+export async function seaTableQuery(tableName) {
   let retries = 5;
   let wait = 2000; // Start with a 2-second wait
   while (retries > 0) {
@@ -702,7 +705,7 @@ async function seaTableUpdateLinkField(terminRowId, mitarbeiterRowId) {
   }
 }
 
-async function seaTableAddRow(tableName, rowData) {
+export async function seaTableAddRow(tableName, rowData) {
   // Neuer, effizienter Ansatz basierend auf dem Skript des Benutzers:
   // 1. Daten für die Verknüpfung (Mitarbeiter_ID) von den restlichen Daten trennen.
   // 2. Spalten-Keys in Spalten-NAMEN umwandeln, da der /rows Endpunkt Namen erwartet.
@@ -804,7 +807,7 @@ async function seaTableAddRow(tableName, rowData) {
   return newRowId;
 }
 
-async function updateSingleLink(baseTableName, baseRowId, linkColumnName, otherRowIds) {
+export async function updateSingleLink(baseTableName, baseRowId, linkColumnName, otherRowIds) {
     if (!seaTableAccessToken || !apiGatewayUrl) return false;
     try {
         const baseTableMeta = METADATA.tables.find(t => t.name.toLowerCase() === baseTableName.toLowerCase());
@@ -1105,7 +1108,7 @@ async function seaTableAddTermin(rowData) {
 }
 
 // NEU: Generische Funktion zum Hinzufügen einer Zeile, die von `addPlanningRowToDatabase` verwendet wird.
-async function genericSeaTableAddRow(tableName, rowDataWithNames) {
+export async function genericSeaTableAddRow(tableName, rowDataWithNames) {
     try {
         const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
         const body = { table_name: tableName, rows: [rowDataWithNames] };
@@ -1218,7 +1221,7 @@ function mapSqlResults(results, tableName) {
   });
 }
 
-async function loadAllData() {
+export async function loadAllData() {
   HIERARCHY_CACHE = null; // Hierarchie-Cache bei jedem Neuladen invalidieren
   setStatus("Lade Datenbank-Zugang...");
   await getSeaTableAccessToken();
@@ -1279,7 +1282,8 @@ async function loadAllData() {
     "Visionen", // NEU
     "Leads", // NEU
     "WorkingDay", // NEU
-    "WorkingDay", // NEU
+    "Beratung", // NEU
+    "Produktauswahl", // NEU
   ];
   
   console.log('%c[DATENLADEN] %cStarte das Laden der Stammdaten...', 'color: #17a2b8; font-weight: bold;', 'color: black;');
@@ -1330,6 +1334,14 @@ async function loadAllData() {
       console.log(`%c[DATENLADEN] %c'Umsatz' geladen und gecached (${db.umsatz.length} Zeilen).`, 'color: #17a2b8; font-weight: bold;', 'color: black;');
   } else {
       console.error(`Konnte 'Umsatz' nicht von der API laden.`);
+  }
+
+  // NEU: Lade die Beratungstabelle, um Duplikate zu vermeiden etc.
+  const beratungData = await seaTableQuery('Beratung');
+  if (beratungData) {
+      db.beratung = beratungData;
+      saveToCache('beratung', db.beratung);
+      console.log(`%c[DATENLADEN] %c'Beratung' geladen und gecached (${db.beratung.length} Zeilen).`, 'color: #17a2b8; font-weight: bold;', 'color: black;');
   }
 
   console.timeEnd('[DATENLADEN] Gesamtladezeit Stammdaten');
@@ -1390,7 +1402,7 @@ function getCurrentDate() {
     return timeTravelDate ? new Date(timeTravelDate) : new Date();
 }
 
-function setStatus(msg, isError = false) {
+export function setStatus(msg, isError = false) {
   dom.statusText.textContent = msg;
   dom.statusMessage.style.color = isError ? "var(--color-accent-red)" : "";
   dom.statusMessage.style.display = msg ? "flex" : "none";
@@ -1458,7 +1470,7 @@ async function getPrimaryKeyColumnName(tableName, forceRefresh = false) {
     log(`!!! FEHLER: Kein Primärschlüssel in Tabelle '${tableName}' gefunden.`);
     return null;
 }
-function findRowById(tableName, id) {
+export function findRowById(tableName, id) {
   return db[tableName.toLowerCase()].find((row) => row._id === id);
 }
 
@@ -1482,7 +1494,7 @@ function getAncestors(userId, levels = 99) { // KORREKTUR: Unbegrenzte Level, um
     }
     return ancestors;
 }
-function escapeSql(str) {
+export function escapeSql(str) {
   if (typeof str !== "string") return str;
   return str.replace(/'/g, "''");
 }
@@ -3635,8 +3647,12 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
 
   // NEU: Banner für kritische Einarbeitungsschritte anzeigen
   if (isUserLeader(user)) {
-      checkAndRenderCriticalOnboardingBanner();
-      await checkAndShowEtMotivationPopup(); // NEU: Motivations-Popup prüfen
+    checkAndRenderCriticalOnboardingBanner();
+    // KORREKTUR: Das Motivations-Popup darf nicht in den Spezialansichten (Bildschirm, Beratung) aufgerufen werden.
+    const urlParams = new URLSearchParams(window.location.search);
+    if (!urlParams.has('view')) {
+        await checkAndShowEtMotivationPopup();
+    }
   } else {
     // NEU: Banner für Freitags-Check-in ausblenden, wenn der Benutzer keine Führungskraft ist.
       const fridayBanner = document.getElementById('friday-checkin-banner');
@@ -4491,7 +4507,7 @@ async function removeOnboardingEntry(traineeId, stepId) {
     return false;
 }
 
-async function genericAddRowWithLinks(tableName, rowDataWithKeys, linkColumnNames) {
+export async function genericAddRowWithLinks(tableName, rowDataWithKeys, linkColumnNames) {
     if (!seaTableAccessToken || !apiGatewayUrl) return false;
 
     const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
@@ -8807,11 +8823,11 @@ class AuswertungView {
         this.fkRennlisteStructureFilter.addEventListener('change', () => this.renderFkRennliste());
 
         // NEU: Event Listener für FK Rennliste Scope
-        if (this.fkRennlisteGroupBtn) {
+        if (this.fkRennlisteGroupBtn && this.fkRennlisteStructureBtn) {
             this.fkRennlisteGroupBtn.addEventListener('click', () => {
                 if (this.currentFkRennlisteScope === 'group') return;
                 this.currentFkRennlisteScope = 'group';
-                saveUiSetting('fkRennlisteScope', 'group'); // NEU
+                saveUiSetting('fkRennlisteScope', 'group');
                 this.fkRennlisteGroupBtn.classList.add('active');
                 this.fkRennlisteStructureBtn.classList.remove('active');
                 this.renderFkRennliste();
@@ -8819,7 +8835,7 @@ class AuswertungView {
             this.fkRennlisteStructureBtn.addEventListener('click', () => {
                 if (this.currentFkRennlisteScope === 'structure') return;
                 this.currentFkRennlisteScope = 'structure';
-                saveUiSetting('fkRennlisteScope', 'structure'); // NEU
+                saveUiSetting('fkRennlisteScope', 'structure');
                 this.fkRennlisteStructureBtn.classList.add('active');
                 this.fkRennlisteGroupBtn.classList.remove('active');
                 this.renderFkRennliste();
@@ -8870,43 +8886,6 @@ class AuswertungView {
                 // Initial render is just showing the button, no data loading needed yet.
                 break;
         }
-    }
-
-    setupEventListeners() {
-        document.querySelectorAll('.auswertung-tab').forEach(tab => {
-            tab.addEventListener('click', (e) => {
-                this.currentTab = e.currentTarget.dataset.view;
-                saveUiSetting('auswertungTab', this.currentTab); // NEU
-                this.updateTabs();
-                this.renderCurrentView();
-            });
-        });
-
-        // NEU: Event Listener für Rangliste-Zeitraum
-        document.querySelectorAll('.rangliste-timespan-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                this.currentRanglisteTimespan = e.currentTarget.dataset.timespan;
-                saveUiSetting('ranglisteTimespan', this.currentRanglisteTimespan);
-                document.querySelectorAll('.rangliste-timespan-btn').forEach(b => b.classList.remove('active'));
-                e.currentTarget.classList.add('active');
-                this.renderRangliste();
-            });
-        });
-
-        // KORREKTUR: Event-Listener für den KI-Button hierher verschoben.
-        if (this.generateWeeklyKiReportBtn) {
-            this.generateWeeklyKiReportBtn.addEventListener('click', () => this.generateWeeklyKiReport());
-        }
-
-        document.querySelectorAll('.aktivitaeten-timespan-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                this.currentAktivitaetenTimespan = e.currentTarget.dataset.timespan;
-                saveUiSetting('aktivitaetenTimespan', this.currentAktivitaetenTimespan); // NEU
-                document.querySelectorAll('.aktivitaeten-timespan-btn').forEach(b => b.classList.remove('active'));
-                e.currentTarget.classList.add('active');
-                this.renderAktivitaeten();
-            });
-        });
     }
 
     async generateWeeklyKiReport() {
@@ -10463,6 +10442,25 @@ async function initializeBildschirmView() {
     }
 }
 
+async function initializeBeratungView() {
+    console.log('[Beratung] Initialisiere Beratungs-Ansicht...');
+    const container = dom.beratungView;
+
+    try {
+        // Lade notwendige Daten, falls noch nicht geschehen
+        if (!db.produktauswahl || db.produktauswahl.length === 0) {
+            setStatus('Lade Beratungsmodul-Daten...');
+            await loadAllData();
+            setStatus('');
+        }
+
+        const { BeratungView } = await import('./beratung.js');
+        beratungViewInstance = new BeratungView();
+        await beratungViewInstance.init(authenticatedUserData);
+    } catch (error) {
+        console.error("[Beratung] Fehler beim Laden der Ansicht:", error);
+    }
+}
 // --- NEU: Periodische Prüfung auf neuen Tag für den Check-in ---
 function startDailyCheckinTrigger() {
     // Prüfe alle 60 Sekunden, ob ein neuer Tag begonnen hat.
@@ -10968,22 +10966,11 @@ function setupSwipeToBack() {
     }
 }
 
-let isInitializing = false;
+/**
+ * Die Haupt-Initialisierungsfunktion für das normale Dashboard.
+ * Wird nur aufgerufen, wenn keine Spezialansicht (?view=...) angefordert wird.
+ */
 async function initializeDashboard() {
-  // NEU: Routing für die Bildschirm-Ansicht
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('view') === 'bildschirm') {
-      initializeBildschirmView();
-      return;
-  }
-
-  if (isInitializing) {
-    console.warn("Initialisierung bereits im Gange. Überspringe.");
-    return;
-  }
-  isInitializing = true;
-
-  // NEU: Zeitreise-Datum aus dem Speicher laden
   const storedTimeTravelDate = localStorage.getItem('timeTravelDate');
   if (storedTimeTravelDate) {
       timeTravelDate = new Date(storedTimeTravelDate);
@@ -10996,7 +10983,6 @@ async function initializeDashboard() {
 
   if (!dataLoaded) {
     setStatus("Initialisierung fehlgeschlagen. Bitte Seite neu laden.", true);
-    isInitializing = false;
     return;
   }
   if (!COLUMN_MAPS.checkin) {
@@ -11016,12 +11002,16 @@ async function initializeDashboard() {
   // NEU: Instanz der AppointmentsView erstellen und Modal-Listener initialisieren
   appointmentsViewInstance = new AppointmentsView();
   appointmentsViewInstance._initSharedElementsAndListeners();
-  
   if (!stimmungsDashboardViewInstance) stimmungsDashboardViewInstance = new StimmungsDashboardView();
 
   // KORREKTUR: Im Zeitreise-Modus nur Mitarbeiter anzeigen, die zu diesem Zeitpunkt schon da waren.
   let usersForLogin = db.mitarbeiter.filter((m) => m.Name && m.Status !== 'Ausgeschieden');
   if (timeTravelDate) {
+        // KORREKTUR: Wenn wir im Zeitreise-Modus sind, aber die Bildschirm-Ansicht laden,
+        // soll die Zeitreise ignoriert werden, um alle Mitarbeiter im Login anzuzeigen (falls nötig).
+        if (viewParam === 'bildschirm') {
+            // Mache nichts, ignoriere die Zeitreise für den Login-Screen bei dieser Ansicht.
+        } else
       usersForLogin = usersForLogin.filter(m => {
           if (!m.Startdatum) return false;
           return new Date(m.Startdatum) <= timeTravelDate;
@@ -11082,8 +11072,6 @@ async function initializeDashboard() {
     setStatus("");
   }
   setupEventListeners();
-  setupSwipeToBack(); // NEU: Swipe-Geste initialisieren
-  isInitializing = false;
 
   // NEU: Starte die periodische Prüfung für den täglichen Check-in
   startDailyCheckinTrigger();
@@ -11239,7 +11227,6 @@ async function proceedToDashboard(userId) {
     await fetchAndRenderDashboard(userId);
 }
 
-
 async function showPrivacyConsentView() {
     // Alle anderen Ansichten ausblenden und nur die Datenschutz-Ansicht anzeigen
     Object.values(dom).forEach(el => {
@@ -11336,6 +11323,66 @@ async function renderSubordinatesForLeader(leaderId, container) {
     // NEU: Füge eine maximale Höhe und eine Scroll-Funktion hinzu
     container.innerHTML = `<div class="space-y-2 max-h-80 overflow-y-auto">${listHtml}</div>`;
 }
+
+/**
+ * NEU: Haupt-Router, der beim Laden der Seite entscheidet, welche Ansicht initialisiert wird.
+ * Dies ist jetzt der primäre Einstiegspunkt.
+ */
+async function mainRouter() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const viewParam = urlParams.get('view');
+
+    switch (viewParam) {
+        case 'bildschirm': {
+            // Rufe die alte, funktionierende Initialisierungsfunktion auf.
+            await initializeBildschirmView();
+            break;
+        }
+
+        case 'beratung': {
+            // KORREKTUR: Blende die Hauptcontainer nur für die Spezialansichten aus.
+            document.getElementById('user-select-screen').style.display = 'none';
+            document.getElementById('dashboard-content').style.display = 'none';
+
+            const container = document.getElementById('beratung-view');
+            container.style.display = 'block';
+            container.innerHTML = '<div class="h-screen w-screen bg-skt-blue flex items-center justify-center"><div class="loader-white"></div></div>';
+            
+            const response = await fetch("./beratung.html");
+            container.innerHTML = await response.text();
+            
+            // Lade die minimal notwendigen Daten für die Beratung
+            await getSeaTableAccessToken();
+            await loadAllData(); // Lädt alle DB-Tabellen in die `db`-Variable
+            
+            await initializeBeratungView();
+            break;
+        }
+
+        case 'test': {
+            // KORREKTUR: Blende die Hauptcontainer nur für die Spezialansichten aus.
+            document.getElementById('user-select-screen').style.display = 'none';
+            document.getElementById('dashboard-content').style.display = 'none';
+
+            const container = document.getElementById('test-view');
+            container.style.display = 'flex';
+            container.innerHTML = '<h1 class="text-white text-9xl font-bold">TEST</h1>';
+            break;
+        }
+
+        default: {
+            // Kein spezieller View-Parameter -> Lade das normale Dashboard.
+            // Die `initializeDashboard` Funktion macht die korrekten Container selbst sichtbar.
+            setupSwipeToBack(); // Swipe-Geste nur für das Dashboard initialisieren
+            await initializeDashboard();
+            break;
+        }
+    }
+}
+
+// --- START ---
+// Der neue Einstiegspunkt ist der mainRouter.
+document.addEventListener("DOMContentLoaded", mainRouter);
 
 function getProgressColorClass(current, goal, totalDays, daysPassed) {
   if (goal <= 0) return "bg-skt-grey-medium";
@@ -14491,9 +14538,6 @@ async function loadAndInitWettbewerbView() {
     }
 }
 
-// --- START ---
-document.addEventListener("DOMContentLoaded", initializeDashboard);
-
 function switchView(viewName) {
   currentView = viewName;
   dom.mainDashboardView.classList.toggle("hidden", viewName !== "dashboard");
@@ -14502,16 +14546,21 @@ function switchView(viewName) {
   dom.potentialView.classList.toggle("hidden", viewName !== "potential");
   document.getElementById('workingday-auswertung-view').classList.toggle('hidden', viewName !== 'workingday-auswertung'); // NEU
   dom.leadCenterView.classList.toggle('hidden', viewName !== 'lead-center'); // NEU
+  dom.beratungView.classList.toggle('hidden', viewName !== 'beratung'); // NEU
   dom.datenschutzView.classList.toggle("hidden", viewName !== "datenschutz");
   dom.umsatzView.classList.toggle("hidden", viewName !== "umsatz");
   dom.auswertungView.classList.toggle("hidden", viewName !== "auswertung");
   dom.strukturbaumView.classList.toggle("hidden", viewName !== "strukturbaum");
-  dom.pgTagebuchView.classList.toggle('hidden', viewName !== 'pg-tagebuch');
-  // NEU: Neue Ansichten umschalten
+  dom.pgTagebuchView.classList.toggle('hidden', viewName !== 'pg-tagebuch'); // KORREKTUR: Stelle sicher, dass alle speziellen Ansichten ausgeblendet werden, wenn eine normale Ansicht aktiv ist.
+  const specialViews = ['bildschirm-view', 'beratung-view'];
+  specialViews.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+  });
+  document.body.style.backgroundColor = ''; // Setzt den Hintergrund auf den CSS-Standard zurück
   dom.planungView.classList.toggle('hidden', viewName !== 'planung');
   dom.wettbewerbView.classList.toggle('hidden', viewName !== 'wettbewerb'); // NEU
   dom.stimmungsDashboardView.classList.toggle('hidden', viewName !== 'stimmungs-dashboard');
-  document.getElementById('bildschirm-view').classList.add('hidden'); // Sicherstellen, dass die Bildschirm-Ansicht immer ausgeblendet ist
   updateBackButtonVisibility();
 
   // NEU: Logik für goldenen Rahmen um den aktiven Button/Menüpunkt
@@ -14591,6 +14640,8 @@ function switchView(viewName) {
     loadAndInitWettbewerbView();
   } else if (viewName === 'workingday-auswertung') { // NEU
     loadAndInitWorkingDayAuswertungView();
+  } else if (viewName === 'beratung') { // NEU
+    initializeBeratungView();
   }
 }
 

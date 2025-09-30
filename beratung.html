@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SKT Digitale Beratung</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-skt-blue">
+    <!-- Ansicht für die interaktive Beratung -->
+    <div id="beratung-root" class="h-screen w-screen bg-skt-blue text-white flex flex-col items-center justify-center p-4 relative overflow-hidden">
+        
+    <!-- Hintergrundbild für den Welcome-Screen -->
+    <div id="beratung-bg-image" class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 opacity-0"></div>
+    <div class="absolute inset-0 bg-skt-blue opacity-80"></div>
+
+    <!-- Hauptcontainer für die Slides -->
+    <div id="beratung-slides-container" class="relative w-full max-w-4xl h-full flex items-center justify-center">
+
+        <!-- Slide 1: Kundenname Eingabe -->
+        <div id="beratung-slide-kundenname" class="beratung-slide text-center">
+            <h1 class="text-4xl font-bold mb-4">Willkommen zur digitalen Beratung</h1>
+            <p class="text-xl mb-8 text-gray-300">Bitte geben Sie den Namen Ihres Kunden ein, um zu starten.</p>
+            <input type="text" id="beratung-kundenname-input" class="text-2xl text-center bg-transparent border-b-2 border-gray-400 focus:border-white focus:outline-none py-2 text-white placeholder-gray-400" placeholder="Name des Kunden">
+        </div>
+
+        <!-- Slide 2: Willkommensbildschirm -->
+        <div id="beratung-slide-welcome" class="beratung-slide hidden text-center">
+            <h1 class="text-6xl font-bold font-times-new-roman">Willkommensberatung</h1>
+            <p id="beratung-welcome-kundenname" class="text-3xl mt-4 text-gray-200"></p>
+        </div>
+
+        <!-- Slide 3: Kategorieauswahl -->
+        <div id="beratung-slide-kategorien" class="beratung-slide hidden w-full">
+            <h2 class="text-3xl font-bold text-center mb-8">Welche Themen sind Ihnen heute wichtig?</h2>
+            <div id="beratung-kategorien-container" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <!-- Kategorien werden hier per JS eingefügt -->
+            </div>
+        </div>
+
+        <!-- Slide 4: Agenda Priorisierung -->
+        <div id="beratung-slide-agenda" class="beratung-slide hidden w-full">
+            <h2 class="text-3xl font-bold text-center mb-8">Lassen Sie uns die Reihenfolge festlegen.</h2>
+            <p class="text-center text-gray-300 mb-6">Sie können die Themen per Drag & Drop sortieren.</p>
+            <div id="beratung-agenda-container" class="max-w-md mx-auto space-y-3">
+                <!-- Priorisierbare Agenda-Punkte werden hier per JS eingefügt -->
+            </div>
+        </div>
+
+        <!-- Slide 5...N: Dynamische Kategorieseiten -->
+        <div id="beratung-slide-kategorie-details" class="beratung-slide hidden w-full">
+            <!-- Inhalt wird dynamisch per JS generiert -->
+        </div>
+
+        <!-- Letzte Slide: Zusammenfassung & Speichern -->
+        <div id="beratung-slide-abschluss" class="beratung-slide hidden text-center">
+            <h2 class="text-4xl font-bold mb-8">Vielen Dank für das Gespräch!</h2>
+            <p class="text-xl mb-6">Die Beratung wird nun für Ihre Unterlagen gespeichert.</p>
+            <div class="loader-white mx-auto"></div>
+        </div>
+
+    </div>
+
+    <!-- Navigationsleiste -->
+    <div id="beratung-nav" class="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-8">
+        <button id="beratung-back-btn" class="beratung-nav-btn hidden">
+            <i class="fas fa-arrow-left"></i> Zurück
+        </button>
+        <button id="beratung-next-btn" class="beratung-nav-btn">
+            Weiter <i class="fas fa-arrow-right"></i>
+        </button>
+    </div>
+    </div>
+
+    <!-- Lodash und SortableJS für Drag-and-Drop -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script type="module" src="beratung_standalone.js"></script>
+</body>
+</html>
