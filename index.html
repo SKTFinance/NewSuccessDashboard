@@ -139,6 +139,7 @@
                                 <a href="#" id="money-view-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-euro-sign w-5 mr-2"></i>Geld-Ansicht</a>
                                 <a href="#" id="edit-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-edit w-5 mr-2"></i>Personendaten</a>
                                 <a href="#" id="strukturbaum-settings-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sitemap w-5 mr-2"></i>Strukturbaum</a>
+                                <a href="#" id="workingday-auswertung-btn" class="hidden block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-calendar-week w-5 mr-2"></i>WorkingDay Auswertung</a>
                                 <a href="#" id="help-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-question-circle w-5 mr-2"></i>Hilfe</a>
                                 <a href="#" id="add-new-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-plus w-5 mr-2"></i>Neuer Nutzer</a>
                                 <a href="#" id="datenschutz-header-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-shield-alt w-5 mr-2"></i>Datenschutz</a>                             <a href="#" id="time-travel-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-clock-rotate-left w-5 mr-2"></i>Zeitreise</a>
@@ -173,6 +174,16 @@
                     </div>
                 </div>
             </div>
+
+            <!-- NEU: Banner für den Freitags-Check-in -->
+            <div id="friday-checkin-banner" class="hidden my-6 p-4 bg-skt-blue text-white rounded-xl shadow-lg flex justify-between items-center cursor-pointer hover:bg-skt-blue-light transition-colors">
+                <div>
+                    <h4 class="font-bold text-lg">Working Day</h4>
+                    <p>Zeit, deine Woche zu reflektieren und die Weichen für den Erfolg zu stellen.</p>
+                </div>
+                <i class="fas fa-arrow-right text-2xl"></i>
+            </div>
+
 
             <div id="notification-prompt" class="hidden bg-skt-blue-light text-white p-4 rounded-lg shadow-md flex justify-between items-center">
                 <p>Möchtest du über wichtige Updates benachrichtigt werden?</p>
@@ -485,6 +496,11 @@
         <main id="lead-center-view" class="hidden w-full max-w-7xl mx-auto px-4 md:px-8 pt-6 pb-6">
             <!-- Inhalt von lead-center.html wird hier geladen -->
         </main>
+
+    <!-- NEU: Container für die WorkingDay-Auswertung -->
+    <main id="workingday-auswertung-view" class="hidden w-full max-w-7xl mx-auto px-4 md:px-8 pt-6 pb-6">
+        <!-- Inhalt von workingday-auswertung.html wird hier geladen -->
+    </main>
 
         <!-- NEU: Container für die Bildschirm-Ansicht -->
     <div id="bildschirm-view" class="hidden">
@@ -951,6 +967,36 @@
             </button>
             <p id="et-motivation-disclaimer" class="text-xs text-gray-400 mt-4"></p>
             <div id="et-motivation-timer-bar" class="w-full bg-gray-200 rounded-full h-2.5 mt-4"><div class="bg-skt-blue h-2.5 rounded-full"></div></div>
+        </div>
+    </div>
+
+    <!-- NEU: Modal für den Freitags-Check-in (WorkingDay) -->
+    <div id="working-day-modal" class="modal-overlay">
+        <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-2xl w-full relative max-h-[90vh] overflow-y-auto">
+            <button id="close-working-day-modal-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
+            <h3 class="text-2xl font-bold text-skt-blue mb-6">Working Day</h3>
+            <form id="working-day-form" class="space-y-6">
+                <input type="hidden" id="working-day-id">
+                <div>
+                    <label for="working-day-potential" class="block text-sm font-medium text-gray-700">Wieviel Potential hast du in deiner Gruppe erarbeiten können?</label>
+                    <input type="number" id="working-day-potential" class="modern-input mt-1" placeholder="Anzahl">
+                </div>
+                <div class="flex items-center space-x-3 pt-2">
+                    <label for="working-day-interventionen" class="toggle-switch"><input type="checkbox" id="working-day-interventionen" class="sr-only peer"><div class="toggle-slider"></div></label>
+                    <label for="working-day-interventionen" class="text-sm font-medium text-gray-700">Hast du deine Interventionen erledigt?</label>
+                </div>
+                <div>
+                    <label for="working-day-kundenservice" class="block text-sm font-medium text-gray-700">Welche Kunden hast du heute zu einem Servicetermin angerufen?</label>
+                    <div id="working-day-kundenservice" class="tag-input-container modern-input mt-1"></div>
+                </div>
+                <div>
+                    <label for="working-day-epa" class="block text-sm font-medium text-gray-700">Wieviele EPA Termine (AT, BT) hast du heute im Team vereinbart?</label>
+                    <input type="number" id="working-day-epa" class="modern-input mt-1" placeholder="Anzahl">
+                </div>
+                <div><label for="working-day-ets" class="block text-sm font-medium text-gray-700">Wieviele ETs hast du heute in deinem Team vereinbart?</label><div class="flex items-center gap-4"><input type="number" id="working-day-ets" class="modern-input mt-1 flex-grow" placeholder="Anzahl"><p id="working-day-et-soll" class="text-sm text-gray-500 mt-1 flex-shrink-0"></p></div></div>
+                <div><label for="working-day-notiz" class="block text-sm font-medium text-gray-700">Notizen</label><textarea id="working-day-notiz" rows="4" class="modern-input mt-1"></textarea></div>
+                <div class="pt-4 flex justify-end"><button type="submit" id="save-working-day-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors">Speichern</button></div>
+            </form>
         </div>
     </div>
 

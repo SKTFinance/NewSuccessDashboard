@@ -48,6 +48,7 @@ let db = {
   checkin: [],
   bürostandorte: [],
     visionen: [], // NEU
+    workingday: [], // NEU
     leads: [], // NEU
 };
 let totalEhResults = []; // NEU: Globale Variable für die vorgeladenen Gesamtumsätze
@@ -69,6 +70,7 @@ let umsatzViewInstance = null;
 let auswertungViewInstance = null;
 let planungViewInstance = null; // NEU
 let strukturbaumViewInstance = null;
+let workingDayAuswertungViewInstance = null; // NEU
 let leadCenterViewInstance = null; // NEU
 let pgTagebuchViewInstance = null;
 let stimmungsDashboardViewInstance = null;
@@ -256,6 +258,7 @@ const dom = {
   moreToolsBtn: document.getElementById('more-tools-btn'),
   moreToolsMenu: document.getElementById('more-tools-menu'),
   stimmungsDashboardMenuItem: document.getElementById('stimmungs-dashboard-menu-item'),
+  workingDayAuswertungBtn: document.getElementById('workingday-auswertung-btn'), // NEU
   helpBtn: document.getElementById('help-btn'),
   helpModal: document.getElementById('help-modal'),
   helpForm: document.getElementById('help-form'),
@@ -1234,6 +1237,10 @@ async function loadAllData() {
   if (!COLUMN_MAPS.checkin) {
     COLUMN_MAPS.checkin = CHECKIN_COLUMN_MAP_FALLBACK;
   }
+  // NEU: Fallback für WorkingDay hinzufügen, um den Fehler zu beheben.
+  if (!COLUMN_MAPS.workingday) {
+    COLUMN_MAPS.workingday = {}; // Initialisiere als leeres Objekt, um den Fehler zu vermeiden.
+  }
 
   // KORREKTUR: Lade die Mitarbeiter-Tabelle IMMER zuerst und separat.
   // Dies ist entscheidend für den Login-Screen und die Datenaktualität.
@@ -1271,6 +1278,8 @@ async function loadAllData() {
     "Checkin",
     "Visionen", // NEU
     "Leads", // NEU
+    "WorkingDay", // NEU
+    "WorkingDay", // NEU
   ];
   
   console.log('%c[DATENLADEN] %cStarte das Laden der Stammdaten...', 'color: #17a2b8; font-weight: bold;', 'color: black;');
@@ -1747,6 +1756,9 @@ function updateUiForUserRoles() {
     if (dom.stimmungsDashboardMenuItem) {
         dom.stimmungsDashboardMenuItem.classList.toggle('hidden', !hasStimmungsAccess);
     }
+
+    // KORREKTUR: Der Button ist jetzt immer sichtbar. Die Berechtigungsprüfung erfolgt beim Klick.
+    dom.workingDayAuswertungBtn.classList.remove('hidden');
 }
 
 function getPreviousMonthlyCycleDates() {
@@ -3625,6 +3637,24 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
   if (isUserLeader(user)) {
       checkAndRenderCriticalOnboardingBanner();
       await checkAndShowEtMotivationPopup(); // NEU: Motivations-Popup prüfen
+  } else {
+    // NEU: Banner für Freitags-Check-in ausblenden, wenn der Benutzer keine Führungskraft ist.
+      const fridayBanner = document.getElementById('friday-checkin-banner');
+      if (fridayBanner) fridayBanner.classList.add('hidden');
+  }
+
+  // NEU: Banner für Freitags-Check-in anzeigen (nur für Führungskräfte)
+  if (isUserLeader(user)) {
+      checkAndRenderFridayCheckinBanner();
+  } else {
+      // NEU: Banner für Freitags-Check-in ausblenden, wenn der Benutzer keine Führungskraft ist.
+      const fridayBanner = document.getElementById('friday-checkin-banner');
+      if (fridayBanner) fridayBanner.classList.add('hidden');
+  }
+
+  // NEU: Banner für Freitags-Check-in anzeigen (nur für Führungskräfte)
+  if (isUserLeader(user)) {
+      checkAndRenderFridayCheckinBanner();
   } else {
       const banner = document.getElementById('critical-onboarding-banner');
       if (banner) banner.classList.add('hidden');
@@ -10552,6 +10582,21 @@ function setupEventListeners() {
     }
   });
 
+  // NEU: Event-Listener für das WorkingDay-Modal
+  document.getElementById('close-working-day-modal-btn').addEventListener('click', closeWorkingDayModal);
+  document.getElementById('working-day-form').addEventListener('submit', (e) => { e.preventDefault(); saveWorkingDayData(); });
+  // NEU: Event-Listener für den WorkingDay-Auswertungs-Button
+  dom.workingDayAuswertungBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        // KORREKTUR: Berechtigungsprüfung beim Klick, anstatt den Button zu verstecken.
+        if (!isUserLeader(authenticatedUserData)) {
+            alert('Du hast keine Berechtigung für diese Ansicht.');
+            closeSettingsMenu(); // Menü nach dem Klick schließen
+            return;
+        }
+        switchView('workingday-auswertung');
+  });
+
   // --- User Login ---
   dom.userDropdownSelect.addEventListener("change", () => {
     document.getElementById("password-container").classList.remove("hidden");
@@ -10580,6 +10625,13 @@ function setupEventListeners() {
         // KORREKTUR: Prüfe die Datenschutzzustimmung direkt nach dem Login.
         if (authenticatedUserData && !authenticatedUserData.Datenschutz) {
             document.getElementById("user-select-screen").classList.add("hidden");
+        // NEU: WorkingDay-Auswertungs-Button nur für Führungskräfte anzeigen
+        const isLeader = isUserLeader(authenticatedUserData);
+        const today = new Date();
+        // TEMPORÄR: Button jeden Tag anzeigen
+        const shouldShowWorkingDayButton = isLeader; // Original: isLeader && today.getDay() === 5;
+        dom.workingDayAuswertungBtn.classList.toggle('hidden', !shouldShowWorkingDayButton);
+
             document.getElementById("dashboard-content").classList.remove("hidden");
             await showPrivacyConsentView();
         } else {
@@ -10987,7 +11039,6 @@ async function initializeDashboard() {
   if (loggedInUserId && findRowById("mitarbeiter", loggedInUserId)) {
     authenticatedUserData = findRowById("mitarbeiter", loggedInUserId);
     updateUiForUserRoles();
-    
     // NEU: Prüfe die Datenschutzzustimmung, BEVOR das Dashboard geladen wird.
     if (authenticatedUserData && !authenticatedUserData.Datenschutz) {
         document.getElementById("user-select-screen").classList.add("hidden");
@@ -11037,6 +11088,149 @@ async function initializeDashboard() {
   // NEU: Starte die periodische Prüfung für den täglichen Check-in
   startDailyCheckinTrigger();
 }
+
+class WorkingDayAuswertungView {
+    constructor() {
+        this.initialized = false;
+    }
+
+    _getDomElements() {
+        this.dateFilter = document.getElementById('workingday-auswertung-date-filter');
+        this.summaryContainer = document.getElementById('workingday-summary-content');
+        this.detailsContainer = document.getElementById('workingday-details-container');
+        return this.dateFilter && this.summaryContainer && this.detailsContainer;
+    }
+
+    async init() {
+        if (!this._getDomElements()) {
+            console.error('[WorkingDayAuswertung] Benötigte DOM-Elemente nicht gefunden.');
+            return;
+        }
+
+        // NEU: Standardmäßig den heutigen Tag auswählen.
+        const today = new Date();
+        this.dateFilter.value = today.toISOString().split('T')[0];
+
+        this.dateFilter.addEventListener('change', () => this.render());
+
+        await this.render();
+        this.initialized = true;
+    }
+
+    async render() { // KORREKTUR: Die Logik zum Abrufen der Untergebenen wurde hierher verschoben, um sicherzustellen, dass sie immer aktuell ist.
+        const selectedDate = this.dateFilter.value;
+        if (!selectedDate) {
+            this.summaryContainer.innerHTML = '<p>Bitte ein Datum auswählen.</p>';
+            this.detailsContainer.innerHTML = '';
+            return;
+        }
+
+        // KORREKTUR: Verwende die ID des eingeloggten Benutzers, um die Hierarchie korrekt aufzubauen.
+        const mySubordinates = getAllSubordinatesRecursive(SKT_APP.authenticatedUserData._id);
+        const relevantUserIds = new Set([authenticatedUserData._id, ...mySubordinates.map(u => u._id)]);
+
+        const entriesForDay = db.workingday.filter(entry =>
+            entry.Datum && entry.Datum.startsWith(selectedDate) && relevantUserIds.has(entry.Mitarbeiter)
+        );
+
+        this._renderSummary(entriesForDay);
+        this._renderDetails(entriesForDay);
+    }
+
+    _renderSummary(entries) {
+        if (entries.length === 0) {
+            this.summaryContainer.innerHTML = '<p class="col-span-full text-center text-gray-500">Keine Einträge für diesen Tag gefunden.</p>';
+            return;
+        }
+
+        const totalPotential = _.sumBy(entries, 'Potential');
+        const totalEPA = _.sumBy(entries, 'EPA');
+        const totalETs = _.sumBy(entries, 'ETs');
+        const interventionenDone = entries.filter(e => e.Interventionen === true).length;
+
+        const createKPICard = (label, value) => `
+            <div class="bg-white p-4 rounded-lg shadow-inner">
+                <p class="text-sm font-medium text-skt-blue-light">${label}</p>
+                <p class="text-2xl font-bold text-skt-blue mt-1">${value}</p>
+            </div>
+        `;
+
+        this.summaryContainer.innerHTML = `
+            ${createKPICard('Potential erarbeitet', totalPotential)}
+            ${createKPICard('EPA Termine', totalEPA)}
+            ${createKPICard('ETs vereinbart', totalETs)}
+            ${createKPICard('Interventionen erledigt', `${interventionenDone} / ${entries.length}`)}
+        `;
+    }
+
+    _renderDetails(entries) {
+        this.detailsContainer.innerHTML = '';
+        if (entries.length === 0) return;
+
+        const entriesByLeader = _.groupBy(entries, 'Mitarbeiter');
+
+        for (const leaderId in entriesByLeader) {
+            const leader = findRowById('mitarbeiter', leaderId);
+            if (!leader) continue;
+
+            const entry = entriesByLeader[leaderId][0]; // Es sollte nur einen pro Tag geben
+
+            const detailsCard = document.createElement('details');
+            detailsCard.className = 'bg-skt-grey-light p-4 rounded-xl border border-gray-200 open:shadow-lg';
+            detailsCard.open = true; // Standardmäßig geöffnet
+
+            const summary = document.createElement('summary');
+            summary.className = 'font-bold text-lg text-skt-blue cursor-pointer flex justify-between items-center';
+            summary.innerHTML = `<span>${leader.Name}</span><i class="fas fa-chevron-down transition-transform duration-300"></i>`;
+
+            const content = document.createElement('div');
+            content.className = 'mt-4 pt-4 border-t border-gray-300 space-y-4 text-sm';
+
+            const interventionenText = entry.Interventionen ? '<span class="text-skt-green-accent font-semibold">Ja</span>' : '<span class="text-skt-red-accent font-semibold">Nein</span>';
+            const kundenServiceTags = (entry.KundenService || '').split(',').map(k => k.trim()).filter(Boolean);
+            const kundenServiceHtml = kundenServiceTags.length > 0
+                ? kundenServiceTags.map(k => `<span class="bg-skt-blue text-white text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full">${k}</span>`).join('')
+                : '<span class="text-gray-500">Keine</span>';
+
+            content.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div><p class="font-semibold">Potential</p><p>${entry.Potential || 0}</p></div>
+                    <div><p class="font-semibold">EPA Termine</p><p>${entry.EPA || 0}</p></div>
+                    <div><p class="font-semibold">ETs</p><p>${entry.ETs || 0}</p></div>
+                    <div><p class="font-semibold">Interventionen erledigt?</p><p>${interventionenText}</p></div>
+                </div>
+                <div class="col-span-full"><p class="font-semibold">Kundenservice-Anrufe</p><div class="mt-1">${kundenServiceHtml}</div></div>
+                <div><p class="font-semibold">Notizen</p><div class="prose prose-sm max-w-none mt-1">${marked.parse(entry.Notiz || 'Keine Notizen.')}</div></div>
+            `;
+
+            detailsCard.appendChild(summary);
+            detailsCard.appendChild(content);
+            this.detailsContainer.appendChild(detailsCard);
+
+            detailsCard.addEventListener('toggle', () => {
+                const icon = summary.querySelector('i');
+                icon.classList.toggle('rotate-180', detailsCard.open);
+            });
+        }
+    }
+}
+
+async function loadAndInitWorkingDayAuswertungView() {
+    const container = document.getElementById('workingday-auswertung-view');
+    try {
+        const response = await fetch("./workingday-auswertung.html");
+        if (!response.ok) throw new Error(`Die Datei 'workingday-auswertung.html' konnte nicht gefunden werden.`);
+        container.innerHTML = await response.text();
+        if (!workingDayAuswertungViewInstance) workingDayAuswertungViewInstance = new WorkingDayAuswertungView();
+        await workingDayAuswertungViewInstance.init();
+    } catch (error) {
+        console.error("Fehler beim Laden der WorkingDay-Auswertung:", error);
+        container.innerHTML = `<p class="text-red-500 text-center">${error.message}</p>`;
+    }
+}
+
+
+
 async function proceedToDashboard(userId) {
     viewHistory = [userId];
     document.getElementById("user-select-screen").classList.add("hidden");
@@ -11816,6 +12010,175 @@ async function checkAndShowEtMotivationPopup() {
     };
 }
 
+function checkAndRenderFridayCheckinBanner() { // KORREKTUR: Name beibehalten, aber Logik geändert
+    const banner = document.getElementById('friday-checkin-banner');
+    if (!banner) return;
+
+    // NEU: Banner nur freitags (Tag 5) und für Führungskräfte ab JGST anzeigen.
+    const isFriday = new Date().getDay() === 5;
+    const isLeaderJGSTAndUp = isUserLeader(authenticatedUserData);
+
+    banner.classList.toggle('hidden', !isFriday || !isLeaderJGSTAndUp);
+    if (isFriday && isLeaderJGSTAndUp) banner.onclick = () => openWorkingDayModal();
+}
+
+async function openWorkingDayModal() {
+    const modal = document.getElementById('working-day-modal');
+    const form = document.getElementById('working-day-form');
+    const idInput = document.getElementById('working-day-id');
+    const potentialInput = document.getElementById('working-day-potential');
+    const interventionenCheckbox = document.getElementById('working-day-interventionen');
+    const epaInput = document.getElementById('working-day-epa');
+    const etsInput = document.getElementById('working-day-ets');
+    const notizTextarea = document.getElementById('working-day-notiz');
+    const etSollText = document.getElementById('working-day-et-soll');
+
+    form.reset();
+
+    // Prüfen, ob für den aktuellen Freitag bereits ein Eintrag existiert
+    const todayString = new Date().toISOString().split('T')[0];
+    const existingEntry = db.workingday.find(wd => 
+        wd.Mitarbeiter === authenticatedUserData._id && 
+        wd.Datum && wd.Datum.startsWith(todayString)
+    );
+
+    if (existingEntry) {
+        idInput.value = existingEntry._id;
+        potentialInput.value = existingEntry.Potential || '';
+        interventionenCheckbox.checked = existingEntry.Interventionen === true;
+        epaInput.value = existingEntry.EPA || '';
+        etsInput.value = existingEntry.ETs || '';
+        notizTextarea.value = existingEntry.Notiz || '';
+        // Kunden-Tags für bestehenden Eintrag rendern
+        setupTagInput(existingEntry.KundenService || '');
+    } else {
+        idInput.value = '';
+        // Leeres Tag-Input-Feld initialisieren
+        setupTagInput('');
+    }
+
+    // ET-Soll berechnen
+    const { startDate } = getMonthlyCycleDates();
+    const nextInfoDate = findNextInfoDateAfter(startDate);
+    const nextInfoDateString = nextInfoDate.toISOString().split('T')[0];
+    const infoPlan = db.infoplanung.find(p => p.Mitarbeiter_ID === authenticatedUserData._id && p.Informationsabend.startsWith(nextInfoDateString));
+    const etSoll = infoPlan?.ET_Ziel || 0;
+    etSollText.textContent = `/ ${etSoll} geplant`;
+
+    modal.classList.add('visible');
+    document.body.classList.add('modal-open');
+}
+
+function closeWorkingDayModal() {
+    const modal = document.getElementById('working-day-modal');
+    modal.classList.remove('visible');
+    document.body.classList.remove('modal-open');
+}
+
+async function saveWorkingDayData() {
+    const form = document.getElementById('working-day-form');
+    const saveBtn = document.getElementById('save-working-day-btn');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Speichern...';
+
+    const rowId = form.querySelector('#working-day-id').value;
+    const isNew = !rowId;
+
+    // Daten aus dem Tag-Input-Feld sammeln
+    const tagContainer = document.getElementById('working-day-kundenservice');
+    const tags = Array.from(tagContainer.querySelectorAll('.tag')).map(tagEl => tagEl.textContent.slice(0, -1).trim());
+    const freeTextInput = tagContainer.querySelector('.tag-input').value.trim();
+    if (freeTextInput) tags.push(freeTextInput);
+
+    const rowData = {
+        [COLUMN_MAPS.workingday.Mitarbeiter]: [authenticatedUserData._id],
+        [COLUMN_MAPS.workingday.Datum]: new Date().toISOString().split('T')[0],
+        [COLUMN_MAPS.workingday.Potential]: parseInt(form.querySelector('#working-day-potential').value) || 0,
+        [COLUMN_MAPS.workingday.Interventionen]: form.querySelector('#working-day-interventionen').checked,
+        [COLUMN_MAPS.workingday.KundenService]: tags.join(', '),
+        [COLUMN_MAPS.workingday.EPA]: parseInt(form.querySelector('#working-day-epa').value) || 0,
+        [COLUMN_MAPS.workingday.ETs]: parseInt(form.querySelector('#working-day-ets').value) || 0,
+        [COLUMN_MAPS.workingday.Notiz]: form.querySelector('#working-day-notiz').value,
+    };
+
+    let success = false;
+    if (isNew) {
+        success = await genericAddRowWithLinks('WorkingDay', rowData, ['Mitarbeiter']);
+    } else {
+        // Für Updates verwenden wir eine SQL-Abfrage, da es einfacher ist.
+        const setClauses = Object.entries(rowData).map(([key, value]) => {
+            if (key === COLUMN_MAPS.workingday.Mitarbeiter) return null; // Mitarbeiter wird nicht geändert
+            const colName = Object.keys(COLUMN_MAPS.workingday).find(k => COLUMN_MAPS.workingday[k] === key);
+            if (!colName) return null;
+            let formattedValue;
+            if (typeof value === 'number') formattedValue = value;
+            else if (typeof value === 'boolean') formattedValue = value ? 'true' : 'false';
+            else formattedValue = `'${escapeSql(String(value))}'`;
+            return `\`${colName}\` = ${formattedValue}`;
+        }).filter(Boolean).join(', ');
+
+        const sql = `UPDATE \`WorkingDay\` SET ${setClauses} WHERE \`_id\` = '${rowId}'`;
+        const result = await seaTableSqlQuery(sql, false);
+        success = result !== null;
+    }
+
+    if (success) {
+        localStorage.removeItem(CACHE_PREFIX + 'workingday');
+        await loadAllData();
+        closeWorkingDayModal();
+    } else {
+        alert('Fehler beim Speichern der Daten.');
+    }
+
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Speichern';
+}
+
+async function setupTagInput(initialValue) {
+    const container = document.getElementById('working-day-kundenservice');
+    container.innerHTML = ''; // Clear previous content
+
+    const createTag = (text) => {
+        const tag = document.createElement('span');
+        tag.className = 'tag';
+        tag.textContent = text;
+        const removeBtn = document.createElement('span');
+        removeBtn.className = 'tag-remove';
+        removeBtn.innerHTML = '&times;';
+        removeBtn.onclick = () => tag.remove();
+        tag.appendChild(removeBtn);
+        return tag;
+    };
+
+    if (initialValue) {
+        initialValue.split(',').forEach(tagText => {
+            if (tagText.trim()) {
+                container.appendChild(createTag(tagText.trim()));
+            }
+        });
+    }
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'tag-input';
+    input.placeholder = 'Kunden hinzufügen...';
+    container.appendChild(input);
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            const text = input.value.trim();
+            if (text) {
+                container.insertBefore(createTag(text), input);
+                input.value = '';
+            }
+        }
+    });
+
+    container.addEventListener('click', () => {
+        input.focus();
+    });
+}
 
 async function handleAIAssistantClick() {
   dom.hinweisModalTitle.textContent = "Frag den Adler";
@@ -14137,6 +14500,7 @@ function switchView(viewName) {
   dom.einarbeitungView.classList.toggle("hidden", viewName !== "einarbeitung");
   dom.appointmentsView.classList.toggle("hidden", viewName !== "appointments");
   dom.potentialView.classList.toggle("hidden", viewName !== "potential");
+  document.getElementById('workingday-auswertung-view').classList.toggle('hidden', viewName !== 'workingday-auswertung'); // NEU
   dom.leadCenterView.classList.toggle('hidden', viewName !== 'lead-center'); // NEU
   dom.datenschutzView.classList.toggle("hidden", viewName !== "datenschutz");
   dom.umsatzView.classList.toggle("hidden", viewName !== "umsatz");
@@ -14162,6 +14526,7 @@ function switchView(viewName) {
       'lead-center': [dom.leadCenterHeaderBtn, document.getElementById('lead-center-menu-item')], // NEU
       'wettbewerb': [dom.wettbewerbHeaderBtn, document.getElementById('wettbewerb-menu-item')], // NEU
       'planung': [dom.planningBtn, document.getElementById('planung-menu-item')], // NEU
+      'workingday-auswertung': [dom.workingDayAuswertungBtn], // NEU
       'strukturbaum': [dom.strukturbaumHeaderBtn, document.getElementById('strukturbaum-menu-item')],
       'stimmungs-dashboard': [document.getElementById('stimmungs-dashboard-header-btn')],
       'datenschutz': [dom.datenschutzHeaderBtn],
@@ -14224,6 +14589,8 @@ function switchView(viewName) {
   } else if (viewName === 'wettbewerb') { // NEU
     // KORREKTUR: Die Berechtigungsprüfung erfolgt jetzt in updateUiForUserRoles, die den Button ein-/ausblendet.
     loadAndInitWettbewerbView();
+  } else if (viewName === 'workingday-auswertung') { // NEU
+    loadAndInitWorkingDayAuswertungView();
   }
 }
 

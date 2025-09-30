@@ -1,0 +1,23 @@
+<!-- Ansicht für die WorkingDay-Auswertung -->
+<div id="workingday-auswertung-module-root" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h2 class="text-3xl font-bold text-skt-blue">WorkingDay Auswertung</h2>
+        <div class="w-full sm:w-auto sm:max-w-xs">
+            <label for="workingday-auswertung-date-filter" class="block text-sm font-medium text-gray-700 mb-1">Datum auswählen</label>
+            <input type="date" id="workingday-auswertung-date-filter" class="modern-input">
+        </div>
+    </div>
+
+    <!-- Gesamtübersicht -->
+    <div id="workingday-summary-container" class="mb-8 p-6 bg-skt-grey-light rounded-xl border border-gray-200">
+        <h3 class="text-xl font-semibold text-skt-blue mb-4">Gesamtübersicht für den ausgewählten Tag</h3>
+        <div id="workingday-summary-content" class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+            <!-- KPIs werden hier per JS eingefügt -->
+        </div>
+    </div>
+
+    <!-- Detailansicht pro Gruppe/Mitarbeiter -->
+    <div id="workingday-details-container" class="space-y-6">
+        <!-- Details werden hier per JS eingefügt -->
+    </div>
+</div>

@@ -1439,3 +1439,41 @@ summary::-webkit-details-marker {
 .countdown-bar-animate > div {
     animation: countdownAnimation 20s linear forwards;
 }
+
+/* NEU: Stile für das Tag-Eingabefeld (WorkingDay Modal) */
+.tag-input-container {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px; /* Überschreibt das Standard-Padding von modern-input */
+    cursor: text;
+}
+.tag-input-container .tag {
+    display: flex;
+    align-items: center;
+    background-color: var(--color-skt-blue);
+    color: white;
+    border-radius: 12px;
+    padding: 4px 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+.tag-input-container .tag .tag-remove {
+    margin-left: 6px;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+.tag-input-container .tag .tag-remove:hover {
+    opacity: 1;
+}
+.tag-input-container .tag-input {
+    flex-grow: 1;
+    border: none;
+    outline: none;
+    background-color: transparent;
+    min-width: 150px;
+}
