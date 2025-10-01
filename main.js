@@ -607,65 +607,6 @@ async function getSeaTableDownloadLink(filePath) {
     }
 }
 
-async function getSeaTableDownloadLink(filePath) {
-    const log = (message, ...data) => console.log(`%c[DownloadLink] %c${message}`, 'color: #17a2b8; font-weight: bold;', 'color: black;', ...data);
-    log(`Anfrage für Download-Link für Pfad: ${filePath}`);
-
-    if (!SEATABLE_API_TOKEN) {
-        log("!!! FEHLER: Haupt-API-Token (SEATABLE_API_TOKEN) fehlt.");
-        console.error("Cannot get download link without the main SeaTable API Token.");
-        return null;
-    }
-    try {
-        // The API expects a path relative to the asset directory, e.g., "files/2024-01/document.pdf"
-        // The path from the database might be a full URL.
-        let relativePath = filePath;
-        const assetPrefix = `/asset/${SEATABLE_DTABLE_UUID}/`;
-        const assetIndex = relativePath.indexOf(assetPrefix);
-
-        if (assetIndex !== -1) {
-            // Extract the path part AFTER "/asset/<dtable_uuid>/"
-            relativePath = relativePath.substring(assetIndex + assetPrefix.length);
-            log(`Asset-Pfad extrahiert: ${relativePath}`);
-        } else {
-            log(`WARNUNG: Asset-Präfix nicht im Pfad gefunden. Verwende Pfad wie er ist: ${relativePath}`);
-        }
-
-        let rawPath;
-        try {
-            const correctedPath = relativePath.replace(/%6s/g, '%20');
-            rawPath = decodeURIComponent(correctedPath);
-            log(`Pfad dekodiert zu: ${rawPath}`);
-        } catch (e) {
-            log(`Konnte Pfad nicht dekodieren, wird unverändert verwendet. Fehler: ${e.message}`);
-            rawPath = relativePath; // Fallback
-        }
-
-        const url = `https://cloud.seatable.io/api/v2.1/dtable/app-download-link/?dtable_uuid=${SEATABLE_DTABLE_UUID}&path=${rawPath}`;
-        log(`Sende GET-Anfrage an: ${url}`);
-        
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: { Authorization: `Token ${SEATABLE_API_TOKEN}` }
-        });
-        log(`Antwort-Status: ${response.status}`);
-        if (!response.ok) {
-            const errorText = await response.text();
-            log(`!!! FEHLER: HTTP-Fehler!`, { status: response.status, text: errorText });
-            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-        }
-        
-        const data = await response.json();
-        log('Erfolgreiche Antwort erhalten:', data);
-
-        return data.download_link;
-    } catch (error) {
-        log('!!! KRITISCHER FEHLER beim Abrufen des Download-Links:', error);
-        console.error("Error getting SeaTable download link:", error);
-        return null;
-    }
-}
-
 async function seaTableUpdateRow(tableName, rowId, rowData) {
   const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
   if (!tableMap) {
