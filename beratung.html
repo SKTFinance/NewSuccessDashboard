@@ -11,10 +11,17 @@
 <body class="bg-skt-blue">
     <!-- Ansicht für die interaktive Beratung -->
     <div id="beratung-root" class="h-screen w-screen bg-skt-blue text-white flex flex-col items-center justify-center p-4 relative overflow-hidden">
-        
-    <!-- Hintergrundbild für den Welcome-Screen -->
-    <div id="beratung-bg-image" class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 opacity-0"></div>
+
+    <!-- Hintergrundbild für den Welcome-Screen (NEU) -->
+    <div id="beratung-bg-image" class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 opacity-0" style="background-image: url('https://images.unsplash.com/photo-1556761175-5973dc0f32e7?q=80&w=2832&auto=format&fit=crop');"></div>
     <div class="absolute inset-0 bg-skt-blue opacity-80"></div>
+
+    <!-- NEU: Lade-Overlay -->
+    <div id="beratung-loading-overlay" class="hidden absolute inset-0 bg-skt-blue z-50 flex-col items-center justify-center text-center transition-opacity duration-300">
+        <div class="loader-white"></div>
+        <p id="loading-text" class="text-xl mt-4 font-semibold text-white transition-opacity duration-500"></p>
+    </div>
+
 
     <!-- Hauptcontainer für die Slides -->
     <div id="beratung-slides-container" class="relative w-full max-w-4xl h-full flex items-center justify-center">
@@ -28,7 +35,7 @@
 
         <!-- Slide 2: Willkommensbildschirm -->
         <div id="beratung-slide-welcome" class="beratung-slide hidden text-center">
-            <h1 class="text-6xl font-bold font-times-new-roman">Willkommensberatung</h1>
+            <h1 class="text-6xl font-bold font-times-new-roman">Finanzkonzept</h1>
             <p id="beratung-welcome-kundenname" class="text-3xl mt-4 text-gray-200"></p>
         </div>
 
@@ -44,15 +51,79 @@
         <div id="beratung-slide-agenda" class="beratung-slide hidden w-full">
             <h2 class="text-3xl font-bold text-center mb-8">Lassen Sie uns die Reihenfolge festlegen.</h2>
             <p class="text-center text-gray-300 mb-6">Sie können die Themen per Drag & Drop sortieren.</p>
-            <div id="beratung-agenda-container" class="max-w-md mx-auto space-y-3">
-                <!-- Priorisierbare Agenda-Punkte werden hier per JS eingefügt -->
+            <div id="beratung-agenda-container" class="max-w-md mx-auto space-y-3"></div>
+        </div>
+
+        <!-- NEU: Statische Seiten für die Säulenauswahl -->
+        <div id="beratung-slide-investment-selection" class="beratung-slide hidden w-full">
+            <h2 class="text-3xl font-bold text-center mb-8">Welche Investment-Form interessiert Sie?</h2>
+            <div id="investment-selection-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
+                <!-- Optionen werden per JS aus den Produkten der Kategorie geladen -->
             </div>
         </div>
 
-        <!-- Slide 5...N: Dynamische Kategorieseiten -->
-        <div id="beratung-slide-kategorie-details" class="beratung-slide hidden w-full">
-            <!-- Inhalt wird dynamisch per JS generiert -->
+        <div id="beratung-slide-habundgut-selection" class="beratung-slide hidden w-full">
+            <h2 class="text-3xl font-bold text-center mb-8">Welchen Bereich von "Hab & Gut" möchten Sie besprechen?</h2>
+            <div id="habundgut-selection-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
+                <!-- Optionen werden per JS aus den Produkten der Kategorie geladen -->
+            </div>
         </div>
+
+        <div id="beratung-slide-koerperundexistenz-selection" class="beratung-slide hidden w-full">
+            <h2 class="text-3xl font-bold text-center mb-8">Welche Absicherung ist Ihnen wichtig?</h2>
+            <div id="koerperundexistenz-selection-container" class="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
+                <!-- Optionen werden per JS aus den Produkten der Kategorie geladen -->
+            </div>
+        </div>
+
+        <div id="beratung-slide-finanzierung-selection" class="beratung-slide hidden w-full">
+            <h2 class="text-3xl font-bold text-center mb-8">Welche Art der Finanzierung benötigen Sie?</h2>
+            <div id="finanzierung-selection-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
+                <!-- Optionen werden per JS aus den Produkten der Kategorie geladen -->
+            </div>
+        </div>
+
+        <div id="beratung-slide-stromundgas-selection" class="beratung-slide hidden w-full">
+            <h2 class="text-3xl font-bold text-center mb-8">Welchen Anbieter möchten Sie wechseln?</h2>
+            <div id="stromundgas-selection-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
+                <!-- Optionen werden per JS aus den Produkten der Kategorie geladen -->
+            </div>
+        </div>
+
+        <!-- Dynamisch generierte Seite für Besonderheiten (bleibt dynamisch, da der Inhalt vom Produkt abhängt) -->
+        <div id="beratung-slide-dynamic-features" class="beratung-slide hidden w-full"></div>
+
+        <!-- NEU: Platzhalter für die Produktempfehlungs-Seite -->
+        <div id="beratung-slide-product-recommendation" class="beratung-slide hidden w-full">
+            <h2 class="text-4xl font-bold text-center mb-8">Produktempfehlung</h2>
+        </div>
+
+        <!-- NEU: Statische Seiten für die Produkt-Erklärungen -->
+        <!-- Diese können individuell gestaltet werden. -->
+        <div id="beratung-slide-explanation-FLV" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: FLV</h2></div>
+        <div id="beratung-slide-explanation-Fondssparen" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Fondssparen</h2></div>
+        <!-- NEU: Statische Seite für Haftpflicht, wie gewünscht -->
+        <div id="beratung-slide-special-Haftpflicht" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Direktverweis Helvetia Haftpflicht</h2></div>
+
+        <div id="beratung-slide-explanation-Rechtschutz" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Rechtschutz</h2></div>
+        <div id="beratung-slide-explanation-Eigenheim" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Eigenheim</h2></div>
+        <div id="beratung-slide-explanation-Haushalt" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Haushalt</h2></div>
+        <div id="beratung-slide-explanation-Krankenversicherung" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Krankenversicherung</h2></div>
+        <div id="beratung-slide-explanation-Unfallversicherung" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Unfallversicherung</h2></div>
+        <div id="beratung-slide-explanation-Risikoleben" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Risikoleben</h2></div>
+        <div id="beratung-slide-explanation-Berufsunfähigkeit" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Berufsunfähigkeit</h2></div>
+        <div id="beratung-slide-explanation-Immobilie" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Immobilie</h2></div>
+        <div id="beratung-slide-explanation-Haftpflicht" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Haftpflicht</h2></div>
+        <div id="beratung-slide-explanation-KFZ" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: KFZ</h2></div>
+        <div id="beratung-slide-explanation-Kredit" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Kredit</h2></div>
+        <div id="beratung-slide-explanation-Leasing" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Leasing</h2></div>
+        <div id="beratung-slide-explanation-Strom" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Strom</h2></div>
+        <div id="beratung-slide-explanation-Gas" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Gas</h2></div>
+
+        <!-- Spezielle Seiten für FLV -->
+        <div id="beratung-slide-special-FLV-Finanzielle_Ziele_Auswahl" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">FLV: Finanzielle Ziele Auswahl</h2></div>
+        <div id="beratung-slide-special-FLV-Dreikontenmodell" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">FLV: Dreikontenmodell</h2></div>
+        <div id="beratung-slide-special-FLV-Steuervorteilrechner" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">FLV: Steuervorteilrechner</h2></div>
 
         <!-- Letzte Slide: Zusammenfassung & Speichern -->
         <div id="beratung-slide-abschluss" class="beratung-slide hidden text-center">
@@ -60,7 +131,6 @@
             <p class="text-xl mb-6">Die Beratung wird nun für Ihre Unterlagen gespeichert.</p>
             <div class="loader-white mx-auto"></div>
         </div>
-
     </div>
 
     <!-- Navigationsleiste -->

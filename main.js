@@ -607,6 +607,65 @@ async function getSeaTableDownloadLink(filePath) {
     }
 }
 
+async function getSeaTableDownloadLink(filePath) {
+    const log = (message, ...data) => console.log(`%c[DownloadLink] %c${message}`, 'color: #17a2b8; font-weight: bold;', 'color: black;', ...data);
+    log(`Anfrage für Download-Link für Pfad: ${filePath}`);
+
+    if (!SEATABLE_API_TOKEN) {
+        log("!!! FEHLER: Haupt-API-Token (SEATABLE_API_TOKEN) fehlt.");
+        console.error("Cannot get download link without the main SeaTable API Token.");
+        return null;
+    }
+    try {
+        // The API expects a path relative to the asset directory, e.g., "files/2024-01/document.pdf"
+        // The path from the database might be a full URL.
+        let relativePath = filePath;
+        const assetPrefix = `/asset/${SEATABLE_DTABLE_UUID}/`;
+        const assetIndex = relativePath.indexOf(assetPrefix);
+
+        if (assetIndex !== -1) {
+            // Extract the path part AFTER "/asset/<dtable_uuid>/"
+            relativePath = relativePath.substring(assetIndex + assetPrefix.length);
+            log(`Asset-Pfad extrahiert: ${relativePath}`);
+        } else {
+            log(`WARNUNG: Asset-Präfix nicht im Pfad gefunden. Verwende Pfad wie er ist: ${relativePath}`);
+        }
+
+        let rawPath;
+        try {
+            const correctedPath = relativePath.replace(/%6s/g, '%20');
+            rawPath = decodeURIComponent(correctedPath);
+            log(`Pfad dekodiert zu: ${rawPath}`);
+        } catch (e) {
+            log(`Konnte Pfad nicht dekodieren, wird unverändert verwendet. Fehler: ${e.message}`);
+            rawPath = relativePath; // Fallback
+        }
+
+        const url = `https://cloud.seatable.io/api/v2.1/dtable/app-download-link/?dtable_uuid=${SEATABLE_DTABLE_UUID}&path=${rawPath}`;
+        log(`Sende GET-Anfrage an: ${url}`);
+        
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: { Authorization: `Token ${SEATABLE_API_TOKEN}` }
+        });
+        log(`Antwort-Status: ${response.status}`);
+        if (!response.ok) {
+            const errorText = await response.text();
+            log(`!!! FEHLER: HTTP-Fehler!`, { status: response.status, text: errorText });
+            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        }
+        
+        const data = await response.json();
+        log('Erfolgreiche Antwort erhalten:', data);
+
+        return data.download_link;
+    } catch (error) {
+        log('!!! KRITISCHER FEHLER beim Abrufen des Download-Links:', error);
+        console.error("Error getting SeaTable download link:", error);
+        return null;
+    }
+}
+
 async function seaTableUpdateRow(tableName, rowId, rowData) {
   const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
   if (!tableMap) {
@@ -1763,14 +1822,12 @@ function updateUiForUserRoles() {
 
     const stimmungsDashboardHeaderBtn = document.getElementById('stimmungs-dashboard-header-btn');
     if (stimmungsDashboardHeaderBtn) {
-        stimmungsDashboardHeaderBtn.classList.toggle('sm:flex', hasStimmungsAccess);
+        stimmungsDashboardHeaderBtn.classList.toggle('hidden', !hasStimmungsAccess);
     }
     if (dom.stimmungsDashboardMenuItem) {
         dom.stimmungsDashboardMenuItem.classList.toggle('hidden', !hasStimmungsAccess);
     }
-
-    // KORREKTUR: Der Button ist jetzt immer sichtbar. Die Berechtigungsprüfung erfolgt beim Klick.
-    dom.workingDayAuswertungBtn.classList.remove('hidden');
+    dom.workingDayAuswertungBtn.classList.remove('hidden'); // KORREKTUR: Der Button ist jetzt immer sichtbar. Die Berechtigungsprüfung erfolgt beim Klick.
 }
 
 function getPreviousMonthlyCycleDates() {
@@ -1985,7 +2042,8 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
         t.Mitarbeiter_ID === user._id &&
         t.Status === 'Ausgemacht' &&
         t.Datum && new Date(t.Datum) < today &&
-        t.Absage !== true // NEU: Stornierte Termine ausschließen
+        t.Absage !== true && // NEU: Stornierte Termine ausschließen
+        t.Kategorie !== 'Sonstiges' // NEU: "Sonstiges" ignorieren
     ).length;
     const anzahlGeworbenerMA = db.mitarbeiter.filter(m => m.Werber === user._id && m.Status !== 'Ausgeschieden').length;
     const position = user.Karrierestufe || "";
@@ -6256,6 +6314,7 @@ class AppointmentsView {
         // KORREKTUR: Filtere von `searchFilteredAppointments`, um die Datumsfilter zu ignorieren und Diskrepanzen zu beheben.
         const outstanding = this.searchFilteredAppointments.filter(t => {
             if (!t.Datum || t.Status !== 'Ausgemacht' || t.Absage === true) return false; // NEU: Stornierte Termine ausschließen
+            if (t.Kategorie === 'Sonstiges') return false; // NEU: "Sonstiges" ignorieren
             const terminDate = new Date(t.Datum);
             return terminDate < today;
         });
@@ -13663,8 +13722,9 @@ async function addOrUpdateCheckinEntry(rowId, rowDataWithKeys) {
             } else if (colMeta && (colMeta.type === 'number' || colMeta.type === 'duration')) {
                 const numValue = parseFloat(value);
                 formattedValue = isNaN(numValue) ? "NULL" : numValue;
-            } else {
-                // Alle anderen Felder (Motivation, Todos, und die 'x'-Checkboxen) werden als Text behandelt.
+            } else if (typeof value === 'boolean') {
+                formattedValue = value ? "true" : "false";
+            } else { // Alle anderen Felder (Motivation, Todos, und die 'x'-Checkboxen) werden als Text behandelt.
                 formattedValue = `'${escapeSql(String(value))}'`;
             }
             setClauses.push(`\`${colName}\` = ${formattedValue}`);
@@ -15795,12 +15855,16 @@ async openCheckinModal(isEditMode = false) {
         checkinStartTime = Date.now();
     
         // KORREKTUR: Lade den bestehenden Check-in, um die Dauer zu initialisieren.
+        // Die Logik unterscheidet jetzt zwischen dem Check-in einer Führungskraft und dem eines Trainees.
         const todayStringForEdit = new Date().toISOString().split('T')[0];
-        const leaderCheckin = isEditMode ? db.checkin.find(c => 
-            c.Mitarbeiter === authenticatedUserData._id && 
-            c.Datum && c.Datum.startsWith(todayStringForEdit) && 
-            (c.Stimmung !== undefined && c.Stimmung !== null)
-        ) : null;
+        const isLeader = isUserLeader(authenticatedUserData);
+        const leaderCheckin = isEditMode ? db.checkin.find(c => {
+            const isCorrectUser = c.Mitarbeiter === authenticatedUserData._id;
+            const isCorrectDate = c.Datum && c.Datum.startsWith(todayStringForEdit);
+            // Für Führungskräfte suchen wir den Eintrag mit Stimmung, für Trainees den mit `Traineeantwort`.
+            const isCorrectType = isLeader ? (c.Stimmung !== undefined && c.Stimmung !== null) : c.Traineeantwort === true;
+            return isCorrectUser && isCorrectDate && isCorrectType;
+        }) : null;
         const initialDuration = leaderCheckin?.Dauer || 0; // in seconds
     
         if (checkinTimerInterval) clearInterval(checkinTimerInterval);
@@ -15830,7 +15894,6 @@ async openCheckinModal(isEditMode = false) {
         const todosContainer = document.getElementById('checkin-todos-container'); // NEU: Logik für mehrstufigen Check-in
 
         // NEU: Rollenspezifische UI-Anpassungen
-        const isLeader = isUserLeader(authenticatedUserData);
         document.getElementById('checkin-step-2').style.display = isLeader ? '' : 'none';
         document.getElementById('checkin-step-3').style.display = isLeader ? '' : 'none';
         document.getElementById('checkin-step-4').style.display = isLeader ? '' : 'none';
@@ -15853,7 +15916,7 @@ async openCheckinModal(isEditMode = false) {
     
         // NEU: Daten für den Bearbeitungsmodus abrufen
         const todayString = new Date().toISOString().split('T')[0];
-        checkinLog('Heutiger Check-in des Leiters:', leaderCheckin);
+        checkinLog('Heutiger Check-in des Benutzers:', leaderCheckin);
     
         const teamCheckins = isEditMode
             ? db.checkin.filter(c => {
@@ -16954,7 +17017,8 @@ async openCheckinModal(isEditMode = false) {
             const traineeStep3Data = { change: document.getElementById('checkin-change').value };
 
             const traineeId = authenticatedUserData._id;
-            const existingTraineeCheckin = db.checkin.find(c => c.Mitarbeiter === traineeId && c.Datum.startsWith(todayString));
+            // KORREKTUR: Suche explizit nach einem Eintrag, der als Trainee-Antwort markiert ist.
+            const existingTraineeCheckin = db.checkin.find(c => c.Mitarbeiter === traineeId && c.Datum.startsWith(todayString) && c.Traineeantwort === true);
             const initialDuration = existingTraineeCheckin?.Dauer || 0;
             const durationInSeconds = checkinStartTime ? initialDuration + Math.round((Date.now() - checkinStartTime) / 1000) : initialDuration;
 
@@ -17045,6 +17109,7 @@ window.SKT_APP = {
   seaTableUpdateRow,
   seaTableUpdateTermin,
   seaTableAddTermin,
+  getSeaTableDownloadLink,
   seaTableDeleteRow,
   mapSqlResults,
   findRowById,
