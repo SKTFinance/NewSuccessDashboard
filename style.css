@@ -1438,8 +1438,138 @@ summary::-webkit-details-marker {
 }
 
 /* --- NEU: Stile für die Beratungs-Ansicht --- */
-.beratung-slide { transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out; }
-.beratung-slide.hidden { opacity: 0; pointer-events: none; position: absolute; transform: scale(0.95); }
+.beratung-slide {
+    /* KORREKTUR: Slides sind standardmäßig ausgeblendet und unsichtbar. */
+    display: none;
+    opacity: 0;
+    transition: opacity 0.4s ease-in-out;
+    width: 100%;
+    /* Zentriert den Inhalt des Slides */
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+.beratung-slide.active {
+    /* KORREKTUR: Der aktive Slide wird als Flexbox angezeigt, um den Inhalt zu zentrieren. */
+    display: flex;
+    opacity: 1;
+}
+.beratung-slide .prose {
+    color: inherit; /* Stellt sicher, dass der Text die Farbe des Eltern-Elements erbt (weiß) */
+}
+.beratung-slide .prose strong {
+    color: inherit; /* Stellt sicher, dass fetter Text auch weiß ist */
+}
+/* KORREKTUR: Mindesthöhe für Goal-Cards, damit sie immer sichtbar sind */
+.goal-card .shadow-text {
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+.goal-card.selected .absolute.inset-0.bg-black {
+    background-color: rgba(212, 175, 55, 0.5); /* Gold-Overlay bei Auswahl */
+}
+
+/* --- Stile für 3-Konten-Modell --- */
+.timeline-container {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 0.75rem;
+    padding: 1rem;
+}
+.timeline-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+    position: relative; /* Für Tooltip */
+}
+.timeline-bar {
+    /* KORREKTUR: Breite wird jetzt in den spezifischen Klassen gesetzt */
+    height: 40px;
+    border-radius: 4px;
+    flex-shrink: 0; /* Verhindert, dass der Balken schrumpft */
+    margin-right: 0.5rem; /* Abstand zum Text */
+}
+/* KORREKTUR: Unterschiedliche Breiten für die Zeitstrahlen */
+.timeline-bar-blue { background-color: var(--color-skt-blue-main); width: 120px; }
+.timeline-bar-yellow { background-color: var(--color-accent-yellow); width: 240px; }
+.timeline-bar-green { background-color: var(--color-accent-green); width: 360px; }
+.timeline-title {
+    display: flex; /* Für Icon und Text */
+    align-items: center;
+}
+.timeline-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+.timeline-duration {
+    font-size: 1rem;
+    font-weight: 400;
+    color: #9ca3af; /* gray-400 */
+}
+.timeline-content {
+    padding-left: calc(1rem + 8px); /* padding + bar width */
+    font-size: 1.125rem;
+    min-height: 3rem; /* Platzhalter, damit es nicht springt */
+}
+.step-content {
+    opacity: 0; /* Startet unsichtbar */
+    transform: translateX(-30px) scale(0.98); /* Etwas stärkerer Effekt */
+    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+}
+.step-content.visible {
+    opacity: 1; /* Wird sichtbar */
+    transform: translateX(0) scale(1); /* Bewegt sich an die Endposition */
+}
+.contract-box {
+    border: 2px solid white;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    text-align: center;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+.contract-box p {
+    font-weight: 600;
+}
+
+/* --- NEU: Stile für Zinseszins-Chart --- */
+.chart-bar-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 80px;
+}
+.chart-bar {
+    width: 100%;
+    border-radius: 0.5rem 0.5rem 0 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    transition: height 1.5s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.chart-bar.bar-blue { background-color: var(--color-skt-blue-main); }
+.chart-bar.bar-yellow { background-color: var(--color-accent-yellow); }
+.chart-bar.bar-green { background-color: var(--color-accent-green); }
+
+.chart-segment-invested { background-color: rgba(255, 255, 255, 0.3); }
+.chart-segment-profit { background-color: transparent; }
+
+.chart-value {
+    position: absolute;
+    top: -1.75rem; /* 28px */
+    left: 50%;
+    transform: translateX(-50%);
+    font-weight: 700;
+    font-size: 1.125rem; /* text-lg */
+    color: white;
+}
+.chart-label {
+    margin-top: 0.5rem;
+    font-weight: 600;
+}
+.chart-tax-label {
+    margin-top: 0.25rem;
+    font-size: 0.75rem; /* text-xs */
+    color: var(--color-skt-red-accent);
+}
 .beratung-nav-btn { background-color: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3); padding: 0.75rem 1.5rem; border-radius: 999px; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; transition: all 0.2s; }
 .beratung-nav-btn:hover { background-color: rgba(255, 255, 255, 0.2); }
 .beratung-nav-btn:disabled { opacity: 0.5; cursor: not-allowed; }

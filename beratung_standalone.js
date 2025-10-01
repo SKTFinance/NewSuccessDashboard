@@ -228,6 +228,7 @@ class BeratungView {
         this.slides = [];
         this.beratungData = { // KORREKTUR: startTime wird jetzt hier initialisiert.
             kundenname: '',
+            mitarbeitername: '', // NEU
             mitarbeiterId: null,
             startTime: new Date(),
             kategorien: [],
@@ -267,8 +268,10 @@ class BeratungView {
         // NEU: Definiert die Start-Slides für die Navigation.
         this.navigation = {
             startPhase: [
+                'beratung-slide-mitarbeitername',
                 'beratung-slide-kundenname',
                 'beratung-slide-welcome',
+                'beratung-slide-berater-vorstellung',
                 'beratung-slide-kategorien',
                 'beratung-slide-agenda'
             ],
@@ -293,6 +296,7 @@ class BeratungView {
         this.backBtn = document.getElementById('beratung-back-btn');
         this.nextBtn = document.getElementById('beratung-next-btn');
         this.bgImage = document.getElementById('beratung-bg-image');
+        this.mitarbeiternameInput = document.getElementById('beratung-mitarbeitername-input'); // NEU
         this.slides = Array.from(document.querySelectorAll('.beratung-slide'));
         this.kundennameInput = document.getElementById('beratung-kundenname-input');
         this.welcomeKundenname = document.getElementById('beratung-welcome-kundenname');
@@ -319,6 +323,17 @@ class BeratungView {
     _setupEventListeners() {
         this.nextBtn.addEventListener('click', () => this._navigateNext());
         this.backBtn.addEventListener('click', () => this._navigateBack());
+
+        // KORREKTUR: Ruft jetzt eine dedizierte Funktion auf, um den Button-Status zu aktualisieren.
+        this.mitarbeiternameInput.addEventListener('input', () => this._updateNavButtons());
+        this.kundennameInput.addEventListener('input', () => this._updateNavButtons());
+
+        this.mitarbeiternameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.nextBtn.click();
+            }
+        });
         this.kundennameInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -335,13 +350,16 @@ class BeratungView {
 
     _showSlide(slideId) {
         beratungLog(`Zeige Slide: ${slideId}`);
-        this.slides.forEach(s => s.classList.add('hidden'));
+        this.slides.forEach(s => {
+            s.classList.remove('active');
+        });
+
         const activeSlide = this.slides.find(s => s.id === slideId);
         if (activeSlide) {
-            activeSlide.classList.remove('hidden');
+            activeSlide.classList.add('active');
 
             // NEU: Hintergrundbild für die ersten beiden Slides einblenden
-            const showBg = slideId === 'beratung-slide-kundenname' || slideId === 'beratung-slide-welcome';
+            const showBg = ['beratung-slide-mitarbeitername', 'beratung-slide-kundenname', 'beratung-slide-welcome'].includes(slideId);
             this.bgImage.classList.toggle('opacity-30', showBg);
 
             this.currentSlideId = slideId; // Speichere die aktuelle Slide-ID
@@ -357,22 +375,39 @@ class BeratungView {
                 this._renderBesonderheiten();
             }
 
+            // NEU: Prüfe, ob es sich um die Berater-Vorstellungsseite handelt
+            if (slideId === 'beratung-slide-berater-vorstellung') {
+                this._renderBeraterVorstellung();
+            }
+
+            // NEU: Prüfe, ob es sich um die "Finanzielle Ziele"-Seite handelt
+            if (slideId === 'beratung-slide-special-FLV-Finanzielle_Ziele_Auswahl') {
+                this._renderFinancialGoals();
+            }
+
+            // NEU: Prüfe, ob es sich um das "3-Konten-Modell" handelt
+            if (slideId === 'beratung-slide-special-FLV-Dreikontenmodell') {
+                this._initThreeAccountsModel();
+                this._renderCompoundInterestChart();
+            }
+
             // NEU: Prüfe, ob es sich um die "Produktempfehlung"-Seite handelt und rendere den Inhalt.
             if (slideId === 'beratung-slide-product-recommendation') {
                 // KORREKTUR: Die Rendering-Logik wird jetzt asynchron nach der Ladeanimation aufgerufen.
                 // Der Aufruf erfolgt in _navigateNext.
             }
-
+            this._updateNavButtons(); // KORREKTUR: Button-Status bei jedem Slide-Wechsel aktualisieren.
         } else {
             beratungLog(`!!! FEHLER: Slide mit ID '${slideId}' nicht gefunden.`);
         }
-        this.backBtn.classList.toggle('hidden', this.history.length === 0);
     }
 
     async _navigateNext() {
         const currentSlideId = this.currentSlideId;
         this.history.push(currentSlideId); // Aktuelle Seite zur History hinzufügen
 
+        
+        
         // KORREKTUR: Das Auslesen der Besonderheiten muss hier erfolgen, bevor die Phasenlogik beginnt,
         // da dieser Slide in der 'agenda'-Phase aufgerufen wird.
         if (currentSlideId === 'beratung-slide-dynamic-features') {
@@ -397,7 +432,24 @@ class BeratungView {
         // --- Logik für die Startphase ---
         if (this.navigation.currentPhase === 'start') {
             // Aktionen beim Verlassen des aktuellen Slides
-            if (currentSlideId === 'beratung-slide-kundenname') {
+            if (currentSlideId === 'beratung-slide-mitarbeitername') {
+                this.beratungData.mitarbeitername = this.mitarbeiternameInput.value || 'Berater';
+                // Finde die Mitarbeiter-ID basierend auf dem Namen
+                // KORREKTUR: Greife auf den korrekten Spalten-Key für den Namen zu, anstatt auf 'm.Name'.
+                const nameKey = COLUMN_MAPS.mitarbeiter?.Name;
+                if (!nameKey) {
+                    beratungLog('!!! FEHLER: Spalten-Key für "Name" in der Mitarbeiter-Tabelle nicht gefunden.', COLUMN_MAPS.mitarbeiter);
+                }
+                const mitarbeiter = nameKey ? db.mitarbeiter.find(m => m && m[nameKey] && m[nameKey].toLowerCase() === this.beratungData.mitarbeitername.toLowerCase()) : null;
+
+                if (mitarbeiter) {
+                    this.beratungData.mitarbeiterId = mitarbeiter._id;
+                    beratungLog(`Mitarbeiter-ID für '${this.beratungData.mitarbeitername}' gefunden: ${this.beratungData.mitarbeiterId}`);
+                } else {
+                    beratungLog(`WARNUNG: Kein Mitarbeiter mit dem Namen '${this.beratungData.mitarbeitername}' gefunden. Speicherung erfolgt ohne Verknüpfung.`);
+                    this.beratungData.mitarbeiterId = null;
+                }
+            } else if (currentSlideId === 'beratung-slide-kundenname') {
                 this.beratungData.kundenname = this.kundennameInput.value || 'Kunde';
                 this.welcomeKundenname.textContent = `für ${this._escapeHtml(this.beratungData.kundenname)}`;
             } else if (currentSlideId === 'beratung-slide-kategorien') {
@@ -783,6 +835,251 @@ class BeratungView {
         });
     }
 
+    _renderFinancialGoals() {
+        const container = document.getElementById('financial-goals-container');
+        if (!container) return;
+
+        const goals = [
+            { name: 'Immobilieneigentum', img: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=1000&q=80' },
+            { name: 'Finanzielle Freiheit', img: 'https://images.unsplash.com/photo-1639322537228-f710d846310a?auto=format&fit=crop&w=1000&q=80' },
+            { name: 'Absicherung im Alter', img: 'https://images.unsplash.com/photo-1616587360496-7c563a6d1253?auto=format&fit=crop&w=1000&q=80' },
+            { name: 'Reisen', img: 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=1000&q=80' },
+            { name: 'Auto', img: 'https://images.unsplash.com/photo-1542281286-9e0a16bb7366?auto=format&fit=crop&w=1000&q=80' },
+            { name: 'Notpolster', img: 'https://images.unsplash.com/photo-1604594878145-565556455b13?auto=format&fit=crop&w=1000&q=80' },
+            { name: 'Luxus', img: 'https://images.unsplash.com/photo-1505846995431-373035999315?auto=format&fit=crop&w=1000&q=80' },
+        ];
+
+        container.innerHTML = goals.map(goal => `
+            <div class="kategorie-item goal-card relative rounded-xl overflow-hidden cursor-pointer aspect-w-1 aspect-h-1 group" data-kategorie="${this._escapeHtml(goal.name)}">
+                <img src="${goal.img}" alt="${goal.name}" class="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-110">
+                <div class="absolute inset-0 bg-black bg-opacity-40 group-hover:bg-opacity-20 transition-all duration-300"></div>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <h3 class="text-white text-2xl font-bold text-center shadow-text">${goal.name}</h3>
+                </div>
+                <div class="absolute top-3 right-3 h-8 w-8 rounded-full bg-white/30 flex items-center justify-center opacity-0 group-[.selected]:opacity-100 transition-opacity duration-300">
+                    <i class="fas fa-check text-white text-xl"></i>
+                </div>
+            </div>
+        `).join('');
+
+        container.querySelectorAll('.goal-card').forEach(card => {
+            card.addEventListener('click', () => card.classList.toggle('selected'));
+        });
+    }
+
+    _initThreeAccountsModel() {
+        const container = document.getElementById('three-accounts-model-container');
+        const nextBtn = document.getElementById('three-accounts-next-step-btn');
+        if (!container || !nextBtn) return;
+
+        const steps = [
+            // KORREKTUR: Die Text-Schritte werden wieder eingefügt.
+            () => this._animateContent('content-kurzfristig', `<p>z.B. Girokonto, <span class="text-skt-red-accent font-semibold">kaum Zinsen</span>, <span class="text-skt-green-accent font-semibold">sehr flexibel</span></p>`),
+            () => this._animateContent('content-mittelfristig', `<p>z.B. Fondsdepot, <span class="text-skt-green-accent font-semibold">7-9% Rendite</span>, <span class="text-skt-red-accent font-semibold">3-5% Kosten</span>, <span class="text-skt-red-accent font-semibold">27,5% KESt</span></p>`),
+            () => this._animateContent('content-langfristig', `<p>z.B. FLV, <span class="text-skt-green-accent font-semibold">7-9% Rendite</span>, <span class="text-skt-red-accent font-semibold">4% Vers. Steuer</span>, <span class="text-skt-red-accent font-semibold">ca. 10% Kosten</span>, <span class="text-skt-green-accent font-semibold">KEINE KESt</span></p>`),
+            // Der letzte Schritt animiert die Vertragsgrafik.
+            () => this._animateContent('content-langfristig', `
+                <div class="flex items-center justify-center gap-4 mt-4">
+                    <div class="text-right"><p class="font-semibold text-skt-red-accent">-4%<br>Versicherungssteuer</p></div>
+                    <i class="fas fa-arrow-right text-skt-red-accent fa-2x"></i>
+                    <div class="contract-box">
+                        <i class="fas fa-piggy-bank fa-2x"></i>
+                        <p>Vertrag</p>
+                    </div>
+                    <i class="fas fa-arrow-right text-skt-green-accent fa-2x"></i>
+                    <div class="text-left"><p class="font-semibold text-skt-green-accent">-keine<br>Kapitalertragssteuer</p></div>
+                </div>
+            `, true)
+        ];
+
+        let currentStep = 0;
+        // Reset view
+        container.querySelectorAll('.timeline-content').forEach(el => el.innerHTML = '');
+
+        const executeStep = () => {
+            if (currentStep < steps.length) {
+                steps[currentStep]();
+                currentStep++;
+                if (currentStep === steps.length) {
+                    nextBtn.innerHTML = 'Verstanden <i class="fas fa-check"></i>';
+                }
+            } else {
+                // Alle Schritte durchlaufen, zum nächsten Haupt-Slide navigieren
+                this._navigateNext();
+            }
+        };
+
+        // Event-Listener neu zuweisen, um alte zu entfernen
+        const newNextBtn = nextBtn.cloneNode(true);
+        nextBtn.parentNode.replaceChild(newNextBtn, nextBtn);
+        newNextBtn.addEventListener('click', executeStep);
+        document.getElementById('three-accounts-next-step-btn').innerHTML = 'Nächster Schritt <i class="fas fa-arrow-down"></i>';
+    }
+
+    _animateContent(containerId, html, append = false) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        const content = document.createElement('div');
+        content.className = 'step-content';
+        content.innerHTML = html;
+
+        if (append) {
+            container.appendChild(content);
+        } else {
+            container.innerHTML = '';
+            container.appendChild(content);
+        }
+
+        // Trigger animation
+        setTimeout(() => content.classList.add('visible'), 50);
+    }
+
+
+    _renderCompoundInterestChart() {
+        const container = document.getElementById('chart-bars-container');
+        if (!container) return;
+
+        const monthlySavings = 200;
+        const years = 35;
+        const annualReturn = 0.07; // 7%
+
+        const n = years * 12; // number of periods (months)
+        const r = annualReturn / 12; // monthly interest rate
+        const totalInvested = monthlySavings * n;
+
+        // 1. Girokonto (kaum Wachstum)
+        const giroEndValue = totalInvested;
+
+        // 2. Fondsdepot
+        const fondsdepotFutureValue = monthlySavings * (Math.pow(1 + r, n) - 1) / r * (1 + r);
+        const fondsdepotProfit = fondsdepotFutureValue - totalInvested;
+        const kestTax = fondsdepotProfit * 0.275;
+        const fondsdepotEndValue = fondsdepotFutureValue - kestTax;
+
+        // 3. FLV
+        const insuranceTax = totalInvested * 0.04;
+        // Effektiv wird jeden Monat etwas weniger investiert.
+        const effectiveMonthlySavingsFLV = monthlySavings * (1 - 0.04);
+        const flvEndValue = effectiveMonthlySavingsFLV * (Math.pow(1 + r, n) - 1) / r * (1 + r);
+
+        const values = {
+            giro: { total: giroEndValue },
+            fondsdepot: { total: fondsdepotEndValue, invested: totalInvested, tax: kestTax },
+            flv: { total: flvEndValue, invested: totalInvested - insuranceTax, tax: insuranceTax }
+        };
+
+        const maxValue = Math.max(values.giro.total, values.fondsdepot.total, values.flv.total);
+
+        const createBar = (label, data, colorClass) => {
+            const totalHeightPercent = (data.total / maxValue) * 100;
+            // KORREKTUR: Die Höhe der Segmente muss relativ zur Gesamthöhe der Säule (data.total) sein, nicht zum Maximalwert des Charts.
+            const investedSegmentPercent = data.invested ? (data.invested / data.total) * 100 : 0;
+            const profitSegmentPercent = data.invested ? ((data.total - data.invested) / data.total) * 100 : 0;
+
+            return `
+                <div class="chart-bar-wrapper">
+                    <div class="chart-bar ${colorClass}" style="height: 0%;" data-height="${totalHeightPercent}">
+                        <div class="chart-segment-invested" style="height: ${investedSegmentPercent}%;"></div>
+                        <div class="chart-segment-profit" style="height: ${profitSegmentPercent}%;"></div>
+                        <div class="chart-value">${Math.round(data.total / 1000)} T€</div>
+                    </div>
+                    <div class="chart-label">${label}</div>
+                    ${data.tax ? `<div class="chart-tax-label">-${Math.round(data.tax / 1000)} T€ Steuer</div>` : ''}
+                </div>
+            `;
+        };
+
+        container.innerHTML = `
+            ${createBar('Girokonto', { total: values.giro.total, invested: values.giro.total }, 'bar-blue')}
+            ${createBar('Fondsdepot', { total: values.fondsdepot.total, invested: values.fondsdepot.invested }, 'bar-yellow')}
+            ${createBar('FLV', { total: values.flv.total, invested: values.flv.invested }, 'bar-green')}
+        `;
+
+        // Animate bars into view
+        setTimeout(() => {
+            container.querySelectorAll('.chart-bar').forEach(bar => {
+                bar.style.height = `${bar.dataset.height}%`;
+            });
+        }, 100);
+    }
+
+    async _renderBeraterVorstellung() {
+        const container = document.getElementById('beratung-slide-berater-vorstellung');
+        if (!container) return;
+
+        container.innerHTML = '<div class="loader-white mx-auto"></div>';
+
+        const beraterName = this.beratungData.mitarbeitername;
+        // KORREKTUR: Greife auf den korrekten Spalten-Key für den Namen zu, anstatt auf 'm.Name',
+        // da die Rohdaten aus der DB kryptische Keys verwenden (z.B. 'lA2R').
+        const nameKey = COLUMN_MAPS.mitarbeiter?.Name;
+        const berater = nameKey 
+            ? db.mitarbeiter.find(m => m && m[nameKey] && m[nameKey].toLowerCase() === beraterName.toLowerCase())
+            : null;
+
+        if (!berater) {
+            container.innerHTML = `<p class="text-center text-xl">Informationen zum Berater "${this._escapeHtml(beraterName)}" konnten nicht geladen werden.</p>`;
+            return;
+        }
+
+        // KORREKTUR: Karrierestufe und Büro sind Link-Felder. Wir müssen den `display_value` aus dem verknüpften Objekt extrahieren.
+        const karrierestufeLink = berater[COLUMN_MAPS.mitarbeiter.Karrierestufe];
+        const karrierestufe = (Array.isArray(karrierestufeLink) && karrierestufeLink[0]) ? karrierestufeLink[0].display_value : 'Berater';
+
+        const bueroLink = berater[COLUMN_MAPS.mitarbeiter.Buero];
+        const buero = (Array.isArray(bueroLink) && bueroLink[0]) ? bueroLink[0].display_value : 'Hauptzentrale';
+
+
+        const textZuMir = berater[COLUMN_MAPS.mitarbeiter.TextZuMir] || 'Ihr Experte für eine sichere finanzielle Zukunft.';
+        const bildUrlRaw = berater[COLUMN_MAPS.mitarbeiter.Bild]?.[0];
+
+        const hatVA = berater[COLUMN_MAPS.mitarbeiter.VA] === true;
+        const hatVB = berater[COLUMN_MAPS.mitarbeiter.VB] === true;
+        const hatImmo = berater[COLUMN_MAPS.mitarbeiter.Immobilienexperte] === true;
+
+        let bildHtml = '<div class="w-64 h-64 bg-skt-blue-light rounded-full flex items-center justify-center"><i class="fas fa-user fa-5x text-white"></i></div>';
+        if (bildUrlRaw) {
+            const finalBildUrl = await getSeaTableDownloadLink(bildUrlRaw);
+            if (finalBildUrl) {
+                bildHtml = `<img src="${finalBildUrl}" alt="Portrait von ${this._escapeHtml(berater.Name)}" class="w-64 h-64 rounded-full object-cover shadow-2xl border-4 border-white">`;
+            }
+        }
+
+        const createSiegel = (text, icon) => `
+            <div class="flex flex-col items-center text-center">
+                <div class="w-24 h-24 rounded-full bg-accent-gold text-skt-blue flex items-center justify-center shadow-lg mb-2 border-4 border-skt-blue-light">
+                    <i class="fas ${icon} fa-3x"></i>
+                </div>
+                <p class="font-semibold">${text}</p>
+            </div>
+        `;
+
+        let siegelHtml = '<div class="flex justify-center gap-8 mt-8">';
+        if (hatVA) siegelHtml += createSiegel('Versicherungsagent', 'fa-shield-alt');
+        if (hatVB) siegelHtml += createSiegel('Vermögensberater', 'fa-piggy-bank');
+        if (hatImmo) siegelHtml += createSiegel('Immobilienexperte', 'fa-home');
+        siegelHtml += '</div>';
+
+        container.innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-12 items-center">
+                <div class="md:col-span-2 text-left">
+                    <h2 class="text-5xl font-bold mb-1">${this._escapeHtml(berater.Name)}</h2>
+                    <p class="text-gold font-bold text-xl mb-2">${karrierestufe}</p>
+                    <p class="text-lg text-gray-300 mb-6"><i class="fas fa-map-marker-alt mr-2"></i>${this._escapeHtml(buero)}</p>
+                    <div class="prose prose-lg text-white max-w-none">
+                        ${textZuMir}
+                    </div>
+                    ${(hatVA || hatVB || hatImmo) ? siegelHtml : ''}
+                </div>
+                <div class="flex justify-center md:justify-end">
+                    ${bildHtml}
+                </div>
+            </div>
+        `;
+    }
+
+    
     // NEU: Rendert die sortierbare Agenda-Liste.
     _renderAgenda() {
         if (!this.agendaContainer) return;
@@ -863,6 +1160,20 @@ class BeratungView {
         }
     }
 
+    // NEU: Dedizierte Funktion zur Aktualisierung der Navigations-Buttons
+    _updateNavButtons() {
+        const isMitarbeiternameValid = this.mitarbeiternameInput.value.trim() !== '';
+        const isKundennameValid = this.kundennameInput.value.trim() !== '';
+        let canProceed = true;
+        if (this.currentSlideId === 'beratung-slide-mitarbeitername' && !isMitarbeiternameValid) canProceed = false;
+        if (this.currentSlideId === 'beratung-slide-kundenname' && !isKundennameValid) canProceed = false;
+
+        this.nextBtn.disabled = !canProceed;
+        this.nextBtn.classList.toggle('opacity-50', !canProceed);
+        this.nextBtn.classList.toggle('cursor-not-allowed', !canProceed);
+        this.backBtn.classList.toggle('hidden', this.history.length === 0);
+    }
+
     async _saveBeratung() {
         beratungLog('Speichere Beratung...');
         this.navContainer.classList.add('hidden');
@@ -877,7 +1188,7 @@ class BeratungView {
 
         const rowData = {
             [COLUMN_MAPS.beratung.Kunde]: this.beratungData.kundenname,
-            [COLUMN_MAPS.beratung.Mitarbeiter]: this.beratungData.mitarbeiterId ? [this.beratungData.mitarbeiterId] : null,
+            [COLUMN_MAPS.beratung.Mitarbeiter]: this.beratungData.mitarbeiterId ? [this.beratungData.mitarbeiterId] : this.beratungData.mitarbeitername,
             [COLUMN_MAPS.beratung.Datum]: this.beratungData.startTime.toISOString(),
             [COLUMN_MAPS.beratung.Dauer]: formatierteDauer,
             [COLUMN_MAPS.beratung.Kategorien]: this.beratungData.kategorien.join(', '),
@@ -893,6 +1204,11 @@ class BeratungView {
         }
     }
 }
+
+// KORREKTUR: Die `prose`-Klassen von Tailwind benötigen eine Basiskonfiguration.
+// Da wir Tailwind über CDN laden, fügen wir hier eine einfache Konfiguration hinzu.
+tailwind.config = { theme: { extend: { typography: (theme) => ({}), } } }
+
 
 // --- INITIALISIERUNG ---
 async function initialize() {
@@ -916,6 +1232,9 @@ async function initialize() {
     ]);
     db.produktauswahl = produktauswahl;
     db.mitarbeiter = mitarbeiter;
+    // NEU: Gib die geladenen Mitarbeiterdaten in der Konsole aus.
+    beratungLog('Mitarbeiter-Tabelle geladen:', mitarbeiter);
+
     db.gesellschaften = gesellschaften;
     // NEU: Detailliertes Logging für die Gesellschaften-Daten
     console.log('%c[DEBUG] %cGeladene Rohdaten für \'Gesellschaften\':', 'color: #e67e22; font-weight: bold;', 'color: black;');

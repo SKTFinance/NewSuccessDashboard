@@ -26,17 +26,29 @@
     <!-- Hauptcontainer für die Slides -->
     <div id="beratung-slides-container" class="relative w-full max-w-4xl h-full flex items-center justify-center">
 
+        <!-- NEU: Slide 0: Mitarbeitername Eingabe -->
+        <div id="beratung-slide-mitarbeitername" class="beratung-slide">
+            <h1 class="text-4xl font-bold mb-4">Willkommen zur digitalen Beratung</h1>
+            <p class="text-xl mb-8 text-gray-300">Bitte geben Sie Ihren Namen ein, um zu starten.</p>
+            <input type="text" id="beratung-mitarbeitername-input" class="text-2xl text-center bg-transparent border-b-2 border-gray-400 focus:border-white focus:outline-none py-2 text-white placeholder-gray-400" placeholder="Ihr Name">
+        </div>
+
         <!-- Slide 1: Kundenname Eingabe -->
-        <div id="beratung-slide-kundenname" class="beratung-slide text-center">
+        <div id="beratung-slide-kundenname" class="beratung-slide hidden">
             <h1 class="text-4xl font-bold mb-4">Willkommen zur digitalen Beratung</h1>
             <p class="text-xl mb-8 text-gray-300">Bitte geben Sie den Namen Ihres Kunden ein, um zu starten.</p>
             <input type="text" id="beratung-kundenname-input" class="text-2xl text-center bg-transparent border-b-2 border-gray-400 focus:border-white focus:outline-none py-2 text-white placeholder-gray-400" placeholder="Name des Kunden">
         </div>
 
         <!-- Slide 2: Willkommensbildschirm -->
-        <div id="beratung-slide-welcome" class="beratung-slide hidden text-center">
+        <div id="beratung-slide-welcome" class="beratung-slide hidden">
             <h1 class="text-6xl font-bold font-times-new-roman">Finanzkonzept</h1>
             <p id="beratung-welcome-kundenname" class="text-3xl mt-4 text-gray-200"></p>
+        </div>
+
+        <!-- NEU: Slide 2.5: Berater-Vorstellung -->
+        <div id="beratung-slide-berater-vorstellung" class="beratung-slide hidden">
+            <!-- Inhalt wird dynamisch per JavaScript generiert -->
         </div>
 
         <!-- Slide 3: Kategorieauswahl -->
@@ -97,11 +109,60 @@
         <div id="beratung-slide-product-recommendation" class="beratung-slide hidden w-full">
             <h2 class="text-4xl font-bold text-center mb-8">Produktempfehlung</h2>
         </div>
+        
+        <!-- Spezielle Seiten für FLV -->
+        <div id="beratung-slide-special-FLV-Finanzielle_Ziele_Auswahl" class="beratung-slide hidden w-full">
+            <h2 class="text-4xl font-bold text-center mb-2">Was sind Ihre finanziellen Ziele?</h2>
+            <p class="text-xl text-center text-gray-300 mb-8">Wählen Sie aus, wofür Sie sparen und investieren möchten.</p>
+            <div id="financial-goals-container" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 max-w-5xl mx-auto">
+                <!-- Ziele werden per JS eingefügt -->
+            </div>
+        </div>
 
-        <!-- NEU: Statische Seiten für die Produkt-Erklärungen -->
-        <!-- Diese können individuell gestaltet werden. -->
-        <div id="beratung-slide-explanation-FLV" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: FLV</h2></div>
+        <div id="beratung-slide-special-FLV-Dreikontenmodell" class="beratung-slide hidden w-full">
+            <h2 class="text-4xl font-bold text-center mb-8 col-span-full">Das 3-Konten-Modell: Ihr Vermögensaufbau</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 w-full max-w-6xl mx-auto">
+                <!-- Linke Spalte: Zeitstrahle -->
+                <div id="three-accounts-model-container" class="w-full space-y-6">
+                    <!-- Kurzfristig -->
+                    <div class="timeline-container">
+                        <div class="timeline-header" data-tooltip="Für Notgroschen und Sicherheit – schnelle Verfügbarkeit ist wichtig.">
+                            <div class="timeline-bar timeline-bar-blue"></div>
+                            <h3 class="timeline-title"><i class="fas fa-wallet mr-2"></i>Kurzfristig <span class="timeline-duration">&lt; 1 Jahr</span></h3>
+                        </div>
+                        <div class="timeline-content" id="content-kurzfristig"></div>
+                    </div>
+                    <!-- Mittelfristig -->
+                    <div class="timeline-container">
+                        <div class="timeline-header" data-tooltip="Für größere Anschaffungen, Reisen oder Auto – etwas Rendite, aber flexibel.">
+                            <div class="timeline-bar timeline-bar-yellow"></div>
+                            <h3 class="timeline-title"><i class="fas fa-car-side mr-2"></i>Mittelfristig <span class="timeline-duration">1-15 Jahre</span></h3>
+                        </div>
+                        <div class="timeline-content" id="content-mittelfristig"></div>
+                    </div>
+                    <!-- Langfristig -->
+                    <div class="timeline-container">
+                        <div class="timeline-header" data-tooltip="Für Vermögensaufbau, Pension und Immobilien – hier zählt Geduld und Steuerersparnis.">
+                            <div class="timeline-bar timeline-bar-green"></div>
+                            <h3 class="timeline-title"><i class="fas fa-piggy-bank mr-2"></i>Langfristig <span class="timeline-duration">&gt; 15 Jahre</span></h3>
+                        </div>
+                        <div class="timeline-content" id="content-langfristig"></div>
+                    </div>
+                </div>
+                <!-- Rechte Spalte: Zinseszins-Chart -->
+                <div id="compound-interest-chart-container" class="flex flex-col justify-end items-center p-6 bg-white/5 rounded-lg">
+                    <h3 class="text-2xl font-bold text-center mb-4">Der Zinseszins-Effekt</h3>
+                    <p class="text-center text-gray-300 mb-6">Vergleich bei 200€ Sparrate über 35 Jahre</p>
+                    <div id="chart-bars-container" class="w-full h-80 flex justify-around items-end gap-4"></div>
+                </div>
+            </div>
+            <button id="three-accounts-next-step-btn" class="beratung-nav-btn mx-auto mt-8">
+                Nächster Schritt <i class="fas fa-arrow-down"></i>
+            </button>
+        </div>
+
         <div id="beratung-slide-explanation-Fondssparen" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Fondssparen</h2></div>
+        <div id="beratung-slide-explanation-FLV" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: FLV</h2></div>
         <!-- NEU: Statische Seite für Haftpflicht, wie gewünscht -->
         <div id="beratung-slide-special-Haftpflicht" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Direktverweis Helvetia Haftpflicht</h2></div>
 
@@ -119,14 +180,10 @@
         <div id="beratung-slide-explanation-Leasing" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Leasing</h2></div>
         <div id="beratung-slide-explanation-Strom" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Strom</h2></div>
         <div id="beratung-slide-explanation-Gas" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Gas</h2></div>
-
-        <!-- Spezielle Seiten für FLV -->
-        <div id="beratung-slide-special-FLV-Finanzielle_Ziele_Auswahl" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">FLV: Finanzielle Ziele Auswahl</h2></div>
-        <div id="beratung-slide-special-FLV-Dreikontenmodell" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">FLV: Dreikontenmodell</h2></div>
         <div id="beratung-slide-special-FLV-Steuervorteilrechner" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">FLV: Steuervorteilrechner</h2></div>
 
         <!-- Letzte Slide: Zusammenfassung & Speichern -->
-        <div id="beratung-slide-abschluss" class="beratung-slide hidden text-center">
+        <div id="beratung-slide-abschluss" class="beratung-slide hidden">
             <h2 class="text-4xl font-bold mb-8">Vielen Dank für das Gespräch!</h2>
             <p class="text-xl mb-6">Die Beratung wird nun für Ihre Unterlagen gespeichert.</p>
             <div class="loader-white mx-auto"></div>
