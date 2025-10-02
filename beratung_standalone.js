@@ -233,6 +233,7 @@ class BeratungView {
             startTime: new Date(),
             kategorien: [],
             agenda: [],
+            financialGoals: [], // NEU: Speicher für ausgewählte finanzielle Ziele
         };
         // NEU: Definiert die Reihenfolge der Unter-Slides für jede Kategorie.
         // KORREKTUR: `slideFlow` wird durch eine dynamische `agendaQueue` ersetzt.
@@ -305,6 +306,31 @@ class BeratungView {
         this.loadingOverlay = document.getElementById('beratung-loading-overlay');
         this.loadingText = document.getElementById('loading-text');
         return this.root && this.slides.every(Boolean) && this.backBtn && this.nextBtn;
+    }
+
+    _setupModalTriggers() {
+        document.querySelectorAll('[data-modal-target]').forEach(button => {
+            button.addEventListener('click', () => {
+                const modalId = button.dataset.modalTarget;
+                const modal = document.getElementById(modalId);
+                if (modal) {
+                    modal.classList.add('visible');
+                    if (modalId === 'pensionsrechner-modal') {
+                        this._initPensionsrechner();
+                    }
+                    if (modalId === 'vorsorgerechner-modal') {
+                        this._initVorsorgerechner();
+                    }
+                }
+            });
+        });
+
+        document.querySelectorAll('[data-modal-close]').forEach(button => {
+            button.addEventListener('click', () => {
+                const modalId = button.dataset.modalClose;
+                document.getElementById(modalId).classList.remove('visible');
+            });
+        });
     }
 
     async init(mitarbeiterId) {
@@ -383,12 +409,32 @@ class BeratungView {
             // NEU: Prüfe, ob es sich um die "Finanzielle Ziele"-Seite handelt
             if (slideId === 'beratung-slide-special-FLV-Finanzielle_Ziele_Auswahl') {
                 this._renderFinancialGoals();
+                this._setupModalTriggers(); // NEU: Event-Listener für die Modal-Buttons setzen
             }
 
             // NEU: Prüfe, ob es sich um das "3-Konten-Modell" handelt
             if (slideId === 'beratung-slide-special-FLV-Dreikontenmodell') {
                 this._initThreeAccountsModel();
-                this._renderCompoundInterestChart();
+            }
+
+            // NEU: Prüfe, ob es sich um den "Steuervorteilrechner" handelt
+            if (slideId === 'beratung-slide-special-FLV-Steuervorteilrechner') {
+                this._initSteuervorteilrechner();
+            }
+
+            // NEU: Prüfe, ob es sich um die Rechtsschutz-Seite handelt
+            if (slideId === 'beratung-slide-explanation-Rechtschutz') {
+                this._renderRechtsschutzChart();
+            }
+
+            // NEU: Prüfe, ob es sich um die Haushalts-Seite handelt
+            if (slideId === 'beratung-slide-explanation-Haushalt') {
+                this._renderHaushaltChart();
+            }
+
+            // NEU: Prüfe, ob es sich um die Eigenheim-Seite handelt
+            if (slideId === 'beratung-slide-explanation-Eigenheim') {
+                this._renderEigenheimChart();
             }
 
             // NEU: Prüfe, ob es sich um die "Produktempfehlung"-Seite handelt und rendere den Inhalt.
@@ -407,7 +453,22 @@ class BeratungView {
         this.history.push(currentSlideId); // Aktuelle Seite zur History hinzufügen
 
         
+        // NEU: Spezielle Logik für das 3-Konten-Modell
+        if (currentSlideId === 'beratung-slide-special-FLV-Dreikontenmodell') {
+            if (this._showNextThreeAccountsStep()) {
+                this.history.pop(); // Bleibe auf dem Slide, entferne den Navigationsschritt aus der History
+                return; // Stoppe die weitere Navigation
+            }
+        }
         
+        // NEU: Speichere die ausgewählten finanziellen Ziele
+        if (currentSlideId === 'beratung-slide-special-FLV-Finanzielle_Ziele_Auswahl') {
+            const container = document.getElementById('financial-goals-container');
+            this.beratungData.financialGoals = container 
+                ? Array.from(container.querySelectorAll('.goal-card.selected')).map(el => el.dataset.kategorie)
+                : [];
+        }
+
         // KORREKTUR: Das Auslesen der Besonderheiten muss hier erfolgen, bevor die Phasenlogik beginnt,
         // da dieser Slide in der 'agenda'-Phase aufgerufen wird.
         if (currentSlideId === 'beratung-slide-dynamic-features') {
@@ -840,25 +901,22 @@ class BeratungView {
         if (!container) return;
 
         const goals = [
-            { name: 'Immobilieneigentum', img: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=1000&q=80' },
-            { name: 'Finanzielle Freiheit', img: 'https://images.unsplash.com/photo-1639322537228-f710d846310a?auto=format&fit=crop&w=1000&q=80' },
-            { name: 'Absicherung im Alter', img: 'https://images.unsplash.com/photo-1616587360496-7c563a6d1253?auto=format&fit=crop&w=1000&q=80' },
-            { name: 'Reisen', img: 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=1000&q=80' },
-            { name: 'Auto', img: 'https://images.unsplash.com/photo-1542281286-9e0a16bb7366?auto=format&fit=crop&w=1000&q=80' },
-            { name: 'Notpolster', img: 'https://images.unsplash.com/photo-1604594878145-565556455b13?auto=format&fit=crop&w=1000&q=80' },
-            { name: 'Luxus', img: 'https://images.unsplash.com/photo-1505846995431-373035999315?auto=format&fit=crop&w=1000&q=80' },
+            { name: 'Immobilieneigentum', icon: 'fa-home' },
+            { name: 'Finanzielle Freiheit', icon: 'fa-infinity' },
+            { name: 'Absicherung im Alter', icon: 'fa-shield-alt' },
+            { name: 'Reisen', icon: 'fa-plane-departure' },
+            { name: 'Auto', icon: 'fa-car' },
+            { name: 'Notpolster', icon: 'fa-piggy-bank' },
+            { name: 'Luxus', icon: 'fa-gem' },
+            { name: 'Familie', icon: 'fa-users' },
         ];
 
         container.innerHTML = goals.map(goal => `
-            <div class="kategorie-item goal-card relative rounded-xl overflow-hidden cursor-pointer aspect-w-1 aspect-h-1 group" data-kategorie="${this._escapeHtml(goal.name)}">
-                <img src="${goal.img}" alt="${goal.name}" class="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-110">
-                <div class="absolute inset-0 bg-black bg-opacity-40 group-hover:bg-opacity-20 transition-all duration-300"></div>
-                <div class="absolute inset-0 flex items-center justify-center">
-                    <h3 class="text-white text-2xl font-bold text-center shadow-text">${goal.name}</h3>
+            <div class="kategorie-item goal-card flex flex-col items-center justify-center p-4 rounded-xl cursor-pointer group" data-kategorie="${this._escapeHtml(goal.name)}">
+                <div class="goal-icon-container flex-grow flex items-center justify-center">
+                    <i class="fas ${goal.icon} fa-4x text-white opacity-70 group-hover:opacity-100 transition-opacity"></i>
                 </div>
-                <div class="absolute top-3 right-3 h-8 w-8 rounded-full bg-white/30 flex items-center justify-center opacity-0 group-[.selected]:opacity-100 transition-opacity duration-300">
-                    <i class="fas fa-check text-white text-xl"></i>
-                </div>
+                <h3 class="text-white text-xl font-bold text-center mt-4">${goal.name}</h3>
             </div>
         `).join('');
 
@@ -868,140 +926,490 @@ class BeratungView {
     }
 
     _initThreeAccountsModel() {
-        const container = document.getElementById('three-accounts-model-container');
-        const nextBtn = document.getElementById('three-accounts-next-step-btn');
-        if (!container || !nextBtn) return;
+        const blocks = document.querySelectorAll(".line-block");
+        if (blocks.length === 0) return;
 
-        const steps = [
-            // KORREKTUR: Die Text-Schritte werden wieder eingefügt.
-            () => this._animateContent('content-kurzfristig', `<p>z.B. Girokonto, <span class="text-skt-red-accent font-semibold">kaum Zinsen</span>, <span class="text-skt-green-accent font-semibold">sehr flexibel</span></p>`),
-            () => this._animateContent('content-mittelfristig', `<p>z.B. Fondsdepot, <span class="text-skt-green-accent font-semibold">7-9% Rendite</span>, <span class="text-skt-red-accent font-semibold">3-5% Kosten</span>, <span class="text-skt-red-accent font-semibold">27,5% KESt</span></p>`),
-            () => this._animateContent('content-langfristig', `<p>z.B. FLV, <span class="text-skt-green-accent font-semibold">7-9% Rendite</span>, <span class="text-skt-red-accent font-semibold">4% Vers. Steuer</span>, <span class="text-skt-red-accent font-semibold">ca. 10% Kosten</span>, <span class="text-skt-green-accent font-semibold">KEINE KESt</span></p>`),
-            // Der letzte Schritt animiert die Vertragsgrafik.
-            () => this._animateContent('content-langfristig', `
-                <div class="flex items-center justify-center gap-4 mt-4">
-                    <div class="text-right"><p class="font-semibold text-skt-red-accent">-4%<br>Versicherungssteuer</p></div>
-                    <i class="fas fa-arrow-right text-skt-red-accent fa-2x"></i>
-                    <div class="contract-box">
-                        <i class="fas fa-piggy-bank fa-2x"></i>
-                        <p>Vertrag</p>
-                    </div>
-                    <i class="fas fa-arrow-right text-skt-green-accent fa-2x"></i>
-                    <div class="text-left"><p class="font-semibold text-skt-green-accent">-keine<br>Kapitalertragssteuer</p></div>
-                </div>
-            `, true)
-        ];
+        // Reset state when the slide is shown
+        this._updateTimelineIcons();
+        blocks.forEach(block => {
+            block.querySelector(".progress").style.width = "0%";
+            block.querySelectorAll(".item").forEach(item => item.classList.remove("show"));
+        });
 
-        let currentStep = 0;
-        // Reset view
-        container.querySelectorAll('.timeline-content').forEach(el => el.innerHTML = '');
+        this.threeAccountsState = {
+            blockIndex: 0,
+            itemIndex: -1,
+            blocks: blocks
+        };
 
-        const executeStep = () => {
-            if (currentStep < steps.length) {
-                steps[currentStep]();
-                currentStep++;
-                if (currentStep === steps.length) {
-                    nextBtn.innerHTML = 'Verstanden <i class="fas fa-check"></i>';
-                }
-            } else {
-                // Alle Schritte durchlaufen, zum nächsten Haupt-Slide navigieren
-                this._navigateNext();
+        // The main 'next' button will now trigger the steps.
+        // The logic is moved to a separate function to be called by the main navigator.
+    }
+
+    _showIconsForBlock(block) {
+        const iconsContainer = block.querySelector('.icons-new');
+        if (iconsContainer) iconsContainer.style.opacity = '1';
+    }
+
+    _updateTimelineIcons() {
+        const goalToIconMap = {
+            'Notpolster': { icon: 'fa-piggy-bank', timeframe: 'kurzfristig' },
+            'Reisen': { icon: 'fa-plane-departure', timeframe: 'mittelfristig' },
+            'Auto': { icon: 'fa-car', timeframe: 'mittelfristig' },
+            'Luxus': { icon: 'fa-gem', timeframe: 'mittelfristig' },
+            'Immobilieneigentum': { icon: 'fa-home', timeframe: 'langfristig' },
+            'Finanzielle Freiheit': { icon: 'fa-infinity', timeframe: 'langfristig' },
+            'Absicherung im Alter': { icon: 'fa-shield-alt', timeframe: 'langfristig' },
+            'Familie': { icon: 'fa-users', timeframe: 'langfristig' }
+        };
+
+        const selectedGoals = this.beratungData.financialGoals || [];
+
+        const iconsByTimeframe = {
+            kurzfristig: [],
+            mittelfristig: [],
+            langfristig: []
+        };
+
+        selectedGoals.forEach(goalName => {
+            const mapping = goalToIconMap[goalName];
+            if (mapping) {
+                iconsByTimeframe[mapping.timeframe].push(`<span><i class="fa-solid ${mapping.icon} fa-2x"></i>${goalName}</span>`);
+            }
+        });
+
+        const updateIcons = (timeframe, defaultHtml) => {
+            const container = document.getElementById(`icons-${timeframe}`);
+            if (container) {
+                const iconsHtml = iconsByTimeframe[timeframe].join('') || defaultHtml;
+                container.innerHTML = iconsHtml;
             }
         };
 
-        // Event-Listener neu zuweisen, um alte zu entfernen
-        const newNextBtn = nextBtn.cloneNode(true);
-        nextBtn.parentNode.replaceChild(newNextBtn, nextBtn);
-        newNextBtn.addEventListener('click', executeStep);
-        document.getElementById('three-accounts-next-step-btn').innerHTML = 'Nächster Schritt <i class="fas fa-arrow-down"></i>';
+        updateIcons('kurzfristig', '<i class="fa-solid fa-piggy-bank" title="Sparen"></i>');
+        updateIcons('mittelfristig', '<i class="fa-solid fa-car" title="Auto"></i><i class="fa-solid fa-plane" title="Reise"></i>');
+        updateIcons('langfristig', '<i class="fa-solid fa-house" title="Immobilie"></i><i class="fa-solid fa-umbrella-beach" title="Pension"></i>');
     }
 
-    _animateContent(containerId, html, append = false) {
-        const container = document.getElementById(containerId);
-        if (!container) return;
+    _showNextThreeAccountsStep() {
+        const state = this.threeAccountsState;
+        if (!state || state.blockIndex >= state.blocks.length) return false; // Animation is finished
 
-        const content = document.createElement('div');
-        content.className = 'step-content';
-        content.innerHTML = html;
+        const block = state.blocks[state.blockIndex];
+        const items = block.querySelectorAll(".item");
+        const progress = block.querySelector(".progress");
 
-        if (append) {
-            container.appendChild(content);
-        } else {
-            container.innerHTML = '';
-            container.appendChild(content);
+        if (state.itemIndex === -1) {
+            progress.style.width = block.dataset.width + "%";
+            this._showIconsForBlock(block);
         }
 
-        // Trigger animation
-        setTimeout(() => content.classList.add('visible'), 50);
+        state.itemIndex++;
+        if (state.itemIndex < items.length) {
+            items[state.itemIndex].classList.add("show");
+            return true; // There are more steps in this block
+        } else {
+            state.blockIndex++;
+            state.itemIndex = -1;
+            if (state.blockIndex >= state.blocks.length) {
+                return false; // Finished all blocks
+            } else {
+                // Immediately show the first item of the next block
+                return this._showNextThreeAccountsStep();
+            }
+        }
     }
 
+    _initSteuervorteilrechner() {
+        const container = document.getElementById('rechner-chart-container');
+        const sparrateInput = document.getElementById('rechner-sparrate');
+        const dauerInput = document.getElementById('rechner-dauer');
+        const renditeInput = document.getElementById('rechner-rendite');
+        const kestToggle = document.getElementById('rechner-kest');
+        const startwertInput = document.getElementById('rechner-startwert');
 
-    _renderCompoundInterestChart() {
-        const container = document.getElementById('chart-bars-container');
+        if (!container || !sparrateInput || !dauerInput || !renditeInput || !kestToggle || !startwertInput) return;
+
+        const renderChart = () => {
+            const startwert = parseFloat(startwertInput.value) || 0;
+            const monthlySavings = parseFloat(sparrateInput.value) || 0;
+            const years = parseInt(dauerInput.value) || 0;
+            const annualReturn = (parseFloat(renditeInput.value) || 0) / 100;
+            const considerKest = kestToggle.checked;
+
+            const categories = Array.from({ length: years }, (_, i) => `Jahr ${i + 1}`);
+            const seriesData = {
+                einzahlung: [], // Was wurde eingezahlt?
+                fondsdepot: [],  // Was kommt im Fondsdepot nach KESt raus?
+                flv: []          // Was kommt in der FLV raus?
+            };
+
+            let totalEinzahlung = startwert;
+            let kapitalOhneKest = 0;
+            let kapitalMitKest = startwert;
+            let totalKest = 0;
+            const annualSavings = monthlySavings * 12;
+            // NEU: Berechnung für FLV, Startwert wird berücksichtigt
+            let flvKapital = startwert;
+
+            
+
+            for (let i = 1; i <= years; i++) {
+                totalEinzahlung += annualSavings;
+                
+                // Berechnung ohne KESt
+                // kapitalOhneKest = (kapitalOhneKest + annualSavings) * (1 + annualReturn);
+
+                // Berechnung mit KESt
+                const prevKapitalMitKest = kapitalMitKest;
+                kapitalMitKest = (kapitalMitKest + annualSavings) * (1 + annualReturn);
+                const gain = kapitalMitKest - prevKapitalMitKest - annualSavings;
+                const kest = considerKest && gain > 0 ? gain * 0.275 : 0; // KESt nur berechnen, wenn der Schalter an ist
+                kapitalMitKest -= kest;
+                totalKest += kest;
+
+                // NEU: Berechnung für FLV (4% Versicherungssteuer auf Einzahlung)
+                // KORREKTUR: In den ersten 5 Jahren 30% Kosten, danach keine mehr.
+                const isInitialPhase = i <= 5;
+                const flvNetAnnualSavings = isInitialPhase ? annualSavings * 0.70 : annualSavings; // 30% Kosten in den ersten 5 Jahren
+                flvKapital = (flvKapital + flvNetAnnualSavings) * (1 + annualReturn);
+
+                seriesData.einzahlung.push(Math.round(totalEinzahlung));
+                seriesData.fondsdepot.push(Math.round(kapitalMitKest));
+                seriesData.flv.push(Math.round(flvKapital));
+            }
+
+            // Update der Ergebnis-Felder
+            document.getElementById('rechner-output-einzahlung').textContent = `${totalEinzahlung.toLocaleString('de-DE')} €`;
+            // KORREKTUR: Die Rendite wird jetzt auf Basis des FLV-Werts berechnet, da dieser keine KESt enthält.
+            const gesamtrendite = flvKapital - totalEinzahlung;
+            document.getElementById('rechner-output-rendite').textContent = `${gesamtrendite.toLocaleString('de-DE', {maximumFractionDigits: 0})} €`;
+            document.getElementById('rechner-output-kest').textContent = `-${totalKest.toLocaleString('de-DE', {maximumFractionDigits: 0})} €`;
+            document.getElementById('rechner-output-endbetrag').textContent = `${kapitalMitKest.toLocaleString('de-DE', {maximumFractionDigits: 0})} €`;
+
+
+
+            const options = {
+                series: [{
+                    name: 'Eingezahlt',
+                    type: 'column',
+                    data: seriesData.einzahlung
+                }, {
+                    name: 'Fondsdepot (nach KESt)',
+                    type: 'column',
+                    data: seriesData.fondsdepot
+                }, {
+                    name: 'FLV (KESt-frei)',
+                    type: 'column',
+                    data: seriesData.flv
+                }],
+                chart: {
+                    height: 450,
+                    type: 'line',
+                    stacked: false,
+                    foreColor: '#e2e8f0',
+                    toolbar: { show: false }
+                },
+                stroke: { width: [0, 0, 3], curve: 'smooth' },
+                plotOptions: { bar: { columnWidth: '60%' } },
+                colors: ['#a0aec0', '#f1c40f', '#27ae60'], // Grau, Gelb, Grün
+                xaxis: {
+                    categories: categories,
+                    title: { text: 'Jahre', style: { color: '#9ca3af' } },
+                    labels: {
+                        formatter: (val) => {
+                            if (typeof val !== 'string') return ''; // KORREKTUR: Sicherheitsprüfung, um den Fehler zu verhindern.
+                            return (parseInt(val.replace('Jahr ', '')) % 5 === 0 || val === 'Jahr 1') ? val.replace('Jahr ', '') : '';
+                        }
+                    }
+                },
+                yaxis: {
+                    title: { text: 'Vermögen in €', style: { color: '#9ca3af' } },
+                    labels: { formatter: (val) => `${(val / 1000).toFixed(0)}k` }
+                },
+                dataLabels: { enabled: false },
+                tooltip: {
+                    theme: 'dark',
+                    shared: true,
+                    intersect: false,
+                    y: { formatter: (val) => `${val.toLocaleString('de-DE')} €` }
+                },
+                legend: { position: 'top', horizontalAlign: 'center' },
+                grid: { borderColor: '#4a5568' }
+            };
+
+            container.innerHTML = ''; // Clear previous chart
+            const chart = new ApexCharts(container, options);
+            chart.render();
+        };
+
+        // Initial render
+        renderChart();
+
+        // Event-Listener für alle Eingabefelder
+        const debouncedRender = _.debounce(renderChart, 300);
+        [startwertInput, sparrateInput, dauerInput, renditeInput, kestToggle].forEach(input => {
+            input.addEventListener('input', debouncedRender);
+        });
+    }
+
+    _renderRechtsschutzChart() {
+        const container = document.getElementById('rechtsschutz-chart-container');
         if (!container) return;
 
-        const monthlySavings = 200;
-        const years = 35;
-        const annualReturn = 0.07; // 7%
+        container.innerHTML = ''; // Clear previous chart
 
-        const n = years * 12; // number of periods (months)
-        const r = annualReturn / 12; // monthly interest rate
-        const totalInvested = monthlySavings * n;
-
-        // 1. Girokonto (kaum Wachstum)
-        const giroEndValue = totalInvested;
-
-        // 2. Fondsdepot
-        const fondsdepotFutureValue = monthlySavings * (Math.pow(1 + r, n) - 1) / r * (1 + r);
-        const fondsdepotProfit = fondsdepotFutureValue - totalInvested;
-        const kestTax = fondsdepotProfit * 0.275;
-        const fondsdepotEndValue = fondsdepotFutureValue - kestTax;
-
-        // 3. FLV
-        const insuranceTax = totalInvested * 0.04;
-        // Effektiv wird jeden Monat etwas weniger investiert.
-        const effectiveMonthlySavingsFLV = monthlySavings * (1 - 0.04);
-        const flvEndValue = effectiveMonthlySavingsFLV * (Math.pow(1 + r, n) - 1) / r * (1 + r);
-
-        const values = {
-            giro: { total: giroEndValue },
-            fondsdepot: { total: fondsdepotEndValue, invested: totalInvested, tax: kestTax },
-            flv: { total: flvEndValue, invested: totalInvested - insuranceTax, tax: insuranceTax }
+        const options = {
+            series: [40, 25, 20, 15],
+            chart: {
+                type: 'donut',
+                height: 250,
+                foreColor: '#e2e8f0'
+            },
+            labels: ['Schadenersatz (z.B. Verkehr)', 'Vertragsstreitigkeiten', 'Arbeitsrecht', 'Wohnen & Miete'],
+            colors: ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444'],
+            plotOptions: {
+                pie: {
+                    donut: {
+                        labels: {
+                            show: true,
+                            total: {
+                                show: true,
+                                label: 'Häufigste',
+                                formatter: () => 'Konflikte'
+                            }
+                        }
+                    }
+                }
+            },
+            dataLabels: {
+                enabled: false
+            },
+            legend: { show: false },
+            responsive: [{ breakpoint: 480, options: { chart: { width: 200 }, legend: { position: 'bottom' } } }]
         };
 
-        const maxValue = Math.max(values.giro.total, values.fondsdepot.total, values.flv.total);
+        const chart = new ApexCharts(container, options);
+        chart.render();
+    }
 
-        const createBar = (label, data, colorClass) => {
-            const totalHeightPercent = (data.total / maxValue) * 100;
-            // KORREKTUR: Die Höhe der Segmente muss relativ zur Gesamthöhe der Säule (data.total) sein, nicht zum Maximalwert des Charts.
-            const investedSegmentPercent = data.invested ? (data.invested / data.total) * 100 : 0;
-            const profitSegmentPercent = data.invested ? ((data.total - data.invested) / data.total) * 100 : 0;
+    _renderHaushaltChart() {
+        const container = document.getElementById('haushalt-chart-container');
+        if (!container) return;
+        container.innerHTML = '';
 
-            return `
-                <div class="chart-bar-wrapper">
-                    <div class="chart-bar ${colorClass}" style="height: 0%;" data-height="${totalHeightPercent}">
-                        <div class="chart-segment-invested" style="height: ${investedSegmentPercent}%;"></div>
-                        <div class="chart-segment-profit" style="height: ${profitSegmentPercent}%;"></div>
-                        <div class="chart-value">${Math.round(data.total / 1000)} T€</div>
-                    </div>
-                    <div class="chart-label">${label}</div>
-                    ${data.tax ? `<div class="chart-tax-label">-${Math.round(data.tax / 1000)} T€ Steuer</div>` : ''}
-                </div>
-            `;
+        const options = {
+            series: [35, 25, 20, 10, 10],
+            chart: { type: 'donut', height: 250, foreColor: '#e2e8f0' },
+            labels: ['Wasserschäden', 'Einbruch/Diebstahl', 'Brandschäden', 'Glasschäden', 'Sonstige Schäden'],
+            colors: ['#3b82f6', '#ef4444', '#f59e0b', '#6b7280'],
+            plotOptions: {
+                pie: {
+                    donut: {
+                        labels: {
+                            show: true,
+                            total: {
+                                show: true,
+                                label: 'Häufigste',
+                                formatter: () => 'Schäden'
+                            }
+                        }
+                    }
+                }
+            },
+            dataLabels: { enabled: false },
+            legend: { show: false },
+            responsive: [{ breakpoint: 480, options: { chart: { width: 200 } } }]
         };
 
-        container.innerHTML = `
-            ${createBar('Girokonto', { total: values.giro.total, invested: values.giro.total }, 'bar-blue')}
-            ${createBar('Fondsdepot', { total: values.fondsdepot.total, invested: values.fondsdepot.invested }, 'bar-yellow')}
-            ${createBar('FLV', { total: values.flv.total, invested: values.flv.invested }, 'bar-green')}
-        `;
+        const chart = new ApexCharts(container, options);
+        chart.render();
+    }
 
-        // Animate bars into view
-        setTimeout(() => {
-            container.querySelectorAll('.chart-bar').forEach(bar => {
-                bar.style.height = `${bar.dataset.height}%`;
-            });
-        }, 100);
+    _renderEigenheimChart() {
+        const container = document.getElementById('eigenheim-chart-container');
+        if (!container) return;
+        container.innerHTML = '';
+
+        const options = {
+            series: [40, 30, 20, 5, 5],
+            chart: { type: 'donut', height: 250, foreColor: '#e2e8f0' },
+            labels: ['Wasserschäden', 'Sturmschäden', 'Brandschäden', 'Glasschäden', 'Sonstige Schäden'],
+            colors: ['#3b82f6', '#22c55e', '#ef4444', '#f59e0b'],
+            plotOptions: {
+                pie: {
+                    donut: {
+                        labels: {
+                            show: true,
+                            total: {
+                                show: true,
+                                label: 'Häufigste',
+                                formatter: () => 'Gefahren'
+                            }
+                        }
+                    }
+                }
+            },
+            dataLabels: { enabled: false },
+            legend: { show: false },
+            responsive: [{ breakpoint: 480, options: { chart: { width: 200 } } }]
+        };
+
+        const chart = new ApexCharts(container, options);
+        chart.render();
+    }
+
+    _initPensionsrechner() {
+        const berechnenBtn = document.getElementById('pr-berechnen-btn');
+        const resetBtn = document.getElementById('pr-reset-btn');
+        const inputSections = document.getElementById('pr-input-sections');
+        const auswertungSection = document.getElementById('pr-auswertung');
+
+        if (!berechnenBtn || !resetBtn || !inputSections || !auswertungSection) return;
+
+        // Remove old listener to prevent duplicates
+        const newBtn = berechnenBtn.cloneNode(true);
+        berechnenBtn.parentNode.replaceChild(newBtn, berechnenBtn);
+
+        const resetView = () => {
+            inputSections.classList.remove('collapsed');
+            auswertungSection.style.display = 'none';
+            newBtn.style.display = 'inline-flex';
+        };
+
+        resetBtn.addEventListener('click', resetView);
+
+        newBtn.addEventListener('click', () => {
+            const anfangsEinkommen = parseFloat(document.getElementById("pr-einkommen").value) || 0;
+            const karriereSteigerung = (parseInt(document.getElementById("pr-karriere").value) || 0) / 100;
+            const geburtsdatum = new Date(document.getElementById("pr-geburtsdatum").value);
+            const pensionsalter = parseInt(document.getElementById("pr-pensionsalter").value) || 65;
+            
+            // KORREKTUR: Dynamische Berechnung des letzten Einkommens
+            const heute = new Date();
+            const alter = heute.getFullYear() - geburtsdatum.getFullYear();
+            const verbleibendeJahre = pensionsalter - alter;
+            
+            // Zinseszinsformel für das Gehalt
+            const letztesBruttoEinkommen = anfangsEinkommen * Math.pow(1 + karriereSteigerung, verbleibendeJahre);
+
+            // einfache Annahmen
+            const nettoFaktor = 1.326; // Annäherung für Brutto -> Netto x14
+            const pensionsersatzrate = 0.74; // Annäherung für die Pensionshöhe
+            const nettoLetzteinkommen = letztesBruttoEinkommen * nettoFaktor;
+            const nettoPension = nettoLetzteinkommen * pensionsersatzrate;
+            const luecke = nettoLetzteinkommen - nettoPension;
+
+            document.getElementById("pr-pAntritt").innerText = "01.01.2061";
+            document.getElementById("pr-pAlter").innerText = `${pensionsalter} Jahre`;
+            document.getElementById("pr-pKarriere").innerText = (karriereSteigerung * 100) + " %";
+            document.getElementById("pr-pLetzte").innerText = nettoLetzteinkommen.toFixed(0) + " €";
+            document.getElementById("pr-pPension").innerText = nettoPension.toFixed(0) + " €";
+            document.getElementById("pr-pLuecke").innerText = luecke.toFixed(0) + " €";
+
+            // Balken-Diagramm
+            const total = nettoLetzteinkommen;
+            const pensionPct = (nettoPension / total) * 100;
+            const gapPct = (luecke / total) * 100;
+            document.getElementById("pr-barPension").style.width = pensionPct + "%";
+            document.getElementById("pr-barGap").style.width = gapPct + "%";
+            document.getElementById("pr-auswertung").style.display = "block";
+            newBtn.style.display = 'none'; // Hide the calculate button
+
+            // NEU: Klappe die Eingabefelder nach der Berechnung ein.
+            inputSections.classList.add('collapsed');
+        });
+    }
+
+    _initVorsorgerechner() {
+        const berechnenBtn = document.getElementById('vr-berechnen-btn');
+        if (!berechnenBtn) return;
+
+        const berechnen = () => {
+            const entnahme = parseFloat(document.getElementById("vr-entnahme").value) || 0;
+            const dauer = parseInt(document.getElementById("vr-dauer").value) || 0;
+            const zinsEntnahme = (parseFloat(document.getElementById("vr-zinsEntnahme").value) || 0) / 100;
+            const zinsSparen = (parseFloat(document.getElementById("vr-zinsSparen").value) || 0) / 100;
+            const startKapital = parseFloat(document.getElementById("vr-startKapital").value) || 0;
+
+            // Kapitalbedarf berechnen
+            const monate = dauer * 12;
+            const i = zinsEntnahme / 12;
+            const kapitalBedarf = entnahme * (1 - Math.pow(1 + i, -monate)) / i;
+
+            // Sparrate berechnen (Annahme: 25 Jahre Sparphase)
+            const sparJahre = 25;
+            const m = sparJahre * 12;
+            const j = zinsSparen / 12;
+            const sparrate = (kapitalBedarf - startKapital) * j / (Math.pow(1 + j, m) - 1);
+
+            // Ausgabe
+            const formatCurrency = (val) => val.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+            document.getElementById("vr-kapital").innerText = formatCurrency(kapitalBedarf);
+            document.getElementById("vr-monatl").innerText = formatCurrency(entnahme);
+            document.getElementById("vr-sparrate").innerText = formatCurrency(sparrate);
+
+            // Chart-Daten generieren
+            const years = [...Array(sparJahre + dauer + 1).keys()];
+            let values = [];
+            let saldo = startKapital;
+            for (let y = 0; y <= sparJahre; y++) {
+                saldo = saldo * (1 + zinsSparen) + sparrate * 12;
+                values.push(saldo);
+            }
+            for (let y = 1; y <= dauer; y++) {
+                saldo = saldo * (1 + zinsEntnahme) - entnahme * 12;
+                values.push(Math.max(saldo, 0));
+            }
+
+            // ApexChart rendern
+            const chartContainer = document.getElementById('vr-chart-container');
+            chartContainer.innerHTML = '';
+            const options = {
+                series: [{ name: "Kapitalverlauf", data: values }],
+                chart: { type: 'area', height: 350, foreColor: '#e2e8f0', toolbar: { show: false }, zoom: { enabled: false } },
+                dataLabels: { enabled: false },
+                stroke: { curve: 'smooth', width: 2 },
+                fill: {
+                    type: 'gradient',
+                    gradient: {
+                        shadeIntensity: 1,
+                        opacityFrom: 0.7,
+                        opacityTo: 0.2,
+                        stops: [0, 100]
+                    }
+                },
+                // NEU: Farben für Anspar- und Entnahmephase
+                colors: ['#22c55e'], // Startet mit Grün
+                annotations: {
+                    xaxis: [{
+                        x: sparJahre,
+                        borderColor: '#FFD700',
+                        label: {
+                            borderColor: '#FFD700',
+                            style: { color: '#111', background: '#FFD700', },
+                            text: 'Pensionsantritt'
+                        }
+                    }]
+                },
+                xaxis: {
+                    categories: years,
+                    title: { text: 'Jahre', style: { color: '#9ca3af' } },
+                    labels: { formatter: (val) => (parseInt(val) % 5 === 0) ? val : '' }
+                },
+                yaxis: {
+                    title: { text: 'Kapital in €', style: { color: '#9ca3af' } },
+                    labels: { formatter: (val) => `${(val / 1000).toFixed(0)}k` }
+                },
+                tooltip: { theme: 'dark', y: { formatter: (val) => `${val.toLocaleString('de-DE')} €` } },
+                grid: { borderColor: '#4a5568', strokeDashArray: 4 }
+            };
+            const chart = new ApexCharts(chartContainer, options);
+            chart.render();
+        };
+
+        berechnenBtn.onclick = berechnen;
+        berechnen(); // Initial render
     }
 
     async _renderBeraterVorstellung() {
@@ -1042,7 +1450,7 @@ class BeratungView {
         if (bildUrlRaw) {
             const finalBildUrl = await getSeaTableDownloadLink(bildUrlRaw);
             if (finalBildUrl) {
-                bildHtml = `<img src="${finalBildUrl}" alt="Portrait von ${this._escapeHtml(berater.Name)}" class="w-64 h-64 rounded-full object-cover shadow-2xl border-4 border-white">`;
+                bildHtml = `<img src="${finalBildUrl}" alt="Portrait von ${this._escapeHtml(berater[nameKey])}" class="w-64 h-64 rounded-full object-cover shadow-2xl border-4 border-white">`;
             }
         }
 
@@ -1064,7 +1472,7 @@ class BeratungView {
         container.innerHTML = `
             <div class="grid grid-cols-1 md:grid-cols-3 gap-12 items-center">
                 <div class="md:col-span-2 text-left">
-                    <h2 class="text-5xl font-bold mb-1">${this._escapeHtml(berater.Name)}</h2>
+                    <h2 class="text-5xl font-bold mb-1">${this._escapeHtml(berater[nameKey])}</h2>
                     <p class="text-gold font-bold text-xl mb-2">${karrierestufe}</p>
                     <p class="text-lg text-gray-300 mb-6"><i class="fas fa-map-marker-alt mr-2"></i>${this._escapeHtml(buero)}</p>
                     <div class="prose prose-lg text-white max-w-none">
@@ -1084,19 +1492,29 @@ class BeratungView {
     _renderAgenda() {
         if (!this.agendaContainer) return;
         this.agendaContainer.innerHTML = '';
+        
+        const updateRanks = () => {
+            this.agendaContainer.querySelectorAll('.agenda-item').forEach((item, index) => {
+                item.classList.remove('rank-1', 'rank-2', 'rank-3');
+                if (index === 0) item.classList.add('rank-1');
+                else if (index === 1) item.classList.add('rank-2');
+                else if (index === 2) item.classList.add('rank-3');
+            });
+        };
 
-        this.beratungData.kategorien.forEach(kategorie => {
+        this.beratungData.kategorien.forEach((kategorie, index) => {
             const item = document.createElement('div');
-            // KORREKTUR: Fügt ein Handle-Icon für besseres Drag-and-Drop-Feedback hinzu.
-            item.className = 'agenda-item p-4 bg-white/10 rounded-lg text-lg font-semibold cursor-grab flex items-center justify-between';
-            item.textContent = kategorie;
+            item.className = 'agenda-item flex items-center justify-between';
             item.dataset.kategorie = kategorie;
             item.innerHTML = `<span>${this._escapeHtml(kategorie)}</span><i class="fas fa-grip-vertical text-gray-400"></i>`;
             this.agendaContainer.appendChild(item);
         });
 
+        updateRanks(); // Set initial ranks
+
         if (this.beratungData.kategorien.length > 0) {
-            new Sortable(this.agendaContainer, { animation: 150, handle: '.fa-grip-vertical' });
+            // KORREKTUR: Nach dem Sortieren die Ränge neu zuweisen.
+            new Sortable(this.agendaContainer, { animation: 150, handle: '.fa-grip-vertical', onEnd: updateRanks });
         }
     }
 

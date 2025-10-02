@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SKT Digitale Beratung</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
@@ -24,7 +25,7 @@
 
 
     <!-- Hauptcontainer für die Slides -->
-    <div id="beratung-slides-container" class="relative w-full max-w-4xl h-full flex items-center justify-center">
+    <div id="beratung-slides-container" class="relative w-full max-w-6xl h-full flex justify-center pb-24 pt-8 overflow-y-auto">
 
         <!-- NEU: Slide 0: Mitarbeitername Eingabe -->
         <div id="beratung-slide-mitarbeitername" class="beratung-slide">
@@ -63,7 +64,7 @@
         <div id="beratung-slide-agenda" class="beratung-slide hidden w-full">
             <h2 class="text-3xl font-bold text-center mb-8">Lassen Sie uns die Reihenfolge festlegen.</h2>
             <p class="text-center text-gray-300 mb-6">Sie können die Themen per Drag & Drop sortieren.</p>
-            <div id="beratung-agenda-container" class="max-w-md mx-auto space-y-3"></div>
+            <div id="beratung-agenda-container" class="max-w-2xl mx-auto space-y-3"></div>
         </div>
 
         <!-- NEU: Statische Seiten für die Säulenauswahl -->
@@ -117,58 +118,119 @@
             <div id="financial-goals-container" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 max-w-5xl mx-auto">
                 <!-- Ziele werden per JS eingefügt -->
             </div>
+            <!-- NEU: Buttons für Rechner -->
+            <div class="mt-12 text-center border-t border-white/10 pt-8 mb-24">
+                <h3 class="text-2xl font-semibold mb-4">Zusätzliche Rechner</h3>
+                <div class="flex justify-center gap-4">
+                    <button data-modal-target="pensionsrechner-modal" class="rechner-btn beratung-nav-btn"><i class="fas fa-calculator"></i>Pensionsrechner</button>
+                    <button data-modal-target="vorsorgerechner-modal" class="rechner-btn beratung-nav-btn"><i class="fas fa-file-invoice-dollar"></i>Vorsorgerechner</button>
+                </div>
+            </div>
         </div>
 
         <div id="beratung-slide-special-FLV-Dreikontenmodell" class="beratung-slide hidden w-full">
-            <h2 class="text-4xl font-bold text-center mb-8 col-span-full">Das 3-Konten-Modell: Ihr Vermögensaufbau</h2>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 w-full max-w-6xl mx-auto">
-                <!-- Linke Spalte: Zeitstrahle -->
-                <div id="three-accounts-model-container" class="w-full space-y-6">
-                    <!-- Kurzfristig -->
-                    <div class="timeline-container">
-                        <div class="timeline-header" data-tooltip="Für Notgroschen und Sicherheit – schnelle Verfügbarkeit ist wichtig.">
-                            <div class="timeline-bar timeline-bar-blue"></div>
-                            <h3 class="timeline-title"><i class="fas fa-wallet mr-2"></i>Kurzfristig <span class="timeline-duration">&lt; 1 Jahr</span></h3>
-                        </div>
-                        <div class="timeline-content" id="content-kurzfristig"></div>
-                    </div>
-                    <!-- Mittelfristig -->
-                    <div class="timeline-container">
-                        <div class="timeline-header" data-tooltip="Für größere Anschaffungen, Reisen oder Auto – etwas Rendite, aber flexibel.">
-                            <div class="timeline-bar timeline-bar-yellow"></div>
-                            <h3 class="timeline-title"><i class="fas fa-car-side mr-2"></i>Mittelfristig <span class="timeline-duration">1-15 Jahre</span></h3>
-                        </div>
-                        <div class="timeline-content" id="content-mittelfristig"></div>
-                    </div>
-                    <!-- Langfristig -->
-                    <div class="timeline-container">
-                        <div class="timeline-header" data-tooltip="Für Vermögensaufbau, Pension und Immobilien – hier zählt Geduld und Steuerersparnis.">
-                            <div class="timeline-bar timeline-bar-green"></div>
-                            <h3 class="timeline-title"><i class="fas fa-piggy-bank mr-2"></i>Langfristig <span class="timeline-duration">&gt; 15 Jahre</span></h3>
-                        </div>
-                        <div class="timeline-content" id="content-langfristig"></div>
+            <h1 class="text-4xl font-bold text-center mb-8">Das 3-Konten-Modell</h1>
+            <div class="timeline-container-new">
+                <!-- Kurzfristig -->
+                <div class="line-block" data-width="20">
+                    <div class="timeline-header-flex"><div class="label">Kurzfristig (&lt; 1 Jahr)</div><div id="icons-kurzfristig" class="icons-new"></div></div><div class="bar"><div class="progress blue"></div></div><div class="texts">
+                        <div class="item">z. B. Girokonto</div>
+                        <div class="item bad">kaum Zinsen</div>
+                        <div class="item good">sehr flexibel</div>
                     </div>
                 </div>
-                <!-- Rechte Spalte: Zinseszins-Chart -->
-                <div id="compound-interest-chart-container" class="flex flex-col justify-end items-center p-6 bg-white/5 rounded-lg">
-                    <h3 class="text-2xl font-bold text-center mb-4">Der Zinseszins-Effekt</h3>
-                    <p class="text-center text-gray-300 mb-6">Vergleich bei 200€ Sparrate über 35 Jahre</p>
-                    <div id="chart-bars-container" class="w-full h-80 flex justify-around items-end gap-4"></div>
+                <!-- Mittelfristig -->
+                <div class="line-block" data-width="50">
+                    <div class="timeline-header-flex"><div class="label">Mittelfristig (1–15 Jahre)</div><div id="icons-mittelfristig" class="icons-new"></div></div><div class="bar"><div class="progress yellow"></div></div><div class="texts">
+                        <div class="item">z. B. Fondsdepot</div>
+                        <div class="item good">7–9% Rendite</div>
+                        <div class="item bad">3–5% Kosten</div>
+                        <div class="item bad">27,5% KESt</div>
+                    </div>
+                </div>
+                <!-- Langfristig -->
+                <div class="line-block" data-width="80">
+                    <div class="timeline-header-flex"><div class="label">Langfristig (&gt; 15 Jahre)</div><div id="icons-langfristig" class="icons-new"></div></div><div class="bar"><div class="progress green"></div></div><div class="texts">
+                        <div class="item">z. B. FLV (Fonds + Versicherung)</div>
+                        <div class="item good">7–9% Rendite</div>
+                        <div class="item bad">4% Versicherungssteuer</div>
+                        <div class="item bad">10–15% Kosten</div>
+                        <div class="item good">KEINE KESt</div>
+                    </div>
                 </div>
             </div>
-            <button id="three-accounts-next-step-btn" class="beratung-nav-btn mx-auto mt-8">
-                Nächster Schritt <i class="fas fa-arrow-down"></i>
-            </button>
+        </div>
+
+        <div id="beratung-slide-explanation-Rechtschutz" class="beratung-slide hidden w-full flex-col">
+            <div class="text-center w-full mb-10">
+                <h2 class="text-4xl font-bold mb-2">Sorgenfrei im Recht mit der richtigen Absicherung</h2>
+                <p class="text-xl text-gray-300">Eine Rechtsschutzversicherung ist Ihr finanzieller Schutzschild bei rechtlichen Konflikten.</p>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-stretch flex-grow w-full">
+                <!-- Linke Spalte: Inhalt & Chart -->
+                <div class="flex flex-col justify-center h-full">
+                    <div class="grid grid-cols-2 gap-6 text-white">
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-blue-500"><i class="fas fa-shield-alt"></i></div><h3 class="font-bold text-lg mt-3">Finanzielle Sicherheit</h3><p class="text-sm text-gray-400 mt-1">Schutz vor hohen Anwalts- und Gerichtskosten.</p></div>
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-green-500"><i class="fas fa-balance-scale"></i></div><h3 class="font-bold text-lg mt-3">Waffengleichheit</h3><p class="text-sm text-gray-400 mt-1">Auf Augenhöhe mit großen Firmen und Gegnern.</p></div>
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-yellow-500"><i class="fas fa-user-tie"></i></div><h3 class="font-bold text-lg mt-3">Expertenrat</h3><p class="text-sm text-gray-400 mt-1">Jederzeit Zugang zu professioneller Rechtsberatung.</p></div>
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-red-500"><i class="fas fa-smile-beam"></i></div><h3 class="font-bold text-lg mt-3">Sorgenfreiheit</h3><p class="text-sm text-gray-400 mt-1">Gelassenheit im Alltag, im Verkehr und bei Verträgen.</p></div>
+                    </div>
+                    <div id="rechtsschutz-chart-container" class="bg-white/5 p-4 rounded-lg mt-6"></div>
+                </div>
+                <!-- Rechte Spalte: Bild -->
+                <div class="hidden lg:flex flex-col gap-6 h-full">
+                    <div class="flex-1"><img src="https://www.helvetia.com/at/web/de/privatkunden/versichern/unfall-recht/rechtsschutzversicherung/_jcr_content/whitelabelparsys-01/productstage_copy/image.1627368758831.transform-fp/1920x1080/rechtsschutzversicherung.jpg" alt="Recht und Gerechtigkeit" class="rounded-2xl shadow-2xl object-cover h-full w-full"></div>
+                    <div class="flex-1 bg-white/5 p-6 rounded-lg"><h4 class="font-bold text-lg mb-2">Wo lauern die meisten Konflikte?</h4><p class="text-gray-300">Das Diagramm zeigt, dass die meisten Rechtsstreitigkeiten im Bereich <strong class="text-white">Schadenersatz</strong> (z.B. nach Unfällen) und bei <strong class="text-white">Vertragsangelegenheiten</strong> (z.B. Online-Käufe, Handwerker) entstehen. Ein umfassender Schutz ist daher unerlässlich.</p></div>
+                </div>
+            </div>
         </div>
 
         <div id="beratung-slide-explanation-Fondssparen" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Fondssparen</h2></div>
         <div id="beratung-slide-explanation-FLV" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: FLV</h2></div>
-        <!-- NEU: Statische Seite für Haftpflicht, wie gewünscht -->
         <div id="beratung-slide-special-Haftpflicht" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Direktverweis Helvetia Haftpflicht</h2></div>
-
-        <div id="beratung-slide-explanation-Rechtschutz" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Rechtschutz</h2></div>
-        <div id="beratung-slide-explanation-Eigenheim" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Eigenheim</h2></div>
-        <div id="beratung-slide-explanation-Haushalt" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Haushalt</h2></div>
+        
+        <div id="beratung-slide-explanation-Eigenheim" class="beratung-slide hidden w-full flex-col">
+            <div class="text-center w-full mb-10">
+                <h2 class="text-4xl font-bold mb-2">Das Fundament Ihres Lebens absichern</h2>
+                <p class="text-xl text-gray-300">Die Eigenheimversicherung schützt Ihr Gebäude vor existenziellen Risiken.</p>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-stretch flex-grow w-full">
+                <div class="flex flex-col justify-center h-full">
+                    <div class="grid grid-cols-2 gap-6 text-white">
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-blue-500"><i class="fas fa-building-shield"></i></div><h3 class="font-bold text-lg mt-3">Umfassender Gebäudeschutz</h3><p class="text-sm text-gray-400 mt-1">Deckt Schäden am Haus selbst (Mauerwerk, Dach, Boden) ab.</p></div>
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-green-500"><i class="fas fa-cloud-showers-heavy"></i></div><h3 class="font-bold text-lg mt-3">Absicherung bei Naturgefahren</h3><p class="text-sm text-gray-400 mt-1">Sturm, Hagel, Überschwemmung – große Schäden werden ersetzt.</p></div>
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-red-500"><i class="fas fa-house-fire"></i></div><h3 class="font-bold text-lg mt-3">Brandschutz für die Immobilie</h3><p class="text-sm text-gray-400 mt-1">Kein finanzieller Ruin bei Brand- oder Blitzschlag-Schäden.</p></div>
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-yellow-500"><i class="fas fa-person-falling-burst"></i></div><h3 class="font-bold text-lg mt-3">Haftpflicht für Grundstück</h3><p class="text-sm text-gray-400 mt-1">Schutz, wenn z.B. jemand auf dem vereisten Gehweg stürzt.</p></div>
+                    </div>
+                    <div id="eigenheim-chart-container" class="bg-white/5 p-4 rounded-lg mt-6"></div>
+                </div>
+                <div class="hidden lg:flex flex-col gap-6 h-full">
+                    <div class="flex-1"><img src="https://images.unsplash.com/photo-1564013799919-ab600027ffc6?q=80&w=2070&auto=format&fit=crop" alt="Modernes Haus" class="rounded-2xl shadow-2xl object-cover h-full w-full"></div>
+                    <div class="flex-1 bg-white/5 p-6 rounded-lg"><h4 class="font-bold text-lg mb-2">Die größten Gefahren für Ihr Heim</h4><p class="text-gray-300">Statistisch gesehen sind <strong class="text-white">Wasserschäden</strong> durch Rohrbrüche und <strong class="text-white">Sturmschäden</strong> die häufigsten und teuersten Risiken für Hausbesitzer. Eine gute Versicherung ist hier essenziell, um den Wert Ihrer Immobilie zu schützen.</p></div>
+                </div>
+            </div>
+        </div>
+        <div id="beratung-slide-explanation-Haushalt" class="beratung-slide hidden w-full flex-col">
+            <div class="text-center w-full mb-10">
+                <h2 class="text-4xl font-bold mb-2">Ihr Zuhause in sicheren Händen</h2>
+                <p class="text-xl text-gray-300">Die Haushaltsversicherung schützt alles, was Ihnen lieb und teuer ist.</p>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-stretch flex-grow w-full">
+                <div class="flex flex-col justify-center h-full">
+                    <div class="grid grid-cols-2 gap-6 text-white">
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-blue-500"><i class="fas fa-couch"></i></div><h3 class="font-bold text-lg mt-3">Schutz des Wohnungsinhalts</h3><p class="text-sm text-gray-400 mt-1">Möbel, Elektrogeräte und Wertsachen sind abgesichert.</p></div>
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-green-500"><i class="fas fa-user-secret"></i></div><h3 class="font-bold text-lg mt-3">Einbruch & Diebstahl</h3><p class="text-sm text-gray-400 mt-1">Ersetzt gestohlene Gegenstände und Reparaturkosten.</p></div>
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-red-500"><i class="fas fa-house-damage"></i></div><h3 class="font-bold text-lg mt-3">Feuer- und Wasserschäden</h3><p class="text-sm text-gray-400 mt-1">Schutz, wenn ein Rohrbruch den gesamten Hausrat zerstört.</p></div>
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-yellow-500"><i class="fas fa-wind"></i></div><h3 class="font-bold text-lg mt-3">Glas- & Elementarschäden</h3><p class="text-sm text-gray-400 mt-1">Schutz bei zerbrochenen Fenstern oder Sturmschäden.</p></div>
+                    </div>
+                    <div id="haushalt-chart-container" class="bg-white/5 p-4 rounded-lg mt-6"></div>
+                </div>
+                <div class="hidden lg:flex flex-col gap-6 h-full">
+                    <div class="flex-1"><img src="https://images.unsplash.com/photo-1618220179428-22790b461013?q=80&w=2127&auto=format&fit=crop" alt="Wohnzimmer" class="rounded-2xl shadow-2xl object-cover h-full w-full"></div>
+                    <div class="flex-1 bg-white/5 p-6 rounded-lg"><h4 class="font-bold text-lg mb-2">Die häufigsten Schäden im Haushalt</h4><p class="text-gray-300">Die Statistik zeigt: <strong class="text-white">Wasserschäden</strong> sind mit Abstand die häufigste Ursache für teure Reparaturen im Haushalt, dicht gefolgt von <strong class="text-white">Einbruch und Diebstahl</strong>. Eine gute Haushaltsversicherung deckt genau diese alltäglichen Risiken ab.</p></div>
+                </div>
+            </div>
+        </div>
         <div id="beratung-slide-explanation-Krankenversicherung" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Krankenversicherung</h2></div>
         <div id="beratung-slide-explanation-Unfallversicherung" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Unfallversicherung</h2></div>
         <div id="beratung-slide-explanation-Risikoleben" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Risikoleben</h2></div>
@@ -180,7 +242,43 @@
         <div id="beratung-slide-explanation-Leasing" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Leasing</h2></div>
         <div id="beratung-slide-explanation-Strom" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Strom</h2></div>
         <div id="beratung-slide-explanation-Gas" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Gas</h2></div>
-        <div id="beratung-slide-special-FLV-Steuervorteilrechner" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">FLV: Steuervorteilrechner</h2></div>
+        <div id="beratung-slide-special-FLV-Steuervorteilrechner" class="beratung-slide hidden w-full">
+            <h2 class="text-4xl font-bold text-center mb-8 col-span-full">Steuervorteilrechner</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 w-full max-w-7xl mx-auto items-center">
+                <!-- Linke Spalte: Eingabefelder -->
+                <div class="lg:col-span-1 bg-white/5 p-6 rounded-lg space-y-6">
+                    <h3 class="text-2xl font-bold text-center">Deine Berechnung</h3>
+                    <div>
+                        <label for="rechner-startwert" class="block text-sm font-medium text-gray-300">Startwert (€)</label>
+                        <input type="number" id="rechner-startwert" value="0" class="modern-input-dark mt-1">
+                    </div>
+                    <div>
+                        <label for="rechner-sparrate" class="block text-sm font-medium text-gray-300">Sparsumme / Monat (€)</label>
+                        <input type="number" id="rechner-sparrate" value="200" class="modern-input-dark mt-1">
+                    </div>
+                    <div>
+                        <label for="rechner-dauer" class="block text-sm font-medium text-gray-300">Anlagedauer (Jahre)</label>
+                        <input type="number" id="rechner-dauer" value="35" class="modern-input-dark mt-1">
+                    </div>
+                    <div>
+                        <label for="rechner-rendite" class="block text-sm font-medium text-gray-300">Rendite p.a. (%)</label>
+                        <input type="number" id="rechner-rendite" value="7" class="modern-input-dark mt-1">
+                    </div>
+                    <div class="flex items-center justify-between pt-4 border-t border-white/10">
+                        <label for="rechner-kest" class="text-sm font-medium text-gray-300">KESt berücksichtigen?</label>
+                        <label class="toggle-switch"><input type="checkbox" id="rechner-kest" class="sr-only peer" checked><div class="toggle-slider"></div></label>
+                    </div>
+                    <div class="pt-4 border-t border-white/10 space-y-2 text-lg">
+                        <div class="flex justify-between"><span>Einzahlung gesamt:</span> <span id="rechner-output-einzahlung" class="font-bold">0 €</span></div>
+                        <div class="flex justify-between"><span>Rendite gesamt:</span> <span id="rechner-output-rendite" class="font-bold">0 €</span></div>
+                        <div class="flex justify-between text-skt-red-accent"><span>KESt gesamt:</span> <span id="rechner-output-kest" class="font-bold">0 €</span></div>
+                        <div class="flex justify-between text-xl text-skt-green-accent pt-2 border-t border-white/20"><span>Endbetrag:</span> <span id="rechner-output-endbetrag" class="font-bold">0 €</span></div>
+                    </div>
+                </div>
+                <!-- Rechte Spalte: Chart -->
+                <div id="rechner-chart-container" class="lg:col-span-1 flex flex-col justify-center items-center"></div>
+            </div>
+        </div>
 
         <!-- Letzte Slide: Zusammenfassung & Speichern -->
         <div id="beratung-slide-abschluss" class="beratung-slide hidden">
@@ -191,7 +289,7 @@
     </div>
 
     <!-- Navigationsleiste -->
-    <div id="beratung-nav" class="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-8">
+    <div id="beratung-nav" class="absolute bottom-0 left-0 right-0 bg-skt-blue/50 backdrop-blur-sm border-t border-white/10 p-4 flex justify-center items-center gap-8 z-20">
         <button id="beratung-back-btn" class="beratung-nav-btn hidden">
             <i class="fas fa-arrow-left"></i> Zurück
         </button>
@@ -199,6 +297,114 @@
             Weiter <i class="fas fa-arrow-right"></i>
         </button>
     </div>
+    </div>
+
+    <!-- NEU: Modals für die Rechner -->
+    <div id="pensionsrechner-modal" class="modal-overlay">
+        <div class="modal-box bg-skt-blue-light rounded-lg shadow-xl p-8 m-4 max-w-4xl w-full relative border border-white/20">
+            <button data-modal-close="pensionsrechner-modal" class="absolute top-3 right-4 text-3xl text-gray-400 hover:text-white">&times;</button>
+            <div class="pensionsrechner-container">
+                <h2 class="text-3xl font-bold text-white mb-6 text-center">Pensionslückenrechner</h2>
+                
+                <div id="pr-input-sections" class="pr-input-collapsible">
+                    <h3 class="text-xl font-bold text-white mb-3">1. Allgemeine Daten</h3>
+                    <div class="pensionsrechner-row">
+                        <div style="flex:1">
+                            <label>Geschlecht</label>
+                            <select id="pr-geschlecht" class="modern-input-dark"><option>Männlich</option><option>Weiblich</option></select>
+                        </div>
+                        <div style="flex:1">
+                            <label>Geburtsdatum</label>
+                            <input type="date" id="pr-geburtsdatum" value="1995-12-11" class="modern-input-dark">
+                        </div>
+                    </div>
+                    <div class="pensionsrechner-row">
+                        <div style="flex:1">
+                            <label>Monatl. Einkommen (brutto)</label>
+                            <input type="number" id="pr-einkommen" value="2000" class="modern-input-dark">
+                        </div>
+                        <div style="flex:1">
+                            <label>Karriereverlauf</label>
+                        <select id="pr-karriere" class="modern-input-dark"><option value="1">1 % p.a.</option><option value="2">2 % p.a.</option><option value="3">3 % p.a.</option><option value="4">4 % p.a.</option></select>
+                        </div>
+                        <div style="flex:1">
+                            <label>Pensionsantrittsalter</label>
+                            <input type="number" id="pr-pensionsalter" value="65" class="modern-input-dark">
+                        </div>
+                    </div>
+
+                    <h3 class="text-xl font-bold text-white mt-6 mb-3">2. Analyse</h3>
+                    <div class="pensionsrechner-note">
+                        Bei der Schnellanalyse greifen wir auf Durchschnittswerte zurück. Dadurch können wir zwar eine
+                        nähere Pensionslücke errechnen, diese beruht aber auf Schätzwerten. Bitte sieh die angezeigten Werte
+                        nur als Orientierungshilfe. Pensionen werden 14x pro Jahr ausbezahlt. Die Berechnung erfolgt in heutigem Geldwert.
+                    </div>
+                </div>
+
+                <button id="pr-berechnen-btn" class="beratung-nav-btn mx-auto">Berechnen</button>
+
+                <div id="pr-auswertung" class="pensionsrechner-result" style="display:none">
+                    <h3>Alterspension</h3>
+                    <div class="pensionsrechner-res-row"><span>Pensionsantritt:</span><span id="pr-pAntritt"></span></div>
+                    <div class="pensionsrechner-res-row"><span>Antrittsalter:</span><span id="pr-pAlter"></span></div>
+                    <div class="pensionsrechner-res-row"><span>Karriereverlauf:</span><span id="pr-pKarriere"></span></div>
+                    <div class="pensionsrechner-res-row"><span>Nettoletzteinkommen:</span><span id="pr-pLetzte"></span></div>
+                    <div class="pensionsrechner-res-row"><span>Nettopension:</span><span class="good" id="pr-pPension"></span></div>
+                    <div class="pensionsrechner-res-row"><span>Lücke:</span><span class="bad" id="pr-pLuecke"></span></div>
+                    <div class="pensionsrechner-chart">
+                        <div class="pensionsrechner-bar"><div class="segment pension" id="pr-barPension"></div><div class="segment gap" id="pr-barGap"></div></div>
+                        <div class="pensionsrechner-legend">
+                            <div class="legend-item"><div class="legend-dot pension"></div>Gesicherte Pension</div>
+                            <div class="legend-item"><div class="legend-dot gap"></div>Pensionslücke</div>
+                        </div>
+                    </div>
+                    <div class="text-center mt-6">
+                        <button id="pr-reset-btn" class="beratung-nav-btn"><i class="fas fa-redo mr-2"></i>Neu berechnen</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="vorsorgerechner-modal" class="modal-overlay">
+        <div class="modal-box bg-skt-blue-light rounded-lg shadow-xl p-8 m-4 max-w-4xl w-full relative border border-white/20">
+            <button data-modal-close="vorsorgerechner-modal" class="absolute top-3 right-4 text-3xl text-gray-400 hover:text-white">&times;</button>
+            <h2 class="text-3xl font-bold text-white mb-6 text-center">Deine Ruhestandsfinanzierung</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Eingaben -->
+                <div class="lg:col-span-1 space-y-4">
+                    <div>
+                        <label for="vr-entnahme" class="text-white">Entnahme pro Monat (€)</label>
+                        <input type="number" id="vr-entnahme" value="2000" class="modern-input-dark">
+                    </div>
+                    <div>
+                        <label for="vr-dauer" class="text-white">Entnahmezeitraum (Jahre)</label>
+                        <input type="number" id="vr-dauer" value="37" class="modern-input-dark">
+                    </div>
+                    <div>
+                        <label for="vr-zinsEntnahme" class="text-white">Zinssatz in Entnahmephase (% p.a.)</label>
+                        <input type="number" id="vr-zinsEntnahme" value="3" class="modern-input-dark">
+                    </div>
+                    <div>
+                        <label for="vr-startKapital" class="text-white">Anfangskapital (€)</label>
+                        <input type="number" id="vr-startKapital" value="0" class="modern-input-dark">
+                    </div>
+                    <div>
+                        <label for="vr-zinsSparen" class="text-white">Zinssatz in Sparphase (% p.a.)</label>
+                        <input type="number" id="vr-zinsSparen" value="9" class="modern-input-dark">
+                    </div>
+                    <button id="vr-berechnen-btn" class="beratung-nav-btn w-full justify-center">Berechnen</button>
+                </div>
+                <!-- Chart + Ergebnis -->
+                <div class="lg:col-span-2 flex flex-col">
+                    <div id="vr-chart-container" class="w-full flex-grow min-h-[300px]"></div>
+                    <div class="mt-6 pt-6 border-t border-white/10 space-y-2 text-lg text-white">
+                        <div class="flex justify-between"><span>Benötigtes Kapital:</span> <span id="vr-kapital" class="font-bold">0 €</span></div>
+                        <div class="flex justify-between"><span>Monatliche Entnahme:</span> <span id="vr-monatl" class="font-bold">0 €</span></div>
+                        <div class="flex justify-between text-xl text-skt-green-accent pt-2 border-t border-white/20"><span>Benötigte Sparrate / Monat:</span> <span id="vr-sparrate" class="font-bold">0 €</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Lodash und SortableJS für Drag-and-Drop -->

@@ -1444,10 +1444,10 @@ summary::-webkit-details-marker {
     opacity: 0;
     transition: opacity 0.4s ease-in-out;
     width: 100%;
-    /* Zentriert den Inhalt des Slides */
+    /* KORREKTUR: justify-content: center entfernt, um Überlaufen zu verhindern. Padding sorgt für Abstand. */
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    margin: auto;
 }
 .beratung-slide.active {
     /* KORREKTUR: Der aktive Slide wird als Flexbox angezeigt, um den Inhalt zu zentrieren. */
@@ -1460,11 +1460,12 @@ summary::-webkit-details-marker {
 .beratung-slide .prose strong {
     color: inherit; /* Stellt sicher, dass fetter Text auch weiß ist */
 }
-/* KORREKTUR: Mindesthöhe für Goal-Cards, damit sie immer sichtbar sind */
-.goal-card .shadow-text {
-    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+/* KORREKTUR: Stile für die Ziel-Karten ohne Bilder */
+.goal-card {
+    min-height: 180px; /* Stellt sicher, dass die Karten eine gute Größe haben */
+    aspect-ratio: 1 / 1;
 }
-.goal-card.selected .absolute.inset-0.bg-black {
+.goal-card.selected {
     background-color: rgba(212, 175, 55, 0.5); /* Gold-Overlay bei Auswahl */
 }
 
@@ -1529,47 +1530,45 @@ summary::-webkit-details-marker {
 .contract-box p {
     font-weight: 600;
 }
-
-/* --- NEU: Stile für Zinseszins-Chart --- */
-.chart-bar-wrapper {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 80px;
-}
-.chart-bar {
-    width: 100%;
-    border-radius: 0.5rem 0.5rem 0 0;
+/* KORREKTUR: Tooltip-Stile wiederhergestellt */
+[data-tooltip] {
     position: relative;
-    display: flex;
-    flex-direction: column;
-    transition: height 1.5s cubic-bezier(0.25, 1, 0.5, 1);
+    cursor: help;
 }
-.chart-bar.bar-blue { background-color: var(--color-skt-blue-main); }
-.chart-bar.bar-yellow { background-color: var(--color-accent-yellow); }
-.chart-bar.bar-green { background-color: var(--color-accent-green); }
-
-.chart-segment-invested { background-color: rgba(255, 255, 255, 0.3); }
-.chart-segment-profit { background-color: transparent; }
-
-.chart-value {
+[data-tooltip]::after {
+    content: attr(data-tooltip);
     position: absolute;
-    top: -1.75rem; /* 28px */
-    left: 50%;
-    transform: translateX(-50%);
-    font-weight: 700;
-    font-size: 1.125rem; /* text-lg */
+    bottom: 100%; left: 50%;
+    transform: translateX(-50%) translateY(-8px);
+    background-color: var(--color-skt-blue); color: white; padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 500; white-space: nowrap; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; z-index: 100;
+}
+[data-tooltip]:hover::after { opacity: 1; visibility: visible; }
+/* --- NEU: Stile für ApexCharts --- */
+.apexcharts-tooltip {
+    background: #2d3748 !important; /* Dunkler Hintergrund */
+    color: #ffffff !important;
+    border: 1px solid #4a5568 !important;
+}
+.apexcharts-tooltip-title {
+    background: #1a202c !important;
+    border-bottom: 1px solid #4a5568 !important;
+}
+.apexcharts-legend-text {
+    color: #e2e8f0 !important; /* Heller Text für die Legende */
+    font-size: 14px !important;
+}
+/* NEU: Stile für die Eingabefelder im Rechner */
+.modern-input-dark {
+    display: block;
+    width: 100%;
+    padding: 0.65rem 1rem;
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0.5rem;
     color: white;
+    transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
 }
-.chart-label {
-    margin-top: 0.5rem;
-    font-weight: 600;
-}
-.chart-tax-label {
-    margin-top: 0.25rem;
-    font-size: 0.75rem; /* text-xs */
-    color: var(--color-skt-red-accent);
-}
+.modern-input-dark:focus { outline: none; border-color: var(--color-skt-blue-main); box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.3); }
 .beratung-nav-btn { background-color: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3); padding: 0.75rem 1.5rem; border-radius: 999px; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; transition: all 0.2s; }
 .beratung-nav-btn:hover { background-color: rgba(255, 255, 255, 0.2); }
 .beratung-nav-btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -1577,6 +1576,125 @@ summary::-webkit-details-marker {
 .kategorie-item.selected { background-color: var(--color-accent-gold); border-color: var(--color-accent-gold); color: var(--color-skt-blue); }
 .agenda-item { background-color: rgba(255, 255, 255, 0.15); cursor: grab; }
 .agenda-item:active { cursor: grabbing; }
+
+/* --- NEU: Stile für Pensionslückenrechner --- */
+.pensionsrechner-container { color: #e2e8f0; }
+.pensionsrechner-container label { font-weight: 600; font-size: .9rem; margin-bottom: 4px; display: block; color: #cbd5e1; }
+.pensionsrechner-row { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 16px; }
+.pensionsrechner-note { font-size: .9rem; color: #d1d5db; line-height: 1.4; margin: 20px 0; background-color: rgba(0,0,0,0.2); padding: 1rem; border-radius: 0.5rem; }
+.pensionsrechner-result { margin-top: 30px; background: rgba(0,0,0,0.2); border-radius: 12px; padding: 20px; border: 1px solid rgba(255,255,255,0.1); }
+.pensionsrechner-result h3 { margin-top: 0; font-size: 1.25rem; font-weight: 700; }
+.pensionsrechner-res-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.pensionsrechner-res-row span:last-child { font-weight: 700; }
+.pensionsrechner-res-row .good { color: var(--color-accent-green); }
+.pensionsrechner-res-row .bad { color: var(--color-accent-red); }
+.pensionsrechner-chart { margin-top: 20px; }
+.pensionsrechner-bar { display: flex; align-items: center; gap: 0; height: 24px; border-radius: 4px; overflow: hidden; background-color: rgba(255,255,255,0.1); }
+.pensionsrechner-bar .segment { height: 100%; transition: width 0.5s ease-in-out; }
+.pensionsrechner-bar .pension { background: var(--color-accent-green); }
+.pensionsrechner-bar .gap { background: var(--color-accent-red); }
+/* KORREKTUR: Veraltete Stile entfernt und neue Legenden-Stile hinzugefügt */
+.pensionsrechner-legend {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    margin-top: 0.75rem;
+    font-size: 0.875rem;
+}
+.pensionsrechner-legend .legend-item { display: flex; align-items: center; gap: 0.5rem; }
+.pensionsrechner-legend .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+.pensionsrechner-legend .legend-dot.pension { background-color: var(--color-accent-green); }
+.pensionsrechner-legend .legend-dot.gap { background-color: var(--color-accent-red); }
+
+/* NEU: Stile für das Einklappen der Pensionsrechner-Eingaben */
+.pr-input-collapsible {
+    max-height: 500px; /* Genug Höhe für den Inhalt */
+    overflow: hidden;
+    transition: max-height 0.5s ease-in-out, opacity 0.3s ease-in-out, margin-bottom 0.5s ease-in-out;
+    opacity: 1;
+}
+.pr-input-collapsible.collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin-bottom: 0 !important; /* Entfernt den Abstand, wenn eingeklappt */
+}
+
+/* --- NEU: Stile für das 3-Konten-Modell (aus User-Beispiel) --- */
+.timeline-container-new { max-width: 900px; margin: auto; display: flex; flex-direction: column; gap: 50px; width: 100%; }
+.line-block { position: relative; }
+.label { font-weight: 700; margin-bottom: 8px; color: #e2e8f0; }
+.bar { position: relative; height: 12px; border-radius: 8px; background: #4b5563; overflow: hidden; }
+.progress { height: 100%; width: 0; transition: width 1s ease; border-radius: 8px; }
+.progress.blue { background: linear-gradient(90deg, #93c5fd, #3b82f6); }
+.progress.yellow { background: linear-gradient(90deg, #fde68a, #f59e0b); }
+.progress.green { background: linear-gradient(90deg, #bbf7d0, #22c55e); }
+/* KORREKTUR: Icons sind jetzt rechts, größer und mit Text */
+.timeline-header-flex {
+    position: relative; /* Wichtig für die Positionierung der Icons */
+    margin-bottom: 8px; /* Abstand zum Balken */
+}
+.icons-new {
+    position: absolute;
+    right: 0; top: 50%; transform: translateY(-50%); display: flex;
+    gap: 1.5rem; /* 24px */
+    color: #e2e8f0;
+    opacity: 0; /* Startet unsichtbar */
+    transition: opacity 0.5s ease 0.5s; /* Verzögerte Einblendung */
+}
+.icons-new span {
+    display: flex; flex-direction: column; align-items: center; gap: 0.25rem;
+    font-size: 0.75rem; color: #d1d5db;
+}
+.texts { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; color: #d1d5db; }
+.item { opacity: 0; transform: translateY(8px); transition: all .4s ease; }
+.item.show { opacity: 1; transform: none; }
+.good { color: var(--color-accent-green); font-weight: 600; }
+.bad { color: var(--color-accent-red); font-weight: 600; }
+
+
+/* NEU: Stile für Produktempfehlungs-Karten */
+.kategorie-item.selected { background-color: var(--color-accent-gold); border-color: var(--color-accent-gold); color: var(--color-skt-blue); }
+.agenda-item {
+    background-color: rgba(255, 255, 255, 0.15);
+    cursor: grab;
+    padding: 1.25rem 1.5rem !important; /* KORREKTUR: Padding erhöht */
+    font-size: 1.125rem; /* text-lg */
+    border: 3px solid transparent; /* Platzhalter für den Rahmen */
+    border-radius: 9999px; /* NEU: Macht die Boxen rund */
+}
+/* KORREKTUR: Stile für Dropdowns im Pensionsrechner, um sie an das dunkle Theme anzupassen */
+.pensionsrechner-container select.modern-input-dark {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.5rem center;
+    background-repeat: no-repeat;
+    background-size: 1.5em 1.5em;
+    padding-right: 2.5rem;
+}
+.agenda-item.rank-1 { border-color: #FFD700; box-shadow: 0 0 10px #FFD700; }
+.agenda-item.rank-2 { border-color: #C0C0C0; }
+.agenda-item.rank-3 { border-color: #CD7F32; }
+.agenda-item:active { cursor: grabbing; }
+
+/* NEU: Stile für die Rechtsschutz-Erklärungsseite */
+.rechtsschutz-card {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    text-align: center;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    font-size: 0.8rem; /* Kleinere Basisschriftgröße für die Karten */
+}
+.rechtsschutz-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+}
+.rechtsschutz-icon {
+    width: 64px; height: 64px; border-radius: 50%; margin: 0 auto; display: flex; align-items: center; justify-content: center; font-size: 1.75rem; color: white;
+}
 
 /* NEU: Stile für Produktempfehlungs-Karten */
 .recommendation-card-best {
