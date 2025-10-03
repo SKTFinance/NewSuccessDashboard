@@ -1731,6 +1731,47 @@ summary::-webkit-details-marker {
     animation: countdownAnimation 20s linear forwards;
 }
 
+/* --- NEU: Stile für die Logo-Tornado-Animation --- */
+.logo-tornado-scene {
+    /* KORREKTUR: Breite weiter vergrößert für den größeren Radius. */
+    width: 300px;
+    height: 120px;
+    perspective: 1000px; /* Legt die 3D-Perspektive fest */
+    margin-bottom: 2rem;
+}
+
+.logo-tornado-stage {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    transform-style: preserve-3d;
+    animation: tornado-spin 25s infinite linear;
+}
+
+.logo-in-tornado {
+    position: absolute;
+    top: 10px;
+    /* KORREKTUR: Logos sind jetzt kleiner im Verhältnis zur Bühne, was den Abstand vergrößert. */
+    left: 25%;
+    width: 50%;
+    height: 80px;
+    object-fit: contain;
+    background-color: rgba(255, 255, 255, 0.9);
+    border-radius: 8px;
+    padding: 5px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    backface-visibility: hidden; /* Verhindert Flackern */
+}
+
+@keyframes tornado-spin {
+    from {
+        transform: rotateY(0deg);
+    }
+    to {
+        transform: rotateY(360deg);
+    }
+}
+
 /* NEU: Stile für das Tag-Eingabefeld (WorkingDay Modal) */
 .tag-input-container {
     display: flex;

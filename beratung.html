@@ -18,8 +18,13 @@
     <div class="absolute inset-0 bg-skt-blue opacity-80"></div>
 
     <!-- NEU: Lade-Overlay -->
-    <div id="beratung-loading-overlay" class="hidden absolute inset-0 bg-skt-blue z-50 flex-col items-center justify-center text-center transition-opacity duration-300">
-        <div class="loader-white"></div>
+    <div id="beratung-loading-overlay" class="hidden absolute inset-0 bg-skt-blue z-50 flex-col items-center justify-center text-center transition-opacity duration-300 p-4">
+        <!-- NEU: Container für die 3D-Logo-Animation -->
+        <div class="logo-tornado-scene">
+            <div id="logo-tornado-container" class="logo-tornado-stage">
+                <!-- Logos werden hier per JS eingefügt -->
+            </div>
+        </div>
         <p id="loading-text" class="text-xl mt-4 font-semibold text-white transition-opacity duration-500"></p>
     </div>
 
@@ -86,6 +91,14 @@
             <h2 class="text-3xl font-bold text-center mb-8">Welche Absicherung ist Ihnen wichtig?</h2>
             <div id="koerperundexistenz-selection-container" class="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
                 <!-- Optionen werden per JS aus den Produkten der Kategorie geladen -->
+            </div>
+            <!-- NEU: Buttons für Zusatzrechner -->
+            <div class="mt-12 text-center border-t border-white/10 pt-8">
+                <h3 class="text-2xl font-semibold mb-4">Zusätzliche Rechner</h3>
+                <div class="flex justify-center gap-4">
+                    <button data-modal-target="erwerbspotential-modal" class="rechner-btn beratung-nav-btn"><i class="fas fa-chart-line"></i>Erwerbspotential</button>
+                    <button data-modal-target="bu-luecke-modal" class="rechner-btn beratung-nav-btn"><i class="fas fa-balance-scale-left"></i>BU-Lücke</button>
+                </div>
             </div>
         </div>
 
@@ -226,7 +239,7 @@
                     <div id="haushalt-chart-container" class="bg-white/5 p-4 rounded-lg mt-6"></div>
                 </div>
                 <div class="hidden lg:flex flex-col gap-6 h-full">
-                    <div class="flex-1"><img src="https://images.unsplash.com/photo-1618220179428-22790b461013?q=80&w=2127&auto=format&fit=crop" alt="Wohnzimmer" class="rounded-2xl shadow-2xl object-cover h-full w-full"></div>
+                    <div class="flex-1"><img src="https://de.mycs.com/blog/wp-content/uploads/2023/04/DE-Wohnung-gemuetlich-featured-image.jpg"></div>
                     <div class="flex-1 bg-white/5 p-6 rounded-lg"><h4 class="font-bold text-lg mb-2">Die häufigsten Schäden im Haushalt</h4><p class="text-gray-300">Die Statistik zeigt: <strong class="text-white">Wasserschäden</strong> sind mit Abstand die häufigste Ursache für teure Reparaturen im Haushalt, dicht gefolgt von <strong class="text-white">Einbruch und Diebstahl</strong>. Eine gute Haushaltsversicherung deckt genau diese alltäglichen Risiken ab.</p></div>
                 </div>
             </div>

@@ -14,6 +14,7 @@ let db = {
     produktauswahl: [],
     mitarbeiter: [],
     produkte: [], // NEU: Die eigentliche Produkttabelle wird benötigt.
+    logos: [], // NEU: Für die Lade-Animation
 };
 
 // KORREKTUR: Statisches Mapping von Produkt zu der entsprechenden "Besonderheiten"-Spalte in der Produktauswahl-Tabelle.
@@ -1562,31 +1563,56 @@ class BeratungView {
         });
     }
 
-    _showLoadingOverlay(show, texts = [], durationPerText = 1500) {
-        if (!this.loadingOverlay || !this.loadingText) return;
-    
+    async _showLoadingOverlay(show, texts = [], durationPerText = 1500) {
+        const overlay = document.getElementById('beratung-loading-overlay');
+        const textElement = document.getElementById('loading-text');
+        const animationContainer = document.getElementById('logo-tornado-container');
+        if (!overlay || !textElement || !animationContainer) return;
+
         if (show) {
-            this.loadingOverlay.classList.remove('hidden');
-            this.loadingOverlay.classList.add('flex');
+            // 1. Logos für die Animation holen
+            animationContainer.innerHTML = ''; // Leeren
+            const logoKey = COLUMN_MAPS.logos?.Bild;
+            if (db.logos && logoKey) {
+                const logoPromises = db.logos.map(logo => getSeaTableDownloadLink(logo[logoKey]?.[0]));
+                const logoUrls = (await Promise.all(logoPromises)).filter(Boolean);
+
+                // NEU: Mische die Reihenfolge der Logos (Fisher-Yates Shuffle)
+                for (let i = logoUrls.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [logoUrls[i], logoUrls[j]] = [logoUrls[j], logoUrls[i]];
+                }
+
+                logoUrls.forEach((url, index) => {
+                    const angle = (360 / logoUrls.length) * index;
+                    const logoEl = document.createElement('img');
+                    logoEl.src = url;
+                    logoEl.className = 'logo-in-tornado';
+                    logoEl.style.transform = `rotateY(${angle}deg) translateZ(450px)`;
+                    animationContainer.appendChild(logoEl);
+                });
+            }
+
+            // 2. Overlay und Text-Animation starten
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
             let textIndex = 0;
             const updateText = () => {
                 if (textIndex < texts.length) {
-                    this.loadingText.style.opacity = 0;
+                    textElement.style.opacity = 0;
                     setTimeout(() => {
-                        this.loadingText.textContent = texts[textIndex];
-                        this.loadingText.style.opacity = 1;
+                        textElement.textContent = texts[textIndex];
+                        textElement.style.opacity = 1;
                         textIndex++;
                     }, 500); // Fade-in time
                 }
             };
-    
             updateText();
             this.loadingInterval = setInterval(updateText, durationPerText);
-
         } else {
             if (this.loadingInterval) clearInterval(this.loadingInterval);
-            this.loadingOverlay.classList.add('hidden');
-            this.loadingOverlay.classList.remove('flex');
+            overlay.classList.add('hidden');
+            overlay.classList.remove('flex');
         }
     }
 
@@ -1654,11 +1680,12 @@ async function initialize() {
     COLUMN_MAPS = await fetchColumnMaps();
     
     // KORREKTUR: Lade alle notwendigen Daten parallel, um die Ladezeit zu verkürzen.
-    const [produktauswahl, mitarbeiter, gesellschaften, produkte] = await Promise.all([
+    const [produktauswahl, mitarbeiter, gesellschaften, produkte, logos] = await Promise.all([
         seaTableQuery('Produktauswahl'),
         seaTableQuery('Mitarbeiter'),
         seaTableQuery('Gesellschaften'),
-        seaTableQuery('Produkte') // NEU
+        seaTableQuery('Produkte'), // NEU
+        seaTableQuery('Logos') // NEU
     ]);
     db.produktauswahl = produktauswahl;
     db.mitarbeiter = mitarbeiter;
@@ -1671,6 +1698,7 @@ async function initialize() {
     console.log(JSON.parse(JSON.stringify(gesellschaften)));
 
     db.produkte = produkte; // NEU
+    db.logos = logos; // NEU
 
     // --- NEU: Detailliertes Logging beim Start ---
     beratungLog('Starte Zuordnungs-Analyse...');
