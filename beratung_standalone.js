@@ -235,6 +235,10 @@ class BeratungView {
             kategorien: [],
             agenda: [],
             financialGoals: [], // NEU: Speicher für ausgewählte finanzielle Ziele
+            // NEU: Detaillierte Speicherung der Ergebnisse pro Agendapunkt
+            beratungspunkte: {
+                // 'FLV': { besonderheiten: ['Sicherheit'], empfehlungen: [...], ausgewaehltesProdukt: 'Produkt A' }
+            }
         };
         // NEU: Definiert die Reihenfolge der Unter-Slides für jede Kategorie.
         // KORREKTUR: `slideFlow` wird durch eine dynamische `agendaQueue` ersetzt.
@@ -592,6 +596,17 @@ class BeratungView {
                 ? Array.from(container.querySelectorAll('.kategorie-item.selected')).map(el => el.dataset.feature)
                 : [];
             
+            // NEU: Speichere die ausgewählten Besonderheiten für den Report
+            const currentAgendaItem = this.beratungData.agenda[this.navigation.agendaIndex];
+            if (!this.beratungData.beratungspunkte[currentAgendaItem]) {
+                this.beratungData.beratungspunkte[currentAgendaItem] = {};
+            }
+            this.beratungData.beratungspunkte[currentAgendaItem].besonderheiten = this.currentSelection.besonderheiten;
+
+            // NEU: Speichere das ausgewählte Produkt
+            const recommendationContainer = document.getElementById('beratung-slide-product-recommendation');
+            const selectedProductInput = recommendationContainer.querySelector('input[name="product-selection"]:checked');
+            this.beratungData.beratungspunkte[currentAgendaItem].ausgewaehltesProdukt = selectedProductInput ? selectedProductInput.value : null;
             // NEU: Ladeanimation vor der Produktempfehlung anzeigen
             this._showLoadingOverlay(true, [
                 'Passende Produkte werden gesucht...',
@@ -914,6 +929,13 @@ class BeratungView {
         const otherProducts = scoredProducts.slice(1, 3);
 
         const createCardHtml = async (product, isBest) => {
+            // NEU: Checkbox zur Auswahl des Produkts hinzufügen
+            const checkboxHtml = `
+                <div class="absolute top-4 right-4">
+                    <input type="radio" name="product-selection" value="${this._escapeHtml(product.name)}" class="h-6 w-6 text-skt-blue-main focus:ring-skt-blue-main border-gray-300">
+                </div>
+            `;
+
             let featuresHtml = '<ul class="space-y-2 text-left">';
             selectedFeatures.forEach(feature => {
                 const hasFeature = product.availableFeatures.includes(feature);
@@ -939,17 +961,31 @@ class BeratungView {
 
             return `
                 <div class="p-6 text-center w-80 ${isBest ? 'recommendation-card-best' : 'recommendation-card-alt'} flex-shrink-0">
+                    ${checkboxHtml}
                     ${logoHtml}
                     <h3 class="text-2xl font-bold mb-2">${product.name}</h3>
                     <p class="text-sm text-gray-400 -mt-2 mb-4">${product.gesellschaft}</p>
                     <p class="text-5xl font-bold mb-4 ${isBest ? 'text-accent-gold' : 'text-gray-300'}">${product.score.toFixed(0)}%</p>
                     <p class="text-sm mb-4 ${isBest ? 'text-gray-200' : 'text-gray-400'}">Übereinstimmung mit Ihren Wünschen</p>
+                    <!-- NEU: Checkbox zur Auswahl -->
+                    <div class="absolute top-4 right-4">
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input type="radio" name="product-selection" value="${this._escapeHtml(product.name)}" class="h-6 w-6 text-skt-blue-main focus:ring-skt-blue-main border-gray-300">
+                        </label>
+                    </div>
                     ${featuresHtml}
                     ${hinweisHtml}
                     ${linkHtml}
                 </div>
             `;
         };
+
+        // NEU: Speichere die Empfehlungen für den Report
+        const currentAgendaItem = this.beratungData.agenda[this.navigation.agendaIndex];
+        if (!this.beratungData.beratungspunkte[currentAgendaItem]) {
+            this.beratungData.beratungspunkte[currentAgendaItem] = {};
+        }
+        this.beratungData.beratungspunkte[currentAgendaItem].empfehlungen = scoredProducts;
 
         // Baue das finale HTML zusammen
         // KORREKTUR: Das beste Produkt und die anderen werden jetzt als direkte Kinder des Flex-Containers gerendert, um das Layout zu korrigieren.
@@ -2458,25 +2494,254 @@ class BeratungView {
         const formatierteDauer = `${stunden}:${minuten}:${sekunden}`;
         beratungLog(`Berechnete Dauer: ${dauerInSekunden}s, formatiert als: ${formatierteDauer}`);
 
+        // NEU: Sammle die IDs der ausgewählten Produkte
+        const ausgewaehlteProduktNamen = Object.values(this.beratungData.beratungspunkte)
+            .map(p => p.ausgewaehltesProdukt)
+            .filter(Boolean);
+        
+        const produktNameKey = COLUMN_MAPS.produkte?.['Produkt'];
+        const produktIds = db.produkte
+            .filter(p => produktNameKey && ausgewaehlteProduktNamen.includes(p[produktNameKey]))
+            .map(p => p._id);
+
+        // KORREKTUR: Die `rowData` wird an die neue Tabellenstruktur angepasst.
+        // Die Spaltennamen werden dynamisch aus den COLUMN_MAPS geholt.
         const rowData = {
-            [COLUMN_MAPS.beratung.Kunde]: this.beratungData.kundenname,
-            [COLUMN_MAPS.beratung.Mitarbeiter]: this.beratungData.mitarbeiterId ? [this.beratungData.mitarbeiterId] : this.beratungData.mitarbeitername,
-            [COLUMN_MAPS.beratung.Datum]: this.beratungData.startTime.toISOString(),
+            [COLUMN_MAPS.beratung.Beratung]: this.beratungData.kundenname, // Primärschlüssel
+            [COLUMN_MAPS.beratung.Mitarbeiter]: this.beratungData.mitarbeiterId ? [this.beratungData.mitarbeiterId] : null,
+            [COLUMN_MAPS.beratung.Themen]: this.beratungData.agenda.join(', '),
             [COLUMN_MAPS.beratung.Dauer]: formatierteDauer,
-            [COLUMN_MAPS.beratung.Kategorien]: this.beratungData.kategorien.join(', '),
-            [COLUMN_MAPS.beratung.Prioritaeten]: this.beratungData.agenda.join(', '),
+            [COLUMN_MAPS.beratung.Produkte]: produktIds.length > 0 ? produktIds : null,
         };
-        const success = await genericAddRowWithLinks('Beratung', rowData, ['Mitarbeiter']);
+        const success = await genericAddRowWithLinks('Beratung', rowData, ['Mitarbeiter', 'Produkte']);
+        // KORREKTUR: PDF-Report wird jetzt in einer Variable gehalten, um ihn hochladen zu können.
+        const pdfBlob = await this._generatePdfReport(true); // true = return blob instead of downloading
+
         if (success) {
             beratungLog('Beratung erfolgreich gespeichert.');
+
+            // NEU: Lade das PDF-Protokoll in die gerade erstellte Zeile hoch.
+            if (pdfBlob) {
+                const newBeratungId = success; // genericAddRowWithLinks gibt die neue ID zurück
+                const pdfFile = new File([pdfBlob], `Beratungsreport_${this.beratungData.kundenname.replace(/ /g, '_')}.pdf`, { type: 'application/pdf' });
+                
+                const uploadLinkData = await seaTableGetUploadLink();
+                if (uploadLinkData) {
+                    const fileUploadSuccess = await seaTableUploadFile(uploadLinkData.upload_link, pdfFile, uploadLinkData.parent_path);
+                    if (fileUploadSuccess) {
+                        const fileData = {
+                            [COLUMN_MAPS.beratung.Protokoll]: [{ url: uploadLinkData.path, name: pdfFile.name, size: pdfFile.size }]
+                        };
+                        // KORREKTUR: Verwende die REST-API für das Update von Dateispalten.
+                        const updateUrl = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+                        const updateBody = { table_name: 'Beratung', row_id: newBeratungId, row: fileData };
+                        const updateResponse = await fetch(updateUrl, { method: 'PUT', headers: { Authorization: `Bearer ${seaTableAccessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(updateBody) });
+                        if (updateResponse.ok) {
+                            beratungLog('PDF-Protokoll erfolgreich hochgeladen.');
+                        } else {
+                            beratungLog('!!! FEHLER beim Aktualisieren der Zeile mit dem PDF-Link.', await updateResponse.text());
+                        }
+                    } else {
+                        beratungLog('!!! FEHLER beim Hochladen der PDF-Datei.');
+                    }
+                } else {
+                    beratungLog('!!! FEHLER beim Abrufen des Upload-Links für das PDF.');
+                }
+            }
+
             setTimeout(() => { window.location.href = window.location.pathname; }, 2000); // KORREKTUR: Sicherer Weg, um zur Startseite zurückzukehren.
         } else {
             alert('Fehler beim Speichern der Beratung.');
             this.navContainer.classList.remove('hidden');
         }
     }
-}
 
+    // NEU: Generiert den PDF-Report am Ende der Beratung
+    async _generatePdfReport() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        const data = this.beratungData;
+        let y = 20; // Startposition auf der Y-Achse
+
+        // --- HILFSFUNKTIONEN ---
+        const addTitle = (text, yPos = y) => {
+            doc.setFontSize(22);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0, 33, 71); // SKT Blau
+            doc.text(text, 14, yPos);
+            y = yPos + 10;
+        };
+        const addSubTitle = (text, yPos = y) => {
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(4, 60, 100); // SKT Blau-Light
+            doc.text(text, 14, yPos);
+            y = yPos + 8;
+        };
+        const addText = (text, x = 14, yPos = y, options = {}) => {
+            const { color = [0, 0, 0], size = 11, style = 'normal' } = options;
+            doc.setFontSize(size);
+            doc.setFont('helvetica', style);
+            doc.setTextColor(color[0], color[1], color[2]);
+            const splitText = doc.splitTextToSize(text, 180);
+            doc.text(splitText, x, yPos);
+            y = yPos + (splitText.length * 5);
+        };
+        const addLine = (yPos = y) => {
+            doc.setDrawColor(220, 220, 220);
+            doc.line(14, yPos, 196, yPos);
+            y = yPos + 5;
+        };
+        const checkPageBreak = (neededHeight = 20) => {
+            if (y + neededHeight > 280) {
+                doc.addPage();
+                y = 20;
+            }
+        };
+        // Funktion zum Laden und Konvertieren von Bildern in Base64
+        const loadImageAsBase64 = async (url) => {
+            if (!url) return null;
+            try {
+                const finalUrl = await getSeaTableDownloadLink(url);
+                if (!finalUrl) return null;
+                const response = await fetch(finalUrl);
+                const blob = await response.blob();
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            } catch (error) {
+                console.error("Fehler beim Laden des Bildes für PDF:", error);
+                return null;
+            }
+        };
+
+        // --- SEITE 1: TITELSEITE ---
+        addTitle(`Zusammenfassung Ihrer Beratung`, 40);
+        addSubTitle(`für ${data.kundenname}`, 50);
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Datum: ${new Date().toLocaleDateString('de-DE')}`, 14, 60);
+
+        // --- SEITE 2: BERATER-VORSTELLUNG ---
+        doc.addPage();
+        y = 20;
+        const berater = db.mitarbeiter.find(m => m._id === data.mitarbeiterId);
+        if (berater) {
+            addTitle('Ihr Berater');
+            const bildUrlRaw = berater[COLUMN_MAPS.mitarbeiter.Bild]?.[0];
+            const beraterBildBase64 = await loadImageAsBase64(bildUrlRaw);
+            if (beraterBildBase64) {
+                doc.addImage(beraterBildBase64, 'PNG', 140, 40, 50, 50, '', 'FAST');
+            }
+            addSubTitle(berater[COLUMN_MAPS.mitarbeiter.Name], y);
+            const karrierestufe = berater[COLUMN_MAPS.mitarbeiter.Karrierestufe]?.[0]?.display_value || 'Berater';
+            addText(karrierestufe, 14, y, { color: [212, 175, 55], style: 'bold' });
+            const buero = berater[COLUMN_MAPS.mitarbeiter.Buero]?.[0]?.display_value || '';
+            addText(buero, 14, y, { size: 10, color: [100, 100, 100] });
+            y += 10;
+            const textZuMir = berater[COLUMN_MAPS.mitarbeiter.TextZuMir] || '';
+            addText(textZuMir, 14, y);
+        }
+
+        // --- DETAILSEITEN PRO AGENDAPUNKT ---
+        for (const agendaPunkt of data.agenda) {
+            const punktData = data.beratungspunkte[agendaPunkt];
+            if (!punktData) continue;
+
+            checkPageBreak(80);
+            addLine();
+            addSubTitle(`Detailanalyse: ${agendaPunkt}`);
+
+            if (punktData.besonderheiten && punktData.besonderheiten.length > 0) {
+                addText(`Ihnen waren folgende Eigenschaften wichtig: ${punktData.besonderheiten.join(', ')}`);
+                y += 5;
+            }
+
+            const chosenProduct = punktData.empfehlungen?.find(p => p.name === punktData.ausgewaehltesProdukt);
+
+            if (chosenProduct) {
+                checkPageBreak(100);
+                doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(0,0,0);
+                doc.text('Ihre Produktauswahl:', 14, y);
+                y += 8;
+
+                // Produkt-Karte zeichnen
+                const cardX = 14, cardY = y, cardWidth = 182, cardHeight = 80;
+                doc.setDrawColor(220, 220, 220);
+                doc.setFillColor(248, 250, 252);
+                doc.roundedRect(cardX, cardY, cardWidth, cardHeight, 3, 3, 'FD');
+
+                // Logo
+                const logoBase64 = await loadImageAsBase64(chosenProduct.logoUrl);
+                if (logoBase64) {
+                    doc.addImage(logoBase64, 'PNG', cardX + 8, cardY + 8, 30, 15, '', 'FAST');
+                }
+
+                // Produktname & Gesellschaft
+                doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 33, 71);
+                doc.text(chosenProduct.name, cardX + 8, cardY + 30);
+                doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100);
+                doc.text(chosenProduct.gesellschaft, cardX + 8, cardY + 35);
+
+                // Score
+                doc.setFontSize(28); doc.setFont('helvetica', 'bold'); doc.setTextColor(212, 175, 55);
+                doc.text(`${chosenProduct.score.toFixed(0)}%`, cardX + cardWidth - 10, cardY + 20, { align: 'right' });
+                doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100);
+                doc.text('Übereinstimmung', cardX + cardWidth - 10, cardY + 25, { align: 'right' });
+
+                // Features
+                let featureY = cardY + 45;
+                punktData.besonderheiten.forEach(feature => {
+                    const hasFeature = chosenProduct.availableFeatures.includes(feature);
+                    doc.setFontSize(10);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(hasFeature ? 0 : 150, hasFeature ? 0 : 150, hasFeature ? 0 : 150);
+                    doc.text(hasFeature ? '✓' : '✗', cardX + 8, featureY, { renderingMode: 'fillThenStroke' });
+                    doc.text(feature, cardX + 14, featureY);
+                    featureY += 6;
+                });
+
+                y += cardHeight + 10;
+            }
+        }
+
+        // --- SEITE 2: CHECKLISTE FÜR BERATER ---
+        doc.addPage();
+        y = 20;
+        addTitle('Checkliste für den Berater');
+
+        const checklistItems = [
+            'Unterlagen an den Kunden überreicht',
+            'Gesprächsprotokoll erstellt',
+            'Kündigungen zu Bestandsprodukten vorbereitet',
+            'Auskunftsvollmacht eingeholt'
+        ];
+
+        // Füge für jedes ausgewählte Produkt einen "Antrag"-Punkt hinzu
+        Object.values(data.beratungspunkte).forEach(punkt => {
+            if (punkt.ausgewaehltesProdukt) {
+                checklistItems.push(`Antrag für "${punkt.ausgewaehltesProdukt}" vorbereitet`);
+            }
+        });
+
+        checklistItems.forEach(item => {
+            doc.rect(14, y - 3.5, 4, 4, 'S'); // Checkbox-Kasten
+            addText(item);
+            y += 5;
+        });
+
+        // --- PDF SPEICHERN oder als BLOB zurückgeben ---
+        if (returnBlob) {
+            beratungLog('PDF-Report wird als Blob für den Upload zurückgegeben.');
+            return doc.output('blob');
+        } else {
+            doc.save(`Beratungsreport_${data.kundenname.replace(/ /g, '_')}.pdf`);
+        }
+    }
+}
 // KORREKTUR: Die `prose`-Klassen von Tailwind benötigen eine Basiskonfiguration.
 // Da wir Tailwind über CDN laden, fügen wir hier eine einfache Konfiguration hinzu.
 tailwind.config = { theme: { extend: { typography: (theme) => ({}), } } }
