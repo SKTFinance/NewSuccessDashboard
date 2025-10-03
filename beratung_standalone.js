@@ -326,8 +326,20 @@ class BeratungView {
                     if (modalId === 'bu-luecke-modal') { // NEU
                         this._initBuLueckenrechner();
                     }
+                    // NEU: Kreditrechner initialisieren
+                    if (modalId === 'kreditrechner-modal') {
+                        this._initKreditrechner();
+                    }
                     if (modalId === 'erwerbspotential-modal') { // NEU
                         this._initErwerbspotentialRechner();
+                    }
+                    // NEU: Steuervorteilrechner-Modal initialisieren
+                    if (modalId === 'steuervorteilrechner-modal') {
+                        this._initSteuervorteilrechnerModal();
+                    }
+                    // NEU: Leasingrechner-Modal initialisieren
+                    if (modalId === 'leasingrechner-modal') {
+                        this._initLeasingrechner();
                     }
                 }
             });
@@ -362,6 +374,9 @@ class BeratungView {
         this.mitarbeiternameInput.addEventListener('input', () => this._updateNavButtons());
         this.kundennameInput.addEventListener('input', () => this._updateNavButtons());
 
+        // KORREKTUR: Die Modal-Trigger müssen hier einmalig initialisiert werden, damit sie auf allen Seiten funktionieren.
+        this._setupModalTriggers();
+
         this.mitarbeiternameInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -379,6 +394,34 @@ class BeratungView {
         this.fullscreenBtn.addEventListener('click', () => {
             this._toggleFullscreen();
         });
+
+        // NEU: Event-Listener für das Rechner-Dropdown
+        const rechnerBtn = document.getElementById('rechner-dropdown-btn');
+        const rechnerMenu = document.getElementById('rechner-dropdown-menu');
+        if (rechnerBtn && rechnerMenu) {
+            rechnerBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                rechnerMenu.classList.toggle('hidden');
+            });
+            document.addEventListener('click', (e) => {
+                if (!rechnerMenu.classList.contains('hidden') && !rechnerMenu.contains(e.target) && !rechnerBtn.contains(e.target)) {
+                    rechnerMenu.classList.add('hidden');
+                }
+            });
+        }
+
+
+        // NEU: Event-Listener für den "Zum Investment springen"-Button
+        const jumpToInvestmentBtn = document.getElementById('jump-to-investment-btn');
+        if (jumpToInvestmentBtn) {
+            jumpToInvestmentBtn.addEventListener('click', () => {
+                // Füge 'Investment' zur Agenda hinzu, falls noch nicht vorhanden
+                if (!this.beratungData.agenda.includes('Investment')) {
+                    this.beratungData.agenda.push('Investment');
+                }
+                this._moveToNextAgendaItem();
+            });
+        }
     }
     
     _escapeHtml(str) {
@@ -435,15 +478,6 @@ class BeratungView {
                 this._renderFinancialGoals();
             }
 
-            // KORREKTUR: Richte die Modal-Trigger für alle Seiten ein, die sie benötigen.
-            const slidesWithModals = [
-                'beratung-slide-special-FLV-Finanzielle_Ziele_Auswahl',
-                'beratung-slide-koerperundexistenz-selection'
-            ];
-            if (slidesWithModals.includes(slideId)) {
-                this._setupModalTriggers();
-            }
-
             // NEU: Prüfe, ob es sich um das "3-Konten-Modell" handelt
             if (slideId === 'beratung-slide-special-FLV-Dreikontenmodell') {
                 this._initThreeAccountsModel();
@@ -482,6 +516,11 @@ class BeratungView {
             // NEU: Prüfe, ob es sich um die BU-Seite handelt
             if (slideId === 'beratung-slide-explanation-Berufsunfähigkeit') {
                 this._renderBUChart();
+            }
+
+            // NEU: Prüfe, ob es sich um die Helvetia-Haftpflicht-Seite handelt
+            if (slideId === 'beratung-slide-special-Haftpflicht') {
+                this._renderHelvetiaLogo();
             }
 
             // NEU: Prüfe, ob es sich um die "Produktempfehlung"-Seite handelt und rendere den Inhalt.
@@ -1229,6 +1268,102 @@ class BeratungView {
         });
     }
 
+    // NEU: Duplizierte Funktion für das Steuervorteilrechner-Modal
+    _initSteuervorteilrechnerModal() {
+        const container = document.getElementById('modal-rechner-chart-container');
+        const sparrateInput = document.getElementById('modal-rechner-sparrate');
+        const dauerInput = document.getElementById('modal-rechner-dauer');
+        const renditeInput = document.getElementById('modal-rechner-rendite');
+        const kestToggle = document.getElementById('modal-rechner-kest');
+        const startwertInput = document.getElementById('modal-rechner-startwert');
+
+        if (!container || !sparrateInput || !dauerInput || !renditeInput || !kestToggle || !startwertInput) return;
+
+        const renderChart = () => {
+            const startwert = parseFloat(startwertInput.value) || 0;
+            const monthlySavings = parseFloat(sparrateInput.value) || 0;
+            const years = parseInt(dauerInput.value) || 0;
+            const annualReturn = (parseFloat(renditeInput.value) || 0) / 100;
+            const considerKest = kestToggle.checked;
+
+            const categories = Array.from({ length: years }, (_, i) => `Jahr ${i + 1}`);
+            const seriesData = { einzahlung: [], fondsdepot: [], flv: [] };
+
+            let totalEinzahlung = startwert;
+            let kapitalMitKest = startwert;
+            let totalKest = 0;
+            const annualSavings = monthlySavings * 12;
+            let flvKapital = startwert;
+
+            for (let i = 1; i <= years; i++) {
+                totalEinzahlung += annualSavings;
+                const prevKapitalMitKest = kapitalMitKest;
+                kapitalMitKest = (kapitalMitKest + annualSavings) * (1 + annualReturn);
+                const gain = kapitalMitKest - prevKapitalMitKest - annualSavings;
+                const kest = considerKest && gain > 0 ? gain * 0.275 : 0;
+                kapitalMitKest -= kest;
+                totalKest += kest;
+
+                const isInitialPhase = i <= 5;
+                const flvNetAnnualSavings = isInitialPhase ? annualSavings * 0.70 : annualSavings;
+                flvKapital = (flvKapital + flvNetAnnualSavings) * (1 + annualReturn);
+
+                seriesData.einzahlung.push(Math.round(totalEinzahlung));
+                seriesData.fondsdepot.push(Math.round(kapitalMitKest));
+                seriesData.flv.push(Math.round(flvKapital));
+            }
+
+            document.getElementById('modal-rechner-output-einzahlung').textContent = `${totalEinzahlung.toLocaleString('de-DE')} €`;
+            const gesamtrendite = flvKapital - totalEinzahlung;
+            document.getElementById('modal-rechner-output-rendite').textContent = `${gesamtrendite.toLocaleString('de-DE', {maximumFractionDigits: 0})} €`;
+            document.getElementById('modal-rechner-output-kest').textContent = `-${totalKest.toLocaleString('de-DE', {maximumFractionDigits: 0})} €`;
+            document.getElementById('modal-rechner-output-endbetrag').textContent = `${kapitalMitKest.toLocaleString('de-DE', {maximumFractionDigits: 0})} €`;
+
+            const options = {
+                series: [{
+                    name: 'Eingezahlt', type: 'column', data: seriesData.einzahlung
+                }, {
+                    name: 'Fondsdepot (nach KESt)', type: 'column', data: seriesData.fondsdepot
+                }, {
+                    name: 'FLV (KESt-frei)', type: 'column', data: seriesData.flv
+                }],
+                chart: { height: 450, type: 'line', stacked: false, foreColor: '#e2e8f0', toolbar: { show: false } },
+                stroke: { width: [0, 0, 3], curve: 'smooth' },
+                plotOptions: { bar: { columnWidth: '60%' } },
+                colors: ['#a0aec0', '#f1c40f', '#27ae60'],
+                xaxis: {
+                    categories: categories,
+                    title: { text: 'Jahre', style: { color: '#9ca3af' } },
+                    labels: {
+                        formatter: (val) => {
+                            if (typeof val !== 'string') return '';
+                            return (parseInt(val.replace('Jahr ', '')) % 5 === 0 || val === 'Jahr 1') ? val.replace('Jahr ', '') : '';
+                        }
+                    }
+                },
+                yaxis: { title: { text: 'Vermögen in €', style: { color: '#9ca3af' } }, labels: { formatter: (val) => `${(val / 1000).toFixed(0)}k` } },
+                dataLabels: { enabled: false },
+                tooltip: { theme: 'dark', shared: true, intersect: false, y: { formatter: (val) => `${val.toLocaleString('de-DE')} €` } },
+                legend: { position: 'top', horizontalAlign: 'center' },
+                grid: { borderColor: '#4a5568' }
+            };
+
+            container.innerHTML = '';
+            const chart = new ApexCharts(container, options);
+            chart.render();
+        };
+
+        renderChart();
+
+        const debouncedRender = _.debounce(renderChart, 300);
+        [startwertInput, sparrateInput, dauerInput, renditeInput, kestToggle].forEach(input => {
+            // Remove old listeners to be safe
+            const new_element = input.cloneNode(true);
+            input.parentNode.replaceChild(new_element, input);
+            new_element.addEventListener('input', debouncedRender);
+        });
+    }
+
     _renderRechtsschutzChart() {
         const container = document.getElementById('rechtsschutz-chart-container');
         if (!container) return;
@@ -1420,6 +1555,27 @@ class BeratungView {
         chart.render();
     }
 
+    async _renderHelvetiaLogo() {
+        const imgElement = document.getElementById('helvetia-logo-img');
+        if (!imgElement) return;
+
+        // Finde die Gesellschaft "Helvetia" in der DB
+        const gesellschaftenNameKey = COLUMN_MAPS.gesellschaften?.['Gesellschaft'];
+        const gesellschaftenBildKey = COLUMN_MAPS.gesellschaften?.['Bild'];
+
+        if (!gesellschaftenNameKey || !gesellschaftenBildKey) {
+            beratungLog('Fehler: Spalten-Keys für Gesellschaften nicht gefunden.');
+            return;
+        }
+
+        const helvetiaGesellschaft = db.gesellschaften.find(g => g[gesellschaftenNameKey] === 'Helvetia');
+        const logoPath = helvetiaGesellschaft?.[gesellschaftenBildKey]?.[0];
+
+        if (logoPath) {
+            const finalUrl = await getSeaTableDownloadLink(logoPath);
+            if (finalUrl) imgElement.src = finalUrl;
+        }
+    }
     _initPensionsrechner() {
         const berechnenBtn = document.getElementById('pr-berechnen-btn');
         const resetBtn = document.getElementById('pr-reset-btn');
@@ -1825,6 +1981,264 @@ class BeratungView {
         });
 
         draw(); // Initialer Aufruf
+    }
+
+    _initKreditrechner() {
+        const qs = (s) => document.querySelector(s);
+        const eur = (v) => new Intl.NumberFormat('de-AT', { style: 'currency', currency: 'EUR' }).format(+v || 0);
+        const pct = (v, dp = 1) => (+v).toFixed(dp).replace('.', ',') + ' % p.a.';
+        const parseMoney = (s) => +String(s).replace(/[^0-9,.-]/g, '').replace(',', '.');
+        const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+        const amountRange = qs('#kr-amountRange');
+        const amountInput = qs('#kr-amountInput');
+        const yearsRange = qs('#kr-yearsRange');
+        const yearsInput = qs('#kr-yearsInput');
+
+        if (!amountRange || !amountInput || !yearsRange || !yearsInput) return;
+
+        const recalc = () => {
+            const P = +amountRange.value;
+            const years = +yearsRange.value;
+            const n = years * 12;
+            const i_m = (+qs('#kr-ratePA').value) / 100 / 12;
+            const tilg = qs('#kr-tilgung').value;
+
+            let M;
+            if (tilg === 'ann') {
+                M = (i_m <= 0) ? P / n : P * i_m / (1 - Math.pow(1 + i_m, -n));
+            } else {
+                M = (P / n) + (P * i_m); // First rate for linear
+            }
+
+            const payout = P;
+            let total;
+            if (tilg === 'ann') {
+                total = M * n;
+            } else {
+                let sum = 0, rest = P;
+                for (let m = 1; m <= n; m++) {
+                    const z = rest * i_m;
+                    const t = P / n;
+                    sum += z + t;
+                    rest -= t;
+                }
+                total = sum;
+                M = sum / n; // Average rate for display
+            }
+
+            const irrMonthly = (cashflows) => {
+                const npv = (r) => cashflows.reduce((acc, cf, t) => acc + cf / Math.pow(1 + r, t), 0);
+                let lo = 0, hi = 1, flo = npv(lo), fhi = npv(hi);
+                if (flo * fhi > 0) {
+                    for (let k = 0; k < 60 && fhi > 0; k++) { hi *= 1.5; fhi = npv(hi); }
+                    if (flo * fhi > 0) return NaN;
+                }
+                for (let it = 0; it < 200; it++) {
+                    const mid = (lo + hi) / 2, fmid = npv(mid);
+                    if (Math.abs(fmid) < 1e-6) return mid;
+                    if (flo * fmid > 0) { lo = mid; flo = fmid; } else { hi = mid; }
+                }
+                return (lo + hi) / 2;
+            };
+
+            const flows = Array(n + 1).fill(0);
+            flows[0] = payout;
+            for (let m = 1; m <= n; m++) flows[m] -= M;
+            const r_m = irrMonthly(flows);
+            const apr = isNaN(r_m) ? null : (Math.pow(1 + r_m, 12) - 1);
+
+            qs('#kr-kpiRate').textContent = eur(M);
+            const breakdownContainer = qs('#kr-breakdown-container');
+            breakdownContainer.innerHTML = `
+                <h3 class="text-xl font-bold text-white mb-4">Berechnungsbeispiel:</h3>
+                <div class="space-y-3 text-gray-300">
+                    <div class="flex justify-between"><span>Kreditbetrag:</span><span class="font-semibold text-white">${eur(P)}</span></div>
+                    <div class="flex justify-between"><span>Laufzeit:</span><span class="font-semibold text-white">${years} Jahre</span></div>
+                    <div class="flex justify-between"><span>Sollzinssatz, variabel:</span><span class="font-semibold text-white">${pct(+qs('#kr-ratePA').value, 3)}</span></div>
+                    <div class="flex justify-between"><span>Auszahlungsbetrag:</span><span class="font-semibold text-white">${eur(payout)}</span></div>
+                    <div class="flex justify-between"><span>Effektivzinssatz:</span><span class="font-semibold text-white">${(apr == null ? '–' : ((apr * 100).toFixed(1).replace('.', ',') + ' % p.a.'))}</span></div>
+                    <div class="flex justify-between text-lg"><span>Zu zahlender Gesamtbetrag:</span><span class="font-bold text-white">${eur(total)}</span></div>
+                </div>
+                <p class="text-xs text-gray-400 mt-6">Hinweis: Zusätzliche Kosten wie Schätzgebühren, Grundbuchseintragungen oder Kontoführungsgebühren sind hier <strong>nicht</strong> berücksichtigt, da diese von Bank zu Bank unterschiedlich ausfallen können.</p>
+            `;
+        };
+
+        const syncAmount = (from) => {
+            if (from === 'range') amountInput.value = eur(amountRange.value);
+            else { const v = clamp(parseMoney(amountInput.value), 50000, 3000000); amountRange.value = v; amountInput.value = eur(v); }
+            recalc();
+        };
+        const syncYears = (from) => {
+            if (from === 'range') yearsInput.value = yearsRange.value + ' Jahre';
+            else { const v = clamp(parseInt((yearsInput.value || '').replace(/\D/g, '')) || 25, 10, 35); yearsRange.value = v; yearsInput.value = v + ' Jahre'; }
+            recalc();
+        };
+
+        amountRange.oninput = () => syncAmount('range');
+        amountInput.onchange = () => syncAmount('input');
+        yearsRange.oninput = () => syncYears('range');
+        yearsInput.onchange = () => syncYears('input');
+        document.querySelectorAll('#kreditrechner-modal [data-step]').forEach(btn => {
+            btn.onclick = () => {
+                if (btn.closest('div').querySelector('#kr-amountInput')) {
+                    const v = clamp(+amountRange.value + (+btn.dataset.step), 50000, 3000000); amountRange.value = v; syncAmount('range');
+                } else {
+                    const v = clamp(+yearsRange.value + (+btn.dataset.step), 10, 35); yearsRange.value = v; syncYears('range');
+                }
+            };
+        });
+        ['#kr-ratePA', '#kr-tilgung'].forEach(id => qs(id).oninput = recalc);
+
+        syncAmount('range');
+        syncYears('range');
+    }
+
+    // NEU: Initialisiert den Leasingrechner
+    _initLeasingrechner() {
+        // Hilfsfunktionen, angepasst an den Modal-Kontext
+        const qs = (s) => document.getElementById(`leasing-${s}`);
+        const fmtEUR = (v) => new Intl.NumberFormat('de-AT', { style: 'currency', currency: 'EUR' }).format(+v || 0);
+        const fmtMoney = (v) => fmtEUR(v);
+
+        function parseMoney(str) {
+            const raw = String(str || '').trim();
+            if (!raw) return 0;
+            let keep = '';
+            for (let i = 0; i < raw.length; i++) {
+                const ch = raw[i];
+                if ((ch >= '0' && ch <= '9') || ch === '-' || ch === ',' || ch === '.') keep += ch;
+            }
+            keep = keep.split('.').join(''); // remove thousands
+            const lastComma = keep.lastIndexOf(',');
+            if (lastComma !== -1) keep = keep.slice(0, lastComma) + '.' + keep.slice(lastComma + 1);
+            const num = parseFloat(keep);
+            return Number.isFinite(num) ? num : 0;
+        }
+
+        function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+        // Elemente
+        const priceInput = qs('priceInput');
+        const downRange = qs('downRange');
+        const downInput = qs('downInput');
+        const termRange = qs('termRange');
+        const termInput = qs('termInput');
+        const rvRange = qs('rvRange');
+        const rvInput = qs('rvInput');
+        const ratePA = qs('ratePA');
+
+        const downMinL = qs('downMinL');
+        const downMaxL = qs('downMaxL');
+        const rvMinL = qs('rvMinL');
+        const rvMaxL = qs('rvMaxL');
+
+        function setPrice(v) {
+            const P = clamp(v, 1000, 1000000);
+            priceInput.value = fmtMoney(P);
+            const downMin = 0;
+            const downMax = Math.round(P);
+            downRange.min = downMin;
+            downRange.max = downMax;
+            downMinL.textContent = fmtMoney(downMin);
+            downMaxL.textContent = fmtMoney(downMax);
+
+            const rvMin = 0;
+            const rvMax = Math.round(P * 0.60);
+            rvRange.min = rvMin;
+            rvRange.max = rvMax;
+            rvMinL.textContent = fmtMoney(rvMin);
+            rvMaxL.textContent = fmtMoney(rvMax);
+
+            if (parseMoney(downInput.value) > downMax) downInput.value = fmtMoney(downMax);
+            if (parseMoney(rvInput.value) > rvMax) rvInput.value = fmtMoney(rvMax);
+
+            recalc();
+        }
+
+        function annuityBalloonRate(Principal, RV, i_m, n) {
+            if (n <= 0) return 0;
+            if (i_m <= 0) {
+                return (Principal - RV) / n;
+            }
+            const pvRV = RV / Math.pow(1 + i_m, n);
+            const base = (Principal - pvRV);
+            return base * (i_m / (1 - Math.pow(1 + i_m, -n)));
+        }
+
+        function recalc() {
+            const price = parseMoney(priceInput.value) || 0;
+            const down = clamp(parseMoney(downInput.value), +downRange.min, +downRange.max);
+            const term = clamp(parseInt(termInput.value) || 36, +termRange.min, +termRange.max);
+            const rv = clamp(parseMoney(rvInput.value), +rvRange.min, +rvRange.max);
+
+            downInput.value = fmtMoney(down);
+            downRange.value = down;
+            termInput.value = term + ' Monate';
+            termRange.value = term;
+            rvInput.value = fmtMoney(rv);
+            rvRange.value = rv;
+
+            const principal = Math.max(0, price - down);
+            const i_m = ((+ratePA.value) || 0) / 100 / 12;
+
+            let M = annuityBalloonRate(principal, rv, i_m, term);
+            if (!Number.isFinite(M)) M = 0;
+            const total = down + M * term + rv;
+
+            qs('kpiRate').textContent = M.toFixed(2).replace('.', ',');
+            qs('kpiTotal').textContent = total.toFixed(2).replace('.', ',');
+        }
+
+        // Event Listeners
+        priceInput.addEventListener('change', () => setPrice(parseMoney(priceInput.value)));
+
+        [downRange, rvRange, termRange].forEach(r => r.addEventListener('input', () => {
+            if (r === downRange) downInput.value = fmtMoney(+downRange.value);
+            if (r === rvRange) rvInput.value = fmtMoney(+rvRange.value);
+            if (r === termRange) termInput.value = (+termRange.value) + ' Monate';
+            recalc();
+        }));
+
+        [downInput, rvInput].forEach(inp => inp.addEventListener('change', recalc));
+        termInput.addEventListener('change', () => {
+            const v = parseInt(termInput.value) || 36;
+            termRange.value = clamp(v, +termRange.min, +termRange.max);
+            recalc();
+        });
+        ratePA.addEventListener('input', recalc);
+
+        document.querySelectorAll('#leasingrechner-modal .stepInput button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const step = +btn.dataset.step;
+                const field = btn.parentElement.querySelector('input');
+                if (field === downInput) {
+                    const v = clamp(parseMoney(downInput.value) + step, +downRange.min, +downRange.max);
+                    downRange.value = v;
+                    downInput.value = fmtMoney(v);
+                } else if (field === rvInput) {
+                    const v = clamp(parseMoney(rvInput.value) + step, +rvRange.min, +rvRange.max);
+                    rvRange.value = v;
+                    rvInput.value = fmtMoney(v);
+                } else if (field === termInput) {
+                    const v = clamp((parseInt(termInput.value) || 36) + step, +termRange.min, +termRange.max);
+                    termRange.value = v;
+                    termInput.value = v + ' Monate';
+                }
+                recalc();
+            });
+        });
+
+        // Initialisierung mit Beispielwerten
+        setPrice(40000);
+        downRange.value = 8000;
+        downInput.value = fmtMoney(8000);
+        termRange.value = 36;
+        termInput.value = '36 Monate';
+        rvRange.value = 17225;
+        rvInput.value = fmtMoney(17225);
+        ratePA.value = 4.90;
+        recalc();
     }
 
     async _renderBeraterVorstellung() {

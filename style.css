@@ -1480,6 +1480,63 @@ summary::-webkit-details-marker {
     background-color: rgba(212, 175, 55, 0.5); /* Gold-Overlay bei Auswahl */
 }
 
+/* --- NEU: Stile für Rechner-Dropdown --- */
+.rechner-dropdown-menu {
+    position: absolute;
+    bottom: 100%;
+    right: 0;
+    margin-bottom: 0.5rem;
+    width: 256px; /* w-64 */
+    background-color: var(--color-skt-blue-light);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0.5rem; /* rounded-lg */
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    z-index: 50;
+}
+.rechner-menu-item {
+    display: block;
+    padding: 0.75rem 1rem;
+    color: white;
+    transition: background-color 0.2s;
+}
+.rechner-menu-item:hover { background-color: rgba(255, 255, 255, 0.1); }
+
+/* --- NEU: Stile für Kreditrechner --- */
+.stepper-btn-dark {
+    width: 44px;
+    height: 44px;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    flex-shrink: 0;
+}
+.stepper-btn-dark:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+.custom-range-dark {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 9999px;
+    outline: none;
+}
+.custom-range-dark::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--color-skt-blue-main);
+    border: 2px solid var(--color-skt-blue);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
 /* --- Stile für 3-Konten-Modell --- */
 .timeline-container {
     background-color: rgba(255, 255, 255, 0.05);
