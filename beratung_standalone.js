@@ -376,13 +376,24 @@ class BeratungView {
 
     _showSlide(slideId) {
         beratungLog(`Zeige Slide: ${slideId}`);
-        this.slides.forEach(s => {
-            s.classList.remove('active');
-        });
 
-        const activeSlide = this.slides.find(s => s.id === slideId);
-        if (activeSlide) {
-            activeSlide.classList.add('active');
+        // Finde die aktuell aktive Folie und blende sie aus
+        const oldSlide = this.slides.find(s => s.classList.contains('active'));
+        if (oldSlide) {
+            oldSlide.classList.remove('active'); // Startet die Fade-Out-Animation
+            oldSlide.classList.add('is-hiding'); // Markiert die Folie als "wird ausgeblendet"
+            
+            // Nachdem die Animation beendet ist, setze display: none
+            oldSlide.addEventListener('transitionend', () => {
+                oldSlide.classList.remove('is-hiding');
+            }, { once: true });
+        }
+
+        // Finde die neue Folie und blende sie ein
+        const newSlide = this.slides.find(s => s.id === slideId);
+        if (newSlide) {
+            newSlide.classList.remove('is-hiding'); // Sicherstellen, dass sie nicht versteckt ist
+            newSlide.classList.add('active'); // Startet die Fade-In-Animation
 
             // NEU: Hintergrundbild für die ersten beiden Slides einblenden
             const showBg = ['beratung-slide-mitarbeitername', 'beratung-slide-kundenname', 'beratung-slide-welcome'].includes(slideId);
@@ -446,6 +457,7 @@ class BeratungView {
         } else {
             beratungLog(`!!! FEHLER: Slide mit ID '${slideId}' nicht gefunden.`);
         }
+                this._renderEigenheimChart();
     }
 
     async _navigateNext() {

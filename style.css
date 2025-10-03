@@ -1440,14 +1440,25 @@ summary::-webkit-details-marker {
 /* --- NEU: Stile für die Beratungs-Ansicht --- */
 .beratung-slide {
     /* KORREKTUR: Slides sind standardmäßig ausgeblendet und unsichtbar. */
-    display: none;
-    opacity: 0;
-    transition: opacity 0.4s ease-in-out;
+    /* KORREKTUR: Absolute Positionierung, damit die Folien übereinander liegen und nicht nebeneinander. */
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     width: 100%;
-    /* KORREKTUR: justify-content: center entfernt, um Überlaufen zu verhindern. Padding sorgt für Abstand. */
+    height: 100%;
     flex-direction: column;
+    /* KORREKTUR: Fügt die vertikale Zentrierung wieder hinzu. */
+    justify-content: center;
     align-items: center;
     margin: auto;
+    opacity: 0;
+    transition: opacity 0.4s ease-in-out;
+    display: none;
+}
+.beratung-slide.is-hiding {
+    display: flex; /* Muss während der Ausblend-Animation sichtbar bleiben */
 }
 .beratung-slide.active {
     /* KORREKTUR: Der aktive Slide wird als Flexbox angezeigt, um den Inhalt zu zentrieren. */
