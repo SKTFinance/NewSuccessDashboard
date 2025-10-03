@@ -92,14 +92,8 @@
             <div id="koerperundexistenz-selection-container" class="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
                 <!-- Optionen werden per JS aus den Produkten der Kategorie geladen -->
             </div>
-            <!-- NEU: Buttons für Zusatzrechner -->
-            <div class="mt-12 text-center border-t border-white/10 pt-8">
-                <h3 class="text-2xl font-semibold mb-4">Zusätzliche Rechner</h3>
-                <div class="flex justify-center gap-4">
-                    <button data-modal-target="erwerbspotential-modal" class="rechner-btn beratung-nav-btn"><i class="fas fa-chart-line"></i>Erwerbspotential</button>
-                    <button data-modal-target="bu-luecke-modal" class="rechner-btn beratung-nav-btn"><i class="fas fa-balance-scale-left"></i>BU-Lücke</button>
-                </div>
-            </div>
+            <!-- KORREKTUR: Button für Erwerbspotentialrechner hinzugefügt -->
+            <div class="mt-12 text-center border-t border-white/10 pt-8"><h3 class="text-2xl font-semibold mb-4">Zusätzliche Rechner</h3><div class="flex justify-center gap-4"><button data-modal-target="erwerbspotential-modal" class="rechner-btn beratung-nav-btn"><i class="fas fa-chart-line"></i>Erwerbspotential</button><button data-modal-target="bu-luecke-modal" class="rechner-btn beratung-nav-btn"><i class="fas fa-balance-scale-left"></i>BU-Lücke</button></div></div>
         </div>
 
         <div id="beratung-slide-finanzierung-selection" class="beratung-slide hidden w-full">
@@ -245,9 +239,75 @@
             </div>
         </div>
         <div id="beratung-slide-explanation-Krankenversicherung" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Krankenversicherung</h2></div>
-        <div id="beratung-slide-explanation-Unfallversicherung" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Unfallversicherung</h2></div>
-        <div id="beratung-slide-explanation-Risikoleben" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Risikoleben</h2></div>
-        <div id="beratung-slide-explanation-Berufsunfähigkeit" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Berufsunfähigkeit</h2></div>
+        <div id="beratung-slide-explanation-Unfallversicherung" class="beratung-slide hidden w-full flex-col">
+            <div class="text-center w-full mb-10">
+                <h2 class="text-4xl font-bold mb-2">Schutz, wenn's drauf ankommt</h2>
+                <p class="text-xl text-gray-300">Die private Unfallversicherung – Ihr finanzielles Sicherheitsnetz rund um die Uhr.</p>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-stretch flex-grow w-full">
+                <!-- Linke Spalte: Inhalt & Chart -->
+                <div class="flex flex-col justify-center h-full">
+                    <div class="grid grid-cols-2 gap-6 text-white">
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-green-500"><i class="fas fa-dollar-sign"></i></div><h3 class="font-bold text-lg mt-3">Finanzielle Soforthilfe</h3><p class="text-sm text-gray-400 mt-1">Deckt Kosten für Bergung, Reha und notwendige Umbauten.</p></div>
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-blue-500"><i class="fas fa-globe-europe"></i></div><h3 class="font-bold text-lg mt-3">Weltweiter Schutz</h3><p class="text-sm text-gray-400 mt-1">Gilt 24/7 – in der Freizeit, im Haushalt und auf Reisen.</p></div>
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-yellow-500"><i class="fas fa-wheelchair"></i></div><h3 class="font-bold text-lg mt-3">Invaliditätsleistung</h3><p class="text-sm text-gray-400 mt-1">Einmalige Kapitalzahlung bei dauerhaften Beeinträchtigungen.</p></div>
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-purple-500"><i class="fas fa-plus-circle"></i></div><h3 class="font-bold text-lg mt-3">Wichtige Zusatzleistungen</h3><p class="text-sm text-gray-400 mt-1">Übernimmt Kosten für kosmetische Operationen und Reha-Management.</p></div>
+                    </div>
+                    <div id="unfall-chart-container" class="bg-white/5 p-4 rounded-lg mt-6"></div>
+                </div>
+                <!-- Rechte Spalte: Bild -->
+                <div class="hidden lg:flex flex-col gap-6 h-full">
+                    <div class="flex-1"><img src="https://images.unsplash.com/photo-1551632811-561732d1e306?q=80&w=2070&auto=format&fit=crop" alt="Familie beim Wandern" class="rounded-2xl shadow-2xl object-cover h-full w-full"></div>
+                    <div class="flex-1 bg-white/5 p-6 rounded-lg"><h4 class="font-bold text-lg mb-2">Wo passieren die meisten Unfälle?</h4><p class="text-gray-300">Die gesetzliche Unfallversicherung leistet nur bei Arbeits- und Wegunfällen. Das Diagramm zeigt aber deutlich: Die mit Abstand meisten Unfälle passieren in der <strong class="text-white">Freizeit und beim Sport</strong>. Genau hier springt die private Unfallversicherung ein und schließt diese entscheidende Lücke.</p></div>
+                </div>
+            </div>
+        </div>
+        <div id="beratung-slide-explanation-Risikoleben" class="beratung-slide hidden w-full flex-col">
+            <div class="text-center w-full mb-10">
+                <h2 class="text-4xl font-bold mb-2">Die Zukunft Ihrer Liebsten sichern</h2>
+                <p class="text-xl text-gray-300">Die Risikolebensversicherung als Fundament für finanzielle Sicherheit.</p>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-stretch flex-grow w-full">
+                <!-- Linke Spalte: Inhalt & Chart -->
+                <div class="flex flex-col justify-center h-full">
+                    <div class="grid grid-cols-2 gap-6 text-white">
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-green-500"><i class="fas fa-users"></i></div><h3 class="font-bold text-lg mt-3">Hinterbliebenenschutz</h3><p class="text-sm text-gray-400 mt-1">Sichert den Lebensstandard Ihrer Familie im Ernstfall.</p></div>
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-blue-500"><i class="fas fa-house-damage"></i></div><h3 class="font-bold text-lg mt-3">Kreditabsicherung</h3><p class="text-sm text-gray-400 mt-1">Schützt vor dem Verlust des Eigenheims bei Krediten.</p></div>
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-yellow-500"><i class="fas fa-piggy-bank"></i></div><h3 class="font-bold text-lg mt-3">Günstiger Schutz</h3><p class="text-sm text-gray-400 mt-1">Bietet eine hohe Versicherungssumme für geringe Beiträge.</p></div>
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-purple-500"><i class="fas fa-handshake"></i></div><h3 class="font-bold text-lg mt-3">Partnerschutz</h3><p class="text-sm text-gray-400 mt-1">Sichert Geschäftspartner gegenseitig ab.</p></div>
+                    </div>
+                    <div id="risiko-chart-container" class="bg-white/5 p-4 rounded-lg mt-6"></div>
+                </div>
+                <!-- Rechte Spalte: Bild -->
+                <div class="hidden lg:flex flex-col gap-6 h-full">
+                    <div class="flex-1"><img src="https://images.unsplash.com/photo-1560518883-ce09059eeffa?q=80&w=1973&auto=format&fit=crop" alt="Paar plant Finanzen" class="rounded-2xl shadow-2xl object-cover h-full w-full"></div>
+                    <div class="flex-1 bg-white/5 p-6 rounded-lg"><h4 class="font-bold text-lg mb-2">Wofür wird die Leistung benötigt?</h4><p class="text-gray-300">Im Todesfall entstehen nicht nur emotionale, sondern auch große finanzielle Lücken. Die Versicherungssumme wird am häufigsten benötigt, um <strong class="text-white">laufende Kredite</strong> zu tilgen und den <strong class="text-white">Lebensunterhalt der Familie</strong> langfristig zu sichern. So wird aus einem Schicksalsschlag keine finanzielle Katastrophe.</p></div>
+                </div>
+            </div>
+        </div>
+        <div id="beratung-slide-explanation-Berufsunfähigkeit" class="beratung-slide hidden w-full flex-col">
+            <div class="text-center w-full mb-10">
+                <h2 class="text-4xl font-bold mb-2">Ihre Arbeitskraft ist Ihr größtes Kapital</h2>
+                <p class="text-xl text-gray-300">Die Berufsunfähigkeitsversicherung schützt Ihr Einkommen.</p>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-stretch flex-grow w-full">
+                <!-- Linke Spalte: Inhalt & Chart -->
+                <div class="flex flex-col justify-center h-full">
+                    <div class="grid grid-cols-2 gap-6 text-white">
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-green-500"><i class="fas fa-money-bill-wave"></i></div><h3 class="font-bold text-lg mt-3">Einkommen sichern</h3><p class="text-sm text-gray-400 mt-1">Ersetzt Ihr wegfallendes Gehalt durch eine monatliche Rente.</p></div>
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-blue-500"><i class="fas fa-chart-line"></i></div><h3 class="font-bold text-lg mt-3">Lebensstandard halten</h3><p class="text-sm text-gray-400 mt-1">Ermöglicht es Ihnen, Ihre laufenden Kosten weiter zu decken.</p></div>
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-yellow-500"><i class="fas fa-user-md"></i></div><h3 class="font-bold text-lg mt-3">Unabhängigkeit bewahren</h3><p class="text-sm text-gray-400 mt-1">Schützt vor Abhängigkeit von Staat oder Familie.</p></div>
+                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-purple-500"><i class="fas fa-brain"></i></div><h3 class="font-bold text-lg mt-3">Psychische Ursachen</h3><p class="text-sm text-gray-400 mt-1">Leistet auch bei Burnout oder Depressionen, den häufigsten Ursachen.</p></div>
+                    </div>
+                    <div id="bu-chart-container-main" class="bg-white/5 p-4 rounded-lg mt-6"></div>
+                </div>
+                <!-- Rechte Spalte: Bild -->
+                <div class="hidden lg:flex flex-col gap-6 h-full">
+                    <div class="flex-1"><img src="https://images.unsplash.com/photo-1544723795-3fb6469f5b39?q=80&w=1978&auto=format&fit=crop" alt="Person am Schreibtisch" class="rounded-2xl shadow-2xl object-cover h-full w-full"></div>
+                    <div class="flex-1 bg-white/5 p-6 rounded-lg"><h4 class="font-bold text-lg mb-2">Die wahren Ursachen für Berufsunfähigkeit</h4><p class="text-gray-300">Anders als oft vermutet, sind Unfälle nur selten der Grund. Das Diagramm zeigt: <strong class="text-white">Psychische Erkrankungen</strong> wie Burnout und Depressionen sind mit Abstand die häufigste Ursache, gefolgt von <strong class="text-white">Erkrankungen des Skeletts und Bewegungsapparates</strong>. Eine gute BU-Versicherung deckt genau diese realen Risiken ab.</p></div>
+                </div>
+            </div>
+        </div>
         <div id="beratung-slide-explanation-Immobilie" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Immobilie</h2></div>
         <div id="beratung-slide-explanation-Haftpflicht" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Haftpflicht</h2></div>
         <div id="beratung-slide-explanation-KFZ" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: KFZ</h2></div>
@@ -302,14 +362,68 @@
     </div>
 
     <!-- Navigationsleiste -->
-    <div id="beratung-nav" class="absolute bottom-0 left-0 right-0 bg-skt-blue/50 backdrop-blur-sm border-t border-white/10 p-4 flex justify-center items-center gap-8 z-20">
-        <button id="beratung-back-btn" class="beratung-nav-btn hidden">
-            <i class="fas fa-arrow-left"></i> Zurück
-        </button>
-        <button id="beratung-next-btn" class="beratung-nav-btn">
-            Weiter <i class="fas fa-arrow-right"></i>
-        </button>
+    <div id="beratung-nav" class="absolute bottom-0 left-0 right-0 bg-skt-blue/50 backdrop-blur-sm border-t border-white/10 p-4 flex justify-between items-center gap-4 z-20">
+        <!-- Linke Seite (leer, für die Ausrichtung) -->
+        <div class="w-24"></div>
+
+        <!-- Mitte: Navigationsbuttons -->
+        <div class="flex gap-8">
+            <button id="beratung-back-btn" class="beratung-nav-btn hidden"><i class="fas fa-arrow-left"></i> Zurück</button>
+            <button id="beratung-next-btn" class="beratung-nav-btn">Weiter <i class="fas fa-arrow-right"></i></button>
+        </div>
+
+        <!-- Rechts: Fullscreen-Button -->
+        <div class="w-24 flex justify-end">
+            <button id="fullscreen-btn" class="text-white/50 hover:text-white transition-colors h-10 w-10 flex items-center justify-center" title="Vollbildmodus umschalten"><i class="fas fa-expand fa-lg"></i></button>
+        </div>
     </div>
+    </div>
+
+    <!-- NEU: Modal für den BU-Lückenrechner -->
+    <div id="bu-luecke-modal" class="modal-overlay">
+        <div class="modal-box bg-skt-blue-light rounded-lg shadow-xl p-8 m-4 max-w-5xl w-full relative border border-white/20">
+            <button data-modal-close="bu-luecke-modal" class="absolute top-3 right-4 text-3xl text-gray-400 hover:text-white">&times;</button>
+            <h2 class="text-3xl font-bold text-white mb-6 text-center">Berufsunfähigkeit – Lückenrechner</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Linke Spalte: Eingaben -->
+                <div class="space-y-4">
+                    <h3 class="text-xl font-semibold text-white border-b border-white/10 pb-2">1. Allgemeine Daten</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label for="bu-birthdate" class="block text-sm font-medium text-gray-300 mb-1">Geburtstag</label><input type="date" id="bu-birthdate" value="1995-12-11" class="modern-input-dark"></div>
+                        <div><label for="bu-job" class="block text-sm font-medium text-gray-300 mb-1">Berufsgruppe</label><select id="bu-job" class="modern-input-dark"><option value="ang">Angestellte:r</option><option value="arb">Arbeiter:in</option><option value="selbst">Selbstständig</option></select></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div><label for="bu-income" class="block text-sm font-medium text-gray-300 mb-1">Monatl. Einkommen</label><input type="number" id="bu-income" value="2000" min="0" step="100" class="modern-input-dark"></div>
+                        <div>
+                            <label for="bu-income-type" class="block text-sm font-medium text-gray-300 mb-1">Art</label>
+                            <div id="bu-income-type-toggle" class="flex gap-2 bg-black/20 p-1 rounded-lg border border-white/10">
+                                <button type="button" data-v="net" class="bu-toggle-btn active">Netto</button>
+                                <button type="button" data-v="gross" class="bu-toggle-btn">Brutto</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div><label for="bu-ret-age" class="block text-sm font-medium text-gray-300 mb-1">Geplanter Pensionsantritt (Alter)</label><select id="bu-ret-age" class="modern-input-dark"><option>60</option><option>61</option><option>62</option><option>63</option><option>64</option><option selected>65</option><option>66</option><option>67</option></select></div>
+                    
+                    <div class="pt-4 border-t border-white/10">
+                        <h3 class="text-xl font-semibold text-white border-b border-white/10 pb-2">2. Szenario BU</h3>
+                        <label for="bu-entry-age" class="block text-sm font-medium text-gray-300 mt-4">Eintritt Berufsunfähigkeit mit <span id="bu-age-now" class="font-bold">29</span> Jahren</label>
+                        <input type="range" id="bu-entry-age" min="18" max="64" value="29" class="w-full mt-2">
+                        <p class="text-xs text-gray-400 mt-2">Schieberegler bewegen, um den Zeitpunkt eines BU-Ereignisses zu simulieren. Berechnung erfolgt in heutigem Geld (vereinfacht).</p>
+                    </div>
+                </div>
+
+                <!-- Rechte Spalte: Ergebnisse -->
+                <div class="space-y-4">
+                    <div class="bu-kpi"><div class="label">Geschätzte BU-Staatspension / Monat</div><div class="value" id="bu-result-pension">–</div></div>
+                    <div class="bu-kpi warn"><div class="label">Monatliche Lücke</div><div class="value" id="bu-result-gap-month">–</div></div>
+                    <div class="bu-kpi"><div class="label">Gesamtlücke bis zur Pension</div><div class="value" id="bu-result-gap-total">–</div></div>                    
+                    <!-- NEU: Container für das ApexCharts-Diagramm -->
+                    <div id="bu-chart-container" class="bg-black/20 p-4 rounded-lg"></div>
+                    <p class="text-xs text-gray-400 p-3 bg-black/20 rounded-lg">Hinweis: Dies ist ein stark vereinfachtes Rechenmodell. Die BU-Staatspension wird hier überschlägig aus dem Nettoeinkommen abgeleitet und je nach Berufsgruppe skaliert. Tatsächliche Ansprüche hängen von Beitragszeiten, Bemessungsgrundlagen, Gesetzeslage u.v.m. ab. Werte dienen als Orientierung, nicht als Beratung oder Angebot.</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- NEU: Modals für die Rechner -->
@@ -415,6 +529,58 @@
                         <div class="flex justify-between"><span>Monatliche Entnahme:</span> <span id="vr-monatl" class="font-bold">0 €</span></div>
                         <div class="flex justify-between text-xl text-skt-green-accent pt-2 border-t border-white/20"><span>Benötigte Sparrate / Monat:</span> <span id="vr-sparrate" class="font-bold">0 €</span></div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEU: Modal für den Erwerbspotentialrechner -->
+    <div id="erwerbspotential-modal" class="modal-overlay">
+        <div class="modal-box bg-skt-blue-light rounded-lg shadow-xl p-8 m-4 max-w-6xl w-full relative border border-white/20">
+            <button data-modal-close="erwerbspotential-modal" class="absolute top-3 right-4 text-3xl text-gray-400 hover:text-white">&times;</button>
+            <h2 class="text-3xl font-bold text-white mb-6 text-center">Erwerbspotentialrechner</h2>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Linke Spalte: Eingaben -->
+                <div class="space-y-4 bg-black/20 p-6 rounded-lg">
+                    <h3 class="text-xl font-semibold text-white border-b border-white/10 pb-2">Deine Angaben</h3>
+                    <div>
+                        <label for="ep-birth" class="block text-sm font-medium text-gray-300 mb-1">Geburtsdatum:</label>
+                        <input type="date" id="ep-birth" value="1995-12-11" class="modern-input-dark">
+                    </div>
+                    <div>
+                        <label for="ep-job" class="block text-sm font-medium text-gray-300 mb-1">Berufsgruppe:</label>
+                        <select id="ep-job" class="modern-input-dark">
+                            <option value="arb" selected>Arbeiter:in</option>
+                            <option value="ang">Angestellte:r</option>
+                            <option value="selbst">Selbstständig</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="ep-gross" class="block text-sm font-medium text-gray-300 mb-1">Bruttogehalt p.m.:</label>
+                            <input type="number" id="ep-gross" value="2709" min="0" step="1" class="modern-input-dark">
+                        </div>
+                        <div>
+                            <label for="ep-net" class="block text-sm font-medium text-gray-300 mb-1">Nettogehalt p.m.:</label>
+                            <input type="number" id="ep-net" value="2000" min="0" step="1" class="modern-input-dark">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="ep-growth" class="block text-sm font-medium text-gray-300 mb-1">Karriereverlauf:</label>
+                        <select id="ep-growth" class="modern-input-dark">
+                            <option value="0">0 % p.a.</option><option value="0.02">2 % p.a.</option><option value="0.03" selected>3 % p.a.</option><option value="0.04">4 % p.a.</option><option value="0.05">5 % p.a.</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Rechte Spalte: Chart & KPIs -->
+                <div class="flex flex-col bg-black/20 rounded-lg overflow-hidden">
+                    <div class="p-6 flex-grow">
+                        <h3 class="text-xl font-semibold text-white">Wert der Arbeitskraft</h3>
+                        <div id="ep-chart-container" class="mt-4"></div>
+                    </div>
+                    <div class="bu-kpi"><div class="label">Summe deines erarbeiteten Nettoeinkommens bis zur Pension</div><div class="value" id="ep-sum">–</div></div>
                 </div>
             </div>
         </div>

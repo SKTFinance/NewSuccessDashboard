@@ -1673,8 +1673,8 @@ summary::-webkit-details-marker {
     border: 3px solid transparent; /* Platzhalter für den Rahmen */
     border-radius: 9999px; /* NEU: Macht die Boxen rund */
 }
-/* KORREKTUR: Stile für Dropdowns im Pensionsrechner, um sie an das dunkle Theme anzupassen */
-.pensionsrechner-container select.modern-input-dark {
+/* KORREKTUR: Stile für Dropdowns in allen Modals, um sie an das dunkle Theme anzupassen. */
+.modal-box select {
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
@@ -1771,6 +1771,26 @@ summary::-webkit-details-marker {
         transform: rotateY(360deg);
     }
 }
+
+/* --- NEU: Stile für den BU-Lückenrechner --- */
+.bu-toggle-btn {
+    flex: 1;
+    padding: 8px 10px;
+    background: transparent;
+    border: 0;
+    color: #cbd5e1;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+.bu-toggle-btn.active {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+.bu-kpi { background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 1rem; }
+.bu-kpi .label { font-size: 0.875rem; color: #d1d5db; }
+.bu-kpi .value { font-size: 1.75rem; font-weight: 700; margin-top: 4px; color: white; }
+.bu-kpi.warn .value { color: var(--color-accent-red); }
 
 /* NEU: Stile für das Tag-Eingabefeld (WorkingDay Modal) */
 .tag-input-container {

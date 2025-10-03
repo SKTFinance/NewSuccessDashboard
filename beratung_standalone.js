@@ -303,6 +303,7 @@ class BeratungView {
         this.kundennameInput = document.getElementById('beratung-kundenname-input');
         this.welcomeKundenname = document.getElementById('beratung-welcome-kundenname');
         this.kategorienContainer = document.getElementById('beratung-kategorien-container');
+        this.fullscreenBtn = document.getElementById('fullscreen-btn'); // NEU
         this.agendaContainer = document.getElementById('beratung-agenda-container');
         this.loadingOverlay = document.getElementById('beratung-loading-overlay');
         this.loadingText = document.getElementById('loading-text');
@@ -321,6 +322,12 @@ class BeratungView {
                     }
                     if (modalId === 'vorsorgerechner-modal') {
                         this._initVorsorgerechner();
+                    }
+                    if (modalId === 'bu-luecke-modal') { // NEU
+                        this._initBuLueckenrechner();
+                    }
+                    if (modalId === 'erwerbspotential-modal') { // NEU
+                        this._initErwerbspotentialRechner();
                     }
                 }
             });
@@ -366,6 +373,11 @@ class BeratungView {
                 e.preventDefault();
                 this.nextBtn.click();
             }
+        });
+
+        // NEU: Event-Listener für den Fullscreen-Button
+        this.fullscreenBtn.addEventListener('click', () => {
+            this._toggleFullscreen();
         });
     }
     
@@ -421,7 +433,15 @@ class BeratungView {
             // NEU: Prüfe, ob es sich um die "Finanzielle Ziele"-Seite handelt
             if (slideId === 'beratung-slide-special-FLV-Finanzielle_Ziele_Auswahl') {
                 this._renderFinancialGoals();
-                this._setupModalTriggers(); // NEU: Event-Listener für die Modal-Buttons setzen
+            }
+
+            // KORREKTUR: Richte die Modal-Trigger für alle Seiten ein, die sie benötigen.
+            const slidesWithModals = [
+                'beratung-slide-special-FLV-Finanzielle_Ziele_Auswahl',
+                'beratung-slide-koerperundexistenz-selection'
+            ];
+            if (slidesWithModals.includes(slideId)) {
+                this._setupModalTriggers();
             }
 
             // NEU: Prüfe, ob es sich um das "3-Konten-Modell" handelt
@@ -449,6 +469,21 @@ class BeratungView {
                 this._renderEigenheimChart();
             }
 
+            // NEU: Prüfe, ob es sich um die Unfall-Seite handelt
+            if (slideId === 'beratung-slide-explanation-Unfallversicherung') {
+                this._renderUnfallChart();
+            }
+
+            // NEU: Prüfe, ob es sich um die Risikoleben-Seite handelt
+            if (slideId === 'beratung-slide-explanation-Risikoleben') {
+                this._renderRisikoChart();
+            }
+
+            // NEU: Prüfe, ob es sich um die BU-Seite handelt
+            if (slideId === 'beratung-slide-explanation-Berufsunfähigkeit') {
+                this._renderBUChart();
+            }
+
             // NEU: Prüfe, ob es sich um die "Produktempfehlung"-Seite handelt und rendere den Inhalt.
             if (slideId === 'beratung-slide-product-recommendation') {
                 // KORREKTUR: Die Rendering-Logik wird jetzt asynchron nach der Ladeanimation aufgerufen.
@@ -459,6 +494,34 @@ class BeratungView {
             beratungLog(`!!! FEHLER: Slide mit ID '${slideId}' nicht gefunden.`);
         }
                 this._renderEigenheimChart();
+    }
+
+    // NEU: Funktion zum Umschalten des Vollbildmodus
+    _toggleFullscreen() {
+        const doc = document.documentElement;
+        const isInFullscreen = document.fullscreenElement || document.mozFullScreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
+
+        if (!isInFullscreen) {
+            if (doc.requestFullscreen) {
+                doc.requestFullscreen();
+            } else if (doc.mozRequestFullScreen) { /* Firefox */
+                doc.mozRequestFullScreen();
+            } else if (doc.webkitRequestFullscreen) { /* Chrome, Safari & Opera */
+                doc.webkitRequestFullscreen();
+            } else if (doc.msRequestFullscreen) { /* IE/Edge */
+                doc.msRequestFullscreen();
+            }
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.mozCancelFullScreen) {
+                document.mozCancelFullScreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) {
+                document.msExitFullscreen();
+            }
+        }
     }
 
     async _navigateNext() {
@@ -1272,6 +1335,91 @@ class BeratungView {
         chart.render();
     }
 
+    _renderUnfallChart() {
+        const container = document.getElementById('unfall-chart-container');
+        if (!container) return;
+        container.innerHTML = '';
+
+        const options = {
+            series: [45, 30, 15, 10],
+            chart: { type: 'donut', height: 250, foreColor: '#e2e8f0' },
+            labels: ['Freizeit & Sport', 'Haushalt', 'Arbeit & Schule', 'Verkehr'],
+            colors: ['#22c55e', '#f59e0b', '#3b82f6', '#ef4444'],
+            plotOptions: {
+                pie: {
+                    donut: {
+                        labels: {
+                            show: true,
+                            total: {
+                                show: true,
+                                label: 'Unfallursachen',
+                                formatter: () => 'Verteilung'
+                            }
+                        }
+                    }
+                }
+            },
+            dataLabels: { enabled: false },
+            legend: { show: false },
+            responsive: [{ breakpoint: 480, options: { chart: { width: 200 } } }]
+        };
+
+        const chart = new ApexCharts(container, options);
+        chart.render();
+    }
+
+    _renderRisikoChart() {
+        const container = document.getElementById('risiko-chart-container');
+        if (!container) return;
+        container.innerHTML = '';
+
+        const options = {
+            series: [50, 35, 15],
+            chart: { type: 'donut', height: 250, foreColor: '#e2e8f0' },
+            labels: ['Laufende Kredite', 'Lebensunterhalt Familie', 'Ausbildung Kinder'],
+            colors: ['#3b82f6', '#22c55e', '#f59e0b'],
+            plotOptions: {
+                pie: {
+                    donut: {
+                        labels: {
+                            show: true,
+                            total: {
+                                show: true,
+                                label: 'Verwendung',
+                                formatter: () => 'der Summe'
+                            }
+                        }
+                    }
+                }
+            },
+            dataLabels: { enabled: false },
+            legend: { show: false },
+            responsive: [{ breakpoint: 480, options: { chart: { width: 200 } } }]
+        };
+
+        const chart = new ApexCharts(container, options);
+        chart.render();
+    }
+
+    _renderBUChart() {
+        const container = document.getElementById('bu-chart-container-main');
+        if (!container) return;
+        container.innerHTML = '';
+
+        const options = {
+            series: [{ data: [32, 21, 15, 8, 24] }],
+            chart: { type: 'bar', height: 250, foreColor: '#e2e8f0', toolbar: { show: false } },
+            plotOptions: { bar: { borderRadius: 4, horizontal: true, } },
+            dataLabels: { enabled: true, formatter: (val) => val + "%", style: { colors: ['#fff'] } },
+            xaxis: { categories: ['Psyche', 'Skelett/Bewegung', 'Krebs/Tumore', 'Unfälle', 'Sonstige'], labels: { show: false } },
+            grid: { show: false },
+            tooltip: { theme: 'dark', y: { formatter: (val) => val + "%" } }
+        };
+
+        const chart = new ApexCharts(container, options);
+        chart.render();
+    }
+
     _initPensionsrechner() {
         const berechnenBtn = document.getElementById('pr-berechnen-btn');
         const resetBtn = document.getElementById('pr-reset-btn');
@@ -1423,6 +1571,260 @@ class BeratungView {
 
         berechnenBtn.onclick = berechnen;
         berechnen(); // Initial render
+    }
+
+    // NEU: Initialisiert den BU-Lückenrechner
+    _initBuLueckenrechner() {
+        const fmt = (v) => new Intl.NumberFormat('de-AT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v || 0);
+
+        let chart = null; // Variable für die Chart-Instanz
+        const incomeTypeToggle = document.getElementById('bu-income-type-toggle');
+        const allInputs = ['#bu-birthdate', '#bu-job', '#bu-income', '#bu-ret-age', '#bu-entry-age'];
+
+        const calc = () => {
+            const type = incomeTypeToggle.querySelector('.active')?.dataset.v || 'net';
+            const birth = new Date(document.getElementById('bu-birthdate').value || '1990-01-01');
+            const job = document.getElementById('bu-job').value;
+            const incomeInput = parseFloat(document.getElementById('bu-income').value || 0);
+            const retAge = parseInt(document.getElementById('bu-ret-age').value, 10);
+            const growth = 0.02; // NEU: Festes jährliches Gehaltswachstum von 2%
+            const entryAge = parseInt(document.getElementById('bu-entry-age').value, 10);
+
+            // Alter heute
+            const now = new Date();
+            let age = now.getFullYear() - birth.getFullYear();
+            const m = now.getMonth() - birth.getMonth();
+            if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+
+            // Nettoeinkommen HEUTE berechnen
+            const netToday = type === 'net' ? incomeInput : (incomeInput * 0.70);
+
+            // Zukünftiges Nettoeinkommen mit 2% Wachstum p.a. berechnen
+            const yearsToBuEntry = Math.max(0, entryAge - age);
+            const netAtBuEntry = netToday * Math.pow(1 + growth, yearsToBuEntry);
+
+            // Einfaches BU-Pensionsmodell
+            const buPensionFactor = (job) => {
+                if (job === 'ang') return 0.60;
+                if (job === 'arb') return 0.55;
+                return 0.50;
+            };
+            const factor = buPensionFactor(job);
+            
+            // Staatliche Pension HEUTE berechnen
+            const buPensionToday = Math.max(0, netToday * factor);
+            // Zukünftige staatliche Pension mit 1% Wachstum p.a. berechnen
+            const buMonthly = buPensionToday * Math.pow(1 + 0.01, yearsToBuEntry);
+
+            // Monatliche Lücke
+            const gapMonthly = Math.max(0, netAtBuEntry - buMonthly);
+
+            // Jahre bis Pension vom Eintrittszeitpunkt
+            const yearsToRet = Math.max(0, retAge - entryAge);
+            const monthsToRet = yearsToRet * 12;
+
+            // Gesamtlücke (vereinfacht, ohne Abzinsung/Aufwertung)
+            const totalGap = gapMonthly * monthsToRet;
+
+            // KPIs befüllen
+            document.getElementById('bu-result-pension').textContent = fmt(buMonthly);
+            document.getElementById('bu-result-gap-month').textContent = fmt(gapMonthly);
+            document.getElementById('bu-result-gap-total').textContent = fmt(totalGap);
+
+            // NEU: ApexCharts-Balkendiagramm erstellen oder aktualisieren
+            const chartOptions = {
+                series: [{
+                    name: 'Geschätzte BU-Staatspension',
+                    data: [Math.round(buMonthly)]
+                }, {
+                    name: 'Monatliche Lücke',
+                    data: [Math.round(gapMonthly)]
+                }],
+                chart: {
+                    type: 'bar',
+                    height: 120,
+                    stacked: true,
+                    stackType: '100%',
+                    toolbar: { show: false },
+                    foreColor: '#e2e8f0'
+                },
+                plotOptions: {
+                    bar: {
+                        horizontal: true,
+                        borderRadius: 4, // NEU: Fügt abgerundete Ecken hinzu
+                    },
+                },
+                stroke: { width: 1, colors: ['#043C64'] },
+                xaxis: {
+                    categories: [''],
+                    labels: { show: false },
+                    axisBorder: { show: false },
+                    axisTicks: { show: false }
+                },
+                yaxis: { labels: { show: false } },
+                tooltip: {
+                    theme: 'dark',
+                    y: { formatter: (val) => fmt(val) }
+                },
+                grid: { show: false },
+                colors: ['#27ae60', '#FF6347'], // Grün für Pension, Rot für Lücke
+                legend: { show: false },
+                dataLabels: { enabled: false }, // KORREKTUR: Beschriftungen im Balken entfernt
+                title: {
+                    text: `Gesamteinkommen: ${fmt(netAtBuEntry)}`,
+                    align: 'center',
+                    style: { fontSize: '14px', fontWeight: 'bold', color: '#fff' }
+                }
+            };
+
+            if (!chart) {
+                chart = new ApexCharts(document.querySelector("#bu-chart-container"), chartOptions);
+                chart.render();
+            } else {
+                chart.updateOptions(chartOptions);
+            }
+        };
+
+        // Event Listeners
+        [...incomeTypeToggle.querySelectorAll('button')].forEach(b => {
+            b.addEventListener('click', () => {
+                b.parentElement.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+                b.classList.add('active');
+                calc();
+            });
+        });
+
+        allInputs.forEach(s => {
+            const el = document.querySelector(s);
+            if (el) {
+                el.addEventListener('input', () => {
+                    if (s === '#bu-entry-age') {
+                        document.getElementById('bu-age-now').textContent = el.value;
+                    }
+                    calc();
+                });
+            }
+        });
+
+        calc(); // Initial calculation
+    }
+
+    // NEU: Initialisiert den Erwerbspotentialrechner
+    _initErwerbspotentialRechner() {
+        const fmt = (v) => new Intl.NumberFormat('de-AT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v || 0);
+        
+        let chart = null;
+        const allInputs = ['#ep-birth', '#ep-job', '#ep-growth']; // KORREKTUR: Brutto/Netto werden separat behandelt
+        const grossInput = document.getElementById('ep-gross');
+        const netInput = document.getElementById('ep-net');
+
+        // NEU: Logik zur Kopplung von Brutto- und Netto-Eingabefeldern
+        const updateNetto = () => {
+            const grossValue = parseFloat(grossInput.value) || 0;
+            netInput.value = Math.round(grossValue * 0.70); // Einfache Brutto-Netto-Näherung
+            draw();
+        };
+        const updateBrutto = () => {
+            const netValue = parseFloat(netInput.value) || 0;
+            grossInput.value = Math.round(netValue / 0.70); // Einfache Netto-Brutto-Näherung
+            draw();
+        };
+
+        grossInput.addEventListener('input', _.debounce(updateNetto, 250));
+        netInput.addEventListener('input', _.debounce(updateBrutto, 250));
+
+        const draw = () => {
+            const birth = new Date(document.getElementById('ep-birth').value || '1995-12-11');
+            const net0 = parseFloat(netInput.value || 0);
+            const g = parseFloat(document.getElementById('ep-growth').value || 0);
+
+            // Jahre bis zur Rente berechnen
+            const now = new Date();
+            let age = now.getFullYear() - birth.getFullYear();
+            const m = now.getMonth() - birth.getMonth();
+            if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+            const years = Math.max(0, 65 - age);
+
+            // Datenreihen aufbauen
+            const buildSeries = (startNet, growth, numYears) => {
+                const pts = [];
+                let sum = 0;
+                for (let t = 0; t <= numYears; t++) {
+                    const netY = startNet * Math.pow(1 + growth, t) * 12;
+                    if (t > 0) sum += netY;
+                    pts.push({ t, sum });
+                }
+                return pts;
+            };
+
+            const s1 = buildSeries(net0, g, years); // mit Wachstum
+
+            const total = s1[s1.length - 1]?.sum || 0;
+            document.getElementById('ep-sum').textContent = fmt(total);
+
+            // Chart-Optionen
+            const chartOptions = {
+                series: [{ // KORREKTUR: Nur noch eine Serie anzeigen
+                    name: 'Mit Karriereverlauf',
+                    data: s1.map(p => Math.round(p.sum))
+                }],
+                chart: {
+                    type: 'area',
+                    height: 350,
+                    foreColor: '#e2e8f0',
+                    toolbar: { show: false },
+                    zoom: { enabled: false }
+                },
+                colors: ['#3b82f6'], // KORREKTUR: Nur noch eine Farbe
+                dataLabels: { enabled: false },
+                stroke: {
+                    curve: 'smooth',
+                    width: 3,
+                },
+                fill: {
+                    type: 'gradient',
+                    gradient: {
+                        shadeIntensity: 1,
+                        opacityFrom: 0.4,
+                        opacityTo: 0.1,
+                        stops: [0, 100]
+                    }
+                },
+                xaxis: {
+                    categories: s1.map(p => p.t),
+                    title: { text: 'Jahre ab heute', style: { color: '#9ca3af' } },
+                    labels: {
+                        formatter: (val) => (parseInt(val) % 5 === 0) ? val : ''
+                    }
+                },
+                yaxis: {
+                    title: { text: 'Gesamteinkommen', style: { color: '#9ca3af' } },
+                    labels: { formatter: (val) => `${(val / 1000).toFixed(0)}k €` }
+                },
+                tooltip: {
+                    theme: 'dark',
+                    x: { formatter: (val) => `Nach ${val} Jahren` },
+                    y: { formatter: (val) => fmt(val) }
+                },
+                legend: { show: false }, // KORREKTUR: Legende ausblenden, da nur eine Serie
+                grid: { borderColor: 'rgba(255,255,255,0.1)', strokeDashArray: 4 }
+            };
+
+            const chartContainer = document.getElementById('ep-chart-container');
+            if (!chart) {
+                chart = new ApexCharts(chartContainer, chartOptions);
+                chart.render();
+            } else {
+                chart.updateOptions(chartOptions);
+            }
+        };
+
+        allInputs.forEach(s => {
+            const el = document.querySelector(s);
+            if (el) el.addEventListener('input', _.debounce(draw, 250));
+        });
+
+        draw(); // Initialer Aufruf
     }
 
     async _renderBeraterVorstellung() {
