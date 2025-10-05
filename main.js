@@ -10689,6 +10689,8 @@ function setupEventListeners() {
   setupMenuItem('potential-menu-item', 'potential-header-btn');
   setupMenuItem('auswertung-menu-item', 'auswertung-header-btn');
   setupMenuItem('strukturbaum-menu-item', 'strukturbaum-header-btn');
+  setupMenuItem('planung-menu-item', 'planung-header-btn');
+  setupMenuItem('stimmungs-dashboard-menu-item', 'stimmungs-dashboard-header-btn');
   setupMenuItem('wettbewerb-menu-item', 'wettbewerb-header-btn'); // NEU
   setupMenuItem('ai-assistant-menu-item', 'ai-assistant-btn');
   dom.superuserBtn.addEventListener("click", async (e) => {
@@ -14574,7 +14576,7 @@ function switchView(viewName) {
       'auswertung': [dom.auswertungHeaderBtn, document.getElementById('auswertung-menu-item')],
       'potential': [dom.potentialHeaderBtn, document.getElementById('potential-menu-item')], // KORREKTUR
       'lead-center': [dom.leadCenterHeaderBtn, document.getElementById('lead-center-menu-item')], // NEU
-      'wettbewerb': [dom.wettbewerbHeaderBtn, document.getElementById('wettbewerb-menu-item')], // NEU
+      'wettbewerb': [dom.wettbewerbHeaderBtn], // NEU
       'planung': [dom.planningBtn, document.getElementById('planung-menu-item')], // NEU
       'workingday-auswertung': [dom.workingDayAuswertungBtn], // NEU
       'strukturbaum': [dom.strukturbaumHeaderBtn, document.getElementById('strukturbaum-menu-item')],
