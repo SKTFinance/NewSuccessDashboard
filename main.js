@@ -177,7 +177,7 @@ const dom = {
   potentialHeaderBtn: document.getElementById("potential-header-btn"),
   umsatzHeaderBtn: document.getElementById("umsatz-header-btn"),
   auswertungHeaderBtn: document.getElementById("auswertung-header-btn"),
-  stimmungsDashboardHeaderBtn: document.getElementById('stimmungs-dashboard-header-btn'), // NEU
+  stimmungsDashboardHeaderBtn: document.getElementById('stimmungs-dashboard-header-btn'),
   pgTagebuchHeaderBtn: document.getElementById('pg-tagebuch-header-btn'),
   strukturbaumHeaderBtn: document.getElementById("strukturbaum-header-btn"),
   wettbewerbHeaderBtn: document.getElementById("wettbewerb-header-btn"), // NEU
@@ -222,7 +222,6 @@ const dom = {
   ),
   editUserBtn: document.getElementById("edit-user-btn"),
   editUserModal: document.getElementById("edit-user-modal"),
-  strukturbaumSettingsBtn: document.getElementById("strukturbaum-settings-btn"), // KORREKTUR: War falsch zugeordnet
   editUserForm: document.getElementById("edit-user-form"),
   cancelEditUserBtn: document.getElementById("cancel-edit-user-btn"),
   cancelEditUserBtn2: document.getElementById("cancel-edit-user-btn-2"),
@@ -1757,17 +1756,19 @@ function updateUiForUserRoles() {
     // KORREKTUR: Trainees sollen das Stimmungsdashboard nicht sehen, auch wenn es für sie aktiviert wäre.
     // Es ist nur für Führungskräfte gedacht.
     const hasStimmungsAccess = (user.Checkin === true || String(user.Checkin).toLowerCase() === 'true') && isUserLeader(user);
+    const isLeader = isUserLeader(user);
 
     // NEU: Sichtbarkeit für Lead-Center-Button
     const hasLeadAccess = user.SiehtLeads === true;
 
-    const stimmungsDashboardHeaderBtn = document.getElementById('stimmungs-dashboard-header-btn');
-    if (stimmungsDashboardHeaderBtn) {
-        stimmungsDashboardHeaderBtn.classList.toggle('hidden', !hasStimmungsAccess);
+    // KORREKTUR: Die Logik wird jetzt wieder vereinfacht und steuert nur noch die Berechtigung.
+    // Die responsiven Klassen (`hidden`, `sm:flex`) im HTML kümmern sich um die Anzeige auf verschiedenen Bildschirmgrößen.
+    if (dom.stimmungsDashboardHeaderBtn) {
+        dom.stimmungsDashboardHeaderBtn.classList.add('hidden');
     }
-    if (dom.stimmungsDashboardMenuItem) {
-        dom.stimmungsDashboardMenuItem.classList.toggle('hidden', !hasStimmungsAccess);
-    }
+    // KORREKTUR: Der Menüpunkt soll jetzt immer angezeigt werden, wenn die Berechtigung da ist.
+    // Der Header-Button ist jetzt immer versteckt.
+    if (dom.stimmungsDashboardMenuItem) dom.stimmungsDashboardMenuItem.classList.toggle('hidden', !hasStimmungsAccess);
     dom.workingDayAuswertungBtn.classList.remove('hidden'); // KORREKTUR: Der Button ist jetzt immer sichtbar. Die Berechtigungsprüfung erfolgt beim Klick.
 }
 
@@ -3536,7 +3537,6 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
 
   // KORREKTUR: Verwende die robustere isUserLeader-Funktion, um zu bestimmen, ob die Führungsansicht angezeigt werden soll.
   const isLeader = isUserLeader(user);
-  // NEU: Lade die bevorzugte Ansicht aus dem Speicher
 
   // NEU: "Neuen Nutzer anlegen"-Button nur für Führungskräfte anzeigen
   dom.addNewUserBtn.classList.toggle('hidden', !isLeader);
@@ -3591,8 +3591,6 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
   // NEU: UI für den Planning-View-Toggle basierend auf der geladenen Einstellung aktualisieren
   dom.teamViewBtn.classList.toggle("active", currentPlanningView === "team");
   dom.personalViewBtn.classList.toggle("active", currentPlanningView === "personal");
-  // KORREKTUR: Zugriff auf das neue Element im Einstellungsmenü
-  const stimmungsDashboardSettingsItem = document.getElementById('stimmungs-dashboard-settings-item');
   dom.strukturViewBtn.classList.toggle("active", currentPlanningView === "struktur");
 
   // NEU: Titel und Daten basierend auf der geladenen Ansicht setzen
@@ -4177,7 +4175,7 @@ function renderTimelineSection(
 
   const sectionStartDate = steps[0].dueDate;
   const sectionEndDate = steps[steps.length - 1].dueDate;
-  const todayForProgress = new Date(); // Use a separate 'today' for progress calculation to not affect the step loop
+  const todayForProgress = getCurrentDate(); // KORREKTUR: Zeitreise-Datum berücksichtigen
 
   const totalDuration = sectionEndDate.getTime() - sectionStartDate.getTime();
   const elapsedDuration = todayForProgress.getTime() - sectionStartDate.getTime();
@@ -4357,11 +4355,11 @@ function renderDateMarkers(container, startDate, endDate) {
   const totalDuration = endDate.getTime() - startDate.getTime();
   if (totalDuration <= 0) return;
 
-  const today = new Date();
+  const today = getCurrentDate(); // KORREKTUR: Zeitreise-Datum berücksichtigen
   const elapsedDuration = today.getTime() - startDate.getTime();
   const timeProgressPercent = Math.max(
     0,
-    Math.min(100, (elapsedDuration / totalDuration) * 100)
+    Math.min(100, (elapsedDuration / totalDuration) * 100) // KORREKTUR: Die Berechnung war korrekt, aber die Verwendung von `new Date()` statt `getCurrentDate()` war der Fehler.
   );
 
   // Start- und Enddatum Marker
@@ -10780,11 +10778,6 @@ function setupEventListeners() {
     closeSettingsMenu();
     openEditUserModal();
   });
-  // KORREKTUR: Event-Listener für Strukturbaum-Button im Einstellungsmenü
-  dom.strukturbaumSettingsBtn.addEventListener("click", (e) => {
-    e.preventDefault();
-    switchView("strukturbaum");
-  });
 
   // NEU: Event Listener für Hilfe-Modal
   dom.helpBtn.addEventListener('click', (e) => {
@@ -10792,11 +10785,19 @@ function setupEventListeners() {
       closeSettingsMenu();
       openHelpModal();
   });
-  dom.helpForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      handleHelpFormSubmit();
-  });
-  dom.cancelHelpBtn.addEventListener('click', closeHelpModal);
+
+  // KORREKTUR: Der Event-Listener für den Menüpunkt des Stimmungsdashboards war an der falschen Stelle.
+  // Er wird jetzt hier korrekt eingerichtet.
+  if (dom.stimmungsDashboardMenuItem) {
+      dom.stimmungsDashboardMenuItem.addEventListener('click', () => switchView('stimmungs-dashboard'));
+  }
+  // NEU: Event-Listener für die neuen Header-Buttons
+  if (dom.stimmungsDashboardHeaderBtn) {
+      dom.stimmungsDashboardHeaderBtn.addEventListener('click', () => switchView('stimmungs-dashboard'));
+  }
+  if (dom.strukturbaumHeaderBtn) {
+      dom.strukturbaumHeaderBtn.addEventListener('click', () => switchView('strukturbaum'));
+  }
 
   // --- Main Navigation ---
   dom.backButton.addEventListener("click", async () => {
@@ -10888,10 +10889,6 @@ function setupEventListeners() {
 
   dom.umsatzHeaderBtn.addEventListener('click', () => {
     switchView('umsatz');
-  });
-
-  dom.stimmungsDashboardHeaderBtn.addEventListener('click', () => {
-    switchView('stimmungs-dashboard');
   });
 
   dom.dashboardHeaderBtn.addEventListener('click', () => {

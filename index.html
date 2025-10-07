@@ -91,9 +91,13 @@
                     <button id="umsatz-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Umsätze">
                         <i class="fas fa-chart-line"></i>
                     </button>
-                    <!-- NEU: Stimmungsdashboard-Button im Header -->
+                    <!-- Stimmungsdashboard-Button im Header (sichtbar ab sm) -->
                     <button id="stimmungs-dashboard-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Stimmungsdashboard">
                         <i class="fas fa-smile-beam"></i>
+                    </button>
+                    <!-- Strukturbaum-Button im Header (sichtbar ab sm) -->
+                    <button id="strukturbaum-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Strukturbaum">
+                        <i class="fas fa-sitemap"></i>
                     </button>
                     <!-- NEU: Planungs-Button im Header -->
                     <button id="planung-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Planung & Vision">
@@ -126,9 +130,9 @@
                                 <a href="#" id="pg-tagebuch-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-comments w-5 mr-2"></i>PG-Tagebuch</a>
                                 <a href="#" id="potential-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-users w-5 mr-2"></i>Potentiale</a>
                                 <a href="#" id="auswertung-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-trophy w-5 mr-2"></i>Auswertung</a>
-                                <a href="#" id="planung-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-tasks w-5 mr-2"></i>Planung & Vision</a>
-                                <a href="#" id="stimmungs-dashboard-menu-item" class="hidden px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-smile-beam w-5 mr-2"></i>Stimmungsdashboard</a>
-                                <a href="#" id="strukturbaum-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sitemap w-5 mr-2"></i>Strukturbaum</a>
+                                <a href="#" id="planung-menu-item" class="block sm:hidden px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-tasks w-5 mr-2"></i>Planung & Vision</a>
+                                <a href="#" id="stimmungs-dashboard-menu-item" class="hidden px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light flex items-center" title="Stimmungsdashboard"><i class="fas fa-smile-beam w-5 mr-2"></i>Stimmungsdashboard</a>
+                                <a href="#" id="strukturbaum-menu-item" class="block sm:hidden px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sitemap w-5 mr-2"></i>Strukturbaum</a>
                         </div>
                     </div>
                     <div class="relative">
@@ -139,7 +143,6 @@
                                 <a href="#" id="superuser-btn" class="hidden block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-users-cog w-5 mr-2"></i>Gesamtansicht</a>
                                 <a href="#" id="money-view-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-euro-sign w-5 mr-2"></i>Geld-Ansicht</a>
                                 <a href="#" id="edit-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-edit w-5 mr-2"></i>Personendaten</a>
-                                <a href="#" id="strukturbaum-settings-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sitemap w-5 mr-2"></i>Strukturbaum</a>
                                 <a href="#" id="workingday-auswertung-btn" class="hidden block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-calendar-week w-5 mr-2"></i>WorkingDay Auswertung</a>
                                 <a href="#" id="help-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-question-circle w-5 mr-2"></i>Hilfe</a>
                                 <a href="#" id="add-new-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-plus w-5 mr-2"></i>Neuer Nutzer</a>
