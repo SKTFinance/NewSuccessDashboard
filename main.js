@@ -4763,6 +4763,13 @@ class AppointmentsView {
         return this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.searchInput && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.statsTab && this.heatmapTab && this.heatmapGrid && this.statsScopeFilter && this.statsCategoryFilterBtn && this.statsCategoryFilterPanel && this.statsMonthTimeline && this.statsPeriodDisplay && this.statsNavPrevBtn && this.statsNavNextBtn && this.outstandingAppointmentsSection && this.outstandingAppointmentsList && this.statsViewTimelineBtn && this.statsViewTableBtn && this.statsTimelineView && this.statsTableView && this.statsViewInfoBtn && this.naechstesInfoView && this.groupFilterContainer && this.mainFilterContainer && this.analysisContainer && this.statsWeekView && this.weekCalendarViewModeSelect && this.weekZoomInBtn && this.weekZoomOutBtn;
     }
 
+    _setupMobileFilterToggle() {
+        const toggleBtn = document.getElementById('mobile-filter-toggle-btn');
+        const filterWrapper = document.getElementById('appointments-filter-wrapper');
+        if (!toggleBtn || !filterWrapper) return;
+        toggleBtn.addEventListener('click', () => filterWrapper.classList.toggle('hidden'));
+    }
+
     async init(userId) {
         appointmentsLog(`Modul wird initialisiert für User-ID: ${userId}`);
         this.currentUserId = userId;
@@ -4771,6 +4778,9 @@ class AppointmentsView {
             appointmentsLog('!!! FEHLER: Benötigte DOM-Elemente für die Termin-Ansicht wurden nicht gefunden.');
             return;
         }
+
+        // NEU: Event-Listener für den mobilen Filter-Button einrichten
+        this._setupMobileFilterToggle();
 
         // NEU: Startdatum für die Statistik-Ansicht initialisieren
         this.statsCurrentDate = getCurrentDate();
@@ -8489,6 +8499,10 @@ class UmsatzView {
         if (allSuccess) {
             // Cache für Gesamt-EH leeren, da sich die Daten geändert haben.
             localStorage.removeItem(CACHE_PREFIX + 'total-eh-results');
+            // KORREKTUR: Der Haupt-Umsatz-Cache muss ebenfalls geleert werden, damit die
+            // Ansicht nach dem Speichern die neuen Daten von der API lädt und anzeigt.
+            localStorage.removeItem(CACHE_PREFIX + 'umsatz');
+
             umsatzLog('Cache für Gesamt-EH geleert.');
 
             saveBtn.textContent = 'Gespeichert!';
@@ -14497,7 +14511,7 @@ class WettbewerbView {
         `;
 
         this.chartContainer.innerHTML = `
-            <svg width="100%" height="100%" viewBox="0 0 300 180" preserveAspectRatio="xMidYNone meet">
+            <svg width="100%" height="100%" viewBox="0 0 300 180" preserveAspectRatio="xMidYMid meet">
                 <defs>
                     <linearGradient id="flightProgressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
                         <stop offset="0%" stop-color="#38bdf8" />
@@ -15686,16 +15700,22 @@ class PlanungView {
         const success = await genericAddRowWithLinks('Visionen', rowData, ['Mitarbeiter']);
 
         if (success) {
+            planungLog('Businessplan erfolgreich gespeichert. Aktualisiere UI.');
             localStorage.removeItem(CACHE_PREFIX + 'visionen');
             await loadAllData();
             await this._renderBusinessplan(this.currentViewedUserId);
-            btn.textContent = 'Gespeichert!';
-            setTimeout(() => {
-                btn.disabled = false;
-                btn.textContent = 'Businessplan speichern';
-            }, 2000);
+
+            // KORREKTUR: Button-Zustand permanent ändern und Häkchen hinzufügen.
+            btn.classList.remove('bg-skt-blue', 'hover:bg-skt-blue-light');
+            btn.classList.add('bg-skt-green-accent', 'cursor-default');
+            btn.innerHTML = '<i class="fas fa-check mr-2"></i> Gespeichert!';
+            // Der Button bleibt deaktiviert, um erneutes, unnötiges Speichern zu verhindern.
+            btn.disabled = true;
+
+            // Die alte Timeout-Logik wird entfernt, damit der Zustand bestehen bleibt.
         } else {
             alert('Fehler beim Speichern des Businessplans.');
+            // KORREKTUR: Button-Zustand bei Fehler zurücksetzen.
             btn.disabled = false;
             btn.textContent = 'Businessplan speichern';
         }
