@@ -4873,6 +4873,16 @@ class AppointmentsView {
         // Die Event-Listener müssen bei jeder Initialisierung neu gesetzt werden,
         // da der HTML-Inhalt der Ansicht dynamisch neu geladen wird.
         this.setupEventListeners();
+        // KORREKTUR: Der Scroll-Listener für die Timeline muss bei jeder Initialisierung neu gesetzt werden,
+        // da das HTML neu geladen wird. Er wird aus setupEventListeners() hierher verschoben.
+        this.statsMonthTimeline.addEventListener('scroll', _.throttle(() => {
+            this._updateCardScales();
+        }, 50));
+
+        // KORREKTUR: Der Listener für den "Neuen Termin"-Button muss bei jeder Initialisierung neu gesetzt werden,
+        // da das HTML neu geladen wird. Er wird aus setupEventListeners() hierher verschoben.
+        document.getElementById('add-appointment-btn-stats').addEventListener('click', () => this.openModal());
+
         const user = SKT_APP.findRowById('mitarbeiter', this.currentUserId);
         if (user) {
             const titleElement = document.getElementById('appointments-title'); // Titel wird jetzt dynamischer
@@ -5062,11 +5072,6 @@ class AppointmentsView {
         this.statsNavNextBtn.addEventListener('click', () => this._navigateStats(1));
         this.statsPeriodDisplay.addEventListener('click', () => this._scrollToTodayInTimeline());
         this.statsViewInfoBtn.addEventListener('click', () => this._switchStatsView('info')); // NEU
-
-        // NEU: Event Listener für den dynamischen Skalierungseffekt beim Scrollen
-        this.statsMonthTimeline.addEventListener('scroll', _.throttle(() => {
-            this._updateCardScales();
-        }, 50));
         
         this.statsViewTimelineBtn.addEventListener('click', () => this._switchStatsView('timeline'));
         this.statsViewWeekBtn.addEventListener('click', () => this._switchStatsView('week'));
@@ -5112,9 +5117,6 @@ class AppointmentsView {
         // KORREKTUR: Event-Listener für die Statistik-Chart-Umschaltung wiederhergestellt
         this.statsByEmployeeBtn.addEventListener('click', () => { this.statsChartMode = 'employee'; this._updateStatsToggleButtons(); this._renderStatsChart(); });
         this.statsByStatusBtn.addEventListener('click', () => { this.statsChartMode = 'status'; this._updateStatsToggleButtons(); this._renderStatsChart(); });
-
-        // Listener für den "Neuen Termin anlegen" Button, der sich in der dynamisch geladenen appointments.html befindet.
-        document.getElementById('add-appointment-btn-stats').addEventListener('click', () => this.openModal());
 
         // Event Listener für den Analyse-Container und die Tabs
         this.toggleAnalysisBtn.addEventListener('click', () => this._toggleCollapsible(this.analysisContent, this.toggleAnalysisBtn));
