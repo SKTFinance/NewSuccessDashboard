@@ -1226,6 +1226,12 @@ summary::-webkit-details-marker {
     cursor: default;
 }
 
+/* NEU: Stile für die Wettbewerbs-Karte im Bildschirm-Modus */
+.wettbewerb-slide .leaderboard-list {
+    justify-content: flex-start; /* Listen oben ausrichten */
+    gap: 1.5rem; /* Mehr Abstand zwischen den Listen */
+}
+
 /* NEU: Stile für den detaillierten Wochenkalender */
 .week-calendar-header-grid {
     display: grid;
