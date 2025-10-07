@@ -527,12 +527,24 @@
             <div id="appointment-modal-hints" class="hidden mb-4 space-y-2"></div>
             <form id="appointment-form" class="space-y-4">
                 <input type="hidden" id="appointment-id">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div id="appointment-grid-1" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div><label for="appointment-user" class="block text-sm font-medium text-gray-700 mb-1">Mitarbeiter</label><select id="appointment-user" required class="modern-select"></select></div>
                     <div><label for="appointment-invitee" class="block text-sm font-medium text-gray-700 mb-1">Eingeladener</label><select id="appointment-invitee" class="modern-select"></select></div>
                     <div><label for="appointment-date" class="block text-sm font-medium text-gray-700 mb-1">Datum & Uhrzeit</label><div class="input-wrapper"><input type="datetime-local" id="appointment-date" required class="modern-input w-full"></div></div>
                     <div><label for="appointment-duration" class="block text-sm font-medium text-gray-700 mb-1">Dauer (Minuten)</label><input type="number" id="appointment-duration" class="modern-input"></div>
-                    <div><label for="appointment-location" class="block text-sm font-medium text-gray-700 mb-1">Ort</label><input type="text" id="appointment-location" class="modern-input"></div>
+                </div>
+                <div id="appointment-location-wrapper" class="hidden"><label for="appointment-location" class="block text-sm font-medium text-gray-700 mb-1">Ort</label><input type="text" id="appointment-location" class="modern-input"></div>
+                <!-- KORREKTUR: Fehlender Wrapper für das Wiederholungs-Dropdown hinzugefügt.
+                     Das Fehlen dieses Elements hat dazu geführt, dass beim Ändern der Kategorie
+                     der Text "null" im Formular erschien, da JavaScript versuchte, ein
+                     nicht existentes Element zu verschieben. -->
+                <div id="appointment-recurrence-wrapper">
+                    <div id="appointment-recurrence-container" class="hidden sm:col-span-1">
+                        <label for="appointment-recurrence" class="block text-sm font-medium text-gray-700 mb-1">Wiederholung</label>
+                        <select id="appointment-recurrence" class="modern-select"><option value="">Keine</option><option value="täglich">Täglich</option><option value="wöchentlich">Wöchentlich</option><option value="zweiwöchentlich">Zweiwöchentlich</option><option value="monatlich">Monatlich (an diesem Tag)</option></select>
+                    </div>
+                </div>
+                <div id="appointment-grid-2" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div><label for="appointment-category" class="block text-sm font-medium text-gray-700 mb-1">Kategorie</label><select id="appointment-category" required class="modern-select"></select></div>
                     <div><label for="appointment-status" class="block text-sm font-medium text-gray-700 mb-1">Status</label><select id="appointment-status" required class="modern-select"></select></div>
                     <div id="appointment-infoabend-container" class="hidden"><label for="appointment-infoabend-date" class="block text-sm font-medium text-gray-700 mb-1">Nächster Infoabend</label><div class="input-wrapper"><input type="date" id="appointment-infoabend-date" class="modern-input w-full"></div></div>
@@ -547,12 +559,8 @@
                             <option value="monatlich">Monatlich (an diesem Tag)</option>
                         </select>
                     </div>
-                </div>
-            <div id="appointment-partner-referrals-grid" class="grid grid-cols-2 gap-4">
-                <div id="appointment-partner-container" class="col-span-2"><label for="appointment-partner" class="block text-sm font-medium text-gray-700">Kunde, Bewerber,...</label><input type="text" id="appointment-partner" class="modern-input"></div>
-                <div id="appointment-referrals-container-single" class="hidden"><label for="appointment-referrals-single" class="block text-sm font-medium text-gray-700">Empfehlungen</label><input type="number" id="appointment-referrals-single" class="modern-input"></div>
-            </div>
-            <div class="grid grid-cols-2 gap-4">
+                <div id="appointment-partner-container" class="sm:col-span-2"><label for="appointment-partner" class="block text-sm font-medium text-gray-700">Kunde, Bewerber,...</label><input type="text" id="appointment-partner" class="modern-input"></div>
+                <div id="appointment-referrals-container-single" class="hidden sm:col-span-2"><label for="appointment-referrals-single" class="block text-sm font-medium text-gray-700">Empfehlungen</label><input type="number" id="appointment-referrals-single" class="modern-input"></div>
                 <div id="appointment-prognose-container" class="hidden"><label for="appointment-prognose" class="block text-sm font-medium text-gray-700">Umsatzprognose (EH)</label><input type="number" step="0.01" id="appointment-prognose" class="modern-input"></div>
                 <div id="appointment-referrals-container-paired"><label for="appointment-referrals-paired" class="block text-sm font-medium text-gray-700">Empfehlungen</label><input type="number" id="appointment-referrals-paired" class="modern-input"></div>
                 </div>

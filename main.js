@@ -6714,20 +6714,65 @@ class AppointmentsView {
         pieContainer.appendChild(svg);
     }
 
-    toggleConditionalFields(category) {
+    _updateModalLayoutForCategory(category) {
+        const recurrenceContainer = this.form.querySelector('#appointment-recurrence-container');
+        const recurrenceWrapper = this.form.querySelector('#appointment-recurrence-wrapper');
+        const locationWrapper = this.form.querySelector('#appointment-location-wrapper'); // Ist jetzt immer full-width
+        const firstGrid = this.form.querySelector('#appointment-grid-1');
+        const secondGrid = this.form.querySelector('#appointment-grid-2');
+        const infoabendContainer = this.form.querySelector('#appointment-infoabend-container');
+        const partnerContainer = this.form.querySelector('#appointment-partner-container');
+        const defaultRecurrenceParent = secondGrid; // Recurrence belongs in the second grid by default.
+        
+        // Reset positions first
+        locationWrapper.classList.remove('hidden');
+        infoabendContainer.classList.remove('sm:col-span-2');
+
+        // KORREKTUR V2: Ersetze .after() durch eine robustere Methode, um Elemente neu anzuordnen.
+        // Wir hängen die Wrapper-Elemente an einen festen Ankerpunkt (das zweite Grid) an,
+        // um sicherzustellen, dass die Reihenfolge immer korrekt ist.
+        const anchor = secondGrid;
+        anchor.before(recurrenceWrapper);
+        anchor.before(locationWrapper);
+
+        secondGrid.appendChild(infoabendContainer); // Infoabend gehört standardmäßig in das zweite Grid
+        if (recurrenceContainer.parentElement !== defaultRecurrenceParent) {
+            secondGrid.appendChild(recurrenceContainer);
+        }
+        recurrenceContainer.classList.remove('sm:col-span-2');
+        recurrenceContainer.classList.add('sm:col-span-1');
+
+        // NEU: Vereinheitlichte Logik für PG und Sonstiges.
+        // Die Wiederholung wird nach dem ersten Grid platziert und füllt die ganze Zeile.
+        if (['PG', 'Sonstiges'].includes(category)) {
+            firstGrid.after(recurrenceWrapper);
+            recurrenceContainer.classList.remove('sm:col-span-1');
+            recurrenceContainer.classList.add('sm:col-span-2');
+        }
+
+        if (category === 'ET') {
+            // Move Infoabend after Partner and make it full-width
+            partnerContainer.after(infoabendContainer);
+            infoabendContainer.classList.add('sm:col-span-2');
+        }
+    }
+
+    _updateConditionalFields(category) {
         this.form.querySelector('#appointment-prognose-container').classList.toggle('hidden', !['BT', 'ST'].includes(category));
         this.form.querySelector('#appointment-infoabend-container').classList.toggle('hidden', category !== 'ET');
+        this.form.querySelector('#appointment-recurrence-container').classList.toggle('hidden', !['Sonstiges', 'PG'].includes(category));
 
         // NEU: Logik für das Empfehlungsfeld
         const referralsSingleContainer = this.form.querySelector('#appointment-referrals-container-single');
         const referralsPairedContainer = this.form.querySelector('#appointment-referrals-container-paired');
 
-        if (['AT', 'NT'].includes(category)) {
+        if (['AT', 'NT', 'Immo', 'Sonstiges'].includes(category)) {
             // Zeige Empfehlungen im Haupt-Grid an
             referralsSingleContainer.classList.remove('hidden');
             referralsPairedContainer.classList.add('hidden');
-        } else if (category === 'ET') {
-            // Blende beide Empfehlungsfelder aus
+            // sm:col-span-2 ist jetzt Standard für dieses Feld im HTML
+            referralsSingleContainer.classList.toggle('sm:col-span-2', true); // Immer volle Breite für diese Kategorien
+        } else if (category === 'ET' || category === 'PG') {
             referralsSingleContainer.classList.add('hidden');
             referralsPairedContainer.classList.add('hidden');
         } else { // BT, ST, Immo
@@ -6735,6 +6780,7 @@ class AppointmentsView {
             referralsSingleContainer.classList.add('hidden');
             referralsPairedContainer.classList.remove('hidden');
         }
+        this._updateModalLayoutForCategory(category);
     }
 
     openModal(termin = null) {
@@ -6796,6 +6842,16 @@ class AppointmentsView {
             const categoryColumn = terminMeta.columns.find(c => c.name === 'Kategorie');
             if (!categoryColumn || !categoryColumn.data || !categoryColumn.data.options) throw new Error("Could not find 'Kategorie' options in metadata.");
             const categories = categoryColumn.data.options.map(o => o.name);
+        
+        // Sortiere die Kategorien nach der gewünschten Reihenfolge
+        const desiredOrder = ['AT', 'BT', 'ET', 'NT', 'ST', 'PG', 'Immo', 'Sonstiges'];
+        categories.sort((a, b) => {
+            const indexA = desiredOrder.indexOf(a);
+            const indexB = desiredOrder.indexOf(b);
+            if (indexA === -1) return 1; // Unbekannte Kategorien ans Ende
+            if (indexB === -1) return -1;
+            return indexA - indexB;
+        });
 
             categorySelect.innerHTML = '';
             categories.forEach(cat => categorySelect.add(new Option(cat, cat)));
@@ -6862,7 +6918,7 @@ class AppointmentsView {
                 this.form.querySelector('#appointment-infoabend-date').value = termin.Infoabend ? termin.Infoabend.split('T')[0] : '';
 
                 this._updateStatusDropdown(termin.Kategorie, termin.Status);
-                this.toggleConditionalFields(termin.Kategorie, false);
+                this._updateConditionalFields(termin.Kategorie);
 
             } else { // Add mode
                 appointmentsLog('Entering add mode.');
@@ -6888,19 +6944,16 @@ class AppointmentsView {
 
             this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !this.form.querySelector('#appointment-cancellation').checked);
             
-            // NEU: Wiederholungs-Container basierend auf der Kategorie ein-/ausblenden
-            const recurrenceContainer = this.form.querySelector('#appointment-recurrence-container');
-            if (recurrenceContainer) {
-                recurrenceContainer.classList.toggle('hidden', !['Sonstiges', 'PG'].includes(categorySelect.value));
-            }
-            
             this.modal.classList.add('visible');
             document.body.classList.add('modal-open');
             appointmentsLog('Modal is now visible.');
 
         } catch (error) {
             appointmentsLog('!!! ERROR in openModal !!!', error);
-            alert('Ein Fehler ist beim Öffnen des Formulars aufgetreten. Details siehe Konsole.');
+            // KORREKTUR: Ersetze alert() durch eine Fehlermeldung im Modal, um Sandbox-Fehler zu vermeiden.
+            const title = this.modal.querySelector('#appointment-modal-title');
+            if (title) title.textContent = 'Fehler';
+            this.form.innerHTML = `<p class="text-red-600">Ein Fehler ist beim Öffnen des Formulars aufgetreten: ${error.message}. Bitte laden Sie die Seite neu.</p>`;
         }
         appointmentsLog('--- END: openModal ---');
     }
@@ -7334,11 +7387,29 @@ class AppointmentsView {
     _handleCategoryChange(newCategory) {
         // Status-Dropdown aktualisieren
         this._updateStatusDropdown(newCategory);
-        // Bedingte Felder ein-/ausblenden
-        this.toggleConditionalFields(newCategory);
+        // Bedingte Felder und Layout aktualisieren
+        this._updateConditionalFields(newCategory);
         // Wenn die neue Kategorie "ET" ist, das Datum für den nächsten Infoabend setzen.
         if (newCategory === 'ET') {
             this.form.querySelector('#appointment-infoabend-date').value = findNextInfoDateAfter(getCurrentDate()).toISOString().split('T')[0];
+        }
+        // NEU: Setze die Standard-Dauer basierend auf der Kategorie, aber nur, wenn es ein neuer Termin ist.
+        const isNewAppointment = !this.form.querySelector('#appointment-id').value;
+        if (isNewAppointment) {
+            const durationInput = this.form.querySelector('#appointment-duration');
+            const defaultDurations = {
+                'AT': 60,
+                'Immo': 60,
+                'Sonstiges': 60,
+                'PG': 60,
+                'ST': 30,
+                'NT': 30,
+                'ET': 45,
+                'BT': 90
+            };
+            if (durationInput && defaultDurations[newCategory]) {
+                durationInput.value = defaultDurations[newCategory];
+            }
         }
 
         // NEU: Wiederholungs-Container ein-/ausblenden
