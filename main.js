@@ -9288,55 +9288,50 @@ class AuswertungView {
     }
      
     async renderRangliste() {
-        this.ranglisteListContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        const container = this.ranglisteListContainer;
+        container.innerHTML = '<div class="loader mx-auto"></div>';
+    
         const { startDate, endDate } = this.currentRanglisteTimespan === 'woche'
             ? getWeeklyCycleDates()
             : getMonthlyCycleDates();
+    
         const startDateIso = startDate.toISOString().split('T')[0];
         const endDateIso = endDate.toISOString().split('T')[0];
-
+    
         const ranglisteLog = (message, ...data) => console.log(`%c[RANGLISTE_DEBUG] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
-
+    
         const capitalbank = db.gesellschaften.find(g => g.Gesellschaft === 'Capitalbank');
         const capitalbankId = capitalbank ? capitalbank._id : null;
-        ranglisteLog(`Capitalbank ID: ${capitalbankId}`);
-
-        const query = `SELECT Mitarbeiter_ID, Gesellschaft_ID, EH FROM Umsatz WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
-        ranglisteLog('Lade alle Umsätze für Rangliste...', query);
-        const allUmsatzRowsRaw = await seaTableSqlQuery(query, true);
-        const allUmsatzRows = mapSqlResults(allUmsatzRowsRaw || [], 'Umsatz');
-        ranglisteLog(`Habe ${allUmsatzRows.length} Umsatz-Zeilen für Rangliste erhalten.`);
-
-        const filteredRows = allUmsatzRows.filter(row => {
-            if (!capitalbankId) return true;
-            const gesellschaftLinks = row.Gesellschaft_ID;
-            if (!gesellschaftLinks || !Array.isArray(gesellschaftLinks) || gesellschaftLinks.length === 0) return true;
-            const hasCapitalbank = gesellschaftLinks.some(link => link.row_id === capitalbankId);
-            if (hasCapitalbank) {
-                ranglisteLog(`FILTERED OUT (Rangliste): Umsatz für ${row.Mitarbeiter_ID?.[0]?.display_value} mit Capitalbank.`, row);
-            }
-            return !hasCapitalbank;
-        });
-
-        const umsatzByMitarbeiter = _.groupBy(filteredRows, row => row.Mitarbeiter_ID?.[0]?.row_id);
-        const activeUsersData = Object.entries(umsatzByMitarbeiter)
-            .map(([mitarbeiterId, umsaetze]) => ({ Mitarbeiter_ID: [{ row_id: mitarbeiterId, display_value: umsaetze[0].Mitarbeiter_ID[0].display_value }], TotalEH: umsaetze.reduce((sum, u) => sum + (u.EH || 0), 0) }))
-            .filter(u => u.TotalEH >= 1);
-
-        const enrichedUsers = activeUsersData.map(u => {
-            const mitarbeiterName = u.Mitarbeiter_ID?.[0]?.display_value;
-            if (!mitarbeiterName) {
-                return null; // Ungültigen Datensatz überspringen
-            }
-            const mitarbeiter = db.mitarbeiter.find(m => m.Name === mitarbeiterName);
-            if (!mitarbeiter || mitarbeiter.Status === 'Ausgeschieden') return null;
-            const werber = mitarbeiter ? db.mitarbeiter.find(m => m._id === mitarbeiter.Werber) : null;
+    
+        // 1. Alle aktiven Mitarbeiter holen
+        const allActiveUsers = db.mitarbeiter.filter(m => m.Status !== 'Ausgeschieden');
+    
+        // 2. Alle relevanten Umsätze für den Zeitraum holen
+        let capitalbankFilter = '';
+        if (capitalbankId) {
+            capitalbankFilter = ` AND NOT (\`Gesellschaft_ID\` IS NOT NULL AND \`Gesellschaft_ID\` LIKE '%${capitalbankId}%')`;
+        }
+        const ehQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`totalEH\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}'${capitalbankFilter} GROUP BY \`Mitarbeiter_ID\``;
+        const ehResultRaw = await seaTableSqlQuery(ehQuery, true);
+        const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
+    
+        // 3. Eine Map der Umsätze pro Mitarbeiter-ID erstellen
+        const ehByMitarbeiterId = _.keyBy(
+            ehResults.map(e => ({ id: e.Mitarbeiter_ID?.[0]?.row_id, totalEH: e.totalEH })),
+            'id'
+        );
+    
+        // 4. Alle aktiven Mitarbeiter mit ihren Umsätzen anreichern
+        const enrichedUsers = allActiveUsers.map(mitarbeiter => {
+            const totalEH = ehByMitarbeiterId[mitarbeiter._id]?.totalEH || 0;
+            // Mitarbeiter nur anzeigen, wenn sie im Zeitraum Umsatz gemacht haben ODER einen Plan haben
+            // (Diese Logik wurde entfernt, um ALLE aktiven Mitarbeiter anzuzeigen)
             return {
                 name: mitarbeiter?.Name || 'Unbekannt',
                 rang: mitarbeiter?.Karrierestufe || 'N/A',
-                eh: u.TotalEH,
+                eh: totalEH,
             };
-        }).filter(Boolean); // Entfernt alle null-Einträge
+        }).filter(user => user && user.eh > 0); // Entfernt alle null-Einträge und Benutzer ohne Umsatz
 
         // ANPASSUNG: Logik zur Gruppierung von Trainee/GA Rängen
         const getRankGroup = (rank) => {
@@ -9365,7 +9360,7 @@ class AuswertungView {
         const sortConfig = this.sortConfig.rangliste;
         const collator = new Intl.Collator('de', { numeric: true, sensitivity: 'base' });
 
-        this.ranglisteListContainer.innerHTML = '';
+        container.innerHTML = '';
         const tableWrapper = document.createElement('div');
         tableWrapper.className = 'overflow-x-auto';
         const table = document.createElement('table');
@@ -9413,7 +9408,7 @@ class AuswertungView {
         table.appendChild(tbody);
         table.querySelectorAll('thead th').forEach(th => th.addEventListener('click', e => this._handleSort('rangliste', e.currentTarget.dataset.sortKey)));
         tableWrapper.appendChild(table);
-        this.ranglisteListContainer.appendChild(tableWrapper);
+        container.appendChild(tableWrapper);
     }
 
     async renderAktivitaeten() {
