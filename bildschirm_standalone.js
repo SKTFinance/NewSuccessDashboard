@@ -182,35 +182,44 @@ function isUserLeader(user) {
     return stage.Hierarchie >= JUNIOR_GST_HIERARCHIE_LEVEL;
 }
 
-function getMonthlyCycleDatesForDate(date) {
+function getMonthlyCycleDatesForDate(date) { // KORREKTUR: Die Logik wurde an die korrekte Version aus main.js angepasst.
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
     let currentMonth = d.getMonth();
     let currentYear = d.getFullYear();
     const _findCycleStartForMonth = (year, month) => {
-        const date = new Date(year, month, 1);
-        while (date.getDay() !== 4) { date.setDate(date.getDate() + 1); }
+        let date = new Date(year, month, 1);
+        date.setHours(0, 0, 0, 0);
+        while (date.getDay() !== 4) { date.setDate(date.getDate() + 1); } // 4 = Donnerstag
         if (date.getDate() <= 2) { date.setDate(date.getDate() + 7); }
-        return date;
+        return date; // Gibt den ersten Donnerstag NACH dem 2. des Monats zurück.
     };
     let thisMonthCycleStart = _findCycleStartForMonth(currentYear, currentMonth);
     let startDate, endDate;
-    if (d < thisMonthCycleStart) {
-        let prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-        let prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-        startDate = _findCycleStartForMonth(prevYear, prevMonth);
-        endDate = new Date(thisMonthCycleStart);
-        endDate.setDate(endDate.getDate() - 1);
-    } else {
+
+    if (d >= thisMonthCycleStart) {
         startDate = thisMonthCycleStart;
         let nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
         let nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
         let nextMonthCycleStart = _findCycleStartForMonth(nextYear, nextMonth);
         endDate = new Date(nextMonthCycleStart);
         endDate.setDate(endDate.getDate() - 1);
+    } else {
+        let prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+        let prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+        startDate = _findCycleStartForMonth(prevYear, prevMonth);
+        endDate = new Date(thisMonthCycleStart);
+        endDate.setDate(endDate.getDate() - 1);
     }
     endDate.setHours(23, 59, 59, 999);
     return { startDate, endDate };
+}
+
+function toLocalISOString(date) {
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 function getMonthlyCycleDates() {
@@ -287,10 +296,10 @@ class BildschirmView {
             const { startDate: monthStartDate, endDate: monthEndDate } = this._getMonthlyDates();
             const { startDate: weekStartDate, endDate: weekEndDate } = this._getWeeklyDates();
 
-            const toIso = (date) => date.toISOString().split('T')[0];
+            // KORREKTUR: toLocalISOString verwenden, um Zeitzonenfehler zu vermeiden.
 
             const getRanking = async (dateFilter, table, aggregation, categoryFilter = "") => {
-                const query = `SELECT Mitarbeiter_ID, ${aggregation} as value FROM \`${table}\` WHERE ${dateFilter} ${categoryFilter} GROUP BY Mitarbeiter_ID ORDER BY value DESC LIMIT 3`;
+                const query = `SELECT Mitarbeiter_ID, ${aggregation} as value FROM \`${table}\` WHERE ${dateFilter} ${categoryFilter} GROUP BY Mitarbeiter_ID ORDER BY value DESC LIMIT 5`;
                 console.log(`[DEBUG] Führe SQL-Abfrage aus: ${query}`);
                 const resultRaw = await seaTableSqlQuery(query, true);
                 return (resultRaw || []).map(item => {
@@ -321,10 +330,10 @@ class BildschirmView {
             const etCategoryFilter = "AND Kategorie = 'ET' AND (Absage IS NULL OR Absage = false) AND Status != 'Storno'";
 
             const [wochenEhRanking, wochenEtRanking, monatsEhRanking, monatsEtRanking] = await Promise.all([
-                getRanking(`Datum >= '${toIso(weekStartDate)}' AND Datum <= '${toIso(weekEndDate)}'`, 'Umsatz', 'SUM(EH)'),
-                getRanking(`Datum >= '${toIso(weekStartDate)}' AND Datum <= '${toIso(weekEndDate)}'`, 'Termine', 'COUNT(_id)', etCategoryFilter),
-                getRanking(`Datum >= '${toIso(monthStartDate)}' AND Datum <= '${toIso(monthEndDate)}'`, 'Umsatz', 'SUM(EH)'),
-                getRanking(`Datum >= '${toIso(monthStartDate)}' AND Datum <= '${toIso(monthEndDate)}'`, 'Termine', 'COUNT(_id)', etCategoryFilter)
+                getRanking(`Datum >= '${toLocalISOString(weekStartDate)}' AND Datum <= '${toLocalISOString(weekEndDate)}'`, 'Umsatz', 'SUM(EH)'),
+                getRanking(`Datum >= '${toLocalISOString(weekStartDate)}' AND Datum <= '${toLocalISOString(weekEndDate)}'`, 'Termine', 'COUNT(_id)', etCategoryFilter),
+                getRanking(`Datum >= '${toLocalISOString(monthStartDate)}' AND Datum <= '${toLocalISOString(monthEndDate)}'`, 'Umsatz', 'SUM(EH)'),
+                getRanking(`Datum >= '${toLocalISOString(monthStartDate)}' AND Datum <= '${toLocalISOString(monthEndDate)}'`, 'Termine', 'COUNT(_id)', etCategoryFilter)
             ]);
             
             const wettbewerbData = await this._getWettbewerbData();
@@ -468,8 +477,8 @@ class BildschirmView {
         const { startDate: twoMonthsAgoStart } = getMonthlyCycleDatesForDate(prevCycleStart);
         const { endDate: currentCycleEnd } = getMonthlyCycleDatesForDate(new Date());
 
-        const startDateIso = twoMonthsAgoStart.toISOString().split('T')[0];
-        const endDateIso = currentCycleEnd.toISOString().split('T')[0];
+        const startDateIso = toLocalISOString(twoMonthsAgoStart);
+        const endDateIso = toLocalISOString(currentCycleEnd);
 
         const subordinateIds = directSubordinates.map(s => `'${s._id}'`).join(',');
         const subordinateNames = directSubordinates.map(s => `'${this.escapeSql(s.Name)}'`).join(',');

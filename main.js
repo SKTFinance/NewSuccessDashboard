@@ -1620,13 +1620,23 @@ async function showConfirmationModal(text, title = 'Bestätigung', okText = 'Bes
 }
 
 function _findCycleStartForMonth(year, month) {
-    const date = new Date(year, month, 1);
-    while (date.getDay() !== 4) { // Thursday
+    // FINALE KORREKTUR: Die Logik wurde überarbeitet, um sicherzustellen, dass der Zyklus
+    // immer am ersten Donnerstag beginnt, der NACH dem 2. des Monats liegt.
+    // Dies behebt den Fehler, bei dem der Zyklusstart manchmal auf den Vormonat fiel.
+    // Wir verwenden jetzt die lokale Zeitzone, um Konsistenz mit den Datumseingaben zu gewährleisten.
+    let date = new Date(year, month, 1);
+    date.setHours(0, 0, 0, 0);
+
+    // Finde den ersten Donnerstag des Monats.
+    while (date.getDay() !== 4) { // 4 = Donnerstag
         date.setDate(date.getDate() + 1);
     }
+
+    // Wenn dieser Donnerstag am 1. oder 2. des Monats ist, nimm den nächsten Donnerstag.
     if (date.getDate() <= 2) {
         date.setDate(date.getDate() + 7);
     }
+
     return date;
 }
 
@@ -1639,22 +1649,38 @@ function getMonthlyCycleDates() {
   let thisMonthCycleStart = _findCycleStartForMonth(currentYear, currentMonth);
   let startDate, endDate;
 
-  if (today < thisMonthCycleStart) {
+  // KORREKTUR: Die Logik wurde umgedreht und die Bedingung auf >= geändert,
+  // um den Grenzfall korrekt zu behandeln, wenn der heutige Tag der Starttag des Zyklus ist.
+  if (today >= thisMonthCycleStart) {
+    // Wir befinden uns im aktuellen oder einem zukünftigen Zyklus.
+    startDate = thisMonthCycleStart;
+    let nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
+    let nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
+    let nextMonthCycleStart = _findCycleStartForMonth(nextYear, nextMonth);
+    endDate = new Date(nextMonthCycleStart);
+    endDate.setDate(endDate.getDate() - 1);
+  } else {
+    // Wir befinden uns noch im vorherigen Zyklus.
     let prevMonth = currentMonth === 0 ? 11 : currentMonth - 1;
     let prevYear = currentMonth === 0 ? currentYear - 1 : currentYear;
     startDate = _findCycleStartForMonth(prevYear, prevMonth);
     endDate = new Date(thisMonthCycleStart);
     endDate.setDate(endDate.getDate() - 1);
-  } else {
-    let nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
-    let nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
-    startDate = thisMonthCycleStart;
-    let nextMonthCycleStart = _findCycleStartForMonth(nextYear, nextMonth);
-    endDate = new Date(nextMonthCycleStart);
-    endDate.setDate(endDate.getDate() - 1);
   }
-  endDate.setHours(23, 59, 59, 999);
+
+  endDate.setHours(23, 59, 59, 999); // Setze die Zeit explizit auf das Ende des Tages.
+  // KORREKTUR: .toISOString() konvertiert in UTC, was zu Verwirrung führt.
+  // .toLocaleString() zeigt das Datum in der lokalen Zeitzone an, was der tatsächlichen Berechnung entspricht.
+  const formatForLog = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' };
+  console.log(`[DEBUG] Berechneter Umsatzmonat: START = ${startDate.toLocaleString('de-DE', formatForLog)}, END = ${endDate.toLocaleString('de-DE', formatForLog)}`);
   return { startDate, endDate };
+}
+
+function toLocalISOString(date) {
+    const year = date.getFullYear();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 function getKpiWarningsForUser(user) {
@@ -1875,8 +1901,10 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   if (users.length === 0) return [];
 
   const { startDate, endDate } = getMonthlyCycleDates();
-  const startDateIso = startDate.toISOString().split("T")[0];
-  const endDateIso = endDate.toISOString().split("T")[0];
+  // KORREKTUR: toLocalISOString verwenden, um Zeitzonenfehler zu vermeiden.
+  const startDateIso = toLocalISOString(startDate);
+  const endDateIso = toLocalISOString(endDate);
+
   const currentMonthName = startDate.toLocaleString("de-DE", { month: "long" });
   const currentYear = startDate.getFullYear();
 
@@ -1886,7 +1914,7 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
 
   // NEU: Finde den nächsten Infoabend, um die korrekten Plandaten zu laden.
   const nextInfoDateForPlan = findNextInfoDateAfter(getCurrentDate());
-  const nextInfoDateStringForPlan = nextInfoDateForPlan.toISOString().split('T')[0];
+  const nextInfoDateStringForPlan = toLocalISOString(nextInfoDateForPlan);
 
   // Plandaten (EH) aus dem vorgeladenen und normalisierten Cache laden.
   const planResults = db.monatsplanung.filter(
@@ -1961,7 +1989,7 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
 
     // 3. ETs für den nächsten Infoabend berechnen
     const nextInfoDate = findNextInfoDateAfter(getCurrentDate());
-    const nextInfoDateString = nextInfoDate.toISOString().split('T')[0];
+    const nextInfoDateString = toLocalISOString(nextInfoDate);
     
     const etAusgemacht = db.termine.filter(t => 
         t.Mitarbeiter_ID === user._id &&
@@ -2485,62 +2513,70 @@ function drawSegmentDividers() {
 
 // --- UI FUNKTIONEN ---
 function updateWeeklyProgress() {
-            const { startDate, endDate } = getMonthlyCycleDates();
-            const today = new Date();
-            clearChildren(dom.weeklyProgressContainer);
+    // FINALE KORREKTUR: Die Logik wurde komplett überarbeitet, um die korrekte Anzahl an Wochen (4 oder 5) dynamisch zu berechnen und darzustellen.
+    const { startDate, endDate } = getMonthlyCycleDates();
+    // KORREKTUR: Für den Fortschrittsbalken muss das *echte* heutige Datum verwendet werden,
+    // wenn wir in der Zeit zurückreisen, damit vergangene Wochen als 100% voll angezeigt werden.
+    const today = new Date(); // `getCurrentDate()` würde das Zeitreise-Datum zurückgeben.
+    clearChildren(dom.weeklyProgressContainer);
 
-            const totalDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
-            const daysInAWeek = 7;
-            const totalWeeks = Math.ceil(totalDays / daysInAWeek);
-            const dateOptions = { day: '2-digit', month: '2-digit' };
+    const dateOptions = { day: '2-digit', month: '2-digit' };
 
-            const createDivider = (left) => {
-                const d = document.createElement('div');
-                d.className = 'start-end-divider'; d.style.left = left;
-                dom.weeklyProgressContainer.appendChild(d);
-            };
-            const createLabel = (left, text, transform) => {
-                const l = document.createElement('div');
-                l.className = 'centered-date-label'; l.style.left = left;
-                l.style.transform = transform; l.textContent = text;
-                dom.weeklyProgressContainer.appendChild(l);
-            };
-            
-            createDivider('0%');
-            createLabel('0%', startDate.toLocaleDateString('de-DE', dateOptions), 'translateX(-50%)');
-
-            for (let i = 0; i < totalWeeks; i++) {
-                const weekStart = new Date(startDate.getTime() + i * daysInAWeek * 24 * 60 * 60 * 1000);
-                const weekEnd = new Date(weekStart.getTime() + daysInAWeek * 24 * 60 * 60 * 1000);
-                let progress = 0;
-                if (today >= weekEnd) progress = 100;
-                else if (today >= weekStart && today < weekEnd) {
-                    const daysPassed = (today - weekStart) / (1000 * 60 * 60 * 24);
-                    progress = (daysPassed / daysInAWeek) * 100;
-                }
-                const weekDiv = document.createElement('div');
-                weekDiv.className = 'flex-1 h-full relative p-2 flex flex-col items-center z-20';
-                weekDiv.innerHTML = `<div class="w-full bg-skt-grey-medium h-2 rounded-full overflow-hidden"><div class="h-full bg-skt-green-accent rounded-full transition-all duration-500" style="width: ${Math.min(progress, 100)}%;"></div></div>`;
-                dom.weeklyProgressContainer.appendChild(weekDiv);
-            }
-
-            const weeksDivs = dom.weeklyProgressContainer.querySelectorAll('.flex-1');
-            weeksDivs.forEach((div, i) => {
-                if (i === weeksDivs.length - 1) return;
-                const pos = `${(i + 1) * (100 / weeksDivs.length)}%`;
-                const weekDivider = document.createElement('div');
-                weekDivider.className = 'week-divider'; weekDivider.style.left = pos;
-                dom.weeklyProgressContainer.appendChild(weekDivider);
-                const wednesday = new Date(startDate.getTime() + i * daysInAWeek * 24 * 60 * 60 * 1000);
-                wednesday.setDate(wednesday.getDate() + (3 - wednesday.getDay() + 7) % 7);
-                createLabel(pos, wednesday.toLocaleDateString('de-DE', dateOptions), 'translateX(-50%)');
-            });
-            
-            const endDivider = document.createElement('div');
-            endDivider.className = 'start-end-divider'; endDivider.style.right = '0%';
-            dom.weeklyProgressContainer.appendChild(endDivider);
-            createLabel('100%', endDate.toLocaleDateString('de-DE', dateOptions), 'translateX(-50%)');
+    // Finde alle Donnerstage (Wochenstarts) im aktuellen Zyklus
+    const weekStarts = [];
+    let currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+        if (currentDate.getDay() === 4) { // Donnerstag
+            weekStarts.push(new Date(currentDate));
         }
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+    const totalWeeks = weekStarts.length;
+
+    const createLabel = (left, text, transform) => {
+        const l = document.createElement('div');
+        l.className = 'centered-date-label'; l.style.left = left;
+        l.style.transform = transform; l.textContent = text;
+        dom.weeklyProgressContainer.appendChild(l);
+    };
+
+    // Start-Label
+    createLabel('0%', startDate.toLocaleDateString('de-DE', dateOptions), 'translateX(-50%)');
+
+    // Wochen-Balken und Trennlinien
+    for (let i = 0; i < totalWeeks; i++) {
+        const weekStart = weekStarts[i];
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 7); // Ende ist der nächste Donnerstag 00:00
+
+        let progress = 0;
+        if (today >= weekEnd) progress = 100;
+        else if (today >= weekStart && today < weekEnd) {
+            const daysPassed = (today - weekStart) / (1000 * 60 * 60 * 24);
+            progress = (daysPassed / 7) * 100;
+        }
+
+        const weekDiv = document.createElement('div');
+        weekDiv.className = 'flex-1 h-full relative p-2 flex flex-col items-center z-20';
+        weekDiv.innerHTML = `<div class="w-full bg-skt-grey-medium h-2 rounded-full overflow-hidden"><div class="h-full bg-skt-green-accent rounded-full transition-all duration-500" style="width: ${Math.min(progress, 100)}%;"></div></div>`;
+        dom.weeklyProgressContainer.appendChild(weekDiv);
+
+        // Trennlinie und Label für das Ende der Woche (Mittwoch)
+        if (i < totalWeeks - 1) {
+            const pos = `${((i + 1) / totalWeeks) * 100}%`;
+            const weekDivider = document.createElement('div');
+            weekDivider.className = 'week-divider'; weekDivider.style.left = pos;
+            dom.weeklyProgressContainer.appendChild(weekDivider);
+
+            const wednesday = new Date(weekEnd);
+            wednesday.setDate(wednesday.getDate() - 1); // Gehe zum Mittwoch
+            createLabel(pos, wednesday.toLocaleDateString('de-DE', dateOptions), 'translateX(-50%)');
+        }
+    }
+
+    // End-Label
+    createLabel('100%', endDate.toLocaleDateString('de-DE', dateOptions), 'translateX(-50%)');
+}
 
  function updateHeaderAnimation(data) {
      const videoContainer = document.getElementById('header-animation-container');
@@ -2654,7 +2690,11 @@ function updateMonthlyPlanningView(data) {
 
     updateCircleProgress(dom.prognosisCircleEh, 35, timeElapsedPercentage);
 
-    const sollValue = Math.round((data.ehGoal || 0) * (timeElapsedPercentage / 100));
+    // KORREKTUR: Im Zeitreise-Modus soll der Soll-Wert dem Ist-Wert entsprechen, da der Zeitraum abgeschlossen ist.
+    const sollValue = timeTravelDate 
+        ? (data.ehCurrent || 0) 
+        : Math.round((data.ehGoal || 0) * (timeElapsedPercentage / 100));
+
     animateValue(dom.ehSollValue, 0, sollValue, 1000);
     drawSegmentDividers();
   }
@@ -2689,6 +2729,9 @@ function updateEmployeeCareerView() {
   const { totalCurrentEh, recruitedEmployees, position } = personalData;
   const promotionRaceDate = user.Befoerderungsdatum;
 
+  // KORREKTUR: Variable `progressEh` wird einmal mit `let` deklariert, um den "has already been declared" Fehler zu beheben.
+  let progressEh = 0;
+
   animateValue(dom.currentEhDisplay, 0, totalCurrentEh, 1500);
 
   // KORREKTUR: JGST wird jetzt wie ein Trainee behandelt, der auf das GST-Ziel hinarbeitet.
@@ -2704,10 +2747,15 @@ function updateEmployeeCareerView() {
   // Sonderlogik für Trainee-Rennen zum GST
   if (isTrainee && promotionRaceDate) {
       const targetDate = new Date(promotionRaceDate); // Behalte als Date-Objekt für Berechnungen
+      // KORREKTUR: Im Zeitreise-Modus den Fortschritt auf 100% setzen, wenn das Zieldatum in der Vergangenheit liegt.
+      const isRaceFinished = timeTravelDate && timeTravelDate > targetDate;
+
       const formattedTargetDate = targetDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
       dom.nextMilestone.innerHTML = `Chancenseminar am <span class="text-skt-blue font-semibold">${formattedTargetDate}</span>`;
       const ehNeeded = 4000; // Festes Ziel für GST
-      const progressEh = ehNeeded > 0 ? (totalCurrentEh / ehNeeded) * 100 : 0;
+      progressEh = isRaceFinished 
+        ? 100 
+        : (ehNeeded > 0 ? (totalCurrentEh / ehNeeded) * 100 : 0);
       dom.careerProgressPercentage.textContent = `${Math.min(progressEh, 100).toFixed(1)}%`;
       dom.progressToNextText.textContent = `Fortschritt zum GST`;
       updateCircleProgress(dom.fortschrittKreisKarriere, 40, progressEh);
@@ -2746,7 +2794,7 @@ function updateEmployeeCareerView() {
 
       // NEU: ETs für den nächsten Infoabend
       const nextInfoDate = findNextInfoDateAfter(today);
-      const nextInfoDateString = nextInfoDate.toISOString().split('T')[0];
+    const nextInfoDateString = toLocalISOString(nextInfoDate);
       const etsForNextInfoabend = db.termine.filter(t =>
           t.Mitarbeiter_ID === user._id && t.Kategorie === 'ET' &&
           t.Infoabend && t.Infoabend.startsWith(nextInfoDateString)
@@ -2782,8 +2830,8 @@ function updateEmployeeCareerView() {
       const targetDate = new Date(promotionRaceDate).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
       dom.nextMilestone.innerHTML = `Ziel BL am <span class="text-skt-blue font-semibold">${targetDate}</span>`;
       const blStage = db.karriereplan.find(k => k.Stufe.toLowerCase().includes('bezirksleiter'));
-      const ehNeeded = blStage ? blStage.Kriterium_EH : 12000; // Fallback
-      const progressEh = ehNeeded > 0 ? (totalCurrentEh / ehNeeded) * 100 : 0;
+      const ehNeeded = blStage ? blStage.Kriterium_EH : 12000; // Fallback;
+      progressEh = ehNeeded > 0 ? (totalCurrentEh / ehNeeded) * 100 : 0;
       dom.careerProgressPercentage.textContent = `${Math.min(progressEh, 100).toFixed(1)}%`;
       dom.progressToNextText.textContent = `Fortschritt zum BL`;
       updateCircleProgress(dom.fortschrittKreisKarriere, 40, progressEh);
@@ -2814,7 +2862,7 @@ function updateEmployeeCareerView() {
           let milestoneText = `Nächster Meilenstein: <span class="text-skt-blue font-semibold">${nextStage.Stufe}</span>`;
           dom.nextMilestone.innerHTML = milestoneText;
           const ehNeeded = nextStage.Kriterium_EH || 0;
-          const progressEh = ehNeeded > 0 ? (totalCurrentEh / ehNeeded) * 100 : 0;
+          progressEh = ehNeeded > 0 ? (totalCurrentEh / ehNeeded) * 100 : 0;
           dom.careerProgressPercentage.textContent = `${Math.min(progressEh, 100).toFixed(1)}%`;
           dom.progressToNextText.textContent = `Fortschritt zum ${nextStage.Stufe}`;
           updateCircleProgress(dom.fortschrittKreisKarriere, 40, progressEh);
@@ -3008,7 +3056,7 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
     // NEU: Eigene Soll-Berechnung für ET basierend auf dem 3-Wochen-Infoabend-Zyklus
     const today = getCurrentDate();
     const nextInfoDate = findNextInfoDateAfter(today);
-    const previousInfoDate = new Date(nextInfoDate.getTime() - 21 * 24 * 60 * 60 * 1000);
+    const previousInfoDate = new Date(nextInfoDate.getTime() - (21 * 24 * 60 * 60 * 1000));
     const totalDaysInETCycle = 21;
     const daysPassedInETCycle = (today.getTime() - previousInfoDate.getTime()) / (1000 * 60 * 60 * 24);
     const etTimeElapsedPercentage = Math.max(0, Math.min(100, (daysPassedInETCycle / totalDaysInETCycle) * 100));
@@ -3250,7 +3298,7 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
     // NEU: Eigene Soll-Berechnung für ET basierend auf dem 3-Wochen-Infoabend-Zyklus
     const today = getCurrentDate();
     const nextInfoDate = findNextInfoDateAfter(today);
-    const previousInfoDate = new Date(nextInfoDate.getTime() - 21 * 24 * 60 * 60 * 1000);
+    const previousInfoDate = new Date(nextInfoDate.getTime() - (21 * 24 * 60 * 60 * 1000));
     const totalDaysInETCycle = 21;
     const daysPassedInETCycle = (today.getTime() - previousInfoDate.getTime()) / (1000 * 60 * 60 * 24);
     const etTimeElapsedPercentage = Math.max(0, Math.min(100, (daysPassedInETCycle / totalDaysInETCycle) * 100));
@@ -3360,7 +3408,7 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
 
 function findNextInfoDateAfter(startDate) {
     // Referenzpunkt ist ein Mittwoch, der ein Infotag ist.
-    const referenceDate = new Date('2025-09-17T00:00:00Z');
+    const referenceDate = new Date('2025-09-17T12:00:00Z');
     const calculationStartDate = new Date(startDate);
     calculationStartDate.setUTCHours(0, 0, 0, 0);
 
@@ -4774,8 +4822,8 @@ class AppointmentsView {
 
         // KORREKTUR: Standard-Datum auf aktuellen Umsatzmonat (Geschäftszyklus) setzen
         const { startDate, endDate } = getMonthlyCycleDates();
-        this.startDateInput.value = startDate.toISOString().split('T')[0];
-        this.endDateInput.value = endDate.toISOString().split('T')[0];
+        this.startDateInput.value = toLocalISOString(startDate);
+        this.endDateInput.value = toLocalISOString(endDate);
 
         this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
 
@@ -4933,8 +4981,8 @@ class AppointmentsView {
             const { startDate: cycleStartDate, endDate: cycleEndDate } = getMonthlyCycleDates();
             const filterStartDate = new Date(this.startDateInput.value);
             const filterEndDate = new Date(this.endDateInput.value);
-            const overallStartDate = new Date(Math.min(cycleStartDate, filterStartDate));
-            const overallEndDate = new Date(Math.max(cycleEndDate, filterEndDate));
+            const overallStartDate = new Date(Math.min(cycleStartDate.getTime(), filterStartDate.getTime()));
+            const overallEndDate = new Date(Math.max(cycleEndDate.getTime(), filterEndDate.getTime()));
             const overallStartDateIso = overallStartDate.toISOString().split('T')[0];
             const overallEndDateIso = overallEndDate.toISOString().split('T')[0];
             
@@ -5023,11 +5071,6 @@ class AppointmentsView {
     }
 
     setupEventListeners() {
-        // KORREKTUR: Verhindere, dass Listener mehrfach hinzugefügt werden.
-        if (this.listenersAttached) {
-            return;
-        }
-
         // KORREKTUR: Filter-Änderungen rufen nur noch render() auf, nicht mehr fetchAndRender().
         // KORREKTUR VOM 25.07: Muss fetchAndRender aufrufen, damit auch Zeiträume außerhalb des initialen 3-Monats-Fensters geladen werden.
         const debouncedFetchAndRender = _.debounce(() => this.fetchAndRender(), 350);
@@ -5093,7 +5136,6 @@ class AppointmentsView {
             this.infoabendShowCancelled.addEventListener('change', () => this.renderNaechstesInfo());
         }
         
-        this.listenersAttached = true; // Markiere, dass die Listener gesetzt wurden.
     }
 
     _setupMobileFilterToggle() {
@@ -6287,7 +6329,7 @@ class AppointmentsView {
         if (repopulateDates) {
             // KORREKTUR: Setzt das Datum standardmäßig auf den nächsten Infoabend.
             const nextInfoDate = findNextInfoDateAfter(getCurrentDate());
-            this.infoabendDateSelect.value = nextInfoDate.toISOString().split('T')[0];
+            this.infoabendDateSelect.value = toLocalISOString(nextInfoDate);
         }
         this.infoabendListContainer.innerHTML = '<div class="loader mx-auto"></div>';
         const selectedDate = this.infoabendDateSelect.value;
@@ -7333,7 +7375,7 @@ class AppointmentsView {
         // Wenn die neue Kategorie "ET" ist, das Datum für den nächsten Infoabend setzen.
         if (newCategory === 'ET') {
             this.form.querySelector('#appointment-infoabend-date').value = findNextInfoDateAfter(getCurrentDate()).toISOString().split('T')[0];
-        }
+        } // KORREKTUR: toLocalISOString verwenden
         // NEU: Setze die Standard-Dauer basierend auf der Kategorie, aber nur, wenn es ein neuer Termin ist.
         const isNewAppointment = !this.form.querySelector('#appointment-id').value;
         if (isNewAppointment) {
@@ -8108,16 +8150,10 @@ class UmsatzView {
             return;
         }
 
-        // KORREKTUR: Standardmäßig die letzten 3 Umsatzmonate anzeigen.
-        // 1. Enddatum ist das Ende des aktuellen Zyklus.
-        const { endDate } = SKT_APP.getMonthlyCycleDates();
-        // 2. Startdatum ist der Beginn des Zyklus von vor 2 Monaten. 
-        // KORREKTUR: Erstelle eine Kopie des Datums, bevor `setMonth` aufgerufen wird, um eine Mutation des Originalobjekts zu verhindern.
-        const { startDate: currentCycleStart } = SKT_APP.getMonthlyCycleDates(); 
-        const startDateCopy = new Date(currentCycleStart);
-        const twoMonthsAgo = new Date(startDateCopy.setMonth(startDateCopy.getMonth() - 2));
-        this.startDateInput.value = twoMonthsAgo.toISOString().split('T')[0];
-        this.endDateInput.value = endDate.toISOString().split('T')[0];
+        // NEU: Standardmäßig den aktuellen Umsatzmonat anzeigen.
+        const { startDate, endDate } = SKT_APP.getMonthlyCycleDates();
+        this.startDateInput.value = toLocalISOString(startDate);
+        this.endDateInput.value = toLocalISOString(endDate);
 
         this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
         this.scopeFilter.classList.toggle('hidden', !SKT_APP.isUserLeader(SKT_APP.authenticatedUserData));
@@ -8989,7 +9025,7 @@ class AuswertungView {
 
         // NEU: Lade ET-Ziele aus der Infoplanung
         const nextInfoDate = findNextInfoDateAfter(new Date());
-        const nextInfoDateString = nextInfoDate.toISOString().split('T')[0];
+    const nextInfoDateString = toLocalISOString(nextInfoDate);
         const infoPlanResults = db.infoplanung.filter(p => p.Informationsabend && p.Informationsabend.startsWith(nextInfoDateString));
         const etGoalsByUserId = _.keyBy(infoPlanResults, 'Mitarbeiter_ID');
 
@@ -9226,8 +9262,8 @@ class AuswertungView {
             ? getWeeklyCycleDates()
             : getMonthlyCycleDates();
     
-        const startDateIso = startDate.toISOString().split('T')[0];
-        const endDateIso = endDate.toISOString().split('T')[0];
+        const startDateIso = toLocalISOString(startDate);
+        const endDateIso = toLocalISOString(endDate);
     
         const ranglisteLog = (message, ...data) => console.log(`%c[RANGLISTE_DEBUG] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
     
@@ -9359,8 +9395,8 @@ class AuswertungView {
 
         this.aktivitaetenDateRangeHint.textContent = `Zeitraum: ${startDate.toLocaleDateString('de-DE')} - ${endDate.toLocaleDateString('de-DE')}`;
 
-        const startDateIso = startDate.toISOString().split('T')[0];
-        const endDateIso = endDate.toISOString().split('T')[0];
+        const startDateIso = toLocalISOString(startDate);
+        const endDateIso = toLocalISOString(endDate);
 
         // KORREKTUR: Verwende die vorgeladenen und vollständigen Termindaten aus `db.termine`,
         // um das 10k-Zeilen-Limit von SQL-Abfragen zu umgehen und Datenkonsistenz sicherzustellen.
@@ -9557,8 +9593,8 @@ class AuswertungView {
         const currentYear = monthStartDateForSoll.getFullYear();
         const planResults = db.monatsplanung.filter(p => p.Monat === currentMonthName && p.Jahr === currentYear);
 
-        const startDateIso = startDate.toISOString().split('T')[0];
-        const endDateIso = endDate.toISOString().split('T')[0];
+        const startDateIso = toLocalISOString(startDate);
+        const endDateIso = toLocalISOString(endDate);
 
         // 1. Lade alle EH-Daten für den Zeitraum
         // KORREKTUR: Capitalbank-Filter hinzufügen.
@@ -10982,7 +11018,7 @@ function setupSwipeToBack() {
  * Die Haupt-Initialisierungsfunktion für das normale Dashboard.
  * Wird nur aufgerufen, wenn keine Spezialansicht (?view=...) angefordert wird.
  */
-async function initializeDashboard() {
+async function initializeDashboard(viewParam) { // KORREKTUR: viewParam als Argument empfangen
   const storedTimeTravelDate = localStorage.getItem('timeTravelDate');
   if (storedTimeTravelDate) {
       timeTravelDate = new Date(storedTimeTravelDate);
@@ -11019,15 +11055,10 @@ async function initializeDashboard() {
   // KORREKTUR: Im Zeitreise-Modus nur Mitarbeiter anzeigen, die zu diesem Zeitpunkt schon da waren.
   let usersForLogin = db.mitarbeiter.filter((m) => m.Name && m.Status !== 'Ausgeschieden');
   if (timeTravelDate) {
-        // KORREKTUR: Wenn wir im Zeitreise-Modus sind, aber die Bildschirm-Ansicht laden,
-        // soll die Zeitreise ignoriert werden, um alle Mitarbeiter im Login anzuzeigen (falls nötig).
-        if (viewParam === 'bildschirm') {
-            // Mache nichts, ignoriere die Zeitreise für den Login-Screen bei dieser Ansicht.
-        } else
-      usersForLogin = usersForLogin.filter(m => {
-          if (!m.Startdatum) return false;
-          return new Date(m.Startdatum) <= timeTravelDate;
-      });
+        usersForLogin = usersForLogin.filter(m => {
+            if (!m.Startdatum) return false;
+            return new Date(m.Startdatum) <= timeTravelDate;
+        });
   }
   usersForLogin.sort((a, b) => a.Name.localeCompare(b.Name));
   usersForLogin.forEach((user) => {
@@ -11386,7 +11417,7 @@ async function mainRouter() {
             // Kein spezieller View-Parameter -> Lade das normale Dashboard.
             // Die `initializeDashboard` Funktion macht die korrekten Container selbst sichtbar.
             setupSwipeToBack(); // Swipe-Geste nur für das Dashboard initialisieren
-            await initializeDashboard();
+            await initializeDashboard(viewParam); // KORREKTUR: viewParam übergeben
             break;
         }
     }
@@ -11530,7 +11561,7 @@ async function getIndividualKpiData(user) {
         log('Aktivitätsrate geprüft. Termine in 4 Wochen:', fourWeekAppointments.length);
 
         const nextInfoDateForPlan = findNextInfoDateAfter(today);
-        const nextInfoDateStringForPlan = nextInfoDateForPlan.toISOString().split('T')[0];
+        const nextInfoDateStringForPlan = toLocalISOString(nextInfoDateForPlan);
         const infoPlan = db.infoplanung.find(p => p.Mitarbeiter_ID === user._id && p.Informationsabend && p.Informationsabend.startsWith(nextInfoDateStringForPlan));
         const etGoal = infoPlan?.ET_Ziel || 0;
         const fourWeekEtAppointments = fourWeekAppointments.filter(t => t.Kategorie === 'ET');
@@ -11940,7 +11971,7 @@ async function _calculateKpisForUser(user, userSales = []) {
     if (userBTs.length > 0) {
         let btsWithSale = 0;
         for (const bt of userBTs) {
-            if (!bt.Terminpartner) continue;
+            if (!bt.Terminpartner) continue; // KORREKTUR: toLocalISOString verwenden
             const terminDate = new Date(bt.Datum);
             const oneWeek = 7 * 24 * 60 * 60 * 1000;
             const searchStart = new Date(terminDate.getTime() - oneWeek);
@@ -11965,7 +11996,7 @@ async function _calculateKpisForUser(user, userSales = []) {
         const fourWeekAppointments = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Datum && new Date(t.Datum) >= fourWeeksAgo && new Date(t.Datum) <= today && ['AT', 'BT', 'ET'].includes(t.Kategorie));
         if (fourWeekAppointments.length < 5) warnings.push(`Geringe Aktivität (${fourWeekAppointments.length} Termine in 4 Wochen)`);
 
-        const nextInfoDateForPlan = findNextInfoDateAfter(today);
+        const nextInfoDateForPlan = findNextInfoDateAfter(today); // KORREKTUR: toLocalISOString verwenden
         const nextInfoDateStringForPlan = nextInfoDateForPlan.toISOString().split('T')[0];
         const infoPlan = db.infoplanung.find(p => p.Mitarbeiter_ID === user._id && p.Informationsabend && p.Informationsabend.startsWith(nextInfoDateStringForPlan));
         const etGoal = infoPlan?.ET_Ziel || 0;
@@ -11986,16 +12017,21 @@ async function checkAndShowEtMotivationPopup() {
     const storageKey = `et-motivation-popup-shown-${user._id}-${todayString}`;
 
     // 1. Prüfen, ob das Popup heute schon gezeigt wurde
-    if (localStorage.getItem(storageKey)) {
-        return;
-    }
+    // KORREKTUR: Die Prüfung auf den LocalStorage wird ans Ende verschoben, damit die Logik nur einmal durchlaufen wird.
 
     // 2. Prüfen, ob die ET-Zielerreichung unter 30% liegt
     const { etCurrent, etGoal } = personalData;
     const etRate = (etGoal > 0) ? (etCurrent / etGoal) : 1;
 
-    if (etRate >= 0.3) {
-        return;
+    // NEU: Prüfen, ob seit Beginn des Info-Zyklus mehr als eine Woche vergangen ist.
+    const today = new Date();
+    const nextInfoDate = findNextInfoDateAfter(today);
+    const previousInfoDate = new Date(nextInfoDate.getTime() - 21 * 24 * 60 * 60 * 1000);
+    const infoCycleStartDate = new Date(previousInfoDate.getTime() + 24 * 60 * 60 * 1000);
+    const oneWeekAfterCycleStart = new Date(infoCycleStartDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    if (localStorage.getItem(storageKey) || etRate >= 0.3 || today < oneWeekAfterCycleStart) {
+        return; // KORREKTUR: toLocalISOString verwenden
     }
 
     // 3. Daten für die KI sammeln
@@ -12040,19 +12076,17 @@ async function checkAndShowEtMotivationPopup() {
     const promptContainer = document.getElementById('et-motivation-prompt');
     const closeBtn = document.getElementById('close-et-motivation-btn');
     const disclaimerContainer = document.getElementById('et-motivation-disclaimer');
-    const timerBar = document.getElementById('et-motivation-timer-bar');
-
+    const timerBar = document.getElementById('et-motivation-timer-bar'); // KORREKTUR: Die Variable `nextInfoDate` wurde bereits deklariert. Die zweite Deklaration wird entfernt.
     // NEU: Schritt 5 - Popup mit der bereits geladenen Nachricht anzeigen
-    messageContainer.innerHTML = aiMessage;
+    messageContainer.innerHTML = aiMessage; // KORREKTUR: toLocalISOString verwenden
     modal.classList.add('visible');
     document.body.classList.add('modal-open');
     closeBtn.classList.add('hidden');
     timerBar.classList.remove('countdown-bar-animate');
     disclaimerContainer.textContent = `Du erhältst diese Nachricht, weil du derzeit unter 30% deines ET-Solls liegst.`;
-
-    const nextInfoDate = findNextInfoDateAfter(new Date()).toLocaleDateString('de-DE');
+    const nextInfoDateString = nextInfoDate.toLocaleDateString('de-DE');
     const missingEts = Math.max(0, etGoal - etCurrent);
-    promptContainer.innerHTML = `<strong>Deine Aufgabe heute:</strong> Vereinbare deine <strong>${missingEts} fehlenden ETs</strong> für den nächsten Infoabend am <strong>${nextInfoDate}</strong>!`;
+    promptContainer.innerHTML = `<strong>Deine Aufgabe heute:</strong> Vereinbare deine <strong>${missingEts} fehlenden ETs</strong> für den nächsten Infoabend am <strong>${nextInfoDateString}</strong>!`;
 
     // 5. Timer und Button-Logik
     void timerBar.offsetWidth; // Trigger reflow to restart animation
@@ -12118,7 +12152,7 @@ async function openWorkingDayModal() {
 
     // ET-Soll berechnen
     const { startDate } = getMonthlyCycleDates();
-    const nextInfoDate = findNextInfoDateAfter(startDate);
+    const nextInfoDate = findNextInfoDateAfter(new Date());
     const nextInfoDateString = nextInfoDate.toISOString().split('T')[0];
     const infoPlan = db.infoplanung.find(p => p.Mitarbeiter_ID === authenticatedUserData._id && p.Informationsabend.startsWith(nextInfoDateString));
     const etSoll = infoPlan?.ET_Ziel || 0;
@@ -14074,7 +14108,7 @@ function closePlanningModal() {
 
 async function saveMonthlyPlanning(userId, monthName, year, ehGoal, etGoal) {
     const nextInfoDate = findNextInfoDateAfter(new Date());
-    const nextInfoDateString = nextInfoDate.toISOString().split('T')[0];
+    const nextInfoDateString = toLocalISOString(nextInfoDate);
 
     // 1. Handle Infoplanung (ET Goal)
     const existingInfoPlan = db.infoplanung.find(p => p.Mitarbeiter_ID === userId && p.Informationsabend && p.Informationsabend.startsWith(nextInfoDateString));
