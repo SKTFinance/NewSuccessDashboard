@@ -1252,6 +1252,12 @@ summary::-webkit-details-marker {
     border-left: 1px solid #e5e7eb; /* border-gray-200 */
 }
 
+.week-calendar-header-grid > div:not(:first-child) {
+    border-left: 1px solid #d1d5db; /* gray-300 */
+}
+.week-calendar-body-grid > .week-calendar-day-col:not(:first-child) {
+    border-left: 1px solid #d1d5db; /* gray-300 */
+}
 .week-calendar-time-slot {
     border-top: 1px dotted #e5e7eb; /* border-gray-200 */
 }
@@ -1269,10 +1275,10 @@ summary::-webkit-details-marker {
 
 .week-calendar-appointment {
     position: absolute; /* KORREKTUR: Positionierung für Überlappung */
-    z-index: 10;
+    z-index: 10; /* KORREKTUR: Klassen für neues Design. */
     overflow: hidden;
     transition: all 0.2s ease;
-    border-left: 4px solid; /* Wird für die Statusfarbe verwendet */
+    /* border-left: 4px solid; */ /* Wird für die Statusfarbe verwendet */ /* KORREKTUR: Wird nicht mehr benötigt, da die farbige Leiste jetzt ein div ist. */
 }
 
 /* NEU: Priorisierung der Inhalte in kleinen Kalendereinträgen */

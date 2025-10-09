@@ -4574,20 +4574,14 @@ class AppointmentsView {
         this.statsCategoryFilterBtn = null;
         this.statsCategoryFilterPanel = null;
         this.statsMonthTimeline = null; // Timeline-Ansicht
-        this.statsTimelineView = null;
-        this.statsViewTimelineBtn = null;
-        // NEU: Wochenkalender-Ansicht
-        this.statsWeekView = null;
+        this.statsTimelineView = null; // NEU: Wochenkalender-Ansicht
+        // NEU: Elemente für den Wochenkalender
         this.statsViewWeekBtn = null;
-        this.weekNavPrevBtn = null;
-        this.weekNavNextBtn = null;
-        this.weekPeriodDisplay = null;
-        this.weekCalendarScopeSelect = null;
-        this.weekCalendarViewModeSelect = null;
-        this.weekCalendarUserSelectContainer = null;
-        this.weekCalendarUserSelect = null;
-        this.weekCalendarBody = null;
-        this.weekCalendarHeader = null;
+        this.statsWeekView = null;
+        this.weekCalendarContainer = null;
+        this.weekCalendarScrollContainer = null;
+
+        this.weekPeriodDisplay = null; // NEU: Wochenkalender-Ansicht
         this.statsPeriodDisplay = null; // Beibehalten für die Wochenanzeige
         this.statsNavPrevBtn = null;    // Beibehalten für die Navigation
         this.statsNavNextBtn = null;    // Beibehalten für die Navigation
@@ -4612,7 +4606,6 @@ class AppointmentsView {
         this.modal = null;
         this.statsCurrentDate = null; // Datum zur Steuerung der Ansicht
         this.form = null;
-        this.searchInput = null;
         this.showCancelledCheckbox = null;
         // NEU: Gekapselte Analyse-Ansicht
         this.detailsContainer = null;
@@ -4629,7 +4622,6 @@ class AppointmentsView {
         this.sortColumn = 'Datum';
         this.sortDirection = 'desc';
         this.filterText = '';
-        this.statsChartMode = 'employee';
         this.weekCalendarSlotHeight = 40; // Default slot height in pixels
         this.showCancelled = false;
         // NEU: Sortierkonfiguration für die Infoabend-Tabelle
@@ -4719,12 +4711,18 @@ class AppointmentsView {
         this.statsPeriodDisplay = document.getElementById('stats-period-display');
         this.statsNavPrevBtn = document.getElementById('stats-nav-prev-btn');
         this.statsNavNextBtn = document.getElementById('stats-nav-next-btn');
-        this.statsViewTimelineBtn = document.getElementById('stats-view-timeline-btn');
+        this.statsViewTimelineBtn = document.getElementById('stats-view-timeline-btn'); // NEU
+        // NEU: Elemente für den Wochenkalender
         this.statsViewWeekBtn = document.getElementById('stats-view-week-btn');
+        this.statsWeekView = document.getElementById('stats-week-view');
+        this.weekCalendarContainer = document.getElementById('week-calendar-container');
+        this.weekCalendarScrollContainer = document.getElementById('week-calendar-scroll-container');
+        // NEU: Container für die Zeitleiste
+        this.weekCalendarTimeLabelsContainer = document.getElementById('week-calendar-time-labels-container');
+        this.weekPeriodDisplay = document.getElementById('week-period-display'); // KORREKTUR: Fehlende Zuweisung
         this.statsViewTableBtn = document.getElementById('stats-view-table-btn');
         this.statsViewInfoBtn = document.getElementById('stats-view-info-btn'); // NEU
         this.statsTimelineView = document.getElementById('stats-timeline-view');
-        this.statsWeekView = document.getElementById('stats-week-view');
         this.statsTableView = document.getElementById('stats-table-view');
         this.naechstesInfoView = document.getElementById('naechstes-info-view'); // NEU
         this.infoabendDateSelect = document.getElementById('infoabend-date-select');
@@ -4748,26 +4746,8 @@ class AppointmentsView {
         this.statsTab = document.getElementById('analysis-stats-tab');
         this.heatmapTab = document.getElementById('analysis-heatmap-tab');
         this.heatmapGrid = document.getElementById('heatmap-grid');
-        // NEU: Wochenkalender
-        this.weekNavPrevBtn = document.getElementById('week-nav-prev-btn');
-        this.weekNavNextBtn = document.getElementById('week-nav-next-btn');
-        this.weekPeriodDisplay = document.getElementById('week-period-display');
-        this.weekCalendarViewModeSelect = document.getElementById('week-calendar-view-mode-select');
-        this.weekCalendarUserSelectContainer = document.getElementById('week-calendar-user-select-container');
-        this.weekCalendarUserSelect = document.getElementById('week-calendar-user-select');
-        this.weekCalendarBody = document.getElementById('week-calendar-body');
-        this.weekCalendarHeader = document.getElementById('week-calendar-header');
-        // NEU: Zoom-Buttons
-        this.weekZoomInBtn = document.getElementById('week-zoom-in-btn');
-        this.weekZoomOutBtn = document.getElementById('week-zoom-out-btn');
-        return this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.searchInput && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.statsTab && this.heatmapTab && this.heatmapGrid && this.statsScopeFilter && this.statsCategoryFilterBtn && this.statsCategoryFilterPanel && this.statsMonthTimeline && this.statsPeriodDisplay && this.statsNavPrevBtn && this.statsNavNextBtn && this.outstandingAppointmentsSection && this.outstandingAppointmentsList && this.statsViewTimelineBtn && this.statsViewTableBtn && this.statsTimelineView && this.statsTableView && this.statsViewInfoBtn && this.naechstesInfoView && this.groupFilterContainer && this.mainFilterContainer && this.analysisContainer && this.statsWeekView && this.weekCalendarViewModeSelect && this.weekZoomInBtn && this.weekZoomOutBtn;
-    }
-
-    _setupMobileFilterToggle() {
-        const toggleBtn = document.getElementById('mobile-filter-toggle-btn');
-        const filterWrapper = document.getElementById('appointments-filter-wrapper');
-        if (!toggleBtn || !filterWrapper) return;
-        toggleBtn.addEventListener('click', () => filterWrapper.classList.toggle('hidden'));
+        // KORREKTUR: Prüfung für den neuen Zeit-Label-Container hinzugefügt.
+        return this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.searchInput && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.statsTab && this.heatmapTab && this.heatmapGrid && this.statsScopeFilter && this.statsCategoryFilterBtn && this.statsCategoryFilterPanel && this.statsMonthTimeline && this.statsPeriodDisplay && this.statsNavPrevBtn && this.statsNavNextBtn && this.outstandingAppointmentsSection && this.outstandingAppointmentsList && this.statsViewTimelineBtn && this.statsViewTableBtn && this.statsTimelineView && this.statsTableView && this.statsViewInfoBtn && this.naechstesInfoView && this.groupFilterContainer && this.mainFilterContainer && this.analysisContainer && this.statsViewWeekBtn && this.statsWeekView && this.weekCalendarContainer && this.weekPeriodDisplay && this.weekCalendarScrollContainer;
     }
 
     async init(userId) {
@@ -4780,20 +4760,17 @@ class AppointmentsView {
         }
 
         // NEU: Event-Listener für den mobilen Filter-Button einrichten
-        this._setupMobileFilterToggle();
+        this._setupMobileFilterToggle(); // KORREKTUR: Die Funktion wird jetzt innerhalb der Klasse definiert.
 
         // NEU: Startdatum für die Statistik-Ansicht initialisieren
         this.statsCurrentDate = getCurrentDate();
         this.statsCurrentDate.setHours(0, 0, 0, 0);
         // NEU: Lade die gespeicherte Slot-Höhe oder verwende den Standardwert
         this.weekCalendarSlotHeight = loadUiSetting('weekCalendarSlotHeight', 40);
-        // NEU: Kalender auf die aktuelle Woche initialisieren
-        const today = getCurrentDate();
-        const startOfWeek = new Date(today);
-        const day = startOfWeek.getDay();
-        const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
-        this.calendarWeekStartDate = new Date(startOfWeek.setDate(diff));
-        this.calendarWeekStartDate.setHours(0, 0, 0, 0);
+        // NEU: Initialisiere den Kalender für die unendliche Scroll-Ansicht
+        this.calendarRenderedDays = new Set();
+        this.calendarStartDate = null;
+        this.calendarEndDate = null;
 
         // KORREKTUR: Standard-Datum auf aktuellen Umsatzmonat (Geschäftszyklus) setzen
         const { startDate, endDate } = getMonthlyCycleDates();
@@ -4801,9 +4778,6 @@ class AppointmentsView {
         this.endDateInput.value = endDate.toISOString().split('T')[0];
 
         this.downline = SKT_APP.getAllSubordinatesRecursive(this.currentUserId);
-
-        // KORREKTUR: Das zweite Dropdown wird jetzt ausgeblendet, da es nicht mehr benötigt wird.
-        if (this.weekCalendarViewModeSelect) this.weekCalendarViewModeSelect.parentElement.classList.add('hidden');
 
         // KORREKTUR: Das Haupt-Dropdown wird jetzt dynamisch befüllt, um "Kalender von..." zu integrieren.
         const isLeader = SKT_APP.isUserLeader(SKT_APP.authenticatedUserData);
@@ -4846,10 +4820,6 @@ class AppointmentsView {
                 }
                 pendingAppointmentGroupFilter = null;
             }
-        }
-        // KORREKTUR: Zeige das "Benutzer auswählen"-Dropdown, wenn "Kalender von..." ausgewählt ist.
-        if (this.weekCalendarUserSelectContainer) {
-            this.weekCalendarUserSelectContainer.classList.toggle('hidden', finalScope !== 'user_select');
         }
         if (pendingAppointmentFilter) {
             this.filterText = pendingAppointmentFilter;
@@ -5072,9 +5042,12 @@ class AppointmentsView {
         this.statsNavNextBtn.addEventListener('click', () => this._navigateStats(1));
         this.statsPeriodDisplay.addEventListener('click', () => this._scrollToTodayInTimeline());
         this.statsViewInfoBtn.addEventListener('click', () => this._switchStatsView('info')); // NEU
-        
+        // NEU: Event-Listener für den Wochenansicht-Button
+        if (this.statsViewWeekBtn) {
+            this.statsViewWeekBtn.addEventListener('click', () => this._switchStatsView('week'));
+        }
+
         this.statsViewTimelineBtn.addEventListener('click', () => this._switchStatsView('timeline'));
-        this.statsViewWeekBtn.addEventListener('click', () => this._switchStatsView('week'));
         this.statsViewTableBtn.addEventListener('click', () => this._switchStatsView('table'));
 
         // NEU: Event Listener für das Dropdown
@@ -5100,15 +5073,6 @@ class AppointmentsView {
             if (isLeader && scope === 'structure') {
                 this._populateGroupFilter(true);
             }
-            // NEU: Wenn "Kalender von..." ausgewählt wird, zur Wochenansicht wechseln.
-            if (scope === 'user_select') {
-                this._switchStatsView('week');
-            }
-            
-            // KORREKTUR: Zeige das "Benutzer auswählen"-Dropdown, wenn "Kalender von..." ausgewählt ist.
-            if (this.weekCalendarUserSelectContainer) {
-                this.weekCalendarUserSelectContainer.classList.toggle('hidden', scope !== 'user_select');
-            }
             this.fetchAndRender(); // Daten bei jeder Änderung neu laden
         });
 
@@ -5123,24 +5087,20 @@ class AppointmentsView {
         this.statsTab.addEventListener('click', () => this._switchAnalysisTab('stats'));
         this.heatmapTab.addEventListener('click', () => this._switchAnalysisTab('heatmap'));
 
-        // NEU: Event-Listener für die "Nächstes Info"-Ansicht
-        this.infoabendDateSelect.addEventListener('change', () => this.renderNaechstesInfo());
-        this.infoabendShowCancelled.addEventListener('change', () => this.renderNaechstesInfo());
-
-        // NEU: Event-Listener für den Wochenkalender (einmalig hier setzen)
-        this.weekNavPrevBtn.addEventListener('click', () => this._navigateWeekCalendar(-7));
-        this.weekNavNextBtn.addEventListener('click', () => this._navigateWeekCalendar(7));
-        this.weekPeriodDisplay.addEventListener('click', () => this._resetWeekCalendarToToday());
-
-        // KORREKTUR: Ruft die Haupt-Render-Funktion auf, um sicherzustellen, dass alle Daten und Filter
-        // korrekt neu angewendet werden, wenn ein Benutzer im Dropdown ausgewählt wird.
-        this.weekCalendarUserSelect.addEventListener('change', () => this.render());
-
-        // NEU: Event-Listener für Zoom-Buttons
-        this.weekZoomInBtn.addEventListener('click', () => this._zoomWeekCalendar(5));
-        this.weekZoomOutBtn.addEventListener('click', () => this._zoomWeekCalendar(-5));
-
+        // KORREKTUR: Event-Listener für die "Nächstes Info"-Ansicht nur hinzufügen, wenn die Elemente existieren.
+        if (this.infoabendDateSelect && this.infoabendShowCancelled) {
+            this.infoabendDateSelect.addEventListener('change', () => this.renderNaechstesInfo());
+            this.infoabendShowCancelled.addEventListener('change', () => this.renderNaechstesInfo());
+        }
+        
         this.listenersAttached = true; // Markiere, dass die Listener gesetzt wurden.
+    }
+
+    _setupMobileFilterToggle() {
+        const toggleBtn = document.getElementById('mobile-filter-toggle-btn');
+        const filterWrapper = document.getElementById('appointments-filter-wrapper');
+        if (!toggleBtn || !filterWrapper) return;
+        toggleBtn.addEventListener('click', () => filterWrapper.classList.toggle('hidden'));
     }
 
     _updateStatusDropdown(category, currentStatus = null) {
@@ -5218,60 +5178,43 @@ class AppointmentsView {
 
     _switchStatsView(view) {
         this.statsTimelineView.classList.toggle('hidden', view !== 'timeline');
-        this.statsWeekView.classList.toggle('hidden', view !== 'week');
         this.statsTableView.classList.toggle('hidden', view !== 'table');
+        this.statsWeekView.classList.toggle('hidden', view !== 'week'); // NEU
         this.naechstesInfoView.classList.toggle('hidden', view !== 'info');
 
         // NEU: Hauptfilter-Maske ausblenden, wenn die Info-Ansicht aktiv ist.
         if (this.mainFilterContainer) {
-            this.mainFilterContainer.classList.toggle('hidden', view === 'info' || view === 'week');
+            this.mainFilterContainer.classList.toggle('hidden', view === 'info');
         }
+        // NEU: Filterleiste für Wochenansicht ausblenden, da diese eigene Filter hat
+        document.getElementById('appointments-main-filter-container').classList.toggle('hidden', view === 'week');
 
         // NEU: Analyse-Container ausblenden, wenn die Info-Ansicht aktiv ist.
         if (this.analysisContainer) {
-            this.analysisContainer.classList.toggle('hidden', view === 'info' || view === 'week');
+            this.analysisContainer.classList.toggle('hidden', view === 'info');
         }
 
         this.statsViewTimelineBtn.classList.toggle('active', view === 'timeline');
-        this.statsViewWeekBtn.classList.toggle('active', view === 'week');
         this.statsViewTableBtn.classList.toggle('active', view === 'table');
+        this.statsViewWeekBtn.classList.toggle('active', view === 'week'); // NEU
         this.statsViewInfoBtn.classList.toggle('active', view === 'info');
-
-        // KORREKTUR: Die "Kalender von..."-Option wird jetzt im Haupt-Dropdown angezeigt.
-        // Das separate Dropdown für den Benutzer wird nur sichtbar, wenn diese Option gewählt ist.
-        const userSelectOption = this.statsScopeFilter.querySelector('option[value="user_select"]');
-        if (this.weekCalendarUserSelectContainer) {
-            this.weekCalendarUserSelectContainer.classList.toggle('hidden', this.statsScopeFilter.value !== 'user_select');
-        }
-
-        // KORREKTUR: Wenn die Ansicht gewechselt wird und "Kalender von..." ausgewählt war,
-        // wird nicht mehr automatisch zurückgesetzt. Der Benutzer kann in jeder Ansicht bleiben.
-        if (view !== 'week' && this.statsScopeFilter.value === 'user_select') {
-            this.statsScopeFilter.value = 'personal';
-            this.statsScopeFilter.dispatchEvent(new Event('change')); // Stellt sicher, dass die Daten neu geladen werden.
-        }
 
         if (view === 'info') {
             this.renderNaechstesInfo(true); // true to repopulate dates
         } else if (view === 'week') {
-            this._populateWeekCalendarUserSelect();
-            this._handleViewModeChange(); // Setzt die initiale Sichtbarkeit und rendert den Kalender
+            this._renderWeekCalendar(); // Render calendar with current data
 
             // Event-Listener für den neuen Kalender
-            this.weekNavPrevBtn.addEventListener('click', () => this._navigateWeekCalendar(-7));
-            this.weekNavNextBtn.addEventListener('click', () => this._navigateWeekCalendar(7));
-            this.weekPeriodDisplay.addEventListener('click', () => this._resetWeekCalendarToToday());
-            this.weekCalendarUserSelect.addEventListener('change', () => this._renderWeekCalendar());
+            this.weekPeriodDisplay.onclick = () => this._resetWeekCalendarToToday();
+            // NEU: Scroll-Listener für unendliches Scrollen
+            this.weekCalendarScrollContainer.onscroll = _.debounce(() => this._handleCalendarScroll(), 100);
+            document.getElementById('week-calendar-zoom-in').onclick = () => this._zoomWeekCalendar(10);
+            document.getElementById('week-calendar-zoom-out').onclick = () => this._zoomWeekCalendar(-10);
+        } else {
+            this._renderAppointmentStats();
+
+            // Event-Listener für den neuen Kalender
         }
-    }
-
-    // NEU: Hilfsfunktion, die auf Änderungen im Haupt-Kalender-Dropdown reagiert.
-    _handleViewModeChange() {
-        const selectedMode = this.weekCalendarViewModeSelect.value;
-        this.weekCalendarUserSelectContainer.classList.toggle('hidden', selectedMode !== 'user_select');
-
-        // Kalender nach jeder Änderung neu rendern
-        this._renderWeekCalendar();
     }
 
 
@@ -5497,21 +5440,10 @@ class AppointmentsView {
         const sortedAppointments = this._sortStatsTableData(finalAppointmentsForTable);
         this._renderStatsTable(sortedAppointments);
 
-        // --- Daten für Wochenkalender vorbereiten ---
-        const weekStart = new Date(this.calendarWeekStartDate);
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekStart.getDate() + 6);
-        weekEnd.setHours(23, 59, 59, 999);
-        const appointmentsForWeekWithRecurrence = this._generateRecurringAppointments(this.searchFilteredAppointments, weekStart, weekEnd);
-        const appointmentsForWeek = appointmentsForWeekWithRecurrence.filter(t => {
-            if (!t.Datum) return false;
-            const terminDate = new Date(t.Datum);
-            return terminDate >= weekStart && terminDate <= weekEnd;
-        })
-        .filter(categoryFilter)
-        .filter(cancelledFilter)
-        .filter(heldFilter);
-        this._renderWeekCalendar(appointmentsForWeek);
+        // --- Week Calendar View Logic ---
+        if (this.statsWeekView && !this.statsWeekView.classList.contains('hidden')) {
+            this._renderWeekCalendar();
+        }
 
         // --- Calendar View Logic ---
         // KORREKTUR: Die Timeline ignoriert die vor-gefilterten `appointmentsToRender` und filtert
@@ -5618,10 +5550,234 @@ class AppointmentsView {
         }, 150);
     }
     
-    // NEU: Hilfsfunktion, die auf Änderungen im Haupt-Kalender-Dropdown reagiert.
-    _handleViewModeChange() {
-        // Kalender nach jeder Änderung neu rendern
-        this._renderAppointmentStats();
+    // NEU: Rendert den Wochenkalender
+    _renderWeekCalendar() {
+        if (!this.weekCalendarContainer || !this.weekCalendarScrollContainer) return;
+
+        // Reset everything for a full re-render (e.g., when user changes)
+        this.weekCalendarContainer.innerHTML = '';
+        this.calendarRenderedDays.clear();
+
+        // Initialer Render-Bereich: 2 Wochen vor und 4 Wochen nach heute
+        const today = new Date(getCurrentDate());
+        today.setHours(0, 0, 0, 0);
+        const initialStartDate = new Date(today);
+        initialStartDate.setDate(today.getDate() - 14);
+        const initialEndDate = new Date(today);
+        initialEndDate.setDate(today.getDate() + 28);
+
+        this.calendarStartDate = initialStartDate;
+        this.calendarEndDate = initialEndDate;
+
+        // Zeit-Labels (linke Spalte, fixiert)
+        const totalCalendarHeight = 24 * 2 * this.weekCalendarSlotHeight;
+        this.weekCalendarTimeLabelsContainer.innerHTML = '';
+        const timeLabelCol = document.createElement('div');
+
+        // Header und Body Container
+        const headerGrid = document.createElement('div');
+        headerGrid.id = 'week-calendar-header-grid';
+        headerGrid.className = 'week-calendar-header-grid sticky top-0 z-20';
+        // KORREKTUR: Die Gesamthöhe des Kalender-Grids wird explizit gesetzt, um eine perfekte Synchronisation zu gewährleisten.
+        this.weekCalendarContainer.style.height = `${totalCalendarHeight}px`;
+        const bodyGrid = document.createElement('div');
+        bodyGrid.id = 'week-calendar-body-grid';
+        bodyGrid.className = 'week-calendar-body-grid';
+
+        this.weekCalendarContainer.append(headerGrid, bodyGrid);
+
+        // KORREKTUR: Die Logik zum Erstellen der Zeit-Labels wurde hierher verschoben und korrigiert.
+        // Das überflüssige, leere Label, das den Versatz verursacht hat, wurde entfernt.
+        timeLabelCol.className = 'week-calendar-time-labels';
+        timeLabelCol.style.height = `${totalCalendarHeight}px`;
+        for (let hour = 0; hour < 24; hour++) {
+            const label = document.createElement('div');
+            label.className = 'week-calendar-time-label text-xs text-gray-500';
+            label.textContent = `${hour.toString().padStart(2, '0')}:00`;
+            label.style.top = `${hour * this.weekCalendarSlotHeight * 2}px`;
+            timeLabelCol.appendChild(label);
+        }
+        this.weekCalendarTimeLabelsContainer.appendChild(timeLabelCol);
+
+
+        this._renderDayColumns(this.calendarStartDate, this.calendarEndDate, false, this.searchFilteredAppointments);
+
+        // Scrolle zum heutigen Tag
+        setTimeout(() => this._scrollToTodayInCalendar(), 100);
+
+        // NEU: Synchronisiere das Scrollen der Zeitleiste mit dem Hauptkalender
+        this.weekCalendarScrollContainer.addEventListener('scroll', () => {
+            if (this.weekCalendarTimeLabelsContainer) {
+                this.weekCalendarTimeLabelsContainer.scrollTop = this.weekCalendarScrollContainer.scrollTop;
+            }
+        });
+    }
+
+    _renderDayColumns(startDate, endDate, prepend = false) {
+        const headerGrid = document.getElementById('week-calendar-header-grid');
+        const bodyGrid = document.getElementById('week-calendar-body-grid');
+        if (!headerGrid || !bodyGrid) return;
+
+        const fragmentHeader = document.createDocumentFragment();
+        const fragmentBody = document.createDocumentFragment();
+
+        for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+            const dateString = d.toISOString().split('T')[0];
+            if (this.calendarRenderedDays.has(dateString)) continue;
+
+            // Header-Zelle
+            const isToday = d.toDateString() === new Date().toDateString();
+            const headerCellClasses = isToday ? 'bg-blue-50 font-bold' : '';
+            const headerCell = document.createElement('div');
+            headerCell.className = `text-center py-2 border-l border-gray-200 ${headerCellClasses}`;
+            headerCell.dataset.date = dateString;
+            headerCell.innerHTML = `
+                <p class="text-xs ${isToday ? 'text-skt-blue' : 'text-gray-500'}">${d.toLocaleDateString('de-DE', { weekday: 'short' })}</p>
+                <p class="text-lg font-bold ${isToday ? 'text-skt-blue' : 'text-gray-700'}">${d.getDate()}</p>
+            `;
+            fragmentHeader.appendChild(headerCell);
+
+            // Body-Spalte
+            const dayCol = this._createDayColumn(d, this.searchFilteredAppointments);
+            fragmentBody.appendChild(dayCol);
+
+            this.calendarRenderedDays.add(dateString);
+        }
+
+        if (prepend) {
+            const firstHeader = headerGrid.firstChild;
+            const firstBody = bodyGrid.firstChild;
+            headerGrid.insertBefore(fragmentHeader, firstHeader);
+            bodyGrid.insertBefore(fragmentBody, firstBody);
+        } else {
+            headerGrid.appendChild(fragmentHeader);
+            bodyGrid.appendChild(fragmentBody);
+        }
+
+        // Update container width
+        const totalDays = this.calendarRenderedDays.size;
+        const dayWidth = 150; // Breite einer Tages-Spalte in px
+        this.weekCalendarContainer.style.width = `${60 + totalDays * dayWidth}px`;
+        headerGrid.style.gridTemplateColumns = `repeat(${totalDays}, ${dayWidth}px)`;
+        bodyGrid.style.gridTemplateColumns = `repeat(${totalDays}, ${dayWidth}px)`;
+    }
+
+    _createDayColumn(day, appointments) {
+        const dayCol = document.createElement('div');
+        const isToday = day.toDateString() === new Date().toDateString();
+        dayCol.className = `week-calendar-day-col ${isToday ? 'today-col' : ''}`;
+        dayCol.dataset.date = day.toISOString().split('T')[0];
+
+        // Zeit-Slots (Linien)
+        for (let hour = 0; hour <= 23; hour++) {
+            for (let minute = 0; minute < 60; minute += 30) {
+                const slot = document.createElement('div');
+                slot.className = 'week-calendar-time-slot';
+                slot.style.height = `${this.weekCalendarSlotHeight}px`;
+                if (minute === 0) slot.classList.add('full-hour');
+                dayCol.appendChild(slot);
+            }
+        }
+
+        // Termine für diesen Tag platzieren
+        const dayAppointments = appointments.filter(t => t.Datum && new Date(t.Datum).toDateString() === day.toDateString());
+        const layout = this._calculateOverlaps(dayAppointments);
+
+        layout.forEach(({ termin, column, totalColumns }) => {
+            const terminEl = this._createWeekAppointmentElement(termin, column, totalColumns);
+            dayCol.appendChild(terminEl);
+            this._renderAppointmentHints(termin, terminEl);
+        });
+
+        return dayCol;
+    }
+
+    _handleCalendarScroll() {
+        const container = this.weekCalendarScrollContainer;
+        const scrollLeft = container.scrollLeft;
+        const scrollWidth = container.scrollWidth;
+        const clientWidth = container.clientWidth;
+
+        // Update month display
+        const centerDate = this._getDateFromScroll();
+        this.weekPeriodDisplay.textContent = centerDate.toLocaleString('de-DE', { month: 'long', year: 'numeric' });
+
+        // Load more days if near the end
+        if (scrollLeft + clientWidth >= scrollWidth - 500) {
+            const newStartDate = new Date(this.calendarEndDate);
+            newStartDate.setDate(newStartDate.getDate() + 1);
+            const newEndDate = new Date(newStartDate);
+            newEndDate.setDate(newStartDate.getDate() + 14);
+            this._renderDayColumns(newStartDate, newEndDate, false, this.searchFilteredAppointments);
+            this.calendarEndDate = newEndDate;
+        }
+
+        // Load more days if near the beginning
+        if (scrollLeft < 500) {
+            const oldScrollWidth = container.scrollWidth;
+            const newEndDate = new Date(this.calendarStartDate);
+            newEndDate.setDate(newEndDate.getDate() - 1);
+            const newStartDate = new Date(newEndDate);
+            newStartDate.setDate(newEndDate.getDate() - 14);
+            this._renderDayColumns(newStartDate, newEndDate, true, this.searchFilteredAppointments);
+            this.calendarStartDate = newStartDate;
+            const newScrollWidth = container.scrollWidth;
+            container.scrollLeft += (newScrollWidth - oldScrollWidth);
+        }
+    }
+
+    _createWeekAppointmentElement(termin, column, totalColumns) {
+        const startDate = new Date(termin.Datum);
+        const startHour = startDate.getHours();
+        const startMinute = startDate.getMinutes();
+        const durationInMinutes = (termin.Dauer || 3600) / 60;
+
+        const topOffset = (startHour * 2 + (startMinute / 30)) * this.weekCalendarSlotHeight; // KORREKTUR: Offset entfernt
+        const height = (durationInMinutes / 30) * this.weekCalendarSlotHeight;
+
+        const width = 100 / totalColumns;
+        const left = column * width;
+
+        const terminEl = document.createElement('div');
+        // KORREKTUR: Klassen für das neue Design angepasst. Der schwarze Bereich wurde entfernt.
+        terminEl.className = 'week-calendar-appointment flex overflow-hidden rounded-lg shadow-md bg-white border';
+        terminEl.style.top = `${topOffset}px`;
+        terminEl.style.height = `${height - 2}px`; // -2 for a small gap
+        terminEl.style.left = `${left}%`;
+        terminEl.style.width = `${width}%`;
+        terminEl.dataset.id = termin._id;
+
+        // KORREKTUR: Logik aus der Timeline-Ansicht übernehmen
+        const { border: statusColorClass, bg: statusBgClass } = this._getAppointmentColorClasses(termin);
+        const categoryColors = {
+            'AT': 'bg-skt-green-accent', 'BT': 'bg-skt-blue-accent', 'ST': 'bg-skt-red-accent',
+            'ET': 'bg-accent-gold', 'Immo': 'bg-accent-immo', 'NT': 'bg-accent-purple', 'default': 'bg-skt-grey-medium'
+        };
+        const categoryPillColor = categoryColors[termin.Kategorie] || categoryColors['default'];
+
+        // Content Priority Logic
+        if (height < 40) terminEl.classList.add('content-priority-medium');
+        if (height < 60) terminEl.classList.add('content-priority-low');
+
+        // KORREKTUR: Mitarbeitername wird jetzt aus dem verknüpften Objekt geholt.
+        const mitarbeiterName = termin.Mitarbeiter_ID?.[0]?.display_value || findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
+        
+        // KORREKTUR: Neues HTML-Layout für das Termin-Element.
+        // Der schwarze Bereich wurde entfernt und das Layout an die Timeline-Ansicht angeglichen.
+        terminEl.innerHTML = `
+            <div class="w-1.5 flex-shrink-0 ${categoryPillColor}"></div>
+            <div class="flex-grow p-2 min-w-0">
+                <p class="font-bold text-sm truncate text-skt-blue flex items-center gap-2">
+                    <span class="h-2 w-2 rounded-full ${statusBgClass} flex-shrink-0"></span>
+                    <span>${termin.Terminpartner || 'Unbekannt'}</span>
+                </p>
+                <p class="text-xs appointment-time text-gray-600">${startDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</p>
+                <p class="text-xs appointment-employee-name text-gray-500 truncate">${mitarbeiterName}</p>
+            </div>
+        `;
+
+        terminEl.addEventListener('click', () => this.openModal(termin));
+        return terminEl;
     }
 
     // NEU: Hilfsfunktion zur Berechnung von überlappenden Terminen für einen Tag
@@ -5726,256 +5882,6 @@ class AppointmentsView {
         this._renderWeekCalendar();
     }
 
-
-    // NEU: Funktion zum Erstellen und Herunterladen einer .ics-Datei
-    _populateWeekCalendarViewModeSelect() {
-        let select = this.weekCalendarViewModeSelect;
-        if (!select) return;
-
-        select.innerHTML = "";
-        const options = [
-            { value: 'personal', text: 'Meine Termine' },
-            { value: 'group', text: 'Meine Gruppe' },
-            { value: 'structure', text: 'Meine Struktur' },
-            { value: 'user_select', text: 'Kalender von...' }
-        ];
-
-        const isLeader = SKT_APP.isUserLeader(SKT_APP.authenticatedUserData)
-
-        options.forEach(opt => {
-            // Gruppen-/Strukturansicht nur für Führungskräfte
-            if (opt.value === 'personal' || opt.value === 'user_select' || isLeader) {
-                select.add(new Option(opt.text, opt.value));
-            }
-        })
-
-        // Gespeicherte Ansicht wiederherstellen oder Standard setzen
-        const savedMode = loadUiSetting('weekCalendarViewMode', 'personal');
-        if (Array.from(select.options).some(opt => opt.value === savedMode)) {
-            select.value = savedMode;
-        } else {
-            select.value = 'personal';
-        }
-    }    
-
-    async _populateWeekCalendarUserSelect() {
-        const select = this.weekCalendarUserSelect;
-        if (!select) return;
-
-        const currentVal = select.value; // Wert merken
-        select.innerHTML = '';
-
-        // Lade den eingeloggten Benutzer, seine gesamte Struktur (Downline) und seine gesamte Upline (Vorgesetzte).
-        const me = SKT_APP.authenticatedUserData;
-        const myStructure = SKT_APP.getAllSubordinatesRecursive(me._id);
-        const myAncestors = getAncestors(me._id, 99); // Alle Ebenen nach oben
-
-        // Kombiniere alle Benutzer und filtere Duplikate sowie inaktive Mitarbeiter heraus.
-        const userSet = new Set([me, ...myStructure, ...myAncestors]);
-        const uniqueUsers = Array.from(userSet).filter(user => user && user.Status !== 'Ausgeschieden' && user.Name);
-
-        uniqueUsers
-             .sort((a, b) => a.Name.localeCompare(b.Name))
-             .forEach(user => {
-                 select.add(new Option(user.Name, user._id));
-             });
- 
-         // Gespeicherten Wert wiederherstellen oder Standard setzen
-         
-         if (Array.from(select.options).some(opt => opt.value === currentVal)) {
-             select.value = currentVal;
-         } else {
-             select.value = me._id; // Standardmäßig den eingeloggten Benutzer auswählen
-         }
-    }
-
-    // KORREKTUR: Komplette Neugestaltung der Kalender-Render-Logik
-    _renderWeekCalendar(appointmentsToRender) {
-        // KORREKTUR: Sicherheitsprüfung, um den TypeError zu verhindern.
-        if (!this.weekCalendarBody || this.statsWeekView.classList.contains('hidden') || !appointmentsToRender) {
-            return;
-        }
-        const slotHeight = this.weekCalendarSlotHeight; // NEU
-
-        const viewMode = this.statsScopeFilter.value;
-        let userIds = new Set();
-        // ... (Logik zur Sammlung von userIds bleibt gleich) ...
-
-        const weekStart = new Date(this.calendarWeekStartDate);
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekStart.getDate() + 6);
-        weekEnd.setHours(23, 59, 59, 999);
-
-        this.weekPeriodDisplay.textContent = `${weekStart.toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit'})} - ${weekEnd.toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit', year:'numeric'})}`;
-
-        // NEU: Filterlogik aus der Timeline-Ansicht übernehmen
-        const showCancelledToggle = document.getElementById('appointments-show-cancelled');
-        const showCancelled = showCancelledToggle ? showCancelledToggle.checked : false;
-        const showHeldToggle = document.getElementById('appointments-show-held');
-        const showHeld = showHeldToggle ? showHeldToggle.checked : false;
-        const selectedCategories = Array.from(this.statsCategoryFilterPanel.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
-        
-        // KORREKTUR: Die Filterung nach Benutzern wird entfernt. `this.allAppointments` ist bereits
-        // durch `fetchAndRender` korrekt auf den ausgewählten Scope (Struktur, Gruppe, etc.) gefiltert.
-        // KORREKTUR: Verwende die bereits gefilterte Liste, die an die Funktion übergeben wird.
-        let appointmentsForWeek = appointmentsToRender.filter(t => {
-            if (!t.Datum) return false;
-            const terminDate = new Date(t.Datum);
-            const isInCategory = selectedCategories.length > 0 ? selectedCategories.includes(t.Kategorie) : true;
-            const isCancelledOk = showCancelled || (t.Absage !== true && t.Status !== 'Storno');
-            const heldStatuses = ['Gehalten', 'Info Eingeladen', 'Info Bestätigt', 'Info Anwesend'];
-            const isHeldOk = showHeld || !heldStatuses.includes(t.Status);
-            return terminDate >= weekStart && terminDate <= weekEnd && isInCategory && isCancelledOk && isHeldOk;
-        });
-
-        // NEU: Zusätzlicher Filter für den "Kalender von..." Modus.
-        // In diesem Modus enthält `this.allAppointments` mehr Daten als angezeigt werden sollen.
-        if (viewMode === 'user_select') {
-            const selectedUserId = this.weekCalendarUserSelect.value;
-            if (selectedUserId) {
-                appointmentsForWeek = appointmentsForWeek.filter(t => t.Mitarbeiter_ID === selectedUserId || t.Eingeladener === selectedUserId);
-            }
-        }
-        
-        // Group appointments by day index (0=Mon, 1=Tue, ...)
-        const appointmentsByDay = Array.from({ length: 7 }, () => []);
-        appointmentsForWeek.forEach(termin => {
-            const dayIndex = new Date(termin.Datum).getDay() === 0 ? 6 : new Date(termin.Datum).getDay() - 1;
-            if (dayIndex >= 0 && dayIndex < 7) {
-                appointmentsByDay[dayIndex].push(termin);
-            }
-        });
-
-        this.weekCalendarHeader.innerHTML = '';
-        this.weekCalendarBody.innerHTML = '';
-
-        // --- Render Header ---
-        const headerGrid = document.createElement('div');
-        headerGrid.className = 'week-calendar-header-grid';
-        headerGrid.innerHTML += `<div class="p-2 border-b border-gray-200"></div>`; // Empty corner
-        const headerDays = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
-        const today = getCurrentDate();
-        headerDays.forEach((day, i) => {
-            const dayDate = new Date(weekStart);
-            dayDate.setDate(weekStart.getDate() + i);
-            const isToday = dayDate.toDateString() === today.toDateString();
-            headerGrid.innerHTML += `<div class="p-2 text-center font-semibold text-skt-blue-light border-r border-b border-gray-200 text-sm ${isToday ? 'bg-blue-100' : ''}">${day} <span class="font-normal text-gray-500">${dayDate.getDate()}.</span></div>`;
-        });
-        this.weekCalendarHeader.appendChild(headerGrid);
-
-        // --- Render Body ---
-        const bodyContainer = document.createElement('div');
-        bodyContainer.className = 'relative'; // Main container for positioning
-        bodyContainer.style.height = `${36 * slotHeight}px`; // NEU: Dynamische Höhe
-
-        // Render time labels and grid lines in the background
-        const gridAndTimes = document.createElement('div');
-        gridAndTimes.className = 'absolute inset-0';
-        
-        const timeColumn = document.createElement('div');
-        timeColumn.className = 'absolute top-0 left-0 w-[60px] h-full';
-        for (let hour = 6; hour < 24; hour++) {
-            const timeLabelCell = document.createElement('div');
-            timeLabelCell.className = 'relative text-right text-xs text-gray-400'; // KORREKTUR: h-[80px] entfernt
-            timeLabelCell.style.height = `${2 * slotHeight}px`; // NEU: Dynamische Höhe
-            timeLabelCell.innerHTML = `<span class="week-calendar-time-label">${String(hour).padStart(2, '0')}:00</span>`;
-            timeColumn.appendChild(timeLabelCell);
-        }
-        gridAndTimes.appendChild(timeColumn);
-
-        const dayGrid = document.createElement('div');
-        dayGrid.className = 'absolute top-0 left-[60px] right-0 bottom-0 grid grid-cols-7';
-        for (let i = 0; i < 7; i++) {
-            const dayCol = document.createElement('div');
-            // KORREKTUR: dayCol wird selbst zu einem Grid-Container für die Zeit-Slots, was robuster ist.
-            dayCol.className = 'week-calendar-day-col grid';
-            dayCol.style.gridTemplateRows = `repeat(36, ${slotHeight}px)`;
-            for (let j = 0; j < 36; j++) {
-                const slot = document.createElement('div');
-                slot.className = 'border-t border-dotted border-gray-200';
-                if (j % 2 === 0) slot.classList.replace('border-dotted', 'border-solid');
-                dayCol.appendChild(slot);
-            }
-            dayGrid.appendChild(dayCol);
-        }
-        gridAndTimes.appendChild(dayGrid);
-        bodyContainer.appendChild(gridAndTimes);
-
-        // --- Render Appointments on top ---
-        const hintLog = (message, ...data) => console.log(`%c[Hint] %c${message}`, 'color: #9b59b6; font-weight: bold;', 'color: black;', ...data);
-        const appointmentsContainer = document.createElement('div');
-        appointmentsContainer.className = 'absolute top-0 left-[60px] right-0 bottom-0 grid grid-cols-7';
-        
-        appointmentsByDay.forEach((dayAppointments, dayIndex) => {
-            if (dayAppointments.length === 0) return;
-
-            const dayColumnContainer = document.createElement('div');
-            dayColumnContainer.className = 'relative h-full'; // Container for one day's appointments
-            dayColumnContainer.style.gridColumn = `${parseInt(dayIndex) + 1} / span 1`;
-
-            const layoutData = this._calculateOverlaps(dayAppointments);
-
-            layoutData.forEach(layoutInfo => {
-                const termin = layoutInfo.termin;
-                const terminDate = new Date(termin.Datum);
-                const startHour = terminDate.getHours();
-                const startMinute = terminDate.getMinutes();
-
-                if (startHour < 6) return;
-
-                const durationMinutes = termin.Dauer ? termin.Dauer / 60 : 60;
-                const startOffsetMinutes = (startHour - 6) * 60 + startMinute;
-                
-                const top = (startOffsetMinutes / 30) * slotHeight; // NEU: Dynamische Höhe
-                const height = Math.max(slotHeight, (durationMinutes / 30) * slotHeight); // NEU: Dynamische Höhe
-
-                const width = 100 / layoutInfo.totalColumns;
-                const left = layoutInfo.column * width; // KORREKTUR: Der Mitarbeitername wird jetzt aus dem gecachten `db.mitarbeiter` geholt.
-
-                const terminEl = document.createElement('a');
-                terminEl.href = '#';
-                terminEl.dataset.id = termin._id;
-                const { border, bg, text } = this._getAppointmentColorClasses(termin, 'category');
-
-                const ownerId = termin.Mitarbeiter_ID;
-                const inviteeId = termin.Eingeladener;
-                let isInvitee = false;
-                if (viewMode === 'personal') {
-                    if (inviteeId === this.currentUserId && ownerId !== this.currentUserId) isInvitee = true;
-                } else if (viewMode === 'user_select') {
-                    const selectedUserId = this.weekCalendarUserSelect.value;
-                    if (inviteeId === selectedUserId && ownerId !== selectedUserId) isInvitee = true;
-                }
-                const inviteeIcon = isInvitee ? '<i class="fas fa-user-plus fa-xs ml-1" title="Du bist eingeladen"></i>' : '';
-                const terminTime = terminDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-
-                terminEl.className = `week-calendar-appointment p-2 rounded-md flex flex-col ${bg} ${text} ${border}`;
-                terminEl.style.top = `${top}px`;
-                terminEl.style.height = `${height - 2}px`; // -2 for a small gap
-                terminEl.style.left = `calc(${left}% + 2px)`;
-                terminEl.style.width = `calc(${width}% - 4px)`;
-
-                // NEU: Füge Klassen hinzu, um die Sichtbarkeit von Inhalten basierend auf der Höhe zu steuern
-                if (height < 60) terminEl.classList.add('content-priority-low'); // Uhrzeit ausblenden
-                if (height < 40) terminEl.classList.add('content-priority-medium'); // Mitarbeitername ausblenden
-
-                terminEl.innerHTML = `
-                    <strong class="text-sm font-bold truncate appointment-customer-name">${termin.Terminpartner || 'Unbekannt'}</strong>
-                    <span class="text-xs opacity-90 appointment-time">${terminTime}</span>
-                    <span class="text-xs opacity-90 truncate mt-auto appointment-employee-name">${findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || ''} ${inviteeIcon}</span>
-                `;
-                // NEU: Hinweise für zugeordnete Umsätze oder PG-Einträge hinzufügen
-                this._renderAppointmentHints(termin, terminEl);
-                terminEl.addEventListener('click', (e) => { e.preventDefault(); this.openModal(this.allAppointments.find(t => t._id === e.currentTarget.dataset.id)); });
-                dayColumnContainer.appendChild(terminEl);
-            });
-            appointmentsContainer.appendChild(dayColumnContainer);
-        });
-
-        bodyContainer.appendChild(appointmentsContainer);
-        this.weekCalendarBody.appendChild(bodyContainer);
-    }
-
     // NEU: Fügt kontextbezogene Hinweise zu einem Termin-Element im Kalender hinzu.
     _renderAppointmentHints(termin, terminEl) {
         const hintLog = (message, ...data) => console.log(`%c[Hint] %c${message}`, 'color: #9b59b6; font-weight: bold;', 'color: black;', ...data);
@@ -6043,18 +5949,43 @@ class AppointmentsView {
     }
 
     _resetWeekCalendarToToday() {
-        // KORREKTUR: Erstelle eine saubere Kopie des Datums, um Seiteneffekte und das "Springen" zu verhindern.
-        const todayCopy = new Date(getCurrentDate());
-        // KORREKTUR: Setze die Stunden zurück, um konsistente Berechnungen zu gewährleisten.
-        todayCopy.setHours(0, 0, 0, 0);
+        this._scrollToTodayInCalendar();
+    }
 
-        const day = todayCopy.getDay();
-        const diff = todayCopy.getDate() - day + (day === 0 ? -6 : 1);
-        const monday = new Date(todayCopy); // Erstelle eine weitere Kopie für die Berechnung
-        monday.setDate(diff);
-        this.calendarWeekStartDate = monday;
-        this.calendarWeekStartDate.setHours(0, 0, 0, 0);
-        this._renderAppointmentStats();
+    _scrollToTodayInCalendar(behavior = 'smooth') {
+        const todayString = new Date(getCurrentDate()).toISOString().split('T')[0];
+        const todayHeader = document.querySelector(`#week-calendar-header-grid > [data-date="${todayString}"]`);
+        if (todayHeader) {
+            const container = this.weekCalendarScrollContainer;
+            const containerRect = container.getBoundingClientRect();
+            const todayRect = todayHeader.getBoundingClientRect();
+            const scrollLeft = container.scrollLeft + todayRect.left - containerRect.left - (containerRect.width / 2) + (todayRect.width / 2);
+            container.scrollTo({ left: scrollLeft, behavior: behavior });
+        }
+    }
+
+    _getDateFromScroll() {
+        const container = this.weekCalendarScrollContainer;
+        const centerScroll = container.scrollLeft + (container.clientWidth / 2);
+        const dayIndex = Math.floor((centerScroll) / 150);
+        const centerDate = new Date(this.calendarStartDate);
+        centerDate.setDate(centerDate.getDate() + dayIndex);
+        return centerDate;
+    }
+
+    _navigateWeekCalendar(days) {
+        const newDate = new Date(this.calendarWeekStartDate);
+        newDate.setDate(newDate.getDate() + days);
+        this.calendarWeekStartDate = newDate;
+        this._renderWeekCalendar();
+    }
+
+    _resetWeekCalendarToToday() {
+        const today = new Date(getCurrentDate());
+        const day = today.getDay();
+        const diff = today.getDate() - day + (day === 0 ? -6 : 1); // Monday is the first day
+        this.calendarWeekStartDate = new Date(today.setDate(diff));
+        this._renderWeekCalendar();
     }
 
     _escapeIcsString(str) {
