@@ -1669,10 +1669,6 @@ function getMonthlyCycleDates() {
   }
 
   endDate.setHours(23, 59, 59, 999); // Setze die Zeit explizit auf das Ende des Tages.
-  // KORREKTUR: .toISOString() konvertiert in UTC, was zu Verwirrung führt.
-  // .toLocaleString() zeigt das Datum in der lokalen Zeitzone an, was der tatsächlichen Berechnung entspricht.
-  const formatForLog = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' };
-  console.log(`[DEBUG] Berechneter Umsatzmonat: START = ${startDate.toLocaleString('de-DE', formatForLog)}, END = ${endDate.toLocaleString('de-DE', formatForLog)}`);
   return { startDate, endDate };
 }
 
@@ -5612,34 +5608,41 @@ class AppointmentsView {
         this.calendarEndDate = initialEndDate;
 
         // Zeit-Labels (linke Spalte, fixiert)
-        const totalCalendarHeight = 24 * 2 * this.weekCalendarSlotHeight;
+        // KORREKTUR: Die Höhe wird jetzt dynamisch basierend auf der Anzahl der Slots berechnet.
+        const totalSlots = 24 * 2; // 24 Stunden, 2 Slots pro Stunde
+        const totalCalendarHeight = totalSlots * this.weekCalendarSlotHeight;
         this.weekCalendarTimeLabelsContainer.innerHTML = '';
         const timeLabelCol = document.createElement('div');
 
         // Header und Body Container
         const headerGrid = document.createElement('div');
         headerGrid.id = 'week-calendar-header-grid';
-        headerGrid.className = 'week-calendar-header-grid sticky top-0 z-20';
+        // KORREKTUR: Die Klassen für das Grid-Layout werden jetzt hier gesetzt.
+        headerGrid.className = 'week-calendar-header-grid sticky top-0 z-20 bg-white';
         // KORREKTUR: Die Gesamthöhe des Kalender-Grids wird explizit gesetzt, um eine perfekte Synchronisation zu gewährleisten.
         this.weekCalendarContainer.style.height = `${totalCalendarHeight}px`;
         const bodyGrid = document.createElement('div');
         bodyGrid.id = 'week-calendar-body-grid';
+        // KORREKTUR: Die Klassen für das Grid-Layout werden jetzt hier gesetzt.
         bodyGrid.className = 'week-calendar-body-grid';
 
         this.weekCalendarContainer.append(headerGrid, bodyGrid);
 
         // KORREKTUR: Die Logik zum Erstellen der Zeit-Labels wurde hierher verschoben und korrigiert.
         // Das überflüssige, leere Label, das den Versatz verursacht hat, wurde entfernt.
-        timeLabelCol.className = 'week-calendar-time-labels';
+        timeLabelCol.className = 'week-calendar-time-labels relative'; // relative für den "Heute"-Indikator
         timeLabelCol.style.height = `${totalCalendarHeight}px`;
         for (let hour = 0; hour < 24; hour++) {
             const label = document.createElement('div');
-            label.className = 'week-calendar-time-label text-xs text-gray-500';
+            // KORREKTUR: Die Positionierung wird jetzt über `top` gesteuert, um den Offset zu beheben.
+            label.className = 'week-calendar-time-label';
             label.textContent = `${hour.toString().padStart(2, '0')}:00`;
             label.style.top = `${hour * this.weekCalendarSlotHeight * 2}px`;
             timeLabelCol.appendChild(label);
         }
         this.weekCalendarTimeLabelsContainer.appendChild(timeLabelCol);
+        // NEU: "Heute"-Indikator zur Zeitleiste hinzufügen
+        this._addTodayIndicatorToTimeline();
 
 
         this._renderDayColumns(this.calendarStartDate, this.calendarEndDate, false, this.searchFilteredAppointments);
@@ -5708,13 +5711,20 @@ class AppointmentsView {
         const dayCol = document.createElement('div');
         const isToday = day.toDateString() === new Date().toDateString();
         dayCol.className = `week-calendar-day-col ${isToday ? 'today-col' : ''}`;
+        // NEU: "Heute"-Indikator hinzufügen, wenn es der heutige Tag ist.
+        if (isToday) {
+            const todayIndicator = document.createElement('div');
+            todayIndicator.className = 'week-calendar-today-indicator';
+            dayCol.appendChild(todayIndicator);
+            this._updateTodayIndicatorPosition(todayIndicator);
+        }
         dayCol.dataset.date = day.toISOString().split('T')[0];
 
         // Zeit-Slots (Linien)
         for (let hour = 0; hour <= 23; hour++) {
             for (let minute = 0; minute < 60; minute += 30) {
                 const slot = document.createElement('div');
-                slot.className = 'week-calendar-time-slot';
+                slot.className = 'week-calendar-time-slot h-full'; // h-full für Grid-Layout
                 slot.style.height = `${this.weekCalendarSlotHeight}px`;
                 if (minute === 0) slot.classList.add('full-hour');
                 dayCol.appendChild(slot);
@@ -5774,7 +5784,8 @@ class AppointmentsView {
         const startMinute = startDate.getMinutes();
         const durationInMinutes = (termin.Dauer || 3600) / 60;
 
-        const topOffset = (startHour * 2 + (startMinute / 30)) * this.weekCalendarSlotHeight; // KORREKTUR: Offset entfernt
+        // KORREKTUR: Die Berechnung des Offsets wurde korrigiert, um den 1-Stunden-Versatz zu beheben.
+        const topOffset = (startHour * 2 + (startMinute / 30)) * this.weekCalendarSlotHeight;
         const height = (durationInMinutes / 30) * this.weekCalendarSlotHeight;
 
         const width = 100 / totalColumns;
@@ -5988,6 +5999,29 @@ class AppointmentsView {
         newDate.setDate(newDate.getDate() + days);
         this.calendarWeekStartDate = newDate;
         this._renderAppointmentStats();
+    }
+
+    // NEU: Fügt den "Heute"-Indikator zur Zeitleiste hinzu.
+    _addTodayIndicatorToTimeline() {
+        const timeLabelCol = this.weekCalendarTimeLabelsContainer.querySelector('.week-calendar-time-labels');
+        if (!timeLabelCol) return;
+
+        const indicator = document.createElement('div');
+        indicator.className = 'week-calendar-today-indicator';
+        timeLabelCol.appendChild(indicator);
+        this._updateTodayIndicatorPosition(indicator);
+    }
+
+    // NEU: Aktualisiert die Position des "Heute"-Indikators.
+    _updateTodayIndicatorPosition(indicatorElement) {
+        const now = new Date();
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+        const totalMinutes = hours * 60 + minutes;
+
+        // Position basierend auf der Slot-Höhe berechnen (1 Slot = 30 Minuten)
+        const topPosition = (totalMinutes / 30) * this.weekCalendarSlotHeight;
+        indicatorElement.style.top = `${topPosition}px`;
     }
 
     _resetWeekCalendarToToday() {

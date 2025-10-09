@@ -1234,43 +1234,20 @@ summary::-webkit-details-marker {
 }
 
 /* NEU: Stile für den detaillierten Wochenkalender */
-.week-calendar-header-grid {
-    display: grid;
-    grid-template-columns: 60px repeat(7, minmax(0, 1fr));
-    background-color: var(--color-skt-grey-light);
-}
-
-.week-calendar-body-grid {
-    display: grid;
-    grid-template-columns: 60px repeat(7, minmax(0, 1fr));
-    /* 18 Stunden (6-24) * 2 Slots/Stunde = 36 Zeilen. Jeder Slot ist 40px hoch. */
-    grid-template-rows: repeat(36, 40px); 
-}
-
 .week-calendar-day-col {
     position: relative;
-    border-left: 1px solid #e5e7eb; /* border-gray-200 */
-}
-
-.week-calendar-header-grid > div:not(:first-child) {
-    border-left: 1px solid #d1d5db; /* gray-300 */
-}
-.week-calendar-body-grid > .week-calendar-day-col:not(:first-child) {
-    border-left: 1px solid #d1d5db; /* gray-300 */
-}
-.week-calendar-time-slot {
-    border-top: 1px dotted #e5e7eb; /* border-gray-200 */
-}
-.week-calendar-time-slot.full-hour {
-    border-top-style: solid;
+    /* KORREKTUR: Der linke Rand wird jetzt über den Grid-Container gesteuert, um Lücken zu vermeiden. */
+    display: grid;
+    grid-template-rows: repeat(48, minmax(0, 1fr)); /* 48 Slots für 24 Stunden */
 }
 
 .week-calendar-time-label {
     position: absolute;
     transform: translateY(-50%);
     right: 8px;
-    background-color: white;
-    padding: 0 4px;
+    /* KORREKTUR: Hintergrund entfernt, um die Linien nicht zu überdecken. */
+    font-size: 0.75rem; /* text-xs */
+    color: #6b7280; /* gray-500 */
 }
 
 .week-calendar-appointment {
@@ -1279,6 +1256,34 @@ summary::-webkit-details-marker {
     overflow: hidden;
     transition: all 0.2s ease;
     /* border-left: 4px solid; */ /* Wird für die Statusfarbe verwendet */ /* KORREKTUR: Wird nicht mehr benötigt, da die farbige Leiste jetzt ein div ist. */
+}
+
+/* KORREKTUR: Grid-Layout für Header und Body, um vertikale Linien sicherzustellen */
+.week-calendar-header-grid, .week-calendar-body-grid {
+    display: grid;
+    gap: 0; /* Kein Abstand zwischen den Spalten */
+}
+.week-calendar-header-grid > div, .week-calendar-body-grid > div {
+    border-right: 1px solid #e5e7eb; /* border-gray-200 */
+}
+.week-calendar-header-grid > div:last-child, .week-calendar-body-grid > div:last-child {
+    border-right: none;
+}
+.week-calendar-time-slot {
+    border-top: 1px dotted #e5e7eb; /* border-gray-200 */
+}
+.week-calendar-time-slot.full-hour {
+    border-top: 1px solid #d1d5db; /* border-gray-300 */
+}
+
+/* NEU: Stile für den "Heute"-Indikator */
+.week-calendar-today-indicator {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: var(--color-accent-red);
+    z-index: 20; /* Über den Terminen */
 }
 
 /* NEU: Priorisierung der Inhalte in kleinen Kalendereinträgen */
