@@ -4763,6 +4763,10 @@ class AppointmentsView {
         this.weekCalendarScrollContainer = document.getElementById('week-calendar-scroll-container');
         // NEU: Container für die Zeitleiste
         this.weekCalendarTimeLabelsContainer = document.getElementById('week-calendar-time-labels-container');
+        // NEU: Elemente für die mobile Tagesansicht
+        this.mobileDayViewContainer = document.getElementById('mobile-day-view-container');
+        this.mobileDayNavPrev = document.getElementById('mobile-day-nav-prev');
+        this.mobileDayNavNext = document.getElementById('mobile-day-nav-next');
         this.weekPeriodDisplay = document.getElementById('week-period-display'); // KORREKTUR: Fehlende Zuweisung
         this.statsViewTableBtn = document.getElementById('stats-view-table-btn');
         this.statsViewInfoBtn = document.getElementById('stats-view-info-btn'); // NEU
@@ -4791,6 +4795,9 @@ class AppointmentsView {
         this.heatmapTab = document.getElementById('analysis-heatmap-tab');
         this.heatmapGrid = document.getElementById('heatmap-grid');
         // KORREKTUR: Prüfung für den neuen Zeit-Label-Container hinzugefügt.
+        // KORREKTUR: Die Prüfung auf `mobileDayViewContainer` wurde entfernt, da dieses Element
+        // nur auf kleinen Bildschirmen relevant ist und die Initialisierung nicht blockieren sollte.
+        // Die anderen Elemente sind für die Grundfunktionalität auf allen Geräten notwendig.
         return this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.searchInput && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.statsTab && this.heatmapTab && this.heatmapGrid && this.statsScopeFilter && this.statsCategoryFilterBtn && this.statsCategoryFilterPanel && this.statsMonthTimeline && this.statsPeriodDisplay && this.statsNavPrevBtn && this.statsNavNextBtn && this.outstandingAppointmentsSection && this.outstandingAppointmentsList && this.statsViewTimelineBtn && this.statsViewTableBtn && this.statsTimelineView && this.statsTableView && this.statsViewInfoBtn && this.naechstesInfoView && this.groupFilterContainer && this.mainFilterContainer && this.analysisContainer && this.statsViewWeekBtn && this.statsWeekView && this.weekCalendarContainer && this.weekPeriodDisplay && this.weekCalendarScrollContainer;
     }
 
@@ -5592,6 +5599,18 @@ class AppointmentsView {
     _renderWeekCalendar() {
         if (!this.weekCalendarContainer || !this.weekCalendarScrollContainer) return;
 
+        // NEU: Prüfe die Bildschirmbreite und rendere die entsprechende Ansicht
+        if (window.innerWidth < 768) {
+            this._renderSingleDayView();
+            return;
+        }
+
+        // Bestehende Logik für die Desktop-Ansicht
+        // KORREKTUR: Prüfen, ob das Element existiert, bevor darauf zugegriffen wird.
+        if (this.mobileDayViewContainer) {
+            this.mobileDayViewContainer.classList.add('hidden');
+        }
+
         // Reset everything for a full re-render (e.g., when user changes)
         this.weekCalendarContainer.innerHTML = '';
         this.calendarRenderedDays.clear();
@@ -5658,6 +5677,81 @@ class AppointmentsView {
         });
     }
 
+    // NEU: Überarbeitete Funktion für die mobile Tagesansicht im iOS-Stil
+    _renderSingleDayView() {
+        // Zeige die mobile Ansicht und verstecke die Desktop-Ansicht
+        // KORREKTUR: Füge eine Sicherheitsprüfung hinzu, um einen Absturz zu verhindern, wenn das Element nicht gefunden wird.
+        if (!this.mobileDayViewContainer) {
+            console.error("Das Container-Element für die mobile Tagesansicht ('mobile-day-view-container') wurde nicht gefunden.");
+            return;
+        }
+
+        this.mobileDayViewContainer.classList.remove('hidden');
+        this.weekCalendarScrollContainer.parentElement.classList.add('hidden'); // Versteckt den Desktop-Kalender
+    
+        const day = this.statsCurrentDate; // Verwende das Datum aus der Timeline-Navigation
+    
+        // Header aktualisieren
+        const header = this.mobileDayViewContainer.querySelector('#mobile-day-header');
+        header.textContent = day.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+    
+        // Navigations-Buttons
+        this.mobileDayNavPrev.onclick = () => this._navigateSingleDay(-1);
+        this.mobileDayNavNext.onclick = () => this._navigateSingleDay(1);
+    
+        // Timeline und Termine rendern
+        const timelineContainer = this.mobileDayViewContainer.querySelector('#mobile-day-timeline');
+        timelineContainer.innerHTML = '';
+    
+        // Zeit-Labels und Linien erstellen
+        for (let hour = 0; hour < 24; hour++) { // KORREKTUR: Verwende die ungefilterte Liste `this.searchFilteredAppointments`,
+            const hourEl = document.createElement('div');
+            hourEl.className = 'mobile-day-hour-slot';
+            hourEl.innerHTML = `<div class="mobile-day-time-label">${hour.toString().padStart(2, '0')}:00</div><div class="mobile-day-hour-line"></div>`;
+            timelineContainer.appendChild(hourEl);
+        }
+    
+        // KORREKTUR: Verwende die ungefilterte Liste `this.searchFilteredAppointments`,
+        // da `this.dateAndSearchFilteredAppointments` bereits nach dem Datumsbereich der Hauptansicht gefiltert ist.
+        const appointmentsForDay = this.searchFilteredAppointments.filter(t => t.Datum && new Date(t.Datum).toDateString() === day.toDateString());
+
+        // NEU: Wenn keine Termine vorhanden sind, eine Meldung anzeigen.
+        if (appointmentsForDay.length === 0) {
+            const noAppointmentsEl = document.createElement('div');
+            noAppointmentsEl.className = 'absolute inset-x-0 top-1/3 text-center text-gray-500';
+            noAppointmentsEl.innerHTML = '<p>Keine Termine für diesen Tag.</p>';
+            timelineContainer.appendChild(noAppointmentsEl);
+        }
+
+        const layout = this._calculateOverlaps(appointmentsForDay); // Überlappungen berechnen
+    
+        layout.forEach(({ termin, column, totalColumns }) => {
+            const terminEl = this._createMobileAppointmentElement(termin, column, totalColumns);
+            timelineContainer.appendChild(terminEl);
+        });
+    
+        // "Jetzt"-Indikator hinzufügen, wenn der angezeigte Tag heute ist
+        const today = new Date();
+        if (day.toDateString() === today.toDateString()) {
+            const nowIndicator = this._createNowIndicator();
+            timelineContainer.appendChild(nowIndicator);
+        }
+    
+        // Zur aktuellen Zeit scrollen (oder zum ersten Termin)
+        setTimeout(() => {
+            const nowIndicator = timelineContainer.querySelector('.mobile-now-indicator');
+            const firstAppointment = timelineContainer.querySelector('.mobile-appointment-block');
+            const target = nowIndicator || firstAppointment;
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+    }
+
+    _navigateSingleDay(days) {
+        const newDate = new Date(this.statsCurrentDate);
+        newDate.setDate(newDate.getDate() + days);
+        this.statsCurrentDate = newDate;
+        this._renderSingleDayView();
+    }
     _renderDayColumns(startDate, endDate, prepend = false) {
         const headerGrid = document.getElementById('week-calendar-header-grid');
         const bodyGrid = document.getElementById('week-calendar-body-grid');
@@ -5831,6 +5925,62 @@ class AppointmentsView {
 
         terminEl.addEventListener('click', () => this.openModal(termin));
         return terminEl;
+    }
+
+    // NEU: Überarbeitete Funktion, um Terminblöcke für die mobile Timeline zu erstellen
+    _createMobileAppointmentElement(termin, column, totalColumns) {
+        const startDate = new Date(termin.Datum);
+        const durationInMinutes = (termin.Dauer || 3600) / 60;
+    
+        const topOffset = (startDate.getHours() * 60 + startDate.getMinutes()); // in Minuten
+        const height = durationInMinutes;
+    
+        const width = 100 / totalColumns;
+        const left = column * width;
+    
+        const { bg: statusBgClass, text: statusTextColorClass } = this._getAppointmentColorClasses(termin);
+        const mitarbeiterName = findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
+    
+        const el = document.createElement('div');
+        el.className = `mobile-appointment-block absolute flex flex-col p-2 rounded-lg shadow-md overflow-hidden ${statusBgClass}`;
+        el.style.top = `${topOffset}px`; // 1px pro Minute
+        el.style.height = `${height}px`;
+        el.style.left = `calc(${left}% + 4rem)`; // 4rem ist die Breite der Zeitleiste
+        el.style.width = `calc(${width}% - 4px)`; // -4px für einen kleinen Abstand
+        el.dataset.id = termin._id;
+    
+        el.innerHTML = `
+            <p class="font-bold text-sm truncate ${statusTextColorClass}">${termin.Terminpartner || 'Unbekannt'}</p>
+            <p class="text-xs ${statusTextColorClass}">${startDate.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}</p>
+            <p class="text-xs opacity-80 ${statusTextColorClass} mt-1 truncate">${mitarbeiterName}</p>
+        `;
+    
+        el.addEventListener('click', () => this.openModal(termin));
+    
+        return el;
+    }
+
+    // NEU: Hilfsfunktion, um den "Jetzt"-Indikator zu erstellen
+    _createNowIndicator() {
+        const now = new Date();
+        const topOffset = now.getHours() * 60 + now.getMinutes();
+    
+        const indicator = document.createElement('div');
+        indicator.className = 'mobile-now-indicator absolute left-0 right-0 flex items-center z-20';
+        indicator.style.top = `${topOffset}px`;
+    
+        indicator.innerHTML = `
+            <div class="w-2 h-2 rounded-full bg-red-500 -ml-1"></div>
+            <div class="flex-grow h-0.5 bg-red-500"></div>
+        `;
+    
+        // Aktualisiert die Position des Indikators jede Minute
+        setInterval(() => {
+            const newTop = new Date().getHours() * 60 + new Date().getMinutes();
+            indicator.style.top = `${newTop}px`;
+        }, 60000);
+    
+        return indicator;
     }
 
     // NEU: Hilfsfunktion zur Berechnung von überlappenden Terminen für einen Tag
