@@ -91,9 +91,13 @@
                     <button id="umsatz-header-btn" class="bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 flex items-center justify-center" title="Umsätze">
                         <i class="fas fa-chart-line"></i>
                     </button>
-                    <!-- NEU: Stimmungsdashboard-Button im Header -->
+                    <!-- Stimmungsdashboard-Button im Header (sichtbar ab sm) -->
                     <button id="stimmungs-dashboard-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Stimmungsdashboard">
                         <i class="fas fa-smile-beam"></i>
+                    </button>
+                    <!-- Strukturbaum-Button im Header (sichtbar ab sm) -->
+                    <button id="strukturbaum-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Strukturbaum">
+                        <i class="fas fa-sitemap"></i>
                     </button>
                     <!-- NEU: Planungs-Button im Header -->
                     <button id="planung-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Planung & Vision">
@@ -126,9 +130,9 @@
                                 <a href="#" id="pg-tagebuch-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-comments w-5 mr-2"></i>PG-Tagebuch</a>
                                 <a href="#" id="potential-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-users w-5 mr-2"></i>Potentiale</a>
                                 <a href="#" id="auswertung-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-trophy w-5 mr-2"></i>Auswertung</a>
-                                <a href="#" id="planung-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-tasks w-5 mr-2"></i>Planung & Vision</a>
-                                <a href="#" id="stimmungs-dashboard-menu-item" class="hidden px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-smile-beam w-5 mr-2"></i>Stimmungsdashboard</a>
-                                <a href="#" id="strukturbaum-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sitemap w-5 mr-2"></i>Strukturbaum</a>
+                                <a href="#" id="planung-menu-item" class="block sm:hidden px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-tasks w-5 mr-2"></i>Planung & Vision</a>
+                                <a href="#" id="stimmungs-dashboard-menu-item" class="hidden px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light flex items-center" title="Stimmungsdashboard"><i class="fas fa-smile-beam w-5 mr-2"></i>Stimmungsdashboard</a>
+                                <a href="#" id="strukturbaum-menu-item" class="block sm:hidden px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sitemap w-5 mr-2"></i>Strukturbaum</a>
                         </div>
                     </div>
                     <div class="relative">
@@ -139,7 +143,6 @@
                                 <a href="#" id="superuser-btn" class="hidden block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-users-cog w-5 mr-2"></i>Gesamtansicht</a>
                                 <a href="#" id="money-view-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-euro-sign w-5 mr-2"></i>Geld-Ansicht</a>
                                 <a href="#" id="edit-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-edit w-5 mr-2"></i>Personendaten</a>
-                                <a href="#" id="strukturbaum-settings-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sitemap w-5 mr-2"></i>Strukturbaum</a>
                                 <a href="#" id="workingday-auswertung-btn" class="hidden block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-calendar-week w-5 mr-2"></i>WorkingDay Auswertung</a>
                                 <a href="#" id="help-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-question-circle w-5 mr-2"></i>Hilfe</a>
                                 <a href="#" id="add-new-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-plus w-5 mr-2"></i>Neuer Nutzer</a>
@@ -527,12 +530,24 @@
             <div id="appointment-modal-hints" class="hidden mb-4 space-y-2"></div>
             <form id="appointment-form" class="space-y-4">
                 <input type="hidden" id="appointment-id">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div id="appointment-grid-1" class="grid grid-cols-2 gap-4">
                     <div><label for="appointment-user" class="block text-sm font-medium text-gray-700 mb-1">Mitarbeiter</label><select id="appointment-user" required class="modern-select"></select></div>
                     <div><label for="appointment-invitee" class="block text-sm font-medium text-gray-700 mb-1">Eingeladener</label><select id="appointment-invitee" class="modern-select"></select></div>
                     <div><label for="appointment-date" class="block text-sm font-medium text-gray-700 mb-1">Datum & Uhrzeit</label><div class="input-wrapper"><input type="datetime-local" id="appointment-date" required class="modern-input w-full"></div></div>
                     <div><label for="appointment-duration" class="block text-sm font-medium text-gray-700 mb-1">Dauer (Minuten)</label><input type="number" id="appointment-duration" class="modern-input"></div>
-                    <div><label for="appointment-location" class="block text-sm font-medium text-gray-700 mb-1">Ort</label><input type="text" id="appointment-location" class="modern-input"></div>
+                </div>
+                <div id="appointment-location-wrapper" class="hidden"><label for="appointment-location" class="block text-sm font-medium text-gray-700 mb-1">Ort</label><input type="text" id="appointment-location" class="modern-input"></div>
+                <!-- KORREKTUR: Fehlender Wrapper für das Wiederholungs-Dropdown hinzugefügt.
+                     Das Fehlen dieses Elements hat dazu geführt, dass beim Ändern der Kategorie
+                     der Text "null" im Formular erschien, da JavaScript versuchte, ein
+                     nicht existentes Element zu verschieben. -->
+                <div id="appointment-recurrence-wrapper">
+                    <div id="appointment-recurrence-container" class="hidden sm:col-span-1">
+                        <label for="appointment-recurrence" class="block text-sm font-medium text-gray-700 mb-1">Wiederholung</label>
+                        <select id="appointment-recurrence" class="modern-select"><option value="">Keine</option><option value="täglich">Täglich</option><option value="wöchentlich">Wöchentlich</option><option value="zweiwöchentlich">Zweiwöchentlich</option><option value="monatlich">Monatlich (an diesem Tag)</option></select>
+                    </div>
+                </div>
+            <div id="appointment-grid-2" class="grid grid-cols-2 gap-4">
                     <div><label for="appointment-category" class="block text-sm font-medium text-gray-700 mb-1">Kategorie</label><select id="appointment-category" required class="modern-select"></select></div>
                     <div><label for="appointment-status" class="block text-sm font-medium text-gray-700 mb-1">Status</label><select id="appointment-status" required class="modern-select"></select></div>
                     <div id="appointment-infoabend-container" class="hidden"><label for="appointment-infoabend-date" class="block text-sm font-medium text-gray-700 mb-1">Nächster Infoabend</label><div class="input-wrapper"><input type="date" id="appointment-infoabend-date" class="modern-input w-full"></div></div>
@@ -547,12 +562,8 @@
                             <option value="monatlich">Monatlich (an diesem Tag)</option>
                         </select>
                     </div>
-                </div>
-            <div id="appointment-partner-referrals-grid" class="grid grid-cols-2 gap-4">
-                <div id="appointment-partner-container" class="col-span-2"><label for="appointment-partner" class="block text-sm font-medium text-gray-700">Kunde, Bewerber,...</label><input type="text" id="appointment-partner" class="modern-input"></div>
-                <div id="appointment-referrals-container-single" class="hidden"><label for="appointment-referrals-single" class="block text-sm font-medium text-gray-700">Empfehlungen</label><input type="number" id="appointment-referrals-single" class="modern-input"></div>
-            </div>
-            <div class="grid grid-cols-2 gap-4">
+                <div id="appointment-partner-container" class="sm:col-span-2"><label for="appointment-partner" class="block text-sm font-medium text-gray-700">Kunde, Bewerber,...</label><input type="text" id="appointment-partner" class="modern-input"></div>
+                <div id="appointment-referrals-container-single" class="hidden sm:col-span-2"><label for="appointment-referrals-single" class="block text-sm font-medium text-gray-700">Empfehlungen</label><input type="number" id="appointment-referrals-single" class="modern-input"></div>
                 <div id="appointment-prognose-container" class="hidden"><label for="appointment-prognose" class="block text-sm font-medium text-gray-700">Umsatzprognose (EH)</label><input type="number" step="0.01" id="appointment-prognose" class="modern-input"></div>
                 <div id="appointment-referrals-container-paired"><label for="appointment-referrals-paired" class="block text-sm font-medium text-gray-700">Empfehlungen</label><input type="number" id="appointment-referrals-paired" class="modern-input"></div>
                 </div>

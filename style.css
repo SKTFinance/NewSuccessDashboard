@@ -476,14 +476,15 @@ summary::-webkit-details-marker {
 .timeline-info .timeline-title {
     font-weight: 600;
     color: var(--color-skt-blue);
-    word-break: break-word;
+    word-break: break-word; /* KORREKTUR: Schriftgröße für bessere Lesbarkeit angepasst */
+    font-size: 0.9rem; /* 14.4px */
 }
 .timeline-info {
     flex: 1 1 auto; /* Allow it to grow and shrink */
     min-width: 150px; /* Prevent it from becoming too small */
 }
 .timeline-info .timeline-duedate {
-    font-size: 0.875rem;
+    font-size: 0.8rem; /* 12.8px */
     color: var(--color-skt-blue-light);
 }
 /* Stile für das iOS-Anleitungs-Modal und Hinweis-Modal */
@@ -1251,6 +1252,12 @@ summary::-webkit-details-marker {
     border-left: 1px solid #e5e7eb; /* border-gray-200 */
 }
 
+.week-calendar-header-grid > div:not(:first-child) {
+    border-left: 1px solid #d1d5db; /* gray-300 */
+}
+.week-calendar-body-grid > .week-calendar-day-col:not(:first-child) {
+    border-left: 1px solid #d1d5db; /* gray-300 */
+}
 .week-calendar-time-slot {
     border-top: 1px dotted #e5e7eb; /* border-gray-200 */
 }
@@ -1268,10 +1275,10 @@ summary::-webkit-details-marker {
 
 .week-calendar-appointment {
     position: absolute; /* KORREKTUR: Positionierung für Überlappung */
-    z-index: 10;
+    z-index: 10; /* KORREKTUR: Klassen für neues Design. */
     overflow: hidden;
     transition: all 0.2s ease;
-    border-left: 4px solid; /* Wird für die Statusfarbe verwendet */
+    /* border-left: 4px solid; */ /* Wird für die Statusfarbe verwendet */ /* KORREKTUR: Wird nicht mehr benötigt, da die farbige Leiste jetzt ein div ist. */
 }
 
 /* NEU: Priorisierung der Inhalte in kleinen Kalendereinträgen */

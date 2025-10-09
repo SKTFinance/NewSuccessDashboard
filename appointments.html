@@ -17,23 +17,27 @@
                 <h3 class="text-2xl font-semibold text-skt-blue">Terminübersicht</h3>
                 <div id="stats-view-toggle" class="view-toggle flex space-x-2">
                     <button id="stats-view-timeline-btn" class="active" title="Timeline-Ansicht"><i class="fas fa-stream"></i></button>
-                    <button id="stats-view-week-btn" title="Wochenkalender"><i class="fas fa-calendar-week"></i></button>
                     <button id="stats-view-table-btn" title="Tabellenansicht"><i class="fas fa-list"></i></button>
+                    <button id="stats-view-week-btn" title="Wochenansicht"><i class="fas fa-calendar-week"></i></button>
                     <button id="stats-view-info-btn" title="Nächstes Info"><i class="fas fa-users"></i></button>
                 </div>
             </div>
-                <div class="flex flex-col sm:flex-row gap-4 w-full sm:w-auto items-center flex-wrap">
-                <div class="w-full sm:w-auto">
-                    <!-- NEU: Dropdown-Container für den Kategorie-Filter -->
-                    <div id="stats-category-filter-dropdown" class="relative">
-                        <button id="stats-category-filter-btn" class="modern-select w-full text-left">Filter</button>
-                            <div id="stats-category-filter-panel" class="hidden absolute right-0 z-40 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 p-4">
-                            <!-- Checkboxen werden per JS gefüllt -->
+            <!-- NEU: Button, der nur auf mobilen Geräten sichtbar ist -->
+            <button id="mobile-filter-toggle-btn" class="md:hidden bg-white border border-gray-300 text-skt-blue font-semibold py-2 px-4 rounded-lg shadow-sm flex items-center gap-2">
+                <i class="fas fa-filter"></i> Filter
+            </button>
+        </div>
+
+        <!-- NEU: Wrapper für alle Filter, der auf mobil ein- und ausgeklappt wird -->
+        <div id="appointments-filter-wrapper" class="hidden md:block">
+            <div class="flex flex-col md:flex-row md:justify-end md:items-center gap-4 w-full mb-6">
+                <div class="flex flex-col sm:flex-row gap-4 w-full md:w-auto items-center flex-wrap">
+                    <div class="w-full sm:w-auto">
+                        <div id="stats-category-filter-dropdown" class="relative">
+                            <button id="stats-category-filter-btn" class="modern-select w-full text-left">Filter</button>
+                            <div id="stats-category-filter-panel" class="hidden absolute right-0 z-40 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 p-4"></div>
                         </div>
                     </div>
-                </div>
-
-                    <!-- KORREKTUR: Scope- und Gruppenfilter in einem Wrapper zusammengefasst, um sie nebeneinander zu halten -->
                     <div class="flex gap-4 w-full sm:w-auto">
                         <div class="w-full sm:w-auto">
                             <label for="appointments-scope-filter" class="sr-only">Statistik anzeigen für</label>
@@ -42,20 +46,17 @@
                                 <option value="group">Meine Gruppe</option>
                                 <option value="structure">Meine Struktur</option>
                             </select>
-                    </div>
+                        </div>
                         <div id="appointments-group-filter-container" class="relative hidden w-full sm:w-auto">
                             <button id="appointments-group-filter-btn" class="modern-select w-full text-left">Alle Gruppen</button>
-                            <div id="appointments-group-filter-panel" class="hidden absolute right-0 z-30 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 p-4">
-                                <!-- Checkboxen werden per JS gefüllt -->
-                            </div>
+                            <div id="appointments-group-filter-panel" class="hidden absolute right-0 z-30 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 p-4"></div>
                         </div>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Filter -->
-        <div id="appointments-main-filter-container" class="bg-skt-grey-light p-4 rounded-xl mb-6 border border-gray-200">
-            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+            <div id="appointments-main-filter-container" class="bg-skt-grey-light p-4 rounded-xl border border-gray-200">
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                 <div class="md:col-span-1">
                     <label for="appointments-search-filter" class="block text-sm font-medium text-gray-700 mb-1">Suchen</label>
                     <div class="input-wrapper">
@@ -64,15 +65,16 @@
                 </div>
                 <div class="md:col-span-2">
                     <div class="grid grid-cols-2 gap-4">
-                    <div>
-                    <label for="appointments-start-date" class="block text-sm font-medium text-gray-700 mb-1">Von</label>
-                    <div class="input-wrapper"><input type="date" id="appointments-start-date" class="modern-input w-full"></div>
-                </div>
+                        <div>
+                            <label for="appointments-start-date" class="block text-sm font-medium text-gray-700 mb-1">Von</label>
+                            <div class="input-wrapper"><input type="date" id="appointments-start-date" class="modern-input w-full"></div>
+                        </div>
                         <div>
                             <label for="appointments-end-date" class="block text-sm font-medium text-gray-700 mb-1">Bis</label>
                             <div class="input-wrapper"><input type="date" id="appointments-end-date" class="modern-input w-full"></div>
                         </div>
                     </div>
+                </div>
                 </div>
             </div>
         </div>
@@ -86,34 +88,23 @@
             </div>
             <div id="stats-month-timeline" class="flex overflow-x-auto gap-4 pb-4 hide-scrollbar" style="height: 500px;"></div>
         </div>
-        <!-- NEU: Ansicht für den Wochenkalender -->
-        <div id="stats-week-view" class="hidden flex flex-col" style="height: 800px;">
-            <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4 flex-shrink-0">
+        <!-- NEU: Container für die Wochenkalender-Ansicht -->
+        <div id="stats-week-view" class="hidden">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4 sticky top-0 bg-white/80 backdrop-blur-sm py-2 z-30">
+                <h4 id="week-period-display" class="font-semibold text-skt-blue text-lg text-center cursor-pointer" title="Zur aktuellen Woche springen"></h4>
                 <div class="flex items-center gap-4">
-                    <button id="week-nav-prev-btn" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors" title="Vorherige Woche"><i class="fas fa-chevron-left"></i></button>
-                    <h4 id="week-period-display" class="font-semibold text-skt-blue text-lg text-center cursor-pointer" title="Zur aktuellen Woche springen"></h4>
-                    <button id="week-nav-next-btn" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors" title="Nächste Woche"><i class="fas fa-chevron-right"></i></button>
-                    <!-- NEU: Zoom-Buttons für den Kalender -->
-                    <div class="ml-4 flex items-center gap-2">
-                        <button id="week-zoom-out-btn" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors" title="Herauszoomen"><i class="fas fa-search-minus"></i></button>
-                        <button id="week-zoom-in-btn" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors" title="Hineinzoomen"><i class="fas fa-search-plus"></i></button>
-                    </div>
-                </div>
-                <!-- NEU: Container für die Kalender-Filter -->
-                <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
-                    <div class="w-full sm:w-auto">
-                        <select id="week-calendar-view-mode-select" class="modern-select"></select>
-                    </div>
-                    <div id="week-calendar-user-select-container" class="hidden w-full sm:w-auto">
-                        <select id="week-calendar-user-select" class="modern-select"></select>
-                    </div>
+                    <!-- KORREKTUR: Der separate User-Select wurde entfernt. Die Filterung erfolgt jetzt über die globalen Filter. -->
+                    <button id="week-calendar-zoom-out" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors" title="Herauszoomen"><i class="fas fa-search-minus"></i></button>
+                    <button id="week-calendar-zoom-in" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors" title="Hineinzoomen"><i class="fas fa-search-plus"></i></button>
                 </div>
             </div>
-            <!-- KORREKTUR: Container für den scrollbaren Kalender -->
-            <div id="week-calendar-scroll-container" class="flex-grow min-h-0 overflow-y-auto relative border border-gray-200 rounded-lg bg-white">
-                <div id="week-calendar-header" class="sticky top-0 z-20"></div>
-                <div id="week-calendar-body">
-                    <!-- Inhalt wird per JS generiert -->
+            <!-- KORREKTUR: Die Zeitachse wird aus dem Scroll-Container herausgezogen, um sie fixieren zu können. -->
+            <!-- NEU: Der Container für die Zeitachse und den Kalender wird zu einer Flexbox, um die vertikale Ausrichtung sicherzustellen. -->
+            <div class="flex relative" style="height: 70vh;">
+                <!-- NEU: Die Zeitachse wird jetzt absolut positioniert und erhält einen eigenen Scroll-Container, um synchron zu scrollen. -->
+                <div id="week-calendar-time-labels-container" class="w-[60px] flex-shrink-0 relative overflow-hidden z-20 bg-white"></div>
+                <div id="week-calendar-scroll-container" class="relative overflow-auto flex-grow">
+                    <div id="week-calendar-container" class="relative"></div>
                 </div>
             </div>
         </div>
