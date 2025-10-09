@@ -7,7 +7,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <title>SKT Digitale Beratung</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="vendor/apexcharts.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
@@ -16,7 +16,7 @@
     <div id="beratung-root" class="h-screen w-screen bg-skt-blue text-white flex flex-col items-center justify-center p-4 relative overflow-hidden">
 
     <!-- Hintergrundbild für den Welcome-Screen (NEU) -->
-    <div id="beratung-bg-image" class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 opacity-0" style="background-image: url('https://images.unsplash.com/photo-1556761175-5973dc0f32e7?q=80&w=2832&auto=format&fit=crop');"></div>
+    <div id="beratung-bg-image" class="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 opacity-0" style="background-image: url('Beratung.png');"></div>
     <div class="absolute inset-0 bg-skt-blue opacity-80"></div>
 
     <!-- NEU: Lade-Overlay -->
@@ -35,27 +35,27 @@
     <div id="beratung-slides-container" class="relative w-full max-w-6xl h-full flex justify-center pb-24 pt-8 overflow-y-auto">
 
         <!-- NEU: Slide 0: Mitarbeitername Eingabe -->
-        <div id="beratung-slide-mitarbeitername" class="beratung-slide">
+        <div id="beratung-slide-mitarbeitername" class="beratung-slide start-screen">
             <h1 class="text-4xl font-bold mb-4">Willkommen zur digitalen Beratung</h1>
             <p class="text-xl mb-8 text-gray-300">Bitte geben Sie Ihren Namen ein, um zu starten.</p>
             <input type="text" id="beratung-mitarbeitername-input" class="text-2xl text-center bg-transparent border-b-2 border-gray-400 focus:border-white focus:outline-none py-2 text-white placeholder-gray-400" placeholder="Ihr Name">
         </div>
 
         <!-- Slide 1: Kundenname Eingabe -->
-        <div id="beratung-slide-kundenname" class="beratung-slide hidden">
+        <div id="beratung-slide-kundenname" class="beratung-slide hidden start-screen">
             <h1 class="text-4xl font-bold mb-4">Willkommen zur digitalen Beratung</h1>
             <p class="text-xl mb-8 text-gray-300">Bitte geben Sie den Namen Ihres Kunden ein, um zu starten.</p>
             <input type="text" id="beratung-kundenname-input" class="text-2xl text-center bg-transparent border-b-2 border-gray-400 focus:border-white focus:outline-none py-2 text-white placeholder-gray-400" placeholder="Name des Kunden">
         </div>
 
         <!-- Slide 2: Willkommensbildschirm -->
-        <div id="beratung-slide-welcome" class="beratung-slide hidden">
+        <div id="beratung-slide-welcome" class="beratung-slide hidden start-screen">
             <h1 class="text-6xl font-bold font-times-new-roman">Finanzkonzept</h1>
             <p id="beratung-welcome-kundenname" class="text-3xl mt-4 text-gray-200"></p>
         </div>
 
         <!-- NEU: Slide 2.5: Berater-Vorstellung -->
-        <div id="beratung-slide-berater-vorstellung" class="beratung-slide hidden">
+        <div id="beratung-slide-berater-vorstellung" class="beratung-slide hidden start-screen">
             <!-- Inhalt wird dynamisch per JavaScript generiert -->
         </div>
 
@@ -170,29 +170,61 @@
             </div>
         </div>
 
-        <div id="beratung-slide-explanation-Rechtschutz" class="beratung-slide hidden w-full flex-col">
-            <div class="text-center w-full mb-10">
-                <h2 class="text-4xl font-bold mb-2">Sorgenfrei im Recht mit der richtigen Absicherung</h2>
-                <p class="text-xl text-gray-300">Eine Rechtsschutzversicherung ist Ihr finanzieller Schutzschild bei rechtlichen Konflikten.</p>
+        <!-- === RECHTSSCHUTZ === -->
+        <div id="beratung-slide-explanation-Rechtschutz" class="beratung-slide hidden">
+            <div class="slide-header">
+                <h2 class="text-4xl font-bold">Rechtsschutzversicherung</h2>
             </div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-stretch flex-grow w-full">
-                <!-- Linke Spalte: Inhalt & Chart -->
-                <div class="flex flex-col justify-center h-full">
-                    <div class="grid grid-cols-2 gap-6 text-white">
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-blue-500"><i class="fas fa-shield-alt"></i></div><h3 class="font-bold text-lg mt-3">Finanzielle Sicherheit</h3><p class="text-sm text-gray-400 mt-1">Schutz vor hohen Anwalts- und Gerichtskosten.</p></div>
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-green-500"><i class="fas fa-balance-scale"></i></div><h3 class="font-bold text-lg mt-3">Waffengleichheit</h3><p class="text-sm text-gray-400 mt-1">Auf Augenhöhe mit großen Firmen und Gegnern.</p></div>
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-yellow-500"><i class="fas fa-user-tie"></i></div><h3 class="font-bold text-lg mt-3">Expertenrat</h3><p class="text-sm text-gray-400 mt-1">Jederzeit Zugang zu professioneller Rechtsberatung.</p></div>
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-red-500"><i class="fas fa-smile-beam"></i></div><h3 class="font-bold text-lg mt-3">Sorgenfreiheit</h3><p class="text-sm text-gray-400 mt-1">Gelassenheit im Alltag, im Verkehr und bei Verträgen.</p></div>
+            <div class="slide-content">
+                <div class="slide-quadrant slide-quadrant--no-clip">
+                    <h3 class="text-xl font-semibold">Starke Leistungen auf einen Blick</h3>
+                    <p class="text-gray-300">Wann immer es rechtlich heikel wird, übernimmt die Rechtsschutzversicherung die Kosten für Beratung, Anwalt und Verfahren.</p>
+                                        
+                    <div class="quadrant-benefit-grid">
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Begleitet bei Streitigkeiten mit Arbeitgebern, Dienstleistern oder Behörden." tabindex="0" role="button" aria-label="Privat &amp; Beruf – Tooltip: Begleitet bei Streitigkeiten mit Arbeitgebern, Dienstleistern oder Behörden.">
+                            <span class="benefit-icon benefit-icon--blue"><i class="fas fa-gavel"></i></span>
+                            <div>
+                                <div class="benefit-title">Privat & Beruf</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Unterstützung nach Unfällen, bei Schadenersatzforderungen oder Führerscheinverlust." tabindex="0" role="button" aria-label="Verkehr – Tooltip: Unterstützung nach Unfällen, bei Schadenersatzforderungen oder Führerscheinverlust.">
+                            <span class="benefit-icon benefit-icon--green"><i class="fas fa-car"></i></span>
+                            <div>
+                                <div class="benefit-title">Verkehr</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Hilfe bei Miet- und Nachbarschaftsstreitigkeiten sowie in Familienrechtsfragen." tabindex="0" role="button" aria-label="Familie &amp; Wohnen – Tooltip: Hilfe bei Miet- und Nachbarschaftsstreitigkeiten sowie in Familienrechtsfragen.">
+                            <span class="benefit-icon benefit-icon--gold"><i class="fas fa-house"></i></span>
+                            <div>
+                                <div class="benefit-title">Familie & Wohnen</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Absicherung bei Cybermobbing, Ehrenbeleidigung oder strafrechtlichen Vorwürfen." tabindex="0" role="button" aria-label="Online &amp; Strafrecht – Tooltip: Absicherung bei Cybermobbing, Ehrenbeleidigung oder strafrechtlichen Vorwürfen.">
+                            <span class="benefit-icon benefit-icon--purple"><i class="fas fa-shield-alt"></i></span>
+                            <div>
+                                <div class="benefit-title">Online & Strafrecht</div>
+                            </div>
+                        </div>
                     </div>
-                    <div id="rechtsschutz-chart-container" class="bg-white/5 p-4 rounded-lg mt-6"></div>
                 </div>
-                <!-- Rechte Spalte: Bild -->
-                <div class="hidden lg:flex flex-col gap-6 h-full">
-                    <div class="flex-1"><img src="https://www.helvetia.com/at/web/de/privatkunden/versichern/unfall-recht/rechtsschutzversicherung/_jcr_content/whitelabelparsys-01/productstage_copy/image.1627368758831.transform-fp/1920x1080/rechtsschutzversicherung.jpg" alt="Recht und Gerechtigkeit" class="rounded-2xl shadow-2xl object-cover h-full w-full"></div>
-                    <div class="flex-1 bg-white/5 p-6 rounded-lg"><h4 class="font-bold text-lg mb-2">Wo lauern die meisten Konflikte?</h4><p class="text-gray-300">Das Diagramm zeigt, dass die meisten Rechtsstreitigkeiten im Bereich <strong class="text-white">Schadenersatz</strong> (z.B. nach Unfällen) und bei <strong class="text-white">Vertragsangelegenheiten</strong> (z.B. Online-Käufe, Handwerker) entstehen. Ein umfassender Schutz ist daher unerlässlich.</p></div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <img src="https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?q=80&w=1974&auto=format&fit=crop" alt="Beratung durch Anwalt" class="quadrant-image">
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <div id="rechtsschutz-chart-container" class="quadrant-chart"></div>
+                </div>
+                <div class="slide-quadrant quadrant-text">
+                    <h3 class="text-xl font-semibold">Wann hilft Rechtsschutz?</h3>
+                    <p>Die häufigsten Konflikte entstehen durch <strong>Verkehrsunfälle</strong>, <strong>Arbeitsrecht</strong> und <strong>Vertragsstreitigkeiten</strong>. Mit einer Rechtsschutzversicherung bleiben Sie handlungsfähig und vermeiden hohe Prozesskosten.</p>
+                    <ul class="quadrant-bullet-list">
+                        <li><i class="fas fa-check-circle"></i><span>Verhandlungen mit Arbeitgeber oder Mieter können sofort unterstützt werden.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Telefonische Erstberatung rund um die Uhr.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Deckung der Prozesskosten inklusive Sachverständigen und Gericht.</span></li>
+                    </ul>
                 </div>
             </div>
         </div>
+
 
         <div id="beratung-slide-explanation-Fondssparen" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Fondssparen</h2></div>
         <div id="beratung-slide-explanation-FLV" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: FLV</h2></div>
@@ -217,154 +249,422 @@
             </div>
         </div>
         
-        <div id="beratung-slide-explanation-Eigenheim" class="beratung-slide hidden w-full flex-col">
-            <div class="text-center w-full mb-10">
-                <h2 class="text-4xl font-bold mb-2">Das Fundament Ihres Lebens absichern</h2>
-                <p class="text-xl text-gray-300">Die Eigenheimversicherung schützt Ihr Gebäude vor existenziellen Risiken.</p>
+        <!-- === EIGENHEIM === -->
+        <div id="beratung-slide-explanation-Eigenheim" class="beratung-slide hidden">
+            <div class="slide-header">
+                <h2 class="text-4xl font-bold">Eigenheimversicherung</h2>
             </div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-stretch flex-grow w-full">
-                <div class="flex flex-col justify-center h-full">
-                    <div class="grid grid-cols-2 gap-6 text-white">
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-blue-500"><i class="fas fa-building-shield"></i></div><h3 class="font-bold text-lg mt-3">Umfassender Gebäudeschutz</h3><p class="text-sm text-gray-400 mt-1">Deckt Schäden am Haus selbst (Mauerwerk, Dach, Boden) ab.</p></div>
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-green-500"><i class="fas fa-cloud-showers-heavy"></i></div><h3 class="font-bold text-lg mt-3">Absicherung bei Naturgefahren</h3><p class="text-sm text-gray-400 mt-1">Sturm, Hagel, Überschwemmung – große Schäden werden ersetzt.</p></div>
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-red-500"><i class="fas fa-house-fire"></i></div><h3 class="font-bold text-lg mt-3">Brandschutz für die Immobilie</h3><p class="text-sm text-gray-400 mt-1">Kein finanzieller Ruin bei Brand- oder Blitzschlag-Schäden.</p></div>
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-yellow-500"><i class="fas fa-person-falling-burst"></i></div><h3 class="font-bold text-lg mt-3">Haftpflicht für Grundstück</h3><p class="text-sm text-gray-400 mt-1">Schutz, wenn z.B. jemand auf dem vereisten Gehweg stürzt.</p></div>
+            <div class="slide-content">
+                <div class="slide-quadrant slide-quadrant--no-clip">
+                    <h3 class="text-xl font-semibold">Ihre Vorteile im Überblick</h3>
+                    <p class="text-gray-300">Die Eigenheimversicherung deckt sowohl das Gebäude als auch Anbauten und haftet für Schäden, die auf Ihrem Grundstück entstehen.</p>
+                                        
+                    <div class="quadrant-benefit-grid">
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Deckt Schäden an Dach, Mauern, Boden, Garage und Nebengebäuden." tabindex="0" role="button" aria-label="Umfassender Gebäudeschutz – Tooltip: Deckt Schäden an Dach, Mauern, Boden, Garage und Nebengebäuden.">
+                            <span class="benefit-icon benefit-icon--blue"><i class="fas fa-home"></i></span>
+                            <div>
+                                <div class="benefit-title">Umfassender Gebäudeschutz</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Schützt vor Sturm, Hagel, Überschwemmung und Schneedruck." tabindex="0" role="button" aria-label="Absicherung bei Naturgefahren – Tooltip: Schützt vor Sturm, Hagel, Überschwemmung und Schneedruck.">
+                            <span class="benefit-icon benefit-icon--green"><i class="fas fa-cloud-rain"></i></span>
+                            <div>
+                                <div class="benefit-title">Absicherung bei Naturgefahren</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Kein finanzieller Ruin bei Brand, Blitzschlag oder Explosion." tabindex="0" role="button" aria-label="Brandschutz für die Immobilie – Tooltip: Kein finanzieller Ruin bei Brand, Blitzschlag oder Explosion.">
+                            <span class="benefit-icon benefit-icon--red"><i class="fas fa-fire"></i></span>
+                            <div>
+                                <div class="benefit-title">Brandschutz für die Immobilie</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Schutz, wenn jemand auf Ihrem Grundstück zu Schaden kommt." tabindex="0" role="button" aria-label="Haftpflicht fürs Grundstück – Tooltip: Schutz, wenn jemand auf Ihrem Grundstück zu Schaden kommt.">
+                            <span class="benefit-icon benefit-icon--gold"><i class="fas fa-users"></i></span>
+                            <div>
+                                <div class="benefit-title">Haftpflicht fürs Grundstück</div>
+                            </div>
+                        </div>
                     </div>
-                    <div id="eigenheim-chart-container" class="bg-white/5 p-4 rounded-lg mt-6"></div>
                 </div>
-                <div class="hidden lg:flex flex-col gap-6 h-full">
-                    <div class="flex-1"><img src="https://images.unsplash.com/photo-1564013799919-ab600027ffc6?q=80&w=2070&auto=format&fit=crop" alt="Modernes Haus" class="rounded-2xl shadow-2xl object-cover h-full w-full"></div>
-                    <div class="flex-1 bg-white/5 p-6 rounded-lg"><h4 class="font-bold text-lg mb-2">Die größten Gefahren für Ihr Heim</h4><p class="text-gray-300">Statistisch gesehen sind <strong class="text-white">Wasserschäden</strong> durch Rohrbrüche und <strong class="text-white">Sturmschäden</strong> die häufigsten und teuersten Risiken für Hausbesitzer. Eine gute Versicherung ist hier essenziell, um den Wert Ihrer Immobilie zu schützen.</p></div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <img src="https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?q=80&w=1974&auto=format&fit=crop" alt="Modernes Eigenheim mit Pool" class="quadrant-image">
                 </div>
-            </div>
-        </div>
-        <div id="beratung-slide-explanation-Haushalt" class="beratung-slide hidden w-full flex-col">
-            <div class="text-center w-full mb-10">
-                <h2 class="text-4xl font-bold mb-2">Ihr Zuhause in sicheren Händen</h2>
-                <p class="text-xl text-gray-300">Die Haushaltsversicherung schützt alles, was Ihnen lieb und teuer ist.</p>
-            </div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-stretch flex-grow w-full">
-                <div class="flex flex-col justify-center h-full">
-                    <div class="grid grid-cols-2 gap-6 text-white">
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-blue-500"><i class="fas fa-couch"></i></div><h3 class="font-bold text-lg mt-3">Schutz des Wohnungsinhalts</h3><p class="text-sm text-gray-400 mt-1">Möbel, Elektrogeräte und Wertsachen sind abgesichert.</p></div>
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-green-500"><i class="fas fa-user-secret"></i></div><h3 class="font-bold text-lg mt-3">Einbruch & Diebstahl</h3><p class="text-sm text-gray-400 mt-1">Ersetzt gestohlene Gegenstände und Reparaturkosten.</p></div>
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-red-500"><i class="fas fa-house-damage"></i></div><h3 class="font-bold text-lg mt-3">Feuer- und Wasserschäden</h3><p class="text-sm text-gray-400 mt-1">Schutz, wenn ein Rohrbruch den gesamten Hausrat zerstört.</p></div>
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-yellow-500"><i class="fas fa-wind"></i></div><h3 class="font-bold text-lg mt-3">Glas- & Elementarschäden</h3><p class="text-sm text-gray-400 mt-1">Schutz bei zerbrochenen Fenstern oder Sturmschäden.</p></div>
-                    </div>
-                    <div id="haushalt-chart-container" class="bg-white/5 p-4 rounded-lg mt-6"></div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <div id="eigenheim-chart-container" class="quadrant-chart"></div>
                 </div>
-                <div class="hidden lg:flex flex-col gap-6 h-full">
-                    <div class="flex-1"><img src="https://de.mycs.com/blog/wp-content/uploads/2023/04/DE-Wohnung-gemuetlich-featured-image.jpg"></div>
-                    <div class="flex-1 bg-white/5 p-6 rounded-lg"><h4 class="font-bold text-lg mb-2">Die häufigsten Schäden im Haushalt</h4><p class="text-gray-300">Die Statistik zeigt: <strong class="text-white">Wasserschäden</strong> sind mit Abstand die häufigste Ursache für teure Reparaturen im Haushalt, dicht gefolgt von <strong class="text-white">Einbruch und Diebstahl</strong>. Eine gute Haushaltsversicherung deckt genau diese alltäglichen Risiken ab.</p></div>
-                </div>
-            </div>
-        </div>
-        <div id="beratung-slide-explanation-Krankenversicherung" class="beratung-slide hidden w-full"><h2 class="text-4xl font-bold text-center mb-8">Erklärung: Krankenversicherung</h2></div>
-        <div id="beratung-slide-explanation-Unfallversicherung" class="beratung-slide hidden w-full flex-col">
-            <div class="text-center w-full mb-10">
-                <h2 class="text-4xl font-bold mb-2">Schutz, wenn's drauf ankommt</h2>
-                <p class="text-xl text-gray-300">Die private Unfallversicherung – Ihr finanzielles Sicherheitsnetz rund um die Uhr.</p>
-            </div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-stretch flex-grow w-full">
-                <!-- Linke Spalte: Inhalt & Chart -->
-                <div class="flex flex-col justify-center h-full">
-                    <div class="grid grid-cols-2 gap-6 text-white">
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-green-500"><i class="fas fa-dollar-sign"></i></div><h3 class="font-bold text-lg mt-3">Finanzielle Soforthilfe</h3><p class="text-sm text-gray-400 mt-1">Deckt Kosten für Bergung, Reha und notwendige Umbauten.</p></div>
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-blue-500"><i class="fas fa-globe-europe"></i></div><h3 class="font-bold text-lg mt-3">Weltweiter Schutz</h3><p class="text-sm text-gray-400 mt-1">Gilt 24/7 – in der Freizeit, im Haushalt und auf Reisen.</p></div>
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-yellow-500"><i class="fas fa-wheelchair"></i></div><h3 class="font-bold text-lg mt-3">Invaliditätsleistung</h3><p class="text-sm text-gray-400 mt-1">Einmalige Kapitalzahlung bei dauerhaften Beeinträchtigungen.</p></div>
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-purple-500"><i class="fas fa-plus-circle"></i></div><h3 class="font-bold text-lg mt-3">Wichtige Zusatzleistungen</h3><p class="text-sm text-gray-400 mt-1">Übernimmt Kosten für kosmetische Operationen und Reha-Management.</p></div>
-                    </div>
-                    <div id="unfall-chart-container" class="bg-white/5 p-4 rounded-lg mt-6"></div>
-                </div>
-                <!-- Rechte Spalte: Bild -->
-                <div class="hidden lg:flex flex-col gap-6 h-full">
-                    <div class="flex-1"><img src="https://images.unsplash.com/photo-1551632811-561732d1e306?q=80&w=2070&auto=format&fit=crop" alt="Familie beim Wandern" class="rounded-2xl shadow-2xl object-cover h-full w-full"></div>
-                    <div class="flex-1 bg-white/5 p-6 rounded-lg"><h4 class="font-bold text-lg mb-2">Wo passieren die meisten Unfälle?</h4><p class="text-gray-300">Die gesetzliche Unfallversicherung leistet nur bei Arbeits- und Wegunfällen. Das Diagramm zeigt aber deutlich: Die mit Abstand meisten Unfälle passieren in der <strong class="text-white">Freizeit und beim Sport</strong>. Genau hier springt die private Unfallversicherung ein und schließt diese entscheidende Lücke.</p></div>
-                </div>
-            </div>
-        </div>
-        <div id="beratung-slide-explanation-Risikoleben" class="beratung-slide hidden w-full flex-col">
-            <div class="text-center w-full mb-10">
-                <h2 class="text-4xl font-bold mb-2">Die Zukunft Ihrer Liebsten sichern</h2>
-                <p class="text-xl text-gray-300">Die Risikolebensversicherung als Fundament für finanzielle Sicherheit.</p>
-            </div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-stretch flex-grow w-full">
-                <!-- Linke Spalte: Inhalt & Chart -->
-                <div class="flex flex-col justify-center h-full">
-                    <div class="grid grid-cols-2 gap-6 text-white">
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-green-500"><i class="fas fa-users"></i></div><h3 class="font-bold text-lg mt-3">Hinterbliebenenschutz</h3><p class="text-sm text-gray-400 mt-1">Sichert den Lebensstandard Ihrer Familie im Ernstfall.</p></div>
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-blue-500"><i class="fas fa-house-damage"></i></div><h3 class="font-bold text-lg mt-3">Kreditabsicherung</h3><p class="text-sm text-gray-400 mt-1">Schützt vor dem Verlust des Eigenheims bei Krediten.</p></div>
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-yellow-500"><i class="fas fa-piggy-bank"></i></div><h3 class="font-bold text-lg mt-3">Günstiger Schutz</h3><p class="text-sm text-gray-400 mt-1">Bietet eine hohe Versicherungssumme für geringe Beiträge.</p></div>
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-purple-500"><i class="fas fa-handshake"></i></div><h3 class="font-bold text-lg mt-3">Partnerschutz</h3><p class="text-sm text-gray-400 mt-1">Sichert Geschäftspartner gegenseitig ab.</p></div>
-                    </div>
-                    <div id="risiko-chart-container" class="bg-white/5 p-4 rounded-lg mt-6"></div>
-                </div>
-                <!-- Rechte Spalte: Bild -->
-                <div class="hidden lg:flex flex-col gap-6 h-full">
-                    <div class="flex-1"><img src="https://images.unsplash.com/photo-1560518883-ce09059eeffa?q=80&w=1973&auto=format&fit=crop" alt="Paar plant Finanzen" class="rounded-2xl shadow-2xl object-cover h-full w-full"></div>
-                    <div class="flex-1 bg-white/5 p-6 rounded-lg"><h4 class="font-bold text-lg mb-2">Wofür wird die Leistung benötigt?</h4><p class="text-gray-300">Im Todesfall entstehen nicht nur emotionale, sondern auch große finanzielle Lücken. Die Versicherungssumme wird am häufigsten benötigt, um <strong class="text-white">laufende Kredite</strong> zu tilgen und den <strong class="text-white">Lebensunterhalt der Familie</strong> langfristig zu sichern. So wird aus einem Schicksalsschlag keine finanzielle Katastrophe.</p></div>
-                </div>
-            </div>
-        </div>
-        <div id="beratung-slide-explanation-Berufsunfähigkeit" class="beratung-slide hidden w-full flex-col">
-            <div class="text-center w-full mb-10">
-                <h2 class="text-4xl font-bold mb-2">Ihre Arbeitskraft ist Ihr größtes Kapital</h2>
-                <p class="text-xl text-gray-300">Die Berufsunfähigkeitsversicherung schützt Ihr Einkommen.</p>
-            </div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-stretch flex-grow w-full">
-                <!-- Linke Spalte: Inhalt & Chart -->
-                <div class="flex flex-col justify-center h-full">
-                    <div class="grid grid-cols-2 gap-6 text-white">
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-green-500"><i class="fas fa-money-bill-wave"></i></div><h3 class="font-bold text-lg mt-3">Einkommen sichern</h3><p class="text-sm text-gray-400 mt-1">Ersetzt Ihr wegfallendes Gehalt durch eine monatliche Rente.</p></div>
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-blue-500"><i class="fas fa-chart-line"></i></div><h3 class="font-bold text-lg mt-3">Lebensstandard halten</h3><p class="text-sm text-gray-400 mt-1">Ermöglicht es Ihnen, Ihre laufenden Kosten weiter zu decken.</p></div>
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-yellow-500"><i class="fas fa-user-md"></i></div><h3 class="font-bold text-lg mt-3">Unabhängigkeit bewahren</h3><p class="text-sm text-gray-400 mt-1">Schützt vor Abhängigkeit von Staat oder Familie.</p></div>
-                        <div class="rechtsschutz-card"><div class="rechtsschutz-icon bg-purple-500"><i class="fas fa-brain"></i></div><h3 class="font-bold text-lg mt-3">Psychische Ursachen</h3><p class="text-sm text-gray-400 mt-1">Leistet auch bei Burnout oder Depressionen, den häufigsten Ursachen.</p></div>
-                    </div>
-                    <div id="bu-chart-container-main" class="bg-white/5 p-4 rounded-lg mt-6"></div>
-                </div>
-                <!-- Rechte Spalte: Bild -->
-                <div class="hidden lg:flex flex-col gap-6 h-full">
-                    <div class="flex-1"><img src="https://images.unsplash.com/photo-1544723795-3fb6469f5b39?q=80&w=1978&auto=format&fit=crop" alt="Person am Schreibtisch" class="rounded-2xl shadow-2xl object-cover h-full w-full"></div>
-                    <div class="flex-1 bg-white/5 p-6 rounded-lg"><h4 class="font-bold text-lg mb-2">Die wahren Ursachen für Berufsunfähigkeit</h4><p class="text-gray-300">Anders als oft vermutet, sind Unfälle nur selten der Grund. Das Diagramm zeigt: <strong class="text-white">Psychische Erkrankungen</strong> wie Burnout und Depressionen sind mit Abstand die häufigste Ursache, gefolgt von <strong class="text-white">Erkrankungen des Skeletts und Bewegungsapparates</strong>. Eine gute BU-Versicherung deckt genau diese realen Risiken ab.</p></div>
-                </div>
-            </div>
-        </div>
-        <div id="beratung-slide-explanation-Immobilie" class="beratung-slide hidden w-full flex-col">
-            <div class="text-center w-full mb-10">
-                <h2 class="text-4xl font-bold mb-2">Ihr Traum vom Eigenheim – Wir sind Ihr Partner</h2>
-                <p class="text-xl text-gray-300">Vom Kauf bis zum Verkauf, wir begleiten Sie auf jedem Schritt.</p>
-            </div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start w-full">
-                <div class="text-gray-300 prose prose-lg max-w-none">
-                    <p>Der Kauf oder Verkauf einer Immobilie ist eine der größten finanziellen Entscheidungen im Leben. Aufgrund der unzähligen individuellen Möglichkeiten und der Komplexität des Marktes haben wir für diesen Bereich spezialisierte Experten im Unternehmen. Diese erarbeiten in einem separaten Termin mit Ihnen eine maßgeschneiderte Strategie.</p>
-                    <p>Wir begleiten Sie nicht nur bei der Suche oder dem Verkauf, sondern sichern Sie auch finanziell ab. Hierbei können die Themen <strong class="text-white">Finanzierung</strong> und <strong class="text-white">Investment</strong> eine entscheidende Rolle spielen.</p>
-                    <h4 class="text-white font-semibold mt-6">Ihre Vorteile mit uns:</h4>
-                    <ul class="list-none p-0 space-y-2">
-                        <li class="flex items-start"><i class="fas fa-check-circle text-skt-green-accent mt-1 mr-3"></i><span>Professionelle Bewertung und Marktanalyse</span></li>
-                        <li class="flex items-start"><i class="fas fa-check-circle text-skt-green-accent mt-1 mr-3"></i><span>Zugang zu einem exklusiven Käufer- und Verkäufernetzwerk</span></li>
-                        <li class="flex items-start"><i class="fas fa-check-circle text-skt-green-accent mt-1 mr-3"></i><span>Ganzheitliche Finanzierungs- und Investmentberatung</span></li>
-                    </ul>
-                    <div class="mt-8"><button id="jump-to-investment-btn" class="beratung-nav-btn"><i class="fas fa-chart-line mr-2"></i>Zum Thema Investment springen</button></div>
-                </div>
-                <div class="hidden lg:flex justify-center items-center"><img src="https://images.unsplash.com/photo-1580587771525-78b9dba3b914?q=80&w=1974&auto=format&fit=crop" alt="Modernes Haus mit Pool" class="rounded-2xl shadow-2xl object-cover h-auto w-full max-w-md"></div>
-            </div>
-        </div>
-        <div id="beratung-slide-explanation-Haftpflicht" class="beratung-slide hidden w-full flex-col">
-            <div class="text-center w-full mb-8">
-                <h2 class="text-4xl font-bold mb-2">Schutz vor den kleinen und großen Missgeschicken</h2>
-                <p class="text-xl text-gray-300">Die private Haftpflichtversicherung – ein absolutes Muss für jeden.</p>
-            </div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start w-full">
-                <div class="text-gray-300 prose prose-lg max-w-none">
-                    <p>Ein Moment der Unachtsamkeit kann schnell zu einem Schaden in Millionenhöhe führen. Die private Haftpflichtversicherung schützt Sie vor den finanziellen Folgen, wenn Sie anderen einen Schaden zufügen. Da die Anforderungen und Deckungssummen sehr individuell sind, haben wir Experten, die mit Ihnen in einem separaten Gespräch das perfekte Paket aus einer riesigen Produktvielfalt zusammenstellen.</p>
-                    <h4 class="text-white font-semibold mt-6">Ihre Vorteile mit uns:</h4>
-                    <ul class="list-none p-0 space-y-2">
-                        <li class="flex items-start"><i class="fas fa-check-circle text-skt-green-accent mt-1 mr-3"></i><span>Analyse Ihres individuellen Risikos</span></li>
-                        <li class="flex items-start"><i class="fas fa-check-circle text-skt-green-accent mt-1 mr-3"></i><span>Vergleich und Auswahl der besten Tarife am Markt</span></li>
-                        <li class="flex items-start"><i class="fas fa-check-circle text-skt-green-accent mt-1 mr-3"></i><span>Sicherstellung ausreichender Deckungssummen für optimalen Schutz</span></li>
+                <div class="slide-quadrant quadrant-text">
+                    <h3 class="text-xl font-semibold">Die größten Gefahren für Ihr Heim</h3>
+                    <p>Statistisch gesehen verursachen <strong>Wasserschäden</strong> durch Leitungsrohrbrüche und <strong>Sturmschäden</strong> die höchsten Kosten. Eine passende Deckung schützt den Wert Ihrer Immobilie.</p>
+                    <ul class="quadrant-bullet-list">
+                        <li><i class="fas fa-check-circle"></i><span>Soforthilfe bei Schäden – Organisation von Handwerkern inklusive.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Hotelkosten, wenn das Haus vorübergehend unbewohnbar ist.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Deckung von Aufräum- und Entsorgungskosten nach größeren Ereignissen.</span></li>
                     </ul>
                 </div>
-                <div class="hidden lg:flex justify-center items-center"><img src="https://res.cloudinary.com/durchblicker/image/upload/q_auto/v1706196464/Private-Haftpflichtversicherung-Oesterreich_ltxjsg.jpg" alt="Zerbrochenes Smartphone" class="rounded-2xl shadow-2xl object-cover h-auto w-full max-w-md"></div>
+            </div>
+        </div>
+        <!-- === HAUSHALT === -->
+        <div id="beratung-slide-explanation-Haushalt" class="beratung-slide hidden">
+            <div class="slide-header">
+                <h2 class="text-4xl font-bold">Haushaltsversicherung</h2>
+            </div>
+            <div class="slide-content">
+                <div class="slide-quadrant slide-quadrant--no-clip">
+                    <h3 class="text-xl font-semibold">Haushalt richtig abgesichert</h3>
+                    <p class="text-gray-300">Sie schützt den kompletten Hausrat – vom Sofa über Elektrogeräte bis zu Kleidung und Sportausrüstung.</p>
+                                        
+                    <div class="quadrant-benefit-grid">
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Mobiliar, Technik und Wertgegenstände werden zum Neuwert ersetzt." tabindex="0" role="button" aria-label="Hausrat komplett geschützt – Tooltip: Mobiliar, Technik und Wertgegenstände werden zum Neuwert ersetzt.">
+                            <span class="benefit-icon benefit-icon--blue"><i class="fas fa-couch"></i></span>
+                            <div>
+                                <div class="benefit-title">Hausrat komplett geschützt</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Deckt Schäden durch Brand, Rauch, Rohrbruch oder Frost." tabindex="0" role="button" aria-label="Feuer &amp; Leitungswasser – Tooltip: Deckt Schäden durch Brand, Rauch, Rohrbruch oder Frost.">
+                            <span class="benefit-icon benefit-icon--teal"><i class="fas fa-tint"></i></span>
+                            <div>
+                                <div class="benefit-title">Feuer & Leitungswasser</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Ersetzt gestohlene Gegenstände inklusive Tür- und Fensterschäden." tabindex="0" role="button" aria-label="Einbruch &amp; Diebstahl – Tooltip: Ersetzt gestohlene Gegenstände inklusive Tür- und Fensterschäden.">
+                            <span class="benefit-icon benefit-icon--red"><i class="fas fa-user-secret"></i></span>
+                            <div>
+                                <div class="benefit-title">Einbruch & Diebstahl</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Auch unterwegs geschützt – z.&amp;nbsp;B. bei Hotelaufenthalten oder Diebstahl aus dem Auto." tabindex="0" role="button" aria-label="Außenversicherung – Tooltip: Auch unterwegs geschützt – z. B. bei Hotelaufenthalten oder Diebstahl aus dem Auto.">
+                            <span class="benefit-icon benefit-icon--gold"><i class="fas fa-suitcase-rolling"></i></span>
+                            <div>
+                                <div class="benefit-title">Außenversicherung</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <img src="https://images.unsplash.com/photo-1505691723518-36a5ac3be353?q=80&w=1974&auto=format&fit=crop" alt="Modern eingerichtetes Wohnzimmer" class="quadrant-image">
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <div id="haushalt-chart-container" class="quadrant-chart"></div>
+                </div>
+                <div class="slide-quadrant quadrant-text">
+                    <h3 class="text-xl font-semibold">Darauf sollten Sie achten</h3>
+                    <p>Die größten Schadenverursacher sind <strong>Wasserrohrbrüche</strong>, <strong>Einbruch</strong> und <strong>Sturm</strong>. Eine ausreichend hohe Versicherungssumme verhindert Unterversicherung und reduziert Ärger im Schadenfall.</p>
+                    <ul class="quadrant-bullet-list">
+                        <li><i class="fas fa-check-circle"></i><span>Anpassung der Deckungssumme an neue Anschaffungen.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Optionaler Glasbruch- und Fahrradschutz ergänzt den Grundtarif.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Assistance-Leistungen wie Schlüsseldienst oder Hotelkosten inklusive.</span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div id="beratung-slide-explanation-Krankenversicherung" class="beratung-slide hidden">
+            <div class="slide-header">
+                <h2 class="text-4xl font-bold">Private Krankenversicherung</h2>
+            </div>
+            <div class="slide-content">
+                <div class="slide-quadrant slide-quadrant--no-clip">
+                    <h3 class="text-xl font-semibold">Gesundheitsleistungen mit Mehrwert</h3>
+                    <p class="text-gray-300">Private Krankenversicherung schafft Freiräume: schnelle Diagnosen, Top-Ärzte und umfassende Zusatzleistungen – genau abgestimmt auf Ihren Alltag.</p>
+                    <div class="quadrant-benefit-grid">
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Freie Arztwahl, Chefarztbehandlung und Einzelzimmer im Spital." tabindex="0" role="button" aria-label="Stationär &amp; Spital – Tooltip: Freie Arztwahl, Chefarztbehandlung und Einzelzimmer im Spital.">
+                            <span class="benefit-icon benefit-icon--blue"><i class="fas fa-procedures"></i></span>
+                            <div>
+                                <div class="benefit-title">Stationär &amp; Spital</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Ersetzt Kosten für Wahlarzt, Physio, Medikamente und Diagnostik." tabindex="0" role="button" aria-label="Ambulante Leistungen – Tooltip: Ersetzt Kosten für Wahlarzt, Physio, Medikamente und Diagnostik.">
+                            <span class="benefit-icon benefit-icon--green"><i class="fas fa-stethoscope"></i></span>
+                            <div>
+                                <div class="benefit-title">Ambulante Leistungen</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Regelmäßige Vorsorgeuntersuchungen, Impfungen und Früherkennung." tabindex="0" role="button" aria-label="Vorsorge &amp; Prävention – Tooltip: Regelmäßige Vorsorgeuntersuchungen, Impfungen und Früherkennung.">
+                            <span class="benefit-icon benefit-icon--gold"><i class="fas fa-heartbeat"></i></span>
+                            <div>
+                                <div class="benefit-title">Vorsorge &amp; Prävention</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Professionelle Zahnbehandlung, Kieferorthopädie und Prophylaxe inklusive." tabindex="0" role="button" aria-label="Zahn &amp; Kiefer – Tooltip: Professionelle Zahnbehandlung, Kieferorthopädie und Prophylaxe inklusive.">
+                            <span class="benefit-icon benefit-icon--teal"><i class="fas fa-tooth"></i></span>
+                            <div>
+                                <div class="benefit-title">Zahn &amp; Kiefer</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <img src="https://images.unsplash.com/photo-1582719478190-ef42fbd4a1b1?q=80&w=1974&auto=format&fit=crop" alt="Ärztin im Gespräch mit Patientin" class="quadrant-image">
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <div id="kranken-chart-container" class="quadrant-chart"></div>
+                </div>
+                <div class="slide-quadrant quadrant-text">
+                    <h3 class="text-xl font-semibold">Warum private Krankenversicherung?</h3>
+                    <p>Sie gewinnen Zeit und Sicherheit: von schneller Terminvergabe bis zur umfassenden Kostenübernahme für moderne Behandlungen.</p>
+                    <ul class="quadrant-bullet-list">
+                        <li><i class="fas fa-check-circle"></i><span>Sofortige Terminvergabe bei Wahlarzt und Spezialisten.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Flexible Tarifbausteine für Familie, Beruf und Freizeit.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Kostenübernahme auch bei innovativen Therapien und alternativen Methoden.</span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+                <!-- === UNFALL === -->
+        <div id="beratung-slide-explanation-Unfallversicherung" class="beratung-slide hidden">
+            <div class="slide-header">
+                <h2 class="text-4xl font-bold">Unfallversicherung</h2>
+            </div>
+            <div class="slide-content">
+                <div class="slide-quadrant slide-quadrant--no-clip">
+                    <h3 class="text-xl font-semibold">Sicherheit bei jedem Schritt</h3>
+                    <p class="text-gray-300">Über 75&nbsp;% aller Unfälle passieren in der Freizeit oder zu Hause – daher ist privater Schutz unverzichtbar.</p>
+                                        
+                    <div class="quadrant-benefit-grid">
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Sofortgeld bei Spitalsaufenthalt und unfallbedingten Operationen." tabindex="0" role="button" aria-label="Soforthilfe – Tooltip: Sofortgeld bei Spitalsaufenthalt und unfallbedingten Operationen.">
+                            <span class="benefit-icon benefit-icon--red"><i class="fas fa-ambulance"></i></span>
+                            <div>
+                                <div class="benefit-title">Soforthilfe</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Kapitalzahlung bei dauerhaften Beeinträchtigungen – auch bei Teilerwerbsminderung." tabindex="0" role="button" aria-label="Invaliditätsleistung – Tooltip: Kapitalzahlung bei dauerhaften Beeinträchtigungen – auch bei Teilerwerbsminderung.">
+                            <span class="benefit-icon benefit-icon--blue"><i class="fas fa-wheelchair"></i></span>
+                            <div>
+                                <div class="benefit-title">Invaliditätsleistung</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Übernahme von Reha, Therapien, Umbauten und Pflegeleistungen." tabindex="0" role="button" aria-label="Reha &amp; Zusatzleistungen – Tooltip: Übernahme von Reha, Therapien, Umbauten und Pflegeleistungen.">
+                            <span class="benefit-icon benefit-icon--green"><i class="fas fa-running"></i></span>
+                            <div>
+                                <div class="benefit-title">Reha & Zusatzleistungen</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Optionaler Schutz für Kinder, Partner oder als Sportpaket erweiterbar." tabindex="0" role="button" aria-label="Familienoptionen – Tooltip: Optionaler Schutz für Kinder, Partner oder als Sportpaket erweiterbar.">
+                            <span class="benefit-icon benefit-icon--gold"><i class="fas fa-child"></i></span>
+                            <div>
+                                <div class="benefit-title">Familienoptionen</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <img src="https://images.unsplash.com/photo-1544025162-d76694265947?q=80&w=1974&auto=format&fit=crop" alt="Aktive Familie beim Sport" class="quadrant-image">
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <div id="unfall-chart-container" class="quadrant-chart"></div>
+                </div>
+                <div class="slide-quadrant quadrant-text">
+                    <h3 class="text-xl font-semibold">Warum lohnt sich Unfallversicherung?</h3>
+                    <p>Die gesetzliche Absicherung leistet nur bei Arbeitsunfällen. Für Freizeit, Sport und Haushalt braucht es privaten Schutz.</p>
+                    <ul class="quadrant-bullet-list">
+                        <li><i class="fas fa-check-circle"></i><span>Finanzielle Sicherheit bei längerer Arbeitsunfähigkeit.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Umbaukosten für Wohnraum oder Fahrzeug werden übernommen.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Assistance-Leistungen wie Haushaltshilfen und Pflege organisiert.</span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <!-- === RISIKOLEBEN === -->
+        <div id="beratung-slide-explanation-Risikoleben" class="beratung-slide hidden">
+            <div class="slide-header">
+                <h2 class="text-4xl font-bold">Risikolebensversicherung</h2>
+            </div>
+            <div class="slide-content">
+                <div class="slide-quadrant slide-quadrant--no-clip">
+                    <h3 class="text-xl font-semibold">Finanzielle Sicherheit für Ihre Liebsten</h3>
+                    <p class="text-gray-300">Mit einer Risikolebensversicherung sichern Sie Ihre Familie, Ihr Zuhause und gemeinsame Verpflichtungen zuverlässig ab.</p>
+                                        
+                    <div class="quadrant-benefit-grid">
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Garantiert finanzielle Stabilität für Partner und Kinder im Ernstfall." tabindex="0" role="button" aria-label="Familienschutz – Tooltip: Garantiert finanzielle Stabilität für Partner und Kinder im Ernstfall.">
+                            <span class="benefit-icon benefit-icon--green"><i class="fas fa-heart"></i></span>
+                            <div>
+                                <div class="benefit-title">Familienschutz</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Tilgt offene Kredite und schützt das Eigenheim vor Zwangsverkauf." tabindex="0" role="button" aria-label="Kreditabsicherung – Tooltip: Tilgt offene Kredite und schützt das Eigenheim vor Zwangsverkauf.">
+                            <span class="benefit-icon benefit-icon--blue"><i class="fas fa-file-contract"></i></span>
+                            <div>
+                                <div class="benefit-title">Kreditabsicherung</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Gegenseitige Absicherung von Geschäfts- oder Lebenspartnern." tabindex="0" role="button" aria-label="Partnerschutz – Tooltip: Gegenseitige Absicherung von Geschäfts- oder Lebenspartnern.">
+                            <span class="benefit-icon benefit-icon--gold"><i class="fas fa-handshake"></i></span>
+                            <div>
+                                <div class="benefit-title">Partnerschutz</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Ermöglicht geordnete Nachfolgeplanung und Liquidität für Erben." tabindex="0" role="button" aria-label="Vorsorge fürs Erbe – Tooltip: Ermöglicht geordnete Nachfolgeplanung und Liquidität für Erben.">
+                            <span class="benefit-icon benefit-icon--purple"><i class="fas fa-seedling"></i></span>
+                            <div>
+                                <div class="benefit-title">Vorsorge fürs Erbe</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <img src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?q=80&w=1974&auto=format&fit=crop" alt="Familie verbringt Zeit miteinander" class="quadrant-image">
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <div id="risiko-chart-container" class="quadrant-chart"></div>
+                </div>
+                <div class="slide-quadrant quadrant-text">
+                    <h3 class="text-xl font-semibold">Wofür wird die Summe verwendet?</h3>
+                    <p>Hauptanliegen sind <strong>laufende Kredite</strong>, <strong>Einkommensersatz</strong> und die <strong>Ausbildung der Kinder</strong>. Gemeinsam ermitteln wir die passende Versicherungssumme.</p>
+                    <ul class="quadrant-bullet-list">
+                        <li><i class="fas fa-check-circle"></i><span>Anpassbare Laufzeit, z.&nbsp;B. bis Kreditende oder Pensionsantritt.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Level-, Linear- oder Annuitätenverlauf möglich.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Optionale Nachversicherung ohne erneute Gesundheitsprüfung.</span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <!-- === BERUFSUNFÄHIGKEIT === -->
+        <div id="beratung-slide-explanation-Berufsunfähigkeit" class="beratung-slide hidden">
+            <div class="slide-header">
+                <h2 class="text-4xl font-bold">Berufsunfähigkeitsversicherung</h2>
+            </div>
+            <div class="slide-content">
+                <div class="slide-quadrant slide-quadrant--no-clip">
+                    <h3 class="text-xl font-semibold">Ihr Einkommen bleibt geschützt</h3>
+                    <p class="text-gray-300">Jeder vierte Erwerbstätige wird vor dem Pensionsalter berufsunfähig. Die staatliche Unterstützung reicht meist nicht.</p>
+                                        
+                    <div class="quadrant-benefit-grid">
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Sichert Ihr monatliches Nettoeinkommen bei längerer Krankheit oder Unfall." tabindex="0" role="button" aria-label="Einkommensschutz – Tooltip: Sichert Ihr monatliches Nettoeinkommen bei längerer Krankheit oder Unfall.">
+                            <span class="benefit-icon benefit-icon--gold"><i class="fas fa-euro-sign"></i></span>
+                            <div>
+                                <div class="benefit-title">Einkommensschutz</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Leistet auch bei Burnout, Depressionen oder anderen psychischen Erkrankungen." tabindex="0" role="button" aria-label="Psychische Ursachen mitversichert – Tooltip: Leistet auch bei Burnout, Depressionen oder anderen psychischen Erkrankungen.">
+                            <span class="benefit-icon benefit-icon--purple"><i class="fas fa-brain"></i></span>
+                            <div>
+                                <div class="benefit-title">Psychische Ursachen mitversichert</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Nachversicherung ohne erneute Gesundheitsprüfung bei Lebensereignissen." tabindex="0" role="button" aria-label="Flexible Anpassungen – Tooltip: Nachversicherung ohne erneute Gesundheitsprüfung bei Lebensereignissen.">
+                            <span class="benefit-icon benefit-icon--green"><i class="fas fa-sync-alt"></i></span>
+                            <div>
+                                <div class="benefit-title">Flexible Anpassungen</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Privater Schutz füllt die Lücke zwischen Bedarf und staatlicher Leistung." tabindex="0" role="button" aria-label="Staatliche Pension reicht nicht – Tooltip: Privater Schutz füllt die Lücke zwischen Bedarf und staatlicher Leistung.">
+                            <span class="benefit-icon benefit-icon--blue"><i class="fas fa-balance-scale"></i></span>
+                            <div>
+                                <div class="benefit-title">Staatliche Pension reicht nicht</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <img src="https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=1974&auto=format&fit=crop" alt="Berater im Gespräch" class="quadrant-image">
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <div id="bu-chart-container-main" class="quadrant-chart"></div>
+                </div>
+                <div class="slide-quadrant quadrant-text">
+                    <h3 class="text-xl font-semibold">So schließen wir die BU-Lücke</h3>
+                    <p>Wir analysieren Ihr aktuelles Einkommen, Ihre Fixkosten und bestehende Absicherungen. Daraus ergibt sich die optimale Rentenhöhe.</p>
+                    <ul class="quadrant-bullet-list">
+                        <li><i class="fas fa-check-circle"></i><span>Individuelle Laufzeit: bis Pensionsantritt oder darüber hinaus.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Dynamik-Optionen halten die Rente wertbeständig.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Zusatzleistungen wie Reha, Pflege und Wiedereinstiegshilfen sind wählbar.</span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div id="beratung-slide-explanation-Immobilie" class="beratung-slide hidden">
+            <div class="slide-header">
+                <h2 class="text-4xl font-bold">Immobilienservice</h2>
+            </div>
+            <div class="slide-content">
+                <div class="slide-quadrant slide-quadrant--no-clip">
+                    <h3 class="text-xl font-semibold">Von der Suche bis zum Verkauf begleitet</h3>
+                    <p class="text-gray-300">Unsere Immobilienexperten unterstützen bei Kauf, Verkauf und Absicherung – abgestimmt auf Finanzierung und Investmentstrategie.</p>
+                    <div class="quadrant-benefit-grid">
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Umfassende Marktanalyse, Bewertung und Preisstrategie." tabindex="0" role="button" aria-label="Bewertung &amp; Analyse – Tooltip: Umfassende Marktanalyse, Bewertung und Preisstrategie.">
+                            <span class="benefit-icon benefit-icon--blue"><i class="fas fa-magnifying-glass-chart"></i></span>
+                            <div><div class="benefit-title">Bewertung &amp; Analyse</div></div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Maßgeschneiderte Finanzierungskonzepte inklusive Förderberatung." tabindex="0" role="button" aria-label="Finanzierungsservice – Tooltip: Maßgeschneiderte Finanzierungskonzepte inklusive Förderberatung.">
+                            <span class="benefit-icon benefit-icon--green"><i class="fas fa-euro-sign"></i></span>
+                            <div><div class="benefit-title">Finanzierungsservice</div></div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Absicherung von Bau- und Eigennutzung über passende Versicherungen." tabindex="0" role="button" aria-label="Absicherung – Tooltip: Absicherung von Bau- und Eigennutzung über passende Versicherungen.">
+                            <span class="benefit-icon benefit-icon--gold"><i class="fas fa-shield-heart"></i></span>
+                            <div><div class="benefit-title">Absicherung</div></div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Langfristige Betreuung bei Vermietung, Verkauf oder Anschlussfinanzierung." tabindex="0" role="button" aria-label="Begleitung – Tooltip: Langfristige Betreuung bei Vermietung, Verkauf oder Anschlussfinanzierung.">
+                            <span class="benefit-icon benefit-icon--purple"><i class="fas fa-handshake"></i></span>
+                            <div><div class="benefit-title">Begleitung</div></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <img src="https://images.unsplash.com/photo-1580587771525-78b9dba3b914?q=80&w=1974&auto=format&fit=crop" alt="Modernes Haus" class="quadrant-image">
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <div id="immobilie-chart-container" class="quadrant-chart"></div>
+                </div>
+                <div class="slide-quadrant quadrant-text">
+                    <h3 class="text-xl font-semibold">Ganzheitliche Immobilienplanung</h3>
+                    <p>Wir verbinden Marktkenntnis, Finanzierung und Absicherung zu einem durchdachten Gesamtpaket.</p>
+                    <ul class="quadrant-bullet-list">
+                        <li><i class="fas fa-check-circle"></i><span>Exklusive Objekt- und Käufernetzwerke.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Integration in Ihr Finanz- und Vorsorgekonzept.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Begleitung bei Verhandlung und Vertragsabschluss.</span></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div id="beratung-slide-explanation-Haftpflicht" class="beratung-slide hidden">
+            <div class="slide-header">
+                <h2 class="text-4xl font-bold">Private Haftpflichtversicherung</h2>
+            </div>
+            <div class="slide-content">
+                <div class="slide-quadrant slide-quadrant--no-clip">
+                    <h3 class="text-xl font-semibold">Schutz vor kleinen und großen Missgeschicken</h3>
+                    <p class="text-gray-300">Wenn etwas passiert, schützt die private Haftpflicht vor hohen Schadenersatzforderungen – für die ganze Familie und im Alltag.</p>
+                    <div class="quadrant-benefit-grid">
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Übernimmt Ansprüche, wenn anderen Personen ein Schaden entsteht." tabindex="0" role="button" aria-label="Personenschäden – Tooltip: Übernimmt Ansprüche, wenn anderen Personen ein Schaden entsteht.">
+                            <span class="benefit-icon benefit-icon--green"><i class="fas fa-user-shield"></i></span>
+                            <div>
+                                <div class="benefit-title">Personenschäden</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Sichert Sach- und Vermögensschäden, etwa bei ausgeliehenen Geräten oder Mietsachen." tabindex="0" role="button" aria-label="Sach- &amp; Vermögensschäden – Tooltip: Sichert Sach- und Vermögensschäden, etwa bei ausgeliehenen Geräten oder Mietsachen.">
+                            <span class="benefit-icon benefit-icon--blue"><i class="fas fa-cubes"></i></span>
+                            <div>
+                                <div class="benefit-title">Sach- &amp; Vermögensschäden</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Greift, wenn der Verursacher zahlungsunfähig ist – wir holen Ihre Forderungen ein." tabindex="0" role="button" aria-label="Forderungsausfall – Tooltip: Greift, wenn der Verursacher zahlungsunfähig ist – wir holen Ihre Forderungen ein.">
+                            <span class="benefit-icon benefit-icon--gold"><i class="fas fa-scale-balanced"></i></span>
+                            <div>
+                                <div class="benefit-title">Forderungsausfall</div>
+                            </div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Gültig auf Reisen und bei Hobbys – auch für mitversicherte Familienmitglieder." tabindex="0" role="button" aria-label="Weltweiter Schutz – Tooltip: Gültig auf Reisen und bei Hobbys – auch für mitversicherte Familienmitglieder.">
+                            <span class="benefit-icon benefit-icon--purple"><i class="fas fa-globe-europe"></i></span>
+                            <div>
+                                <div class="benefit-title">Weltweiter Schutz</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <img src="https://images.unsplash.com/photo-1521791136064-7986c2920216?q=80&w=1974&auto=format&fit=crop" alt="Familie in einem Wohnzimmer" class="quadrant-image">
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <div id="haftpflicht-chart-container" class="quadrant-chart"></div>
+                </div>
+                <div class="slide-quadrant quadrant-text">
+                    <h3 class="text-xl font-semibold">Warum jetzt absichern?</h3>
+                    <p>Der teuerste Schaden entsteht häufig durch Unachtsamkeit. Mit ausreichend Deckungssumme und Forderungsausfalldeckung bleiben Sie rechtlich wie finanziell geschützt.</p>
+                    <ul class="quadrant-bullet-list">
+                        <li><i class="fas fa-check-circle"></i><span>Schadenmeldungen und Abwehr unberechtigter Ansprüche inklusive.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Familien- und Partneroptionen flexibel ergänzbar.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Zusatzbausteine für Sport, Tiere oder Ehrenamt auswählbar.</span></li>
+                    </ul>
+                </div>
             </div>
         </div>
         <div id="beratung-slide-explanation-KFZ" class="beratung-slide hidden w-full flex-col">
@@ -385,78 +685,180 @@
                 <div class="hidden lg:flex justify-center items-center"><img src="https://test.bavariadirekt.de/magazin/wp-content/uploads/2023/08/auto-online-zulassen.jpg" alt="Auto auf einer Straße" class="rounded-2xl shadow-2xl object-cover h-auto w-full max-w-md"></div>
             </div>
         </div>
-        <div id="beratung-slide-explanation-Kredit" class="beratung-slide hidden w-full flex-col">
-            <div class="text-center w-full mb-8">
-                <h2 class="text-4xl font-bold mb-2">Ihre Wünsche finanzieren</h2>
-                <p class="text-xl text-gray-300">Der passende Kredit für Ihre Pläne.</p>
+        <div id="beratung-slide-explanation-Kredit" class="beratung-slide hidden">
+            <div class="slide-header">
+                <h2 class="text-4xl font-bold">Der passende Kredit</h2>
             </div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start w-full">
-                <div class="text-gray-300 prose prose-lg max-w-none">
-                    <p>Ein Kredit ist oft der Schlüssel zur Verwirklichung großer Träume. Doch die Konditionen und Möglichkeiten sind extrem vielfältig. Als Ihr Partner haben wir Zugriff auf eine breite Palette von Finanzierungslösungen und finden die für Sie günstigste und passendste Option. Unsere Finanzierungsexperten beraten Sie in einem separaten Termin, um alle Details zu klären.</p>
-                    <h4 class="text-white font-semibold mt-6">Ihre Vorteile mit uns:</h4>
-                    <ul class="list-none p-0 space-y-2">
-                        <li class="flex items-start"><i class="fas fa-check-circle text-skt-green-accent mt-1 mr-3"></i><span>Anbieterunabhängiger Vergleich der besten Zinskonditionen</span></li>
-                        <li class="flex items-start"><i class="fas fa-check-circle text-skt-green-accent mt-1 mr-3"></i><span>Maßgeschneiderte Lösungen für Ihre finanzielle Situation</span></li>
-                        <li class="flex items-start"><i class="fas fa-check-circle text-skt-green-accent mt-1 mr-3"></i><span>Professionelle Begleitung während des gesamten Prozesses</span></li>
-                    </ul>
-                    <div class="mt-8"><button data-modal-target="kreditrechner-modal" class="rechner-btn beratung-nav-btn"><i class="fas fa-calculator mr-2"></i>Finanzierungsrechner</button></div>
+            <div class="slide-content">
+                <div class="slide-quadrant slide-quadrant--no-clip">
+                    <h3 class="text-xl font-semibold">Finanzierungslösungen nach Maß</h3>
+                    <p class="text-gray-300">Ob Eigenheim, Modernisierung oder Konsum – gemeinsam finden wir die optimale Finanzierung mit stabilen Raten und Planungssicherheit.</p>
+                    <div class="quadrant-benefit-grid">
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Vergleich verschiedener Banken und Förderungen für den besten Zinssatz." tabindex="0" role="button" aria-label="Zinsoptimierung – Tooltip: Vergleich verschiedener Banken und Förderungen für den besten Zinssatz.">
+                            <span class="benefit-icon benefit-icon--blue"><i class="fas fa-percentage"></i></span>
+                            <div><div class="benefit-title">Zinsoptimierung</div></div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Flexible Laufzeiten und Tilgungsmodelle – an Ihre Lebensplanung angepasst." tabindex="0" role="button" aria-label="Flexible Laufzeit – Tooltip: Flexible Laufzeiten und Tilgungsmodelle – an Ihre Lebensplanung angepasst.">
+                            <span class="benefit-icon benefit-icon--green"><i class="fas fa-calendar-alt"></i></span>
+                            <div><div class="benefit-title">Flexible Laufzeit</div></div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Fix oder variabel? Wir kombinieren, was zu Ihrem Sicherheitsbedürfnis passt." tabindex="0" role="button" aria-label="Zinsmix – Tooltip: Fix oder variabel? Wir kombinieren, was zu Ihrem Sicherheitsbedürfnis passt.">
+                            <span class="benefit-icon benefit-icon--gold"><i class="fas fa-sliders-h"></i></span>
+                            <div><div class="benefit-title">Zinsmix</div></div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Vom Antrag bis zur Auszahlung: wir begleiten jeden Schritt und klären offene Fragen." tabindex="0" role="button" aria-label="Begleitung – Tooltip: Vom Antrag bis zur Auszahlung: wir begleiten jeden Schritt und klären offene Fragen.">
+                            <span class="benefit-icon benefit-icon--purple"><i class="fas fa-hand-holding-dollar"></i></span>
+                            <div><div class="benefit-title">Begleitung</div></div>
+                        </div>
+                    </div>
                 </div>
-                <div class="hidden lg:flex justify-center items-center"><img src="https://www.wind-immobilien.de/media/images/fotolia-101246113-xs.jpg?1475654720001" alt="Person unterzeichnet einen Vertrag" class="rounded-2xl shadow-2xl object-cover h-auto w-full max-w-md"></div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <img src="https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?q=80&w=1974&auto=format&fit=crop" alt="Beratung zur Finanzierung" class="quadrant-image">
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <div id="kredit-chart-container" class="quadrant-chart"></div>
+                </div>
+                <div class="slide-quadrant quadrant-text">
+                    <h3 class="text-xl font-semibold">Schnell zu besseren Konditionen</h3>
+                    <p>Wir prüfen im Vorfeld die Leistbarkeit und schaffen Sicherheit, bevor Sie unterschreiben. So reduzieren wir Risiko und Rate.</p>
+                    <ul class="quadrant-bullet-list">
+                        <li><i class="fas fa-check-circle"></i><span>Haushaltsrechnung &amp; Bonitätsprüfung im Vorfeld.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Optimierte Nebenkosten dank Vergleich und Förderberatung.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Schnelle Entscheidung durch vollständige Unterlagenerstellung.</span></li>
+                    </ul>
+                </div>
             </div>
         </div>
-        <div id="beratung-slide-explanation-Leasing" class="beratung-slide hidden w-full flex-col">
-            <div class="text-center w-full mb-8">
-                <h2 class="text-4xl font-bold mb-2">Flexibel bleiben mit Leasing</h2>
-                <p class="text-xl text-gray-300">Die smarte Alternative zum Kauf.</p>
+        <div id="beratung-slide-explanation-Leasing" class="beratung-slide hidden">
+            <div class="slide-header">
+                <h2 class="text-4xl font-bold">Leasinglösungen</h2>
             </div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start w-full">
-                <div class="text-gray-300 prose prose-lg max-w-none">
-                    <p>Leasing bietet eine attraktive Möglichkeit, immer ein modernes Fahrzeug zu fahren, ohne es kaufen zu müssen. Die Vertragsdetails und Optionen können jedoch komplex sein. Wir sind der perfekte Partner, um für Sie die besten Leasingangebote zu vergleichen und ein Paket zu schnüren, das genau auf Ihre Bedürfnisse zugeschnitten ist. Vereinbaren Sie einen Termin mit unseren Leasing-Experten!</p>
-                    <h4 class="text-white font-semibold mt-6">Ihre Vorteile mit uns:</h4>
-                    <ul class="list-none p-0 space-y-2">
-                        <li class="flex items-start"><i class="fas fa-check-circle text-skt-green-accent mt-1 mr-3"></i><span>Vergleich von Top-Leasingangeboten verschiedener Anbieter</span></li>
-                        <li class="flex items-start"><i class="fas fa-check-circle text-skt-green-accent mt-1 mr-3"></i><span>Transparente Beratung zu Restwert, Kilometerleistung und Co.</span></li>
-                        <li class="flex items-start"><i class="fas fa-check-circle text-skt-green-accent mt-1 mr-3"></i><span>Optimierung der Raten und Vertragskonditionen</span></li>
-                    </ul>
-                    <div class="mt-8"><button data-modal-target="leasingrechner-modal" class="rechner-btn beratung-nav-btn"><i class="fas fa-car mr-2"></i>Leasingrechner</button></div>
+            <div class="slide-content">
+                <div class="slide-quadrant slide-quadrant--no-clip">
+                    <h3 class="text-xl font-semibold">Mobil bleiben ohne Kapitalbindung</h3>
+                    <p class="text-gray-300">Leasing kombiniert Flexibilität mit planbaren Raten – ideal für Auto, Fuhrpark oder Technik. Wir finden das Modell, das zu Ihrer Nutzung passt.</p>
+                    <div class="quadrant-benefit-grid">
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Konstante Monatsrate ohne teure Sonderzahlungen." tabindex="0" role="button" aria-label="Planbare Rate – Tooltip: Konstante Monatsrate ohne teure Sonderzahlungen.">
+                            <span class="benefit-icon benefit-icon--gold"><i class="fas fa-coins"></i></span>
+                            <div><div class="benefit-title">Planbare Rate</div></div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Optionales Service- und Wartungspaket direkt integriert." tabindex="0" role="button" aria-label="Servicepakete – Tooltip: Optionales Service- und Wartungspaket direkt integriert.">
+                            <span class="benefit-icon benefit-icon--green"><i class="fas fa-tools"></i></span>
+                            <div><div class="benefit-title">Servicepakete</div></div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Flexible Laufzeiten mit Kauf-, Verlängerungs- oder Rückgabeoption." tabindex="0" role="button" aria-label="Flexible Rückgabe – Tooltip: Flexible Laufzeiten mit Kauf-, Verlängerungs- oder Rückgabeoption.">
+                            <span class="benefit-icon benefit-icon--blue"><i class="fas fa-sync"></i></span>
+                            <div><div class="benefit-title">Flexible Rückgabe</div></div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Modernste Fahrzeuge oder Geräte ohne Bindung an Restwerte." tabindex="0" role="button" aria-label="Immer aktuell – Tooltip: Modernste Fahrzeuge oder Geräte ohne Bindung an Restwerte.">
+                            <span class="benefit-icon benefit-icon--purple"><i class="fas fa-bolt"></i></span>
+                            <div><div class="benefit-title">Immer aktuell</div></div>
+                        </div>
+                    </div>
                 </div>
-                <div class="hidden lg:flex justify-center items-center"><img src="https://www.anwaltfinden.at/wp-content/uploads/2020/05/Leasing-Mappe.jpg" alt="Autoschlüssel werden übergeben" class="rounded-2xl shadow-2xl object-cover h-auto w-full max-w-md"></div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <img src="https://images.unsplash.com/photo-1549921296-3ecf9f5c9c4a?q=80&w=1974&auto=format&fit=crop" alt="Leasing Fahrzeug" class="quadrant-image">
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <div id="leasing-chart-container" class="quadrant-chart"></div>
+                </div>
+                <div class="slide-quadrant quadrant-text">
+                    <h3 class="text-xl font-semibold">So bleiben Sie flexibel</h3>
+                    <p>Leasing erleichtert Budgetplanung und hält Sie technisch auf dem neuesten Stand – perfekt für Unternehmen und Privatkunden.</p>
+                    <ul class="quadrant-bullet-list">
+                        <li><i class="fas fa-check-circle"></i><span>Restwertrisiko wird vom Leasinggeber getragen.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Versicherung und Service individuell kombinierbar.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Einfache Umstiegsmöglichkeiten nach Vertragsende.</span></li>
+                    </ul>
+                </div>
             </div>
         </div>
-        <div id="beratung-slide-explanation-Strom" class="beratung-slide hidden w-full flex-col">
-            <div class="text-center w-full mb-8">
-                <h2 class="text-4xl font-bold mb-2">Energiekosten clever senken</h2>
-                <p class="text-xl text-gray-300">Als Energiekostenmakler finden wir den besten Stromtarif für Sie.</p>
+        <div id="beratung-slide-explanation-Strom" class="beratung-slide hidden">
+            <div class="slide-header">
+                <h2 class="text-4xl font-bold">Stromtarife im Überblick</h2>
             </div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start w-full">
-                <div class="text-gray-300 prose prose-lg max-w-none">
-                    <p>Die Strompreise ändern sich ständig und der Anbietermarkt ist riesig. Als Ihr persönlicher Energiekostenmakler übernehmen wir den gesamten Vergleichsprozess für Sie. Alles, was wir benötigen, ist Ihre letzte Jahresstromabrechnung. Auf dieser Basis erstellen unsere Experten ein individuelles Angebot und zeigen Ihnen Ihr genaues Sparpotenzial auf.</p>
-                    <h4 class="text-white font-semibold mt-6">Ihre Vorteile mit uns:</h4>
-                    <ul class="list-none p-0 space-y-2">
-                        <li class="flex items-start"><i class="fas fa-check-circle text-skt-green-accent mt-1 mr-3"></i><span>Unabhängiger Vergleich einer Vielzahl von Stromanbietern</span></li>
-                        <li class="flex items-start"><i class="fas fa-check-circle text-skt-green-accent mt-1 mr-3"></i><span>Kein Aufwand für Sie – wir benötigen nur Ihre Jahresabrechnung</span></li>
-                        <li class="flex items-start"><i class="fas fa-check-circle text-skt-green-accent mt-1 mr-3"></i><span>Garantierte Ersparnis durch die Auswahl des optimalen Tarifs</span></li>
+            <div class="slide-content">
+                <div class="slide-quadrant slide-quadrant--no-clip">
+                    <h3 class="text-xl font-semibold">Energie smart einkaufen</h3>
+                    <p class="text-gray-300">Wir vergleichen Tarife, Nachhaltigkeit und Preisgarantien – für Haushalte wie Unternehmen.</p>
+                    <div class="quadrant-benefit-grid">
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Unabhängiger Vergleich aller regionalen Anbieter." tabindex="0" role="button" aria-label="Tarifvergleich – Tooltip: Unabhängiger Vergleich aller regionalen Anbieter.">
+                            <span class="benefit-icon benefit-icon--blue"><i class="fas fa-plug"></i></span>
+                            <div><div class="benefit-title">Tarifvergleich</div></div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Öko- und Klimatarife für nachhaltigen Verbrauch." tabindex="0" role="button" aria-label="Nachhaltig – Tooltip: Öko- und Klimatarife für nachhaltigen Verbrauch.">
+                            <span class="benefit-icon benefit-icon--green"><i class="fas fa-leaf"></i></span>
+                            <div><div class="benefit-title">Nachhaltig</div></div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Preisgarantien schützen vor unerwarteten Anpassungen." tabindex="0" role="button" aria-label="Preisgarantie – Tooltip: Preisgarantien schützen vor unerwarteten Anpassungen.">
+                            <span class="benefit-icon benefit-icon--gold"><i class="fas fa-shield-alt"></i></span>
+                            <div><div class="benefit-title">Preisgarantie</div></div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Integration von Smart Meter und dynamischen Tarifen." tabindex="0" role="button" aria-label="Smart Meter – Tooltip: Integration von Smart Meter und dynamischen Tarifen.">
+                            <span class="benefit-icon benefit-icon--purple"><i class="fas fa-chart-line"></i></span>
+                            <div><div class="benefit-title">Smart Meter</div></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <img src="https://images.unsplash.com/photo-1509395176047-4a66953fd231?q=80&w=1974&auto=format&fit=crop" alt="Stromnetz" class="quadrant-image">
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <div id="strom-chart-container" class="quadrant-chart"></div>
+                </div>
+                <div class="slide-quadrant quadrant-text">
+                    <h3 class="text-xl font-semibold">Kosten senken, Umwelt schonen</h3>
+                    <p>Durch Tarifwechsel können Haushalte bis zu 30&nbsp;% sparen. Wir begleiten Wechsel oder Bündelung von Strom- und Gaslieferverträgen.</p>
+                    <ul class="quadrant-bullet-list">
+                        <li><i class="fas fa-check-circle"></i><span>Wechselfertig vorbereitete Anträge.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Berücksichtigung aktueller Förderprogramme.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Nachhaltige Tarife mit Herkunftsnachweis.</span></li>
                     </ul>
                 </div>
-                <div class="hidden lg:flex justify-center items-center"><img src="https://images01.wohnnet.at/shutterstock_185467274.jpg/image_cover_95/1.953.522" alt="Glühbirne" class="rounded-2xl shadow-2xl object-cover h-auto w-full max-w-md"></div>
             </div>
         </div>
-        <div id="beratung-slide-explanation-Gas" class="beratung-slide hidden w-full flex-col">
-            <div class="text-center w-full mb-8">
-                <h2 class="text-4xl font-bold mb-2">Heizkosten optimieren, Geld sparen</h2>
-                <p class="text-xl text-gray-300">Wir finden den günstigsten Gasanbieter für Ihr Zuhause.</p>
+        <div id="beratung-slide-explanation-Gas" class="beratung-slide hidden">
+            <div class="slide-header">
+                <h2 class="text-4xl font-bold">Gastarife vergleichen</h2>
             </div>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start w-full">
-                <div class="text-gray-300 prose prose-lg max-w-none">
-                    <p>Genau wie beim Strom gibt es auch bei Gas enorme Preisunterschiede zwischen den Anbietern. Als Ihr Energiekostenmakler durchforsten wir den Markt für Sie. Legen Sie uns einfach Ihre letzte Jahresgasabrechnung vor, und unsere Experten finden das beste Angebot. So sparen Sie bares Geld, ohne selbst unzählige Tarife vergleichen zu müssen.</p>
-                    <h4 class="text-white font-semibold mt-6">Ihre Vorteile mit uns:</h4>
-                    <ul class="list-none p-0 space-y-2">
-                        <li class="flex items-start"><i class="fas fa-check-circle text-skt-green-accent mt-1 mr-3"></i><span>Anbieterunabhängiger Vergleich und garantierte Bestpreise</span></li>
-                        <li class="flex items-start"><i class="fas fa-check-circle text-skt-green-accent mt-1 mr-3"></i><span>Einfacher Wechselprozess, den wir für Sie managen</span></li>
-                        <li class="flex items-start"><i class="fas fa-check-circle text-skt-green-accent mt-1 mr-3"></i><span>Langfristige Kostenersparnis durch regelmäßige Tarifoptimierung</span></li>
+            <div class="slide-content">
+                <div class="slide-quadrant slide-quadrant--no-clip">
+                    <h3 class="text-xl font-semibold">Warme Wohnung zum besten Preis</h3>
+                    <p class="text-gray-300">Wir analysieren Verbrauch, Preisgarantien und Versorgungssicherheit – und finden den idealen Gasanbieter.</p>
+                    <div class="quadrant-benefit-grid">
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Optimale Tarife für Haushalte und Gewerbe." tabindex="0" role="button" aria-label="Tarifoptimierung – Tooltip: Optimale Tarife für Haushalte und Gewerbe.">
+                            <span class="benefit-icon benefit-icon--blue"><i class="fas fa-fire"></i></span>
+                            <div><div class="benefit-title">Tarifoptimierung</div></div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Preisdeckel und Garantien geben Planungssicherheit." tabindex="0" role="button" aria-label="Preisabsicherung – Tooltip: Preisdeckel und Garantien geben Planungssicherheit.">
+                            <span class="benefit-icon benefit-icon--gold"><i class="fas fa-lock"></i></span>
+                            <div><div class="benefit-title">Preisabsicherung</div></div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Biogas-Optionen für klimafreundliche Wärme." tabindex="0" role="button" aria-label="Ökogas – Tooltip: Biogas-Optionen für klimafreundliche Wärme.">
+                            <span class="benefit-icon benefit-icon--green"><i class="fas fa-seedling"></i></span>
+                            <div><div class="benefit-title">Ökogas</div></div>
+                        </div>
+                        <div class="benefit-card benefit-card--tooltip" data-tooltip="Jährliche Verbrauchsanalyse und Optimierung." tabindex="0" role="button" aria-label="Service &amp; Monitoring – Tooltip: Jährliche Verbrauchsanalyse und Optimierung.">
+                            <span class="benefit-icon benefit-icon--purple"><i class="fas fa-gauge"></i></span>
+                            <div><div class="benefit-title">Service &amp; Monitoring</div></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <img src="https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?q=80&w=1974&auto=format&fit=crop" alt="Gastherme" class="quadrant-image">
+                </div>
+                <div class="slide-quadrant slide-quadrant--center">
+                    <div id="gas-chart-container" class="quadrant-chart"></div>
+                </div>
+                <div class="slide-quadrant quadrant-text">
+                    <h3 class="text-xl font-semibold">Wärme mit Weitblick</h3>
+                    <p>Mit transparenten Laufzeiten und Preisgarantien vermeiden wir Nachzahlungen und sichern den Energiebedarf langfristig ab.</p>
+                    <ul class="quadrant-bullet-list">
+                        <li><i class="fas fa-check-circle"></i><span>Berücksichtigung von Bonuszahlungen und Bindefristen.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Wechselservice für nahtlosen Anbieterwechsel.</span></li>
+                        <li><i class="fas fa-check-circle"></i><span>Kombitarife für Strom &amp; Gas verhandelbar.</span></li>
                     </ul>
                 </div>
-                <div class="hidden lg:flex justify-center items-center"><img src="https://static.scientificamerican.com/sciam/cache/file/4FEB5C93-F6DA-475B-9FB7C0A2A73227E9_source.jpg?crop=1%3A1%2Csmart&w=1000" alt="Gasflamme eines Herds" class="rounded-2xl shadow-2xl object-cover h-auto w-full max-w-md"></div>
             </div>
         </div>
         <div id="beratung-slide-special-FLV-Steuervorteilrechner" class="beratung-slide hidden w-full">
@@ -886,8 +1288,8 @@
     </div>
 
     <!-- Lodash und SortableJS für Drag-and-Drop -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js" defer></script>
+    <script src="vendor/lodash.min.js" defer></script>
+    <script src="vendor/sortable.min.js" defer></script>
     <script type="module" src="beratung_standalone.js" defer></script>
 </body>
 </html>

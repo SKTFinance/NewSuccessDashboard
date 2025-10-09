@@ -1442,48 +1442,326 @@ summary::-webkit-details-marker {
     /* Adjust to center the emoji on the path */
     transform: translate(-12px, 8px);
 }
-
-/* --- NEU: Stile für die Beratungs-Ansicht --- */
+/* --- NEU: Stile für die Beratungs-Ansicht (5-Block-Layout) --- */
 .beratung-slide {
-    /* KORREKTUR: Slides sind standardmäßig ausgeblendet und unsichtbar. */
-    /* KORREKTUR: Absolute Positionierung, damit die Folien übereinander liegen und nicht nebeneinander. */
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
+    inset: 0;
     width: 100%;
     height: 100%;
+    display: none;
     flex-direction: column;
-    /* KORREKTUR: Fügt die vertikale Zentrierung wieder hinzu. */
     justify-content: center;
     align-items: center;
+    padding: 3rem 2rem 2rem;
     margin: auto;
     opacity: 0;
     transition: opacity 0.4s ease-in-out;
+    background-color: var(--color-skt-blue);
+    overflow: hidden;
+}
+
+.beratung-slide.start-screen {
+    background: transparent;
+    box-shadow: none;
+}
+
+/* Header nimmt fixen Anteil (ca. 15 % der Höhe) ein */
+.slide-header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 1rem 0 0;
+    width: 100%;
+}
+
+/* Inhalt füllt den restlichen Viewport (4 gleich große Quadranten) */
+.slide-content {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    padding: 1rem 0 2rem;
+    height: clamp(420px, calc(100vh - var(--nav-height, 120px) - 6rem), 720px);
+    max-height: calc(100vh - var(--nav-height, 120px) - 5rem);
+    min-height: 0;
+    align-items: stretch;
+}
+
+/* Jeder Quadrant gleich groß und zentriert */
+.slide-quadrant {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 0.85rem;
+    padding: 1.5rem;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 0.75rem;
+    text-align: left;
+    font-size: 1.1rem;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+    height: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.slide-quadrant--no-clip {
+    overflow: visible;
+}
+
+.slide-quadrant h3 {
+    font-size: clamp(1.1rem, 1rem + 0.35vw, 1.35rem);
+}
+
+.slide-quadrant:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+    transform: scale(1.02);
+}
+
+.slide-quadrant--center {
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.quadrant-benefit-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem;
+    width: 100%;
+    flex: 1;
+    align-content: stretch;
+    grid-auto-rows: minmax(0, 1fr);
+    min-height: 0;
+    overflow: visible;
+}
+
+.benefit-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    background-color: rgba(15, 23, 42, 0.35);
+    border-radius: 0.75rem;
+    padding: 0.85rem;
+    min-height: 0;
+    height: 100%;
+    box-sizing: border-box;
+    overflow: visible;
+}
+
+.benefit-card--tooltip {
+    position: relative;
+    cursor: help;
+}
+
+.benefit-card--tooltip .benefit-desc {
     display: none;
 }
+
+.benefit-card--tooltip::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 50%;
+    bottom: 110%;
+    transform: translateX(-50%);
+    background: #f8fafc;
+    color: #0f172a;
+    padding: 0.65rem 1rem;
+    border-radius: 0.6rem;
+    font-size: 0.85rem;
+    line-height: 1.35;
+    width: max-content;
+    max-width: 240px;
+    display: block;
+    opacity: 0;
+    pointer-events: none;
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.25);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    transform-origin: bottom center;
+    z-index: 20;
+}
+
+.benefit-card--tooltip::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: 102%;
+    transform: translateX(-50%);
+    border-width: 6px;
+    border-style: solid;
+    border-color: #f8fafc transparent transparent transparent;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    z-index: 21;
+}
+
+.benefit-card--tooltip:hover::after,
+.benefit-card--tooltip:focus-visible::after {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-4px);
+}
+
+.benefit-card--tooltip:hover::before,
+.benefit-card--tooltip:focus-visible::before {
+    opacity: 1;
+}
+
+.benefit-icon {
+    flex-shrink: 0;
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    color: #0f172a;
+    font-weight: 700;
+}
+
+.benefit-icon--blue { background: #60a5fa; }
+.benefit-icon--green { background: #34d399; }
+.benefit-icon--gold { background: #fbbf24; }
+.benefit-icon--red { background: #f87171; }
+.benefit-icon--purple { background: #c084fc; }
+.benefit-icon--teal { background: #2dd4bf; }
+
+.benefit-title {
+    font-size: clamp(0.95rem, 0.85rem + 0.3vw, 1rem);
+    font-weight: 600;
+    color: #e2e8f0;
+}
+
+.benefit-desc {
+    font-size: clamp(0.78rem, 0.7rem + 0.3vw, 0.9rem);
+    color: rgba(226, 232, 240, 0.85);
+    margin-top: 0.2rem;
+}
+
+.quadrant-image {
+    width: 100%;
+    height: 100%;
+    max-height: 260px;
+    object-fit: cover;
+    border-radius: 1rem;
+    box-shadow: 0 25px 45px rgba(15, 23, 42, 0.45);
+}
+
+.quadrant-chart {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.chart-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #e2e8f0;
+    text-align: center;
+    margin-bottom: 0.75rem;
+}
+
+.chart-hover-info {
+    margin-top: 0.75rem;
+    font-size: 0.95rem;
+    color: rgba(226, 232, 240, 0.85);
+    text-align: center;
+    min-height: 1.4rem;
+}
+
+.slide-quadrant > p {
+    margin-bottom: 0;
+    font-size: clamp(0.85rem, 0.78rem + 0.25vw, 1rem);
+    line-height: 1.4;
+}
+
+.quadrant-text p {
+    color: rgba(226, 232, 240, 0.85);
+    font-size: 1rem;
+}
+
+.quadrant-text strong {
+    color: #ffffff;
+}
+
+.quadrant-bullet-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 0.5rem;
+}
+
+.quadrant-bullet-list li {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-start;
+    color: rgba(226, 232, 240, 0.85);
+    font-size: 0.95rem;
+}
+
+.quadrant-bullet-list li i {
+    margin-top: 0.15rem;
+    color: #38bdf8;
+}
+
+@media (max-width: 1024px) {
+    .slide-content {
+        grid-template-columns: 1fr;
+        grid-template-rows: repeat(4, auto);
+        height: auto;
+        max-height: none;
+    }
+
+    .slide-quadrant {
+        min-height: unset;
+    }
+
+    .quadrant-image {
+        max-height: 320px;
+    }
+}
+
+@media (max-width: 768px) {
+    .quadrant-benefit-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Aktive und ausblendende Slides */
 .beratung-slide.is-hiding {
-    display: flex; /* Muss während der Ausblend-Animation sichtbar bleiben */
+    display: flex;
 }
 .beratung-slide.active {
-    /* KORREKTUR: Der aktive Slide wird als Flexbox angezeigt, um den Inhalt zu zentrieren. */
     display: flex;
     opacity: 1;
 }
+
+/* Textfarben und Typografie */
 .beratung-slide .prose {
-    color: inherit; /* Stellt sicher, dass der Text die Farbe des Eltern-Elements erbt (weiß) */
+    color: inherit;
 }
 .beratung-slide .prose strong {
-    color: inherit; /* Stellt sicher, dass fetter Text auch weiß ist */
+    color: inherit;
 }
-/* KORREKTUR: Stile für die Ziel-Karten ohne Bilder */
+
+/* Zielkarten (weiterhin kompatibel) */
 .goal-card {
-    min-height: 180px; /* Stellt sicher, dass die Karten eine gute Größe haben */
+    min-height: 180px;
     aspect-ratio: 1 / 1;
 }
 .goal-card.selected {
-    background-color: rgba(212, 175, 55, 0.5); /* Gold-Overlay bei Auswahl */
+    background-color: rgba(212, 175, 55, 0.5);
 }
 
 /* --- NEU: Stile für Rechner-Dropdown --- */
@@ -1505,7 +1783,9 @@ summary::-webkit-details-marker {
     color: white;
     transition: background-color 0.2s;
 }
-.rechner-menu-item:hover { background-color: rgba(255, 255, 255, 0.1); }
+.rechner-menu-item:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
 
 /* --- NEU: Stile für Kreditrechner --- */
 .stepper-btn-dark {
@@ -1520,6 +1800,7 @@ summary::-webkit-details-marker {
     transition: background-color 0.2s;
     flex-shrink: 0;
 }
+
 .stepper-btn-dark:hover {
     background-color: rgba(255, 255, 255, 0.2);
 }
@@ -1771,19 +2052,80 @@ summary::-webkit-details-marker {
 }
 
 /* NEU: Stile für Produktempfehlungs-Karten */
+.recommendation-card-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    align-items: stretch;
+}
+
+@media (min-width: 768px) {
+    .recommendation-card-container {
+        flex-direction: row;
+        justify-content: center;
+    }
+}
+
+.recommendation-card {
+    position: relative;
+    width: clamp(240px, 22vw, 320px);
+    min-height: 480px;
+    padding: 2.25rem 2rem;
+    border-radius: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.75rem;
+    word-break: break-word;
+    hyphens: auto;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    background: rgba(4, 60, 100, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
 .recommendation-card-best {
     background-color: var(--color-skt-blue-light);
     border: 2px solid var(--color-accent-gold);
-    border-radius: 1rem;
-    box-shadow: 0 10px 25px rgba(212, 175, 55, 0.2);
+    box-shadow: 0 18px 35px rgba(212, 175, 55, 0.35);
     transform: scale(1.1);
-    z-index: 10; /* Stellt sicher, dass die vergrößerte Karte über den anderen liegt */
+    z-index: 10;
 }
+
 .recommendation-card-alt {
-    background-color: rgba(4, 60, 100, 0.5); /* Dunkleres, halbtransparentes Blau */
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 1rem;
     transform: scale(1.0);
+}
+
+.recommendation-card p {
+    white-space: normal;
+}
+
+.recommendation-card-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.recommendation-card-score {
+    font-size: 3.5rem;
+    font-weight: 700;
+}
+
+.recommendation-card-radio {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+}
+
+.recommendation-card-features {
+    width: 100%;
+    margin-top: 1rem;
+    text-align: left;
+    flex-grow: 1;
+}
+
+.recommendation-card-actions {
+    margin-top: 1.25rem;
 }
 /* NEU: Animation für den Countdown-Balken im ET-Motivations-Modal */
 @keyframes countdownAnimation {

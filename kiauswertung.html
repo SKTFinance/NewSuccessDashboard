@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<title>Vertrag-Extractor + DSGVO + Gemini-Analyse</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+:root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --accent:#60a5fa; --good:#22c55e; --warn:#f59e0b; --bad:#ef4444; }
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:#e5e7eb;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
+.wrap{max-width:1100px;margin:0 auto;padding:24px}
+.card{background:var(--card);border:1px solid #1f2937;border-radius:12px;padding:16px;margin:12px 0}
+button{background:var(--accent);border:none;color:#0b1220;padding:10px 14px;border-radius:10px;font-weight:600;cursor:pointer}
+button:disabled{opacity:.6;cursor:not-allowed}
+textarea{width:100%;min-height:200px;background:#0b1220;color:#e5e7eb;border:1px solid #1f2937;border-radius:8px;padding:10px;resize:vertical}
+.log{max-height:180px;overflow:auto;background:#0b1220;border:1px solid #1f2937;border-radius:8px;padding:8px;font-size:.9rem}
+.progress{height:8px;background:#0b1220;border:1px solid #1f2937;border-radius:999px;overflow:hidden}
+.bar{height:100%;width:0%;background:var(--accent);transition:width .25s}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,"Courier New",monospace}
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";</script>
+</head>
+
+<body>
+<div class="wrap">
+  <h1>Vertrag-Extractor <span class="muted">mit DSGVO-Anonymisierung + Gemini-Analyse</span></h1>
+
+  <div class="card">
+    <label>PDF-Datei hochladen:</label>
+    <input id="file" type="file" accept=".pdf" style="width:100%;padding:8px;border:1px dashed #334155;background:#0b1220;color:#cbd5e1;border-radius:8px" />
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button id="anonBtn" disabled>Anonymisieren</button>
+      <button id="aiBtn" disabled>An Gemini senden</button>
+    </div>
+    <div class="progress"><div class="bar" id="bar"></div></div>
+    <div id="phase" style="text-align:right;color:#94a3b8;margin-top:6px">Bereit</div>
+  </div>
+
+  <div class="card">
+    <h3>Anonymisierter Text</h3>
+    <textarea id="raw" class="mono" placeholder="Nach dem ersten Schritt erscheint hier der bereinigte Text …"></textarea>
+  </div>
+
+  <div class="card">
+    <h3>Gemini-Ergebnis</h3>
+    <pre id="result" class="mono"></pre>
+  </div>
+
+  <div class="card"><h3>Protokoll</h3><div id="log" class="log mono"></div></div>
+</div>
+
+<script>
+const apiKey = "AIzaSyAUnqTaKJ1B7mvltFTWvHcz4szfA1YDFek"; // 🔑 dein Gemini-Key
+
+const fileEl=document.getElementById("file"),
+      anonBtn=document.getElementById("anonBtn"),
+      aiBtn=document.getElementById("aiBtn"),
+      rawEl=document.getElementById("raw"),
+      resultEl=document.getElementById("result"),
+      barEl=document.getElementById("bar"),
+      phaseEl=document.getElementById("phase"),
+      logEl=document.getElementById("log");
+let currentFile=null, anonymizedText="";
+
+function log(m,c){const d=document.createElement("div");d.textContent=m;if(c)d.classList.add(c);logEl.appendChild(d);logEl.scrollTop=logEl.scrollHeight;}
+function bar(p){barEl.style.width=Math.max(0,Math.min(100,p))+"%";}
+function phase(t){phaseEl.textContent=t;}
+
+fileEl.addEventListener("change",()=>{currentFile=fileEl.files?.[0]??null;anonBtn.disabled=!currentFile;log("Datei gewählt: "+currentFile.name,"ok");});
+
+// --- PDF lesen ---
+async function extractFromPDF(file){
+  const buf=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  let text="";
+  for(let i=1;i<=pdf.numPages;i++){
+    const pg=await pdf.getPage(i);
+    const tc=await pg.getTextContent();
+    text+=tc.items.map(it=>it.str).join(" ")+"\n";
+    bar((i/pdf.numPages)*50);
+  }
+  return text;
+}
+
+// --- DSGVO-Anonymisierung ---
+function anonymizeSensitiveData(text){
+  const patterns=[
+    {re:/\b(Herrn?|Frau)\s+[A-ZÄÖÜ][a-zäöüß]+\s+[A-ZÄÖÜ][a-zäöüß]+/g,ph:"[NAME]"},
+    {re:/\b[A-ZÄÖÜ][a-zäöüß]+straße\s*\d+\b/g,ph:"[ADRESSE]"},
+    {re:/\b\d{4,5}\s+[A-ZÄÖÜ][a-zäöüß]+/g,ph:"[ORT]"},
+    {re:/\b\d{1,2}\.\d{1,2}\.\d{2,4}\b/g,ph:"[DATUM]"},
+    {re:/\b[A-Z]{2}\d{2}\s?\d{4,}\b/g,ph:"[IBAN]"},
+    {re:/\bBIC\s+[A-Z0-9]{8,11}\b/g,ph:"[BIC]"},
+    {re:/\+?\d[\d\s\/\-]{5,}\d/g,ph:"[TEL]"},
+    {re:/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,ph:"[EMAIL]"},
+  ];
+  let replaced=0;
+  for(const {re,ph} of patterns){const before=text;text=text.replace(re,ph);if(text!==before)replaced++;}
+  return {clean:text,count:replaced};
+}
+
+// --- Schritt 1: Anonymisierung ---
+anonBtn.addEventListener("click",async()=>{
+  if(!currentFile)return;
+  phase("Lese PDF …");bar(5);
+  const text=await extractFromPDF(currentFile);
+  const {clean,count}=anonymizeSensitiveData(text);
+  anonymizedText=clean; rawEl.value=clean;
+  log(`Anonymisierung abgeschlossen (${count} Elemente ersetzt).`,"ok");
+  bar(100);phase("Bereit für Gemini");aiBtn.disabled=false;
+});
+
+// --- Schritt 2: Gemini-Analyse (robuste Version) ---
+aiBtn.addEventListener("click", async () => {
+  if (!anonymizedText) {
+    alert("Bitte zuerst anonymisieren!");
+    return;
+  }
+  phase("Sende an Gemini …");
+  bar(10);
+
+  const prompt = `Analysiere folgenden anonymisierten Versicherungsvertrag.
+Extrahiere bitte:
+- Vertragsbeginn
+- Vertragsende
+- monatliche Beiträge
+- Rückkaufswerttabellen (wenn vorhanden)
+- wichtige Versicherungsleistungen
+Antworte im JSON-Format:
+{ "Startdatum": "...", "Enddatum": "...", "Beitrag": "...", "Rueckkaufswerte": [...], "Komponenten": [...] }
+
+Text:
+${anonymizedText.slice(0, 15000)}
+`;
+
+  try {
+    const res = await fetch(
+      \`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=\${apiKey}\`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+        }),
+      }
+    );
+
+    const data = await res.json();
+    let output = "Keine Antwort erhalten.";
+
+    // 🔍 Robuste Auswertung aller möglichen Strukturen
+    if (data?.candidates?.[0]?.content?.parts) {
+      const parts = data.candidates[0].content.parts;
+      if (Array.isArray(parts)) {
+        output = parts.map(p => p.text || JSON.stringify(p)).join("\n");
+      } else if (typeof parts.text === "string") {
+        output = parts.text;
+      }
+    } else if (data?.candidates?.[0]?.content?.text) {
+      output = data.candidates[0].content.text;
+    }
+
+    resultEl.textContent = output.trim() || "Leere Antwort.";
+    bar(100);
+    phase("Fertig");
+    log("Gemini-Antwort empfangen.", "ok");
+  } catch (e) {
+    log("Fehler: " + e.message, "err");
+    phase("Fehler");
+  }
+});
+</script>
+</body>
+</html>

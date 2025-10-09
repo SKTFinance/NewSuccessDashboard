@@ -497,7 +497,37 @@ class BeratungView {
                 this._renderRechtsschutzChart();
             }
 
-            // NEU: Prüfe, ob es sich um die Haushalts-Seite handelt
+            // NEU: Prüfe, ob es sich um die Kranken-Seite handelt
+            if (slideId === 'beratung-slide-explanation-Krankenversicherung') {
+                this._renderKrankenChart();
+            }
+
+                        // NEU: Prüfe, ob es sich um die Haftpflicht-Seite handelt
+            if (slideId === 'beratung-slide-explanation-Haftpflicht') {
+                this._renderHaftpflichtChart();
+            }
+
+            if (slideId === 'beratung-slide-explanation-Kredit') {
+                this._renderKreditChart();
+            }
+
+            if (slideId === 'beratung-slide-explanation-Leasing') {
+                this._renderLeasingChart();
+            }
+
+            if (slideId === 'beratung-slide-explanation-Strom') {
+                this._renderStromChart();
+            }
+
+            if (slideId === 'beratung-slide-explanation-Gas') {
+                this._renderGasChart();
+            }
+
+            if (slideId === 'beratung-slide-explanation-Immobilie') {
+                this._renderImmobilieChart();
+            }
+
+// NEU: Prüfe, ob es sich um die Haushalts-Seite handelt
             if (slideId === 'beratung-slide-explanation-Haushalt') {
                 this._renderHaushaltChart();
             }
@@ -922,60 +952,58 @@ class BeratungView {
 
         // 5. Rendere die Karten
         let html = `<h2 class="text-4xl font-bold text-center mb-8">Unsere Empfehlung für Sie</h2>`;
-        html += `<div class="flex flex-col md:flex-row items-center justify-center gap-8">`;
+        html += `<div class="recommendation-card-container">`;
 
         const bestProduct = scoredProducts[0];
         // KORREKTUR: Zeige nur die nächsten zwei besten Produkte an.
         const otherProducts = scoredProducts.slice(1, 3);
 
         const createCardHtml = async (product, isBest) => {
-            // NEU: Checkbox zur Auswahl des Produkts hinzufügen
-            const checkboxHtml = `
-                <div class="absolute top-4 right-4">
-                    <input type="radio" name="product-selection" value="${this._escapeHtml(product.name)}" class="h-6 w-6 text-skt-blue-main focus:ring-skt-blue-main border-gray-300">
-                </div>
-            `;
+            let featuresHtml;
+            if (selectedFeatures.length > 0) {
+                featuresHtml = '<ul class="space-y-2">' + selectedFeatures.map(feature => {
+                    const hasFeature = product.availableFeatures.includes(feature);
+                    return `
+                        <li class="flex items-center gap-2 ${hasFeature ? 'text-white' : 'text-gray-400 line-through'}">
+                            <i class="fas ${hasFeature ? 'fa-check-circle text-skt-green-accent' : 'fa-times-circle text-skt-red-accent'}"></i>
+                            <span>${this._escapeHtml(feature)}</span>
+                        </li>
+                    `;
+                }).join('') + '</ul>';
+            } else {
+                featuresHtml = '<p class="text-sm text-gray-400">Keine Prioritäten ausgewählt.</p>';
+            }
 
-            let featuresHtml = '<ul class="space-y-2 text-left">';
-            selectedFeatures.forEach(feature => {
-                const hasFeature = product.availableFeatures.includes(feature);
-                featuresHtml += `
-                    <li class="flex items-center gap-2 ${hasFeature ? 'text-white' : 'text-gray-400 line-through'}">
-                        <i class="fas ${hasFeature ? 'fa-check-circle text-skt-green-accent' : 'fa-times-circle text-skt-red-accent'}"></i>
-                        <span>${this._escapeHtml(feature)}</span>
-                    </li>
-                `;
-            });
-            featuresHtml += '</ul>';
+            const hinweisHtml = product.hinweis ? `<p class="text-xs text-gray-300 italic mt-3">${this._escapeHtml(product.hinweis)}</p>` : '';
+            const linkHtml = product.link ? `<a href="${product.link}" target="_blank" class="inline-block bg-skt-blue text-white font-semibold py-2 px-4 rounded-lg hover:bg-skt-blue-light transition-colors">Mehr erfahren</a>` : '';
 
-            const hinweisHtml = product.hinweis ? `<p class="text-xs text-gray-300 mt-4 italic">${this._escapeHtml(product.hinweis)}</p>` : '';
-            const linkHtml = product.link ? `<a href="${product.link}" target="_blank" class="inline-block mt-4 bg-skt-blue text-white font-semibold py-2 px-4 rounded-lg hover:bg-skt-blue-light transition-colors">Mehr erfahren</a>` : '';
-            
-            let logoHtml = `<div class="h-12 mb-4"></div>`;
+            let logoHtml = `<div class="h-12"></div>`;
             if (product.logoUrl) {
                 const finalLogoUrl = await getSeaTableDownloadLink(product.logoUrl);
                 if (finalLogoUrl) {
-                    logoHtml = `<img src="${finalLogoUrl}" alt="${product.gesellschaft} Logo" class="h-12 mx-auto mb-4 object-contain">`;
+                    logoHtml = `<img src="${finalLogoUrl}" alt="${product.gesellschaft} Logo" class="h-12 mx-auto object-contain">`;
                 }
             }
 
+            const cardClass = `recommendation-card ${isBest ? 'recommendation-card-best' : 'recommendation-card-alt'}`;
+            const scoreClass = isBest ? 'text-accent-gold' : 'text-gray-200';
+            const subtitleClass = isBest ? 'text-gray-200' : 'text-gray-400';
+
             return `
-                <div class="p-6 text-center w-80 ${isBest ? 'recommendation-card-best' : 'recommendation-card-alt'} flex-shrink-0">
-                    ${checkboxHtml}
-                    ${logoHtml}
-                    <h3 class="text-2xl font-bold mb-2">${product.name}</h3>
-                    <p class="text-sm text-gray-400 -mt-2 mb-4">${product.gesellschaft}</p>
-                    <p class="text-5xl font-bold mb-4 ${isBest ? 'text-accent-gold' : 'text-gray-300'}">${product.score.toFixed(0)}%</p>
-                    <p class="text-sm mb-4 ${isBest ? 'text-gray-200' : 'text-gray-400'}">Übereinstimmung mit Ihren Wünschen</p>
-                    <!-- NEU: Checkbox zur Auswahl -->
-                    <div class="absolute top-4 right-4">
-                        <label class="flex items-center space-x-2 cursor-pointer">
-                            <input type="radio" name="product-selection" value="${this._escapeHtml(product.name)}" class="h-6 w-6 text-skt-blue-main focus:ring-skt-blue-main border-gray-300">
-                        </label>
+                <div class="${cardClass}">
+                    <div class="recommendation-card-radio">
+                        <input type="radio" name="product-selection" value="${this._escapeHtml(product.name)}" class="h-6 w-6 text-skt-blue-main focus:ring-skt-blue-main border-gray-300">
                     </div>
-                    ${featuresHtml}
+                    ${logoHtml}
+                    <h3 class="recommendation-card-title">${product.name}</h3>
+                    <p class="text-sm text-gray-400 -mt-2">${product.gesellschaft}</p>
+                    <p class="recommendation-card-score ${scoreClass}">${product.score.toFixed(0)}%</p>
+                    <p class="text-sm ${subtitleClass}">Übereinstimmung mit Ihren Wünschen</p>
+                    <div class="recommendation-card-features">
+                        ${featuresHtml}
+                    </div>
                     ${hinweisHtml}
-                    ${linkHtml}
+                    ${linkHtml ? `<div class="recommendation-card-actions">${linkHtml}</div>` : ''}
                 </div>
             `;
         };
@@ -1400,6 +1428,98 @@ class BeratungView {
         });
     }
 
+    _getAdaptiveChartHeight(container, fallback = 220) {
+        if (!container) return fallback;
+        const available = Math.floor(container.getBoundingClientRect().height) || fallback;
+        return Math.max(160, Math.min(available, fallback));
+    }
+
+    _prepareChartContainer(container, titleText) {
+        if (!container) return null;
+        const parent = container.parentElement;
+        if (!parent) return null;
+
+        let titleEl = parent.querySelector('.chart-title');
+        if (!titleEl) {
+            titleEl = document.createElement('h4');
+            titleEl.className = 'chart-title';
+            parent.insertBefore(titleEl, container);
+        }
+        if (titleText) titleEl.textContent = titleText; else titleEl.textContent = '';
+
+        let infoEl = parent.querySelector('.chart-hover-info');
+        if (!infoEl) {
+            infoEl = document.createElement('div');
+            infoEl.className = 'chart-hover-info';
+            parent.appendChild(infoEl);
+        }
+        infoEl.textContent = '';
+        return infoEl;
+    }
+
+    _applyDonutHover(container, options, titleText) {
+        const infoEl = this._prepareChartContainer(container, titleText);
+        const total = (options.series || []).reduce((sum, val) => sum + (typeof val === 'number' ? val : 0), 0);
+
+        const donutLabels = options.plotOptions && options.plotOptions.pie && options.plotOptions.pie.donut && options.plotOptions.pie.donut.labels;
+        if (donutLabels) {
+            if (donutLabels.total) donutLabels.total.show = false;
+            if (donutLabels.value) donutLabels.value.show = false;
+            if (donutLabels.name) donutLabels.name.show = false;
+        }
+
+        options.tooltip = { enabled: false };
+        options.chart = options.chart || {};
+        const existingEvents = options.chart.events || {};
+        options.chart.events = {
+            ...existingEvents,
+            dataPointMouseEnter: (event, chartContext, config) => {
+                if (infoEl && options.labels) {
+                    const index = config.seriesIndex ?? config.dataPointIndex;
+                    const label = options.labels[index] || '';
+                    const value = options.series[index] || 0;
+                    const percent = total ? Math.round((value / total) * 100) : 0;
+                    infoEl.innerHTML = `<strong>${label}</strong>: ${value.toLocaleString('de-DE')} (${percent}%)`;
+                }
+                if (typeof existingEvents.dataPointMouseEnter === 'function') {
+                    existingEvents.dataPointMouseEnter(event, chartContext, config);
+                }
+            },
+            dataPointMouseLeave: (event, chartContext, config) => {
+                if (infoEl) infoEl.textContent = '';
+                if (typeof existingEvents.dataPointMouseLeave === 'function') {
+                    existingEvents.dataPointMouseLeave(event, chartContext, config);
+                }
+            }
+        };
+    }
+
+    _applyBarHover(container, options, titleText) {
+        const infoEl = this._prepareChartContainer(container, titleText);
+        options.tooltip = { enabled: false };
+        options.chart = options.chart || {};
+        const existingEvents = options.chart.events || {};
+        options.chart.events = {
+            ...existingEvents,
+            dataPointMouseEnter: (event, chartContext, config) => {
+                if (infoEl) {
+                    const label = options.xaxis?.categories?.[config.dataPointIndex] || '';
+                    const value = options.series?.[config.seriesIndex]?.data?.[config.dataPointIndex] || 0;
+                    infoEl.innerHTML = `<strong>${label}</strong>: ${value}%`;
+                }
+                if (typeof existingEvents.dataPointMouseEnter === 'function') {
+                    existingEvents.dataPointMouseEnter(event, chartContext, config);
+                }
+            },
+            dataPointMouseLeave: (event, chartContext, config) => {
+                if (infoEl) infoEl.textContent = '';
+                if (typeof existingEvents.dataPointMouseLeave === 'function') {
+                    existingEvents.dataPointMouseLeave(event, chartContext, config);
+                }
+            }
+        };
+    }
+
     _renderRechtsschutzChart() {
         const container = document.getElementById('rechtsschutz-chart-container');
         if (!container) return;
@@ -1410,7 +1530,7 @@ class BeratungView {
             series: [40, 25, 20, 15],
             chart: {
                 type: 'donut',
-                height: 250,
+                height: this._getAdaptiveChartHeight(container),
                 foreColor: '#e2e8f0'
             },
             labels: ['Schadenersatz (z.B. Verkehr)', 'Vertragsstreitigkeiten', 'Arbeitsrecht', 'Wohnen & Miete'],
@@ -1435,7 +1555,165 @@ class BeratungView {
             legend: { show: false },
             responsive: [{ breakpoint: 480, options: { chart: { width: 200 }, legend: { position: 'bottom' } } }]
         };
+        this._applyDonutHover(container, options, container.dataset?.chartTitle || '');
+        const chart = new ApexCharts(container, options);
+        chart.render();
+    }
 
+    _renderKrankenChart() {
+        const container = document.getElementById('kranken-chart-container');
+        if (!container) return;
+
+        container.innerHTML = '';
+
+        const options = {
+            series: [35, 30, 20, 15],
+            chart: { type: 'donut', height: this._getAdaptiveChartHeight(container), foreColor: '#e2e8f0' },
+            labels: ['Stationär', 'Ambulant', 'Vorsorge', 'Zahn & Kiefer'],
+            colors: ['#3b82f6', '#22c55e', '#fbbf24', '#2dd4bf'],
+            plotOptions: {
+                pie: {
+                    donut: {
+                        labels: {
+                            show: true,
+                            total: {
+                                show: true,
+                                label: 'Leistungsschwerpunkte',
+                                formatter: () => 'Anteil'
+                            }
+                        }
+                    }
+                }
+            },
+            dataLabels: { enabled: false },
+            legend: { show: false },
+            responsive: [{ breakpoint: 480, options: { chart: { width: 200 } } }]
+        };
+        this._applyDonutHover(container, options, container.dataset?.chartTitle || '');
+        const chart = new ApexCharts(container, options);
+        chart.render();
+    }
+
+    _renderKreditChart() {
+        const container = document.getElementById('kredit-chart-container');
+        if (!container) return;
+        container.innerHTML = '';
+
+        const options = {
+            series: [50, 25, 15, 10],
+            chart: { type: 'donut', height: this._getAdaptiveChartHeight(container), foreColor: '#e2e8f0' },
+            labels: ['Hauskauf', 'Modernisierung', 'Konsumentenkredit', 'Umschuldung'],
+            colors: ['#2563eb', '#22c55e', '#f97316', '#a855f7'],
+            plotOptions: { pie: { donut: { labels: { show: true, total: { show: true, label: 'Finanzierungszweck', formatter: () => 'Anteil' } } } } },
+            dataLabels: { enabled: false },
+            legend: { show: false },
+            responsive: [{ breakpoint: 480, options: { chart: { width: 200 } } }]
+        };
+        this._applyDonutHover(container, options, container.dataset?.chartTitle || '');
+        const chart = new ApexCharts(container, options);
+        chart.render();
+    }
+    _renderLeasingChart() {
+        const container = document.getElementById('leasing-chart-container');
+        if (!container) return;
+        container.innerHTML = '';
+
+        const options = {
+            series: [40, 30, 20, 10],
+            chart: { type: 'donut', height: this._getAdaptiveChartHeight(container), foreColor: '#e2e8f0' },
+            labels: ['PKW privat', 'Fuhrpark', 'Technik', 'Sonstiges'],
+            colors: ['#fbbf24', '#2563eb', '#10b981', '#a855f7'],
+            plotOptions: { pie: { donut: { labels: { show: true, total: { show: true, label: 'Leasing-Anteil', formatter: () => 'Segmente' } } } } },
+            dataLabels: { enabled: false },
+            legend: { show: false },
+            responsive: [{ breakpoint: 480, options: { chart: { width: 200 } } }]
+        };
+        this._applyDonutHover(container, options, container.dataset?.chartTitle || '');
+        const chart = new ApexCharts(container, options);
+        chart.render();
+    }
+
+    _renderStromChart() {
+        const container = document.getElementById('strom-chart-container');
+        if (!container) return;
+        container.innerHTML = '';
+
+        const options = {
+            series: [45, 25, 20, 10],
+            chart: { type: 'donut', height: this._getAdaptiveChartHeight(container), foreColor: '#e2e8f0' },
+            labels: ['Standardtarif', 'Ökostrom', 'Preisgarantie', 'Dynamisch'],
+            colors: ['#2563eb', '#22c55e', '#fbbf24', '#a855f7'],
+            plotOptions: { pie: { donut: { labels: { show: true, total: { show: true, label: 'Tarifmix', formatter: () => 'Anteil' } } } } },
+            dataLabels: { enabled: false },
+            legend: { show: false },
+            responsive: [{ breakpoint: 480, options: { chart: { width: 200 } } }]
+        };
+
+        this._applyDonutHover(container, options, container.dataset?.chartTitle || '');
+        const chart = new ApexCharts(container, options);
+        chart.render();
+    }
+
+    _renderGasChart() {
+        const container = document.getElementById('gas-chart-container');
+        if (!container) return;
+        container.innerHTML = '';
+
+        const options = {
+            series: [50, 30, 12, 8],
+            chart: { type: 'donut', height: this._getAdaptiveChartHeight(container), foreColor: '#e2e8f0' },
+            labels: ['Haushalt', 'Gewerbe', 'Ökogas', 'Preisgarantie'],
+            colors: ['#f97316', '#2563eb', '#22c55e', '#a855f7'],
+            plotOptions: { pie: { donut: { labels: { show: true, total: { show: true, label: 'Kundensegmente', formatter: () => 'Anteil' } } } } },
+            dataLabels: { enabled: false },
+            legend: { show: false },
+            responsive: [{ breakpoint: 480, options: { chart: { width: 200 } } }]
+        };
+
+        this._applyDonutHover(container, options, container.dataset?.chartTitle || '');
+        const chart = new ApexCharts(container, options);
+        chart.render();
+    }
+
+    _renderImmobilieChart() {
+        const container = document.getElementById('immobilie-chart-container');
+        if (!container) return;
+        container.innerHTML = '';
+
+        const options = {
+            series: [35, 25, 20, 20],
+            chart: { type: 'donut', height: this._getAdaptiveChartHeight(container), foreColor: '#e2e8f0' },
+            labels: ['Kauf', 'Verkauf', 'Vermietung', 'Finanzierung'],
+            colors: ['#2563eb', '#f97316', '#22c55e', '#a855f7'],
+            plotOptions: { pie: { donut: { labels: { show: true, total: { show: true, label: 'Leistungsschwerpunkte', formatter: () => 'Anteil' } } } } },
+            dataLabels: { enabled: false },
+            legend: { show: false },
+            responsive: [{ breakpoint: 480, options: { chart: { width: 200 } } }]
+        };
+
+        this._applyDonutHover(container, options, container.dataset?.chartTitle || '');
+        const chart = new ApexCharts(container, options);
+        chart.render();
+    }
+
+
+    _renderHaftpflichtChart() {
+        const container = document.getElementById('haftpflicht-chart-container');
+        if (!container) return;
+        container.innerHTML = '';
+
+        const options = {
+            series: [45, 30, 15, 10],
+            chart: { type: 'donut', height: this._getAdaptiveChartHeight(container), foreColor: '#e2e8f0' },
+            labels: ['Personenschäden', 'Sachschäden', 'Vermögensschäden', 'Rechtsschutz'],
+            colors: ['#22c55e', '#3b82f6', '#fbbf24', '#a855f7'],
+            plotOptions: { pie: { donut: { labels: { show: true, total: { show: true, label: 'Schadenarten', formatter: () => 'Anteil' } } } } },
+            dataLabels: { enabled: false },
+            legend: { show: false },
+            responsive: [{ breakpoint: 480, options: { chart: { width: 200 } } }]
+        };
+
+        this._applyDonutHover(container, options, container.dataset?.chartTitle || '');
         const chart = new ApexCharts(container, options);
         chart.render();
     }
@@ -1447,7 +1725,7 @@ class BeratungView {
 
         const options = {
             series: [35, 25, 20, 10, 10],
-            chart: { type: 'donut', height: 250, foreColor: '#e2e8f0' },
+            chart: { type: 'donut', height: this._getAdaptiveChartHeight(container), foreColor: '#e2e8f0' },
             labels: ['Wasserschäden', 'Einbruch/Diebstahl', 'Brandschäden', 'Glasschäden', 'Sonstige Schäden'],
             colors: ['#3b82f6', '#ef4444', '#f59e0b', '#6b7280'],
             plotOptions: {
@@ -1469,6 +1747,7 @@ class BeratungView {
             responsive: [{ breakpoint: 480, options: { chart: { width: 200 } } }]
         };
 
+        this._applyDonutHover(container, options, container.dataset?.chartTitle || '');
         const chart = new ApexCharts(container, options);
         chart.render();
     }
@@ -1480,7 +1759,7 @@ class BeratungView {
 
         const options = {
             series: [40, 30, 20, 5, 5],
-            chart: { type: 'donut', height: 250, foreColor: '#e2e8f0' },
+            chart: { type: 'donut', height: this._getAdaptiveChartHeight(container), foreColor: '#e2e8f0' },
             labels: ['Wasserschäden', 'Sturmschäden', 'Brandschäden', 'Glasschäden', 'Sonstige Schäden'],
             colors: ['#3b82f6', '#22c55e', '#ef4444', '#f59e0b'],
             plotOptions: {
@@ -1502,6 +1781,7 @@ class BeratungView {
             responsive: [{ breakpoint: 480, options: { chart: { width: 200 } } }]
         };
 
+        this._applyDonutHover(container, options, container.dataset?.chartTitle || '');
         const chart = new ApexCharts(container, options);
         chart.render();
     }
@@ -1513,7 +1793,7 @@ class BeratungView {
 
         const options = {
             series: [45, 30, 15, 10],
-            chart: { type: 'donut', height: 250, foreColor: '#e2e8f0' },
+            chart: { type: 'donut', height: this._getAdaptiveChartHeight(container), foreColor: '#e2e8f0' },
             labels: ['Freizeit & Sport', 'Haushalt', 'Arbeit & Schule', 'Verkehr'],
             colors: ['#22c55e', '#f59e0b', '#3b82f6', '#ef4444'],
             plotOptions: {
@@ -1535,6 +1815,7 @@ class BeratungView {
             responsive: [{ breakpoint: 480, options: { chart: { width: 200 } } }]
         };
 
+        this._applyDonutHover(container, options, container.dataset?.chartTitle || '');
         const chart = new ApexCharts(container, options);
         chart.render();
     }
@@ -1546,7 +1827,7 @@ class BeratungView {
 
         const options = {
             series: [50, 35, 15],
-            chart: { type: 'donut', height: 250, foreColor: '#e2e8f0' },
+            chart: { type: 'donut', height: this._getAdaptiveChartHeight(container), foreColor: '#e2e8f0' },
             labels: ['Laufende Kredite', 'Lebensunterhalt Familie', 'Ausbildung Kinder'],
             colors: ['#3b82f6', '#22c55e', '#f59e0b'],
             plotOptions: {
@@ -1568,6 +1849,7 @@ class BeratungView {
             responsive: [{ breakpoint: 480, options: { chart: { width: 200 } } }]
         };
 
+        this._applyDonutHover(container, options, container.dataset?.chartTitle || '');
         const chart = new ApexCharts(container, options);
         chart.render();
     }
@@ -1579,7 +1861,7 @@ class BeratungView {
 
         const options = {
             series: [{ data: [32, 21, 15, 8, 24] }],
-            chart: { type: 'bar', height: 250, foreColor: '#e2e8f0', toolbar: { show: false } },
+            chart: { type: 'bar', height: this._getAdaptiveChartHeight(container), foreColor: '#e2e8f0', toolbar: { show: false } },
             plotOptions: { bar: { borderRadius: 4, horizontal: true, } },
             dataLabels: { enabled: true, formatter: (val) => val + "%", style: { colors: ['#fff'] } },
             xaxis: { categories: ['Psyche', 'Skelett/Bewegung', 'Krebs/Tumore', 'Unfälle', 'Sonstige'], labels: { show: false } },
@@ -1587,6 +1869,7 @@ class BeratungView {
             tooltip: { theme: 'dark', y: { formatter: (val) => val + "%" } }
         };
 
+        this._applyBarHover(container, options, container.dataset?.chartTitle || '');
         const chart = new ApexCharts(container, options);
         chart.render();
     }
@@ -2311,11 +2594,11 @@ class BeratungView {
         const hatVB = berater[COLUMN_MAPS.mitarbeiter.VB] === true;
         const hatImmo = berater[COLUMN_MAPS.mitarbeiter.Immobilienexperte] === true;
 
-        let bildHtml = '<div class="w-64 h-64 bg-skt-blue-light rounded-full flex items-center justify-center"><i class="fas fa-user fa-5x text-white"></i></div>';
+        let bildHtml = '<div class="w-80 h-80 bg-skt-blue-light rounded-full flex items-center justify-center"><i class="fas fa-user fa-5x text-white"></i></div>';
         if (bildUrlRaw) {
             const finalBildUrl = await getSeaTableDownloadLink(bildUrlRaw);
             if (finalBildUrl) {
-                bildHtml = `<img src="${finalBildUrl}" alt="Portrait von ${this._escapeHtml(berater[nameKey])}" class="w-64 h-64 rounded-full object-cover shadow-2xl border-4 border-white">`;
+                bildHtml = `<img src="${finalBildUrl}" alt="Portrait von ${this._escapeHtml(berater[nameKey])}" class="w-80 h-80 rounded-full object-cover shadow-2xl border-4 border-white">`;
             }
         }
 
@@ -2379,7 +2662,11 @@ class BeratungView {
 
         if (this.beratungData.kategorien.length > 0) {
             // KORREKTUR: Nach dem Sortieren die Ränge neu zuweisen.
-            new Sortable(this.agendaContainer, { animation: 150, handle: '.fa-grip-vertical', onEnd: updateRanks });
+            if (typeof Sortable !== 'undefined') {
+                new Sortable(this.agendaContainer, { animation: 150, handle: '.fa-grip-vertical', onEnd: updateRanks });
+            } else {
+                beratungLog('WARNUNG: SortableJS konnte nicht geladen werden. Drag-and-Drop ist deaktiviert.');
+            }
         }
     }
 
