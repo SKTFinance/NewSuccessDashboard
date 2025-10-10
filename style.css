@@ -861,6 +861,9 @@ summary::-webkit-details-marker {
     border-radius: 6px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
+.pqq-muted {
+    color: #94a3b8 !important;
+}
 
 /* NEU: PQQ Details Collapsible */
 .pqq-details-collapsible {

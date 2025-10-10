@@ -1360,14 +1360,47 @@ function _escapeHtml(str) {
 }
 
 function saveToCache(key, data) {
+  const namespacedKey = CACHE_PREFIX + key;
+  const buildPayload = () => JSON.stringify({ timestamp: Date.now(), data });
+
+  const attemptSet = (payload) => {
+    localStorage.setItem(namespacedKey, payload);
+  };
+
+  const payload = buildPayload();
+
   try {
-    const item = {
-      timestamp: new Date().getTime(),
-      data: data,
-    };
-    localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(item));
+    attemptSet(payload);
+    return;
   } catch (e) {
-    console.error("Fehler beim Speichern im Cache", e);
+    if (!isQuotaExceededError(e)) {
+      console.error("Fehler beim Speichern im Cache", e);
+      return;
+    }
+  }
+
+  console.warn("Speicherlimit erreicht. Entferne ältere Cache-Einträge …");
+  pruneCacheEntries(namespacedKey, 10);
+
+  try {
+    attemptSet(buildPayload());
+    console.info("Cache-Eintrag nach Bereinigung erfolgreich gespeichert:", namespacedKey);
+    return;
+  } catch (retryError) {
+    if (!isQuotaExceededError(retryError)) {
+      console.error("Cache konnte nach Bereinigung nicht gespeichert werden.", retryError);
+      return;
+    }
+  }
+
+  console.warn("Cache weiterhin voll. Lösche alle Cache-Einträge für dieses Dashboard …");
+  clearWholeCacheNamespace();
+
+  try {
+    attemptSet(buildPayload());
+    console.info("Cache-Eintrag nach vollständiger Bereinigung gespeichert:", namespacedKey);
+  } catch (finalError) {
+    console.error("Cache konnte auch nach vollständiger Bereinigung nicht gespeichert werden. Speichere nicht.", finalError);
   }
 }
 
@@ -1382,6 +1415,58 @@ function loadFromCache(key, maxAgeMinutes = 60) {
   } catch (e) {
     return null;
   }
+}
+
+function isQuotaExceededError(error) {
+  if (!error) return false;
+  if (error.code && error.code === 22) return true;
+  if (error.name && (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED')) return true;
+  if (typeof error.message === 'string' && error.message.includes('quota')) return true;
+  return false;
+}
+
+function pruneCacheEntries(excludeKey, maxRemovals = 5) {
+  const cacheEntries = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(CACHE_PREFIX)) continue;
+    if (key === excludeKey) continue;
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key));
+      cacheEntries.push({
+        key,
+        timestamp: parsed?.timestamp || 0
+      });
+    } catch (_ignored) {
+      cacheEntries.push({ key, timestamp: 0 });
+    }
+  }
+
+  // Sort by oldest first
+  cacheEntries.sort((a, b) => a.timestamp - b.timestamp);
+
+  let removals = 0;
+  for (const entry of cacheEntries) {
+    localStorage.removeItem(entry.key);
+    removals++;
+    if (removals >= maxRemovals) break;
+  }
+
+  if (removals === 0 && excludeKey) {
+    // As a last resort, drop the existing value for the same key.
+    localStorage.removeItem(excludeKey);
+  }
+}
+
+function clearWholeCacheNamespace() {
+  const keysToRemove = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith(CACHE_PREFIX)) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach(key => localStorage.removeItem(key));
 }
 
 function getCacheItemInfo(key) {
@@ -9702,15 +9787,27 @@ class AuswertungView {
             p.Jahr === prevYear
         );
 
-        if (!plan) {
-            pqqLog(`Keine Plandaten für ${user.Name} im ${prevMonthName} ${prevYear} gefunden.`);
-            alert(`Für ${user.Name} wurden keine Plandaten im ${prevMonthName} ${prevYear} gefunden. PQQ kann nicht berechnet werden.`);
+        const infoPlansForUser = db.infoplanung.filter(p =>
+            p.Mitarbeiter_ID === userId &&
+            p.Informationsabend &&
+            (() => {
+                const infoDate = new Date(p.Informationsabend);
+                return infoDate >= prevMonthStartDate && infoDate <= prevMonthEndDate;
+            })()
+        );
+
+        if (!plan && infoPlansForUser.length === 0) {
+            pqqLog(`Keine Plan- oder Info-Plan-Daten für ${user.Name} im ${prevMonthName} ${prevYear} gefunden.`);
+            alert(`Für ${user.Name} wurden keine Plan- oder Info-Plan-Daten im ${prevMonthName} ${prevYear} gefunden. PQQ kann nicht berechnet werden.`);
             return;
         }
 
         const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
-        const ursprungszielET = plan?.Ursprungsziel_ET || 0;
-        pqqLog(`Plandaten (Ursprungsziel):`, { EH: ursprungszielEH, ET: ursprungszielET });
+        const ursprungszielET = infoPlansForUser.reduce(
+            (sum, p) => sum + (p.Ursprungsziel_ET ?? p.ET_Ziel ?? 0),
+            0
+        );
+        pqqLog(`Plan-/Info-Daten (Ursprungsziel):`, { EH: ursprungszielEH, ET: ursprungszielET });
 
         // 3. Get actual data for previous month via SQL
         const mitarbeiterNameSql = `'${escapeSql(user.Name)}'`;
@@ -9729,10 +9826,22 @@ class AuswertungView {
         const ehQuote = (ursprungszielEH > 0) ? (totalEH / ursprungszielEH) : (ursprungszielEH === 0 ? 1 : 0);
         pqqLog(`EH-Quote Berechnung: ${totalEH} (Ist) / ${ursprungszielEH} (Ziel) = ${ehQuote.toFixed(4)}`);
         const etQuote = (ursprungszielET > 0) ? (totalETAusgemacht / ursprungszielET) : (ursprungszielET === 0 ? 1 : 0);
-        pqqLog(`ET-Quote Berechnung: ${totalETAusgemacht} (Ist) / ${ursprungszielET} (Ziel) = ${etQuote.toFixed(4)}`);
-        const pqq = ((ehQuote + etQuote) / 2) * 100;
-        pqqLog(`Gesamt-PQQ: ((${ehQuote.toFixed(4)} + ${etQuote.toFixed(4)}) / 2) * 100 = ${pqq.toFixed(2)}%`);
-        alert(`PQQ-Berechnung für ${user.Name}:\n\nEH-Quote: ${(ehQuote * 100).toFixed(0)}% (${totalEH} Ist / ${ursprungszielEH} Ziel)\nET-Quote: ${(etQuote * 100).toFixed(0)}% (${totalETAusgemacht} Ist / ${ursprungszielET} Ziel)\n\nGesamt-PQQ: ${pqq.toFixed(0)}%\n\n(Details in der Entwicklerkonsole)`);
+        const includeEt = ursprungszielET > 0;
+        if (includeEt) {
+            pqqLog(`ET-Quote Berechnung: ${totalETAusgemacht} (Ist) / ${ursprungszielET} (Ziel) = ${etQuote.toFixed(4)}`);
+        } else {
+            pqqLog('ET-Ziel = 0. ET-Quote wird bei der Gesamt-PQQ nicht berücksichtigt.');
+        }
+        const { pqq, etConsidered } = computePqqScore(ehQuote, etQuote, includeEt);
+        if (etConsidered) {
+            pqqLog(`Gesamt-PQQ: ((${ehQuote.toFixed(4)} + ${etQuote.toFixed(4)}) / 2) * 100 = ${pqq.toFixed(2)}%`);
+        } else {
+            pqqLog(`Gesamt-PQQ: ${pqq.toFixed(2)}% (nur EH berücksichtigt, ET-Ziel 0)`);
+        }
+        const etAlertLine = etConsidered
+            ? `ET-Quote: ${(etQuote * 100).toFixed(0)}% (${totalETAusgemacht} Ist / ${ursprungszielET} Ziel)`
+            : 'ET-Quote: ET-Ziel 0 (nicht berücksichtigt)';
+        alert(`PQQ-Berechnung für ${user.Name}:\n\nEH-Quote: ${(ehQuote * 100).toFixed(0)}% (${totalEH} Ist / ${ursprungszielEH} Ziel)\n${etAlertLine}\n\nGesamt-PQQ: ${pqq.toFixed(0)}%\n\n(Details in der Entwicklerkonsole)`);
     }
 
     async renderPlanungen() {
@@ -10003,10 +10112,14 @@ class AuswertungView {
         
         // KORREKTUR: Verwende die übergebenen Infoplan-Daten
         const relevantPlans = db.monatsplanung.filter(p => userIds.includes(p.Mitarbeiter_ID) && p.Monat === prevMonthName && p.Jahr === prevYear);
-        const relevantInfoPlans = db.infoplanung.filter(p => userIds.includes(p.Mitarbeiter_ID) && new Date(p.Informationsabend).getFullYear() === prevYear && new Date(p.Informationsabend).getMonth() === prevMonthDate.getMonth());
+        const relevantInfoPlans = db.infoplanung.filter(p => {
+            if (!userIds.includes(p.Mitarbeiter_ID) || !p.Informationsabend) return false;
+            const infoDate = new Date(p.Informationsabend);
+            return infoDate >= prevMonthStartDate && infoDate <= prevMonthEndDate;
+        });
         
         const plansByUserId = _.keyBy(relevantPlans, 'Mitarbeiter_ID');
-        const infoPlansByUserId = _.keyBy(relevantInfoPlans, 'Mitarbeiter_ID');
+        const infoPlansByUserId = _.groupBy(relevantInfoPlans, 'Mitarbeiter_ID');
 
         const mitarbeiterNames = userIds.map(id => findRowById('mitarbeiter', id)?.Name).filter(Boolean);
         if (mitarbeiterNames.length === 0) return pqqDataMap;
@@ -10038,20 +10151,24 @@ class AuswertungView {
         const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
         userIds.forEach(userId => {
             const plan = plansByUserId[userId];
-            const infoPlan = infoPlansByUserId[userId];
+            const infoPlansForUser = infoPlansByUserId[userId] || [];
             const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
-            const ursprungszielET = infoPlan?.Ursprungsziel_ET || 0;
+            const ursprungszielET = infoPlansForUser.reduce(
+                (sum, p) => sum + (p.Ursprungsziel_ET ?? p.ET_Ziel ?? 0),
+                0
+            );
             const totalEH = ehByMitarbeiterId[userId]?.totalEH || 0;
             const userEts = etByMitarbeiterId[userId] || [];
             const totalETAusgemacht = userEts.filter(t => ET_STATUS_AUSGEMACHT.includes(t.Status)).length;
 
             // KORREKTUR: Formel ist Ist / Ziel
             const ehQuote = (ursprungszielEH > 0) ? (totalEH / ursprungszielEH) : (ursprungszielEH === 0 ? 1 : 0);
-
-            // KORREKTUR: Formel ist Ist / Ziel
             const etQuote = (ursprungszielET > 0) ? (totalETAusgemacht / ursprungszielET) : (ursprungszielET === 0 ? 1 : 0);
+            const includeEt = ursprungszielET > 0;
+            const { pqq, etConsidered } = computePqqScore(ehQuote, etQuote, includeEt);
             pqqDataMap[userId] = {
-                pqq: ((ehQuote + etQuote) / 2) * 100,
+                pqq,
+                etIncluded: etConsidered,
                 etIst: totalETAusgemacht, // NEU: ET-Ist-Wert hinzufügen
                 ehIst: istEhByMitarbeiterId[userId]?.totalEH || 0,
                 prognose: prognoseByMitarbeiterId[userId]?.totalPrognose || 0
@@ -11450,14 +11567,21 @@ async function getSingleUserPQQ(userId) {
     const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
 
     // Get ET plan
-    const prevMonthInfoPlan = db.infoplanung.find(p => 
+    const prevMonthInfoPlans = db.infoplanung.filter(p => 
         p.Mitarbeiter_ID === userId &&
-        new Date(p.Informationsabend).getFullYear() === prevYear &&
-        new Date(p.Informationsabend).getMonth() === startDate.getMonth() // KORREKTUR: Prüft auf den Monat des Infoabends
+        p.Informationsabend &&
+        (() => {
+            const infoDate = new Date(p.Informationsabend);
+            return infoDate >= startDate && infoDate <= endDate;
+        })()
     );
-    const ursprungszielET = prevMonthInfoPlan?.Ursprungsziel_ET || 0;
+    const ursprungszielET = prevMonthInfoPlans.reduce(
+        (sum, p) => sum + (p.Ursprungsziel_ET ?? p.ET_Ziel ?? 0),
+        0
+    );
 
-    if (ursprungszielEH === 0 && ursprungszielET === 0) return { pqq: 100, ehQuote: 1, etQuote: 1 };
+    if (!plan && prevMonthInfoPlans.length === 0) return null;
+    if (ursprungszielEH === 0 && ursprungszielET === 0) return { pqq: 100, ehQuote: 1, etQuote: 1, etConsidered: false };
 
     // KORREKTUR: Lade die Ist-EH für den Vormonat direkt per SQL.
     const userName = findRowById('mitarbeiter', userId)?.Name;
@@ -11477,8 +11601,8 @@ async function getSingleUserPQQ(userId) {
 
     const ehQuote = (ursprungszielEH > 0) ? (actualEH / ursprungszielEH) : 1;
     const etQuote = (ursprungszielET > 0) ? (actualET / ursprungszielET) : 1;
-    const pqq = ((ehQuote + etQuote) / 2) * 100;
-    return { pqq, ehQuote, etQuote };
+    const { pqq, etConsidered } = computePqqScore(ehQuote, etQuote, ursprungszielET > 0);
+    return { pqq, ehQuote, etQuote, etConsidered };
 }
 
 // NEU: Globale Funktion zur KPI-Berechnung
@@ -12300,7 +12424,78 @@ async function handleAIAssistantClick() {
     console.error("Fehler bei der Gemini-API-Anfrage:", error);
     dom.hinweisModalContent.textContent =
       "Der KI-Assistent ist im Moment leider nicht verfügbar. Bitte versuchen Sie es später erneut.";
-  }
+}
+}
+
+function computePqqScore(ehQuote, etQuote, includeEt) {
+    const contributions = [];
+    const safeEhQuote = Number.isFinite(ehQuote) ? ehQuote : 0;
+    const etConsidered = includeEt && Number.isFinite(etQuote);
+    if (Number.isFinite(safeEhQuote)) {
+        contributions.push(safeEhQuote);
+    }
+    if (etConsidered) {
+        contributions.push(etQuote);
+    }
+    if (contributions.length === 0) {
+        return { pqq: 0, etConsidered: false };
+    }
+    const averageQuote = contributions.reduce((sum, value) => sum + value, 0) / contributions.length;
+    return { pqq: averageQuote * 100, etConsidered };
+}
+
+function updatePqqUiForEtContribution({ etConsidered, totalPercent, ehPercent, etPercent }) {
+    if (!dom || !dom.pqqView) return;
+
+    const totalIndicator = dom.pqqIndicator?.querySelector('div');
+    const ehIndicator = dom.pqqEhIndicator?.querySelector('div');
+    const etIndicator = dom.pqqEtIndicator?.querySelector('div');
+
+    if (totalIndicator) {
+        totalIndicator.style.backgroundColor = etConsidered ? '' : '#94a3b8';
+    }
+    if (ehIndicator) {
+        ehIndicator.style.backgroundColor = etConsidered ? '' : '#94a3b8';
+    }
+    if (etIndicator) {
+        etIndicator.style.backgroundColor = etConsidered ? '' : '#d1d5db';
+        etIndicator.style.opacity = etConsidered ? '1' : '0.35';
+    }
+
+    if (dom.pqqValueDisplay) {
+        dom.pqqValueDisplay.textContent = `${Math.round(totalPercent)}%${etConsidered ? '' : ' (nur EH)'}`;
+        dom.pqqValueDisplay.classList.toggle('pqq-muted', !etConsidered);
+    }
+
+    if (dom.pqqEhValueDisplay) {
+        dom.pqqEhValueDisplay.textContent = `${Math.round(ehPercent)}%${etConsidered ? '' : ' (maßgeblich)'}`;
+        dom.pqqEhValueDisplay.classList.toggle('pqq-muted', !etConsidered);
+    }
+
+    if (dom.pqqEtValueDisplay) {
+        if (etConsidered) {
+            dom.pqqEtValueDisplay.textContent = `${Math.round(etPercent)}%`;
+            dom.pqqEtValueDisplay.classList.remove('pqq-muted');
+        } else {
+            dom.pqqEtValueDisplay.textContent = 'ET-Ziel 0';
+            dom.pqqEtValueDisplay.classList.add('pqq-muted');
+        }
+    }
+
+    const noteId = 'pqq-eh-only-note';
+    let noteEl = document.getElementById(noteId);
+    if (!etConsidered) {
+        if (!noteEl) {
+            noteEl = document.createElement('p');
+            noteEl.id = noteId;
+            noteEl.className = 'text-xs text-gray-500 mt-3 text-center';
+            const gaugeWrapper = dom.pqqView.querySelector('#pqq-gauge')?.parentElement || dom.pqqView;
+            gaugeWrapper.appendChild(noteEl);
+        }
+        noteEl.textContent = 'ET-Ziel 0 – Gesamt-PQQ entspricht der EH-Quote.';
+    } else if (noteEl) {
+        noteEl.remove();
+    }
 }
 
 function _renderSinglePQQGauge(indicatorEl, valueDisplayEl, value) {
@@ -12334,16 +12529,28 @@ async function calculateAndRenderPQQ(mitarbeiterId) {
         p.Jahr === prevYear
     );
 
-    if (!plan) {
-        pqqLog('Keine Plandaten für den Vormonat gefunden. PQQ-Ansicht wird ausgeblendet.');
+    const infoPlansForUser = db.infoplanung.filter(p =>
+        p.Mitarbeiter_ID === mitarbeiterId &&
+        p.Informationsabend &&
+        (() => {
+            const infoDate = new Date(p.Informationsabend);
+            return infoDate >= startDate && infoDate <= endDate;
+        })()
+    );
+
+    if (!plan && infoPlansForUser.length === 0) {
+        pqqLog('Keine Plan- oder Info-Plan-Daten für den Vormonat gefunden. PQQ-Ansicht wird ausgeblendet.');
         dom.pqqView.classList.add('hidden');
         return;
     }
     dom.pqqView.classList.remove('hidden');
 
     const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
-    const ursprungszielET = plan?.Ursprungsziel_ET || 0;
-    pqqLog(`Plandaten gefunden: EH-Ziel=${ursprungszielEH}, ET-Ziel=${ursprungszielET}`);
+    const ursprungszielET = infoPlansForUser.reduce(
+        (sum, p) => sum + (p.Ursprungsziel_ET ?? p.ET_Ziel ?? 0),
+        0
+    );
+    pqqLog(`Plandaten gefunden: EH-Ziel=${ursprungszielEH}, ET-Ziel (Infoabende)=${ursprungszielET}`);
 
     // 3. Get actual data for previous month via SQL
     const mitarbeiterName = findRowById('mitarbeiter', mitarbeiterId)?.Name;
@@ -12365,27 +12572,38 @@ async function calculateAndRenderPQQ(mitarbeiterId) {
 
     // 4. Calculate PQQ parts
     let ehQuote = 0;
-    if (totalEH > 0) {
-        ehQuote = ursprungszielEH / totalEH;
-    } else if (ursprungszielEH === 0) { // Ziel 0, Ist 0 -> 100% Zielerreichung
+    if (ursprungszielEH > 0) {
+        ehQuote = totalEH / ursprungszielEH;
+    } else if (ursprungszielEH === 0) { // Kein Ziel gesetzt -> als erfüllt werten
         ehQuote = 1;
     }
 
     let etQuote = 0;
-    if (totalETAusgemacht > 0) {
-        etQuote = ursprungszielET / totalETAusgemacht;
-    } else if (ursprungszielET === 0) { // Ziel 0, Ist 0 -> 100% Zielerreichung
+    if (ursprungszielET > 0) {
+        etQuote = totalETAusgemacht / ursprungszielET;
+    } else if (ursprungszielET === 0) { // Kein Ziel gesetzt -> als erfüllt werten
         etQuote = 1;
     }
 
-    const pqq = ((ehQuote + etQuote) / 2) * 100;
-    pqqLog(`Einzelquoten berechnet: EH-Quote=${(ehQuote * 100).toFixed(2)}%, ET-Quote=${(etQuote * 100).toFixed(2)}%`);
-    pqqLog(`Gesamt-PQQ berechnet: ${pqq.toFixed(2)}%`);
+    const includeEt = ursprungszielET > 0;
+    const { pqq, etConsidered } = computePqqScore(ehQuote, etQuote, includeEt);
+    if (etConsidered) {
+        pqqLog(`Einzelquoten berechnet: EH-Quote=${(ehQuote * 100).toFixed(2)}%, ET-Quote=${(etQuote * 100).toFixed(2)}%`);
+        pqqLog(`Gesamt-PQQ berechnet: ${pqq.toFixed(2)}%`);
+    } else {
+        pqqLog(`ET-Ziel = 0. Gesamt-PQQ entspricht EH-Quote ${ (ehQuote * 100).toFixed(2)}%`);
+    }
 
     // 5. Render gauges
     _renderSinglePQQGauge(dom.pqqIndicator, dom.pqqValueDisplay, pqq);
     _renderSinglePQQGauge(dom.pqqEhIndicator, dom.pqqEhValueDisplay, ehQuote * 100);
     _renderSinglePQQGauge(dom.pqqEtIndicator, dom.pqqEtValueDisplay, etQuote * 100);
+    updatePqqUiForEtContribution({
+        etConsidered,
+        totalPercent: pqq,
+        ehPercent: ehQuote * 100,
+        etPercent: etQuote * 100
+    });
     pqqLog('Alle Gauges gerendert.');
 }
 
@@ -12411,8 +12629,15 @@ async function calculateAndRenderPQQForCurrentView() {
         pqqLog(`PQQ-Daten aus dem Cache geladen für Key: ${cacheKey}`);
         dom.pqqView.classList.remove('hidden');
         _renderSinglePQQGauge(dom.pqqIndicator, dom.pqqValueDisplay, cachedPQQ.pqq);
-        _renderSinglePQQGauge(dom.pqqEhIndicator, dom.pqqEhValueDisplay, cachedPQQ.ehQuote * 100);
-        _renderSinglePQQGauge(dom.pqqEtIndicator, dom.pqqEtValueDisplay, cachedPQQ.etQuote * 100);
+        _renderSinglePQQGauge(dom.pqqEhIndicator, dom.pqqEhValueDisplay, (cachedPQQ.ehQuote || 0) * 100);
+        _renderSinglePQQGauge(dom.pqqEtIndicator, dom.pqqEtValueDisplay, (cachedPQQ.etQuote || 0) * 100);
+        const etConsidered = cachedPQQ.etConsidered !== undefined ? cachedPQQ.etConsidered : true;
+        updatePqqUiForEtContribution({
+            etConsidered,
+            totalPercent: cachedPQQ.pqq,
+            ehPercent: (cachedPQQ.ehQuote || 0) * 100,
+            etPercent: (cachedPQQ.etQuote || 0) * 100
+        });
         pqqLog('Alle Gauges aus dem Cache gerendert.');
         return; // Berechnung hier beenden, da Daten aus dem Cache kamen
     }
@@ -12465,7 +12690,11 @@ async function calculateAndRenderPQQForCurrentView() {
     const prevYear = startDate.getFullYear();
     pqqLog(`PQQ-Zeitraum: ${startDateIso} bis ${endDateIso} (${prevMonthName} ${prevYear})`);
     pqqLog('Suche Plandaten in `db.monatsplanung` (insgesamt ' + db.monatsplanung.length + ' Einträge).');
-    const relevantInfoPlans = db.infoplanung.filter(p => userIds.includes(p.Mitarbeiter_ID) && new Date(p.Informationsabend).getFullYear() === prevYear && new Date(p.Informationsabend).getMonth() === startDate.getMonth());
+    const relevantInfoPlans = db.infoplanung.filter(p => {
+        if (!userIds.includes(p.Mitarbeiter_ID) || !p.Informationsabend) return false;
+        const infoDate = new Date(p.Informationsabend);
+        return infoDate >= startDate && infoDate <= endDate;
+    });
     const relevantPlans = db.monatsplanung.filter(p =>
         userIds.includes(p.Mitarbeiter_ID) &&
         p.Monat === prevMonthName &&
@@ -12483,7 +12712,7 @@ async function calculateAndRenderPQQForCurrentView() {
 
     dom.pqqView.classList.remove('hidden');
     const totalUrsprungszielEH = relevantPlans.reduce((sum, p) => sum + (p.Ursprungsziel_EH || 0), 0);
-    const totalUrsprungszielET = relevantInfoPlans.reduce((sum, p) => sum + (p.Ursprungsziel_ET || 0), 0);
+    const totalUrsprungszielET = relevantInfoPlans.reduce((sum, p) => sum + (p.Ursprungsziel_ET ?? p.ET_Ziel ?? 0), 0);
     pqqLog(`Plandaten gefunden (${relevantPlans.length} Einträge): Gesamt-EH-Ziel=${totalUrsprungszielEH}, Gesamt-ET-Ziel=${totalUrsprungszielET}`);
 
     // 3. Hole Ist-Daten für den Vormonat
@@ -12517,19 +12746,22 @@ async function calculateAndRenderPQQForCurrentView() {
     // 4. Berechne PQQ-Teile
     // KORREKTUR: Formel ist Ist / Ziel
     const ehQuote = (totalUrsprungszielEH > 0) ? (totalEH / totalUrsprungszielEH) : (totalUrsprungszielEH === 0 ? 1 : 0);
-
-    // KORREKTUR: Formel ist Ist / Ziel
     const etQuote = (totalUrsprungszielET > 0) ? (totalETAusgemacht / totalUrsprungszielET) : (totalUrsprungszielET === 0 ? 1 : 0);
-
-    const pqq = ((ehQuote + etQuote) / 2) * 100;
-    pqqLog(`Einzelquoten berechnet: EH-Quote=${(ehQuote * 100).toFixed(2)}%, ET-Quote=${(etQuote * 100).toFixed(2)}%`);
-    pqqLog(`Gesamt-PQQ berechnet: ${pqq.toFixed(2)}%`);
+    const includeEt = totalUrsprungszielET > 0;
+    const { pqq, etConsidered } = computePqqScore(ehQuote, etQuote, includeEt);
+    if (etConsidered) {
+        pqqLog(`Einzelquoten berechnet: EH-Quote=${(ehQuote * 100).toFixed(2)}%, ET-Quote=${(etQuote * 100).toFixed(2)}%`);
+        pqqLog(`Gesamt-PQQ berechnet: ${pqq.toFixed(2)}%`);
+    } else {
+        pqqLog(`ET-Ziel = 0. Gesamt-PQQ entspricht EH-Quote ${ (ehQuote * 100).toFixed(2)}%`);
+    }
 
     // NEU: PQQ-Daten im Cache speichern
     const pqqDataToCache = {
-        pqq: pqq,
-        ehQuote: ehQuote,
-        etQuote: etQuote
+        pqq,
+        ehQuote,
+        etQuote,
+        etConsidered
     };
     saveToCache(cacheKey, pqqDataToCache);
     pqqLog('PQQ-Daten im Cache gespeichert.', pqqDataToCache);
@@ -12538,6 +12770,12 @@ async function calculateAndRenderPQQForCurrentView() {
     _renderSinglePQQGauge(dom.pqqIndicator, dom.pqqValueDisplay, pqq);
     _renderSinglePQQGauge(dom.pqqEhIndicator, dom.pqqEhValueDisplay, ehQuote * 100);
     _renderSinglePQQGauge(dom.pqqEtIndicator, dom.pqqEtValueDisplay, etQuote * 100);
+    updatePqqUiForEtContribution({
+        etConsidered,
+        totalPercent: pqq,
+        ehPercent: ehQuote * 100,
+        etPercent: etQuote * 100
+    });
     pqqLog('Alle Gauges gerendert.');
 }
 
@@ -12802,6 +13040,12 @@ class StrukturbaumView {
         const ehByMitarbeiter = _.groupBy(mapSqlResults(ehResultsRaw, 'Umsatz'), r => r.Mitarbeiter_ID[0].display_value);
         const etByMitarbeiter = _.groupBy(mapSqlResults(etResultsRaw, 'Termine'), r => r.Mitarbeiter_ID[0].display_value);
         const plans = db.monatsplanung.filter(p => p.Monat === prevMonthName && p.Jahr === prevYear);
+        const infoPlans = db.infoplanung.filter(p => {
+            if (!p.Informationsabend) return false;
+            const infoDate = new Date(p.Informationsabend);
+            return infoDate >= prevStart && infoDate <= prevEnd;
+        });
+        const infoPlansByUser = _.groupBy(infoPlans, 'Mitarbeiter_ID');
 
         for (const userId of userIds) {
             const user = findRowById('mitarbeiter', userId);
@@ -12813,7 +13057,7 @@ class StrukturbaumView {
                 idsForPqqCalc.push(...groupMembers.map(m => m._id));
             }
 
-            const pqq = await this.calculatePQQForIds(idsForPqqCalc, plans, ehByMitarbeiter, etByMitarbeiter);
+            const pqq = await this.calculatePQQForIds(idsForPqqCalc, plans, infoPlansByUser, ehByMitarbeiter, etByMitarbeiter);
             if (dataMap[userId]) {
                 dataMap[userId].pqq = pqq;
             }
@@ -12822,7 +13066,7 @@ class StrukturbaumView {
         return dataMap;
     }
 
-    async calculatePQQForIds(userIds, allPlans, allEh, allEt) {
+    async calculatePQQForIds(userIds, allPlans, allInfoPlans, allEh, allEt) {
         const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
 
         let totalUrsprungszielEH = 0;
@@ -12836,7 +13080,9 @@ class StrukturbaumView {
 
             const plan = allPlans.find(p => p.Mitarbeiter_ID === id);
             totalUrsprungszielEH += plan?.Ursprungsziel_EH || 0;
-            totalUrsprungszielET += plan?.Ursprungsziel_ET || 0;
+            const infoPlansForUser = allInfoPlans[id] || [];
+            const userEtGoal = infoPlansForUser.reduce((sum, p) => sum + (p.Ursprungsziel_ET ?? p.ET_Ziel ?? 0), 0);
+            totalUrsprungszielET += userEtGoal;
 
             totalActualEH += allEh[user.Name]?.[0]?.totalEH || 0;
             const userEts = allEt[user.Name] || [];
@@ -12844,14 +13090,15 @@ class StrukturbaumView {
         }
 
         let ehQuote = 0;
-        if (totalActualEH > 0) ehQuote = totalUrsprungszielEH / totalActualEH;
+        if (totalUrsprungszielEH > 0) ehQuote = totalActualEH / totalUrsprungszielEH;
         else if (totalUrsprungszielEH === 0) ehQuote = 1;
 
         let etQuote = 0;
-        if (totalActualET > 0) etQuote = totalUrsprungszielET / totalActualET;
+        if (totalUrsprungszielET > 0) etQuote = totalActualET / totalUrsprungszielET;
         else if (totalUrsprungszielET === 0) etQuote = 1;
 
-        return ((ehQuote + etQuote) / 2) * 100;
+        const { pqq } = computePqqScore(ehQuote, etQuote, totalUrsprungszielET > 0);
+        return pqq;
     }
 }
 
@@ -16180,14 +16427,20 @@ async openCheckinModal(isEditMode = false) {
         const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
 
         // Get ET plan
-        const prevMonthInfoPlan = db.infoplanung.find(p => 
-            p.Mitarbeiter_ID === userId &&
-            new Date(p.Informationsabend).getFullYear() === prevYear &&
-            new Date(p.Informationsabend).getMonth() === startDate.getMonth()
-        );
-        const ursprungszielET = prevMonthInfoPlan?.Ursprungsziel_ET || 0;
+    const prevMonthInfoPlans = db.infoplanung.filter(p => 
+        p.Mitarbeiter_ID === userId &&
+        p.Informationsabend &&
+        (() => {
+            const infoDate = new Date(p.Informationsabend);
+            return infoDate >= startDate && infoDate <= endDate;
+        })()
+    );
+    const ursprungszielET = prevMonthInfoPlans.reduce(
+        (sum, p) => sum + (p.Ursprungsziel_ET ?? p.ET_Ziel ?? 0),
+        0
+    );
 
-        if (!plan && !prevMonthInfoPlan) return null;
+    if (!plan && prevMonthInfoPlans.length === 0) return null;
 
         // Get actual EH
         const actualEH = db.umsatz.filter(sale => 
@@ -16205,7 +16458,7 @@ async openCheckinModal(isEditMode = false) {
 
         const ehQuote = (ursprungszielEH > 0) ? (actualEH / ursprungszielEH) : 1;
         const etQuote = (ursprungszielET > 0) ? (actualET / ursprungszielET) : 1;
-        return ((ehQuote + etQuote) / 2) * 100;
+        return computePqqScore(ehQuote, etQuote, ursprungszielET > 0).pqq;
     }
 
     renderRedFlags(checkins) {
