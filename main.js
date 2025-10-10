@@ -10157,9 +10157,14 @@ class AuswertungView {
                 acc.ursprungsEhGoal += member.ursprungsEhGoal ?? 0;
                 acc.ehIst += member.ehIst ?? 0;
                 acc.prognose += member.prognose ?? 0;
+                if (member.pqq && member.pqq > 0) {
+                    acc.pqqSum += member.pqq;
+                    acc.pqqCount += 1;
+                }
                 return acc;
             
-            }, { ehGoal: 0, etGoal: 0, etIst: 0, ursprungsEhGoal: 0, ehIst: 0, prognose: 0 });
+            }, { ehGoal: 0, etGoal: 0, etIst: 0, ursprungsEhGoal: 0, ehIst: 0, prognose: 0, pqqSum: 0, pqqCount: 0 });
+            groupSums.pqqAverage = groupSums.pqqCount > 0 ? groupSums.pqqSum / groupSums.pqqCount : null;
             
             const groupObject = {
                 leader: leader,
@@ -10201,8 +10206,9 @@ class AuswertungView {
             </div>`;
 
         const renderUserRow = (user) => {
-            const pqq = user.pqq || 0;
-            const pqqColor = pqq > 120 ? 'text-skt-green-accent' : pqq >= 80 ? 'text-skt-yellow-accent' : 'text-skt-red-accent';
+            const hasPqq = typeof user.pqq === 'number' && user.pqq > 0;
+            const pqq = hasPqq ? user.pqq : 0;
+            const pqqColor = hasPqq ? (pqq > 120 ? 'text-skt-green-accent' : pqq >= 80 ? 'text-skt-yellow-accent' : 'text-skt-red-accent') : 'text-gray-400';
             
             // NEU: CSS-Klasse für Null-Ziele
             const ehGoalClass = (user.ehGoal || 0) === 0 ? 'zero-goal' : '';
@@ -10232,7 +10238,7 @@ class AuswertungView {
                     <div class="text-center font-bold ${ehIstClass}">${(user.ehIst || 0).toLocaleString('de-DE', { maximumFractionDigits: 2 })}</div>
                     <div class="text-center font-bold">${(user.prognose || 0).toLocaleString('de-DE', { maximumFractionDigits: 0 })}</div>
                     <div class="text-center font-bold ${planChangeColor}">${planChangeHtml}</div>
-                    <div class="text-center font-bold ${pqqColor} cursor-pointer" data-pqq-userid="${user.id}" title="PQQ-Berechnung anzeigen">${pqq.toFixed(0)}%</div>
+                    <div class="text-center font-bold ${pqqColor} cursor-pointer" data-pqq-userid="${user.id}" title="PQQ-Berechnung anzeigen">${hasPqq ? `${pqq.toFixed(0)}%` : '-'}</div>
                     <div class="text-center text-gray-400 hover:text-skt-blue cursor-pointer" data-edit-userid="${user.id}" title="Planung bearbeiten"><i class="fas fa-pen"></i></div>
                 </div>
             `;
@@ -10252,6 +10258,9 @@ class AuswertungView {
                 sumPlanChangeColorClass = 'text-green-400';
                 sumPlanChangeHtml = 'Neu';
             }
+            const sumPqqValue = (typeof group.sums.pqqAverage === 'number') ? group.sums.pqqAverage : null;
+            const sumPqqClass = sumPqqValue !== null ? (sumPqqValue > 120 ? 'text-green-200' : sumPqqValue >= 80 ? 'text-yellow-200' : 'text-red-200') : 'text-white';
+            const sumPqqHtml = sumPqqValue !== null ? `${sumPqqValue.toFixed(0)}%` : '-';
 
             const sumRowHtml = `
                 <div class="grid grid-cols-11 gap-4 items-center py-2 px-4 bg-skt-blue-light text-white rounded-b-md">
@@ -10263,7 +10272,7 @@ class AuswertungView {
                     <div class="text-center font-bold">${group.sums.ehIst.toLocaleString('de-DE', { maximumFractionDigits: 2 })}</div>
                     <div class="text-center font-bold">${group.sums.prognose.toLocaleString('de-DE', { maximumFractionDigits: 0 })}</div>
                     <div class="text-center font-bold ${sumPlanChangeColorClass}">${sumPlanChangeHtml}</div>
-                    <div class="text-center font-bold"></div>
+                    <div class="text-center font-bold ${sumPqqClass}">${sumPqqHtml}</div>
                     <div class="text-center"></div>
             `;
 
