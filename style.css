@@ -1237,43 +1237,20 @@ summary::-webkit-details-marker {
 }
 
 /* NEU: Stile für den detaillierten Wochenkalender */
-.week-calendar-header-grid {
-    display: grid;
-    grid-template-columns: 60px repeat(7, minmax(0, 1fr));
-    background-color: var(--color-skt-grey-light);
-}
-
-.week-calendar-body-grid {
-    display: grid;
-    grid-template-columns: 60px repeat(7, minmax(0, 1fr));
-    /* 18 Stunden (6-24) * 2 Slots/Stunde = 36 Zeilen. Jeder Slot ist 40px hoch. */
-    grid-template-rows: repeat(36, 40px); 
-}
-
 .week-calendar-day-col {
     position: relative;
-    border-left: 1px solid #e5e7eb; /* border-gray-200 */
-}
-
-.week-calendar-header-grid > div:not(:first-child) {
-    border-left: 1px solid #d1d5db; /* gray-300 */
-}
-.week-calendar-body-grid > .week-calendar-day-col:not(:first-child) {
-    border-left: 1px solid #d1d5db; /* gray-300 */
-}
-.week-calendar-time-slot {
-    border-top: 1px dotted #e5e7eb; /* border-gray-200 */
-}
-.week-calendar-time-slot.full-hour {
-    border-top-style: solid;
+    /* KORREKTUR: Der linke Rand wird jetzt über den Grid-Container gesteuert, um Lücken zu vermeiden. */
+    display: grid;
+    grid-template-rows: repeat(48, minmax(0, 1fr)); /* 48 Slots für 24 Stunden */
 }
 
 .week-calendar-time-label {
     position: absolute;
     transform: translateY(-50%);
     right: 8px;
-    background-color: white;
-    padding: 0 4px;
+    /* KORREKTUR: Hintergrund entfernt, um die Linien nicht zu überdecken. */
+    font-size: 0.75rem; /* text-xs */
+    color: #6b7280; /* gray-500 */
 }
 
 .week-calendar-appointment {
@@ -1282,6 +1259,34 @@ summary::-webkit-details-marker {
     overflow: hidden;
     transition: all 0.2s ease;
     /* border-left: 4px solid; */ /* Wird für die Statusfarbe verwendet */ /* KORREKTUR: Wird nicht mehr benötigt, da die farbige Leiste jetzt ein div ist. */
+}
+
+/* KORREKTUR: Grid-Layout für Header und Body, um vertikale Linien sicherzustellen */
+.week-calendar-header-grid, .week-calendar-body-grid {
+    display: grid;
+    gap: 0; /* Kein Abstand zwischen den Spalten */
+}
+.week-calendar-header-grid > div, .week-calendar-body-grid > div {
+    border-right: 1px solid #e5e7eb; /* border-gray-200 */
+}
+.week-calendar-header-grid > div:last-child, .week-calendar-body-grid > div:last-child {
+    border-right: none;
+}
+.week-calendar-time-slot {
+    border-top: 1px dotted #e5e7eb; /* border-gray-200 */
+}
+.week-calendar-time-slot.full-hour {
+    border-top: 1px solid #d1d5db; /* border-gray-300 */
+}
+
+/* NEU: Stile für den "Heute"-Indikator */
+.week-calendar-today-indicator {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: var(--color-accent-red);
+    z-index: 20; /* Über den Terminen */
 }
 
 /* NEU: Priorisierung der Inhalte in kleinen Kalendereinträgen */
@@ -1452,7 +1457,54 @@ summary::-webkit-details-marker {
     /* Adjust to center the emoji on the path */
     transform: translate(-12px, 8px);
 }
+
+/* --- NEU: Stile für die mobile Tagesansicht im iOS-Stil --- */
+.mobile-day-hour-slot {
+    position: relative;
+    height: 60px; /* 1px pro Minute, also 60px pro Stunde */
+}
+.mobile-day-time-label {
+    position: absolute;
+    top: -0.5em; /* Zentriert das Label auf der Linie */
+    left: 0;
+    font-size: 0.75rem; /* text-xs */
+    color: #6b7280; /* gray-500 */
+    width: 3.5rem; /* w-14 */
+    text-align: right;
+    padding-right: 0.5rem; /* pr-2 */
+}
+.mobile-day-hour-line {
+    position: absolute;
+    top: 0;
+    left: 4rem; /* w-16, Platz für das Label */
+    right: 0;
+    height: 1px;
+    background-color: #e5e7eb; /* gray-200 */
+}
+.mobile-appointment-block {
+    /* Die Positionierung (top, height, left, width) wird per JS gesetzt */
+    z-index: 10;
+    border-left: 3px solid rgba(0,0,0,0.2);
+}
+.mobile-appointment-block p {
+    line-height: 1.2;
+}
+.mobile-now-indicator {
+    pointer-events: none; /* Lässt Klicks durch den Indikator zu */
+}
+
+/* KORREKTUR: Die Farben für die mobile Ansicht werden jetzt über die Hintergrundfarbe gesteuert */
+.bg-red-100 { background-color: var(--color-accent-red-light); }
+.bg-green-100 { background-color: #dcfce7; }
+.bg-blue-100 { background-color: #dbeafe; }
+.bg-yellow-100 { background-color: #fef9c3; }
+
 /* --- NEU: Stile für die Beratungs-Ansicht (5-Block-Layout) --- */
+.top-level-view {
+    display: none; /* Standardmäßig versteckt */
+    position: fixed;
+    inset: 0;
+}
 .beratung-slide {
     position: absolute;
     inset: 0;

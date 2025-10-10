@@ -89,7 +89,7 @@
             <div id="stats-month-timeline" class="flex overflow-x-auto gap-4 pb-4 hide-scrollbar" style="height: 500px;"></div>
         </div>
         <!-- NEU: Container für die Wochenkalender-Ansicht -->
-        <div id="stats-week-view" class="hidden">
+        <div id="stats-week-view" class="hidden mt-4">
             <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4 sticky top-0 bg-white/80 backdrop-blur-sm py-2 z-30">
                 <h4 id="week-period-display" class="font-semibold text-skt-blue text-lg text-center cursor-pointer" title="Zur aktuellen Woche springen"></h4>
                 <div class="flex items-center gap-4">
@@ -99,15 +99,28 @@
                 </div>
             </div>
             <!-- KORREKTUR: Die Zeitachse wird aus dem Scroll-Container herausgezogen, um sie fixieren zu können. -->
-            <!-- NEU: Der Container für die Zeitachse und den Kalender wird zu einer Flexbox, um die vertikale Ausrichtung sicherzustellen. -->
+            <!-- KORREKTUR: Die Zeitachse wird jetzt absolut positioniert und erhält einen eigenen Scroll-Container, um synchron zu scrollen. -->
             <div class="flex relative" style="height: 70vh;">
-                <!-- NEU: Die Zeitachse wird jetzt absolut positioniert und erhält einen eigenen Scroll-Container, um synchron zu scrollen. -->
-                <div id="week-calendar-time-labels-container" class="w-[60px] flex-shrink-0 relative overflow-hidden z-20 bg-white"></div>
+                <!-- KORREKTUR: Die Zeitachse wird jetzt absolut positioniert und erhält einen eigenen Scroll-Container, um synchron zu scrollen. -->
+                <div id="week-calendar-time-labels-container" class="w-[60px] flex-shrink-0 relative overflow-hidden z-20 bg-white border-r border-gray-200"></div>
                 <div id="week-calendar-scroll-container" class="relative overflow-auto flex-grow">
                     <div id="week-calendar-container" class="relative"></div>
                 </div>
             </div>
         </div>
+        <!-- KORREKTUR: Der Container für die mobile Tagesansicht wird aus der Wochenansicht herausgezogen, um Fehler zu vermeiden. -->
+        <div id="mobile-day-view-container" class="hidden md:hidden h-[75vh] flex flex-col mt-4">
+            <div class="flex justify-between items-center mb-4">
+                <button id="mobile-day-nav-prev" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors"><i class="fas fa-chevron-left"></i></button>
+                <h4 id="mobile-day-header" class="font-semibold text-skt-blue text-lg text-center"></h4>
+                <button id="mobile-day-nav-next" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors"><i class="fas fa-chevron-right"></i></button>
+            </div>
+            <div id="mobile-day-timeline" class="relative flex-grow overflow-y-auto" style="height: 1440px;">
+                <!-- Die Timeline (Stunden + Termine) wird hier per JS gerendert -->
+            </div>
+        </div>
+
+        <!-- Ansicht für die Tabelle -->
         <div id="stats-table-view" class="hidden">
             <div id="stats-table-container" class="max-h-[500px] overflow-y-auto"></div>
         </div>
