@@ -1661,6 +1661,13 @@ function loadUiSetting(key, defaultValue) {
     return settings[key] !== undefined ? settings[key] : defaultValue;
 }
 
+function formatDateYMD(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 // NEU: Generische Funktion für das Bestätigungs-Modal
 async function showConfirmationModal(text, title = 'Bestätigung', okText = 'Bestätigen', cancelText = 'Abbrechen') {
     return new Promise((resolve) => {
@@ -10569,10 +10576,13 @@ class BildschirmView {
     }
 
     _getMonthlyDates() {
-        const today = new Date();
-        const startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-        const endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
-        return { startDate, endDate };
+        // Verwende denselben Umsatzmonat wie das restliche Dashboard.
+        const { startDate, endDate } = getMonthlyCycleDates();
+        // Defensive copy, damit das lokale Auftauen keine globalen Werte beschneidet.
+        return {
+            startDate: new Date(startDate),
+            endDate: new Date(endDate)
+        };
     }
 
     async fetchAndRenderRankings() {
@@ -10581,10 +10591,10 @@ class BildschirmView {
             const { startDate: monthStartDate, endDate: monthEndDate } = this._getMonthlyDates();
             const { startDate: weekStartDate, endDate: weekEndDate } = this._getWeeklyDates();
 
-            const monthStartDateIso = monthStartDate.toISOString().split('T')[0];
-            const monthEndDateIso = monthEndDate.toISOString().split('T')[0];
-            const weekStartDateIso = weekStartDate.toISOString().split('T')[0];
-            const weekEndDateIso = weekEndDate.toISOString().split('T')[0];
+            const monthStartDateIso = formatDateYMD(monthStartDate);
+            const monthEndDateIso = formatDateYMD(monthEndDate);
+            const weekStartDateIso = formatDateYMD(weekStartDate);
+            const weekEndDateIso = formatDateYMD(weekEndDate);
 
             // Helper function to build and run a query
             const getRanking = async (dateFilter, table, aggregation, categoryFilter = "") => {
@@ -10643,7 +10653,7 @@ class BildschirmView {
     _renderList(container, data, unit) {
         container.innerHTML = '';
 
-        const displayData = [...data];
+        const displayData = [...data].slice(0, 3);
         while (displayData.length < 3) {
             displayData.push(null); // Platzhalter für leere Felder hinzufügen
         }
