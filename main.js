@@ -5860,14 +5860,16 @@ class AppointmentsView {
         if (appointmentsForDay.length === 0) {
             const noAppointmentsEl = document.createElement('div');
             noAppointmentsEl.className = 'absolute inset-x-0 top-1/3 text-center text-gray-500';
+            noAppointmentsEl.style.pointerEvents = 'none';
             noAppointmentsEl.innerHTML = '<p>Keine Termine für diesen Tag.</p>';
             timelineContainer.appendChild(noAppointmentsEl);
         }
 
         const layout = this._calculateOverlaps(appointmentsForDay); // Überlappungen berechnen
-    
+        const timelineWidth = timelineContainer.getBoundingClientRect().width;
+
         layout.forEach(({ termin, column, totalColumns }) => {
-            const terminEl = this._createMobileAppointmentElement(termin, column, totalColumns);
+            const terminEl = this._createMobileAppointmentElement(termin, column, totalColumns, timelineWidth);
             timelineContainer.appendChild(terminEl);
         });
     
@@ -5885,6 +5887,52 @@ class AppointmentsView {
             const target = nowIndicator || firstAppointment;
             if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, 100);
+
+        let mobilePointerState = null;
+        timelineContainer.onpointerdown = (event) => {
+            if ((event.pointerType === 'mouse' && event.button !== 0) || (event.pointerType === 'touch' && event.button !== undefined && event.button !== 0)) return;
+            const rect = timelineContainer.getBoundingClientRect();
+            if (event.clientY < rect.top || event.clientY > rect.bottom) return;
+            mobilePointerState = {
+                id: event.pointerId,
+                x: event.clientX,
+                y: event.clientY,
+                moved: false,
+            };
+        };
+        timelineContainer.onpointermove = (event) => {
+            if (!mobilePointerState || mobilePointerState.id !== event.pointerId) return;
+            if (Math.abs(event.clientX - mobilePointerState.x) > 6 || Math.abs(event.clientY - mobilePointerState.y) > 6) {
+                mobilePointerState.moved = true;
+            }
+        };
+        timelineContainer.onpointerup = (event) => {
+            if (!mobilePointerState || mobilePointerState.id !== event.pointerId) {
+                mobilePointerState = null;
+                return;
+            }
+            const rect = timelineContainer.getBoundingClientRect();
+            const wasMove = mobilePointerState.moved;
+            mobilePointerState = null;
+            if (wasMove) return;
+            if (event.target.closest('.mobile-appointment-block') || event.target.closest('.mobile-now-indicator')) return;
+            if (rect.height <= 0) return;
+
+            const scrollTop = timelineContainer.scrollTop;
+            const scrollHeight = timelineContainer.scrollHeight;
+            let offsetY = event.clientY - rect.top + scrollTop;
+            offsetY = Math.max(0, Math.min(scrollHeight, offsetY));
+            const minutes = Math.min(23 * 60 + 30, Math.round(offsetY / 30) * 30);
+            const startDate = new Date(day);
+            startDate.setHours(0, 0, 0, 0);
+            startDate.setMinutes(minutes);
+            event.preventDefault();
+            event.stopPropagation();
+            this._openCreateModalAt(startDate);
+        };
+        timelineContainer.onpointercancel = () => {
+            mobilePointerState = null;
+        };
     }
 
     _navigateSingleDay(days) {
@@ -6143,25 +6191,29 @@ class AppointmentsView {
     }
 
     // NEU: Überarbeitete Funktion, um Terminblöcke für die mobile Timeline zu erstellen
-    _createMobileAppointmentElement(termin, column, totalColumns) {
+    _createMobileAppointmentElement(termin, column, totalColumns, timelineWidth) {
         const startDate = new Date(termin.Datum);
         const durationInMinutes = (termin.Dauer || 3600) / 60;
-    
+
         const topOffset = (startDate.getHours() * 60 + startDate.getMinutes()); // in Minuten
         const height = durationInMinutes;
-    
-        const width = 100 / totalColumns;
-        const left = column * width;
-    
+
+        const labelOffsetPx = 64; // 4rem für die Zeitleiste
+        const containerWidth = Math.max(labelOffsetPx + 80, timelineWidth || 0);
+        const availableWidth = Math.max(0, containerWidth - labelOffsetPx - 8);
+        const columnWidth = totalColumns > 0 ? availableWidth / totalColumns : availableWidth;
+        const leftPx = labelOffsetPx + column * columnWidth;
+        const widthPx = Math.max(24, columnWidth - 8);
+
         const { bg: statusBgClass, text: statusTextColorClass } = this._getAppointmentColorClasses(termin);
         const mitarbeiterName = findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
-    
+
         const el = document.createElement('div');
         el.className = `mobile-appointment-block absolute flex flex-col p-2 rounded-lg shadow-md overflow-hidden ${statusBgClass}`;
         el.style.top = `${topOffset}px`; // 1px pro Minute
         el.style.height = `${height}px`;
-        el.style.left = `calc(${left}% + 4rem)`; // 4rem ist die Breite der Zeitleiste
-        el.style.width = `calc(${width}% - 4px)`; // -4px für einen kleinen Abstand
+        el.style.left = `${leftPx}px`;
+        el.style.width = `${widthPx}px`;
         el.dataset.id = termin._id;
     
         el.innerHTML = `

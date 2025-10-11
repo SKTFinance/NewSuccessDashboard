@@ -1255,6 +1255,7 @@ summary::-webkit-details-marker {
 
 #mobile-day-timeline {
     overflow-x: hidden;
+    position: relative;
 }
 
 #stats-week-view {
