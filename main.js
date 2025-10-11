@@ -7954,11 +7954,19 @@ async function loadAndInitAppointmentsView() {
     if (pendingAppointmentsMobileFocus) {
       pendingAppointmentsMobileFocus = false;
       try {
-        appointmentsViewInstance.forceWeekView = true;
+        const isMobile = window.innerWidth < 768;
+        appointmentsViewInstance.forceWeekView = false;
         appointmentsViewInstance._switchStatsView('week');
         requestAnimationFrame(() => {
+          if (isMobile) {
+            const mobileContainer = document.getElementById('mobile-day-view-container');
+            if (mobileContainer?.scrollIntoView) {
+              mobileContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              return;
+            }
+          }
           const weekHeader = document.querySelector('#stats-week-view .flex.flex-col');
-          if (weekHeader && weekHeader.scrollIntoView) {
+          if (weekHeader?.scrollIntoView) {
             weekHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
         });

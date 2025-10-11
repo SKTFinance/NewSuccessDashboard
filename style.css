@@ -1246,6 +1246,17 @@ summary::-webkit-details-marker {
     min-width: 0;
 }
 
+#mobile-day-view-container {
+    overflow-x: hidden;
+    touch-action: pan-y;
+    width: 100%;
+    max-width: 100%;
+}
+
+#mobile-day-timeline {
+    overflow-x: hidden;
+}
+
 #stats-week-view {
     overflow-x: hidden;
 }
