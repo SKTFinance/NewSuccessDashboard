@@ -1237,6 +1237,15 @@ summary::-webkit-details-marker {
 }
 
 /* NEU: Zusätzliche Layout-Anpassungen für den Wochenkalender */
+#week-calendar-container {
+    width: 100%;
+    max-width: 100%;
+}
+
+.week-calendar-day-col {
+    min-width: 0;
+}
+
 #stats-week-view {
     overflow-x: hidden;
 }

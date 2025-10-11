@@ -4717,6 +4717,9 @@ class AppointmentsView {
         this.statsWeekView = null;
         this.weekCalendarContainer = null;
         this.weekCalendarScrollContainer = null;
+        this.weekCalendarTimeLabelsContainer = null;
+        this.forceWeekView = false;
+        this.isMobileWeekCalendar = false;
 
         this.weekPeriodDisplay = null; // NEU: Wochenkalender-Ansicht
         this.statsPeriodDisplay = null; // Beibehalten für die Wochenanzeige
@@ -4771,6 +4774,17 @@ class AppointmentsView {
         this.savedCategoryFilter = loadUiSetting('appointmentsCategoryFilter', defaultCategories);
         this.savedShowCancelled = loadUiSetting('appointmentsShowCancelled', false);
         this.savedShowHeld = loadUiSetting('appointmentsShowHeld', true); // Standardmäßig jetzt true
+    }
+
+    _formatDateTimeForInput(date) {
+        const local = new Date(date);
+        if (Number.isNaN(local.getTime())) return '';
+        const year = local.getFullYear();
+        const month = String(local.getMonth() + 1).padStart(2, '0');
+        const day = String(local.getDate()).padStart(2, '0');
+        const hours = String(local.getHours()).padStart(2, '0');
+        const minutes = String(local.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
     }
 
     _saveCategoryFilters() {
@@ -5319,6 +5333,9 @@ class AppointmentsView {
         this.statsTableView.classList.toggle('hidden', view !== 'table');
         this.statsWeekView.classList.toggle('hidden', view !== 'week'); // NEU
         this.naechstesInfoView.classList.toggle('hidden', view !== 'info');
+        if (view !== 'week') {
+            this.forceWeekView = false;
+        }
 
         // NEU: Hauptfilter-Maske ausblenden, wenn die Info-Ansicht aktiv ist.
         if (this.mainFilterContainer) {
@@ -5692,8 +5709,12 @@ class AppointmentsView {
     _renderWeekCalendar() {
         if (!this.weekCalendarContainer || !this.weekCalendarScrollContainer) return;
 
-        // NEU: Prüfe die Bildschirmbreite und rendere die entsprechende Ansicht
-        if (window.innerWidth < 768) {
+        const isPointerCoarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+        const isNarrowViewport = window.innerWidth <= 900;
+        this.isMobileWeekCalendar = isPointerCoarse || isNarrowViewport;
+
+        const shouldUseSingleDay = window.innerWidth < 768 && !this.forceWeekView;
+        if (shouldUseSingleDay) {
             this._renderSingleDayView();
             return;
         }
@@ -5703,6 +5724,10 @@ class AppointmentsView {
         if (this.mobileDayViewContainer) {
             this.mobileDayViewContainer.classList.add('hidden');
         }
+        const scrollWrapper = this.weekCalendarScrollContainer.parentElement;
+        if (scrollWrapper) {
+            scrollWrapper.classList.remove('hidden');
+        }
 
         // Reset everything for a full re-render (e.g., when user changes)
         this.weekCalendarContainer.innerHTML = '';
@@ -5711,13 +5736,36 @@ class AppointmentsView {
         // Initialer Render-Bereich: 2 Wochen vor und 4 Wochen nach heute
         const today = new Date(getCurrentDate());
         today.setHours(0, 0, 0, 0);
-        const initialStartDate = new Date(today);
-        initialStartDate.setDate(today.getDate() - 14);
-        const initialEndDate = new Date(today);
-        initialEndDate.setDate(today.getDate() + 28);
+        let initialStartDate;
+        let initialEndDate;
+
+        if (this.isMobileWeekCalendar) {
+            const weekStart = new Date(today);
+            const dayOffset = (weekStart.getDay() + 6) % 7; // Montag als Wochenstart
+            weekStart.setDate(weekStart.getDate() - dayOffset);
+            weekStart.setHours(0, 0, 0, 0);
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            initialStartDate = weekStart;
+            initialEndDate = weekEnd;
+        } else {
+            initialStartDate = new Date(today);
+            initialStartDate.setDate(today.getDate() - 14);
+            initialEndDate = new Date(today);
+            initialEndDate.setDate(today.getDate() + 28);
+        }
 
         this.calendarStartDate = initialStartDate;
         this.calendarEndDate = initialEndDate;
+
+        if (this.weekPeriodDisplay) {
+            if (this.isMobileWeekCalendar) {
+                const rangeText = `${initialStartDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })} - ${initialEndDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+                this.weekPeriodDisplay.textContent = rangeText;
+            } else {
+                this.weekPeriodDisplay.textContent = initialStartDate.toLocaleString('de-DE', { month: 'long', year: 'numeric' });
+            }
+        }
 
         // Zeit-Labels (linke Spalte, fixiert)
         // KORREKTUR: Die Höhe wird jetzt dynamisch basierend auf der Anzahl der Slots berechnet.
@@ -5888,10 +5936,16 @@ class AppointmentsView {
 
         // Update container width
         const totalDays = this.calendarRenderedDays.size;
-        const dayWidth = 150; // Breite einer Tages-Spalte in px
-        this.weekCalendarContainer.style.width = `${60 + totalDays * dayWidth}px`;
-        headerGrid.style.gridTemplateColumns = `repeat(${totalDays}, ${dayWidth}px)`;
-        bodyGrid.style.gridTemplateColumns = `repeat(${totalDays}, ${dayWidth}px)`;
+        if (this.isMobileWeekCalendar) {
+            this.weekCalendarContainer.style.width = '100%';
+            headerGrid.style.gridTemplateColumns = `repeat(${totalDays}, minmax(0, 1fr))`;
+            bodyGrid.style.gridTemplateColumns = `repeat(${totalDays}, minmax(0, 1fr))`;
+        } else {
+            const dayWidth = 150; // Breite einer Tages-Spalte in px
+            this.weekCalendarContainer.style.width = `${60 + totalDays * dayWidth}px`;
+            headerGrid.style.gridTemplateColumns = `repeat(${totalDays}, ${dayWidth}px)`;
+            bodyGrid.style.gridTemplateColumns = `repeat(${totalDays}, ${dayWidth}px)`;
+        }
     }
 
     _createDayColumn(day, appointments) {
@@ -5913,10 +5967,48 @@ class AppointmentsView {
                 const slot = document.createElement('div');
                 slot.className = 'week-calendar-time-slot h-full'; // h-full für Grid-Layout
                 slot.style.height = `${this.weekCalendarSlotHeight}px`;
+                slot.dataset.startMinutes = (hour * 60 + minute).toString();
                 if (minute === 0) slot.classList.add('full-hour');
                 dayCol.appendChild(slot);
             }
         }
+
+        let pointerState = null;
+        dayCol.addEventListener('pointerdown', (event) => {
+            if ((event.pointerType === 'mouse' && event.button !== 0) || event.pointerType === 'touch' && event.button !== undefined && event.button !== 0) return;
+            pointerState = {
+                id: event.pointerId,
+                x: event.clientX,
+                y: event.clientY,
+                moved: false,
+                type: event.pointerType
+            };
+        });
+        dayCol.addEventListener('pointermove', (event) => {
+            if (!pointerState || pointerState.id !== event.pointerId) return;
+            if (Math.abs(event.clientX - pointerState.x) > 6 || Math.abs(event.clientY - pointerState.y) > 6) {
+                pointerState.moved = true;
+            }
+        });
+        dayCol.addEventListener('pointerup', (event) => {
+            if (!pointerState || pointerState.id !== event.pointerId) return;
+            const slotEl = event.target.closest('.week-calendar-time-slot');
+            if (!slotEl || pointerState.moved) {
+                pointerState = null;
+                return;
+            }
+            if (slotEl.closest('.week-calendar-appointment')) {
+                pointerState = null;
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            this._handleEmptySlotSelection(slotEl, day);
+            pointerState = null;
+        });
+        dayCol.addEventListener('pointercancel', () => {
+            pointerState = null;
+        });
 
         // Termine für diesen Tag platzieren
         const dayAppointments = appointments.filter(t => t.Datum && new Date(t.Datum).toDateString() === day.toDateString());
@@ -5931,7 +6023,37 @@ class AppointmentsView {
         return dayCol;
     }
 
+    _handleEmptySlotSelection(slotElement, day) {
+        const startMinutes = parseInt(slotElement.dataset.startMinutes, 10);
+        if (Number.isNaN(startMinutes)) return;
+
+        const startDate = new Date(day);
+        startDate.setHours(0, 0, 0, 0);
+        startDate.setMinutes(startMinutes);
+        this._openCreateModalAt(startDate);
+    }
+
+    _openCreateModalAt(date) {
+        this.openModal(null);
+        const dateInput = this.form?.querySelector('#appointment-date');
+        if (dateInput) {
+            dateInput.value = this._formatDateTimeForInput(date);
+        }
+    }
+
     _handleCalendarScroll() {
+        if (this.isMobileWeekCalendar) {
+            if (this.weekPeriodDisplay && this.calendarStartDate && this.calendarEndDate) {
+                const start = new Date(this.calendarStartDate);
+                const end = new Date(this.calendarEndDate);
+                const rangeText = `${start.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })} - ${end.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+                this.weekPeriodDisplay.textContent = rangeText;
+            } else if (this.weekPeriodDisplay && this.calendarStartDate) {
+                this.weekPeriodDisplay.textContent = this.calendarStartDate.toLocaleString('de-DE', { month: 'long', year: 'numeric' });
+            }
+            return;
+        }
+
         const container = this.weekCalendarScrollContainer;
         const scrollLeft = container.scrollLeft;
         const scrollWidth = container.scrollWidth;
@@ -7139,14 +7261,8 @@ class AppointmentsView {
                 // KORREKTUR: `datetime-local` erwartet das Format YYYY-MM-DDTHH:mm
                 // `toISOString()` konvertiert in UTC, was zu Zeitzonenfehlern führt.
                 // Wir müssen das Datum manuell in das korrekte lokale Format umwandeln.
-                if (dateForForm) {
-                    const localDate = new Date(dateForForm);
-                    // Wir ziehen den Zeitzonen-Offset ab, um die "echte" lokale Zeit zu bekommen, die dann korrekt als String formatiert wird.
-                    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
-                    this.form.querySelector('#appointment-date').value = localDate.toISOString().slice(0, 16);
-                } else {
-                    this.form.querySelector('#appointment-date').value = '';
-                }
+                const dateInput = this.form.querySelector('#appointment-date');
+                dateInput.value = dateForForm ? this._formatDateTimeForInput(dateForForm) : '';
                 categorySelect.value = termin.Kategorie || '';
                 // NEU: Neue Felder befüllen
                 this.form.querySelector('#appointment-location').value = termin.Ort || '';
@@ -7185,11 +7301,8 @@ class AppointmentsView {
                 title.textContent = 'Termin anlegen';
                 idInput.value = '';
                 userSelect.value = this.currentUserId;
-                // KORREKTUR: `toISOString()` konvertiert in UTC. Um die korrekte lokale Zeit zu erhalten,
-                // muss der Zeitzonen-Offset manuell korrigiert werden, bevor der String erzeugt wird.
                 const now = new Date();
-                now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-                this.form.querySelector('#appointment-date').value = now.toISOString().slice(0, 16);
+                this.form.querySelector('#appointment-date').value = this._formatDateTimeForInput(now);
 
                 // NEU: Neue Felder leeren
                 this.form.querySelector('#appointment-location').value = '';
@@ -7841,11 +7954,12 @@ async function loadAndInitAppointmentsView() {
     if (pendingAppointmentsMobileFocus) {
       pendingAppointmentsMobileFocus = false;
       try {
+        appointmentsViewInstance.forceWeekView = true;
         appointmentsViewInstance._switchStatsView('week');
         requestAnimationFrame(() => {
-          const headerRow = document.getElementById('week-period-display')?.parentElement ?? document.getElementById('stats-week-view');
-          if (headerRow && headerRow.scrollIntoView) {
-            headerRow.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          const weekHeader = document.querySelector('#stats-week-view .flex.flex-col');
+          if (weekHeader && weekHeader.scrollIntoView) {
+            weekHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
         });
       } catch (focusError) {
@@ -11198,7 +11312,7 @@ function setupEventListeners() {
   });
 // KORREKTUR: Fehlende Event-Listener für Header-Buttons hinzugefügt
   dom.appointmentsHeaderBtn.addEventListener('click', () => {
-    const isMobileDevice = window.matchMedia?.('(max-width: 768px)').matches;
+    const isMobileDevice = (window.matchMedia?.('(pointer: coarse)').matches ?? false) || window.innerWidth <= 900;
     pendingAppointmentsMobileFocus = Boolean(isMobileDevice);
     switchView('appointments');
   });
@@ -15054,6 +15168,9 @@ async function loadAndInitWettbewerbView() {
 }
 
 function switchView(viewName) {
+  if (viewName !== 'appointments' && appointmentsViewInstance) {
+    appointmentsViewInstance.forceWeekView = false;
+  }
   currentView = viewName;
   dom.mainDashboardView.classList.toggle("hidden", viewName !== "dashboard");
   dom.einarbeitungView.classList.toggle("hidden", viewName !== "einarbeitung");
