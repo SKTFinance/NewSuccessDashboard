@@ -1236,6 +1236,21 @@ summary::-webkit-details-marker {
     gap: 1.5rem; /* Mehr Abstand zwischen den Listen */
 }
 
+/* NEU: Zusätzliche Layout-Anpassungen für den Wochenkalender */
+#stats-week-view {
+    overflow-x: hidden;
+}
+
+#stats-week-view .flex.flex-col {
+    scroll-margin-top: 80px;
+}
+
+#week-calendar-scroll-container {
+    overflow-x: hidden;
+    overscroll-behavior-x: contain;
+    touch-action: pan-y;
+}
+
 /* NEU: Stile für den detaillierten Wochenkalender */
 .week-calendar-day-col {
     position: relative;

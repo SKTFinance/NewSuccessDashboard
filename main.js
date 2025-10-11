@@ -91,6 +91,7 @@ let checkinTimerInterval = null; // NEU: Intervall für den Check-in-Timer
 let lastCheckinDateCheck = null; // NEU: Datum der letzten Check-in-Prüfung
 // --- NEU: Gekapselte Instanzen für jede Ansicht ---
 let appointmentsViewInstance = null;
+let pendingAppointmentsMobileFocus = false;
 let timeTravelDate = null; // NEU
 let currentOnboardingSubView = "leader-list"; // Wird von der Einarbeitungslogik verwaltet
 
@@ -7836,6 +7837,21 @@ async function loadAndInitAppointmentsView() {
     
     console.log('%c[Loader] %cInitializing appointments view instance...', 'color: orange; font-weight: bold;', 'color: black;');
     await appointmentsViewInstance.init(currentlyViewedUserData._id);
+
+    if (pendingAppointmentsMobileFocus) {
+      pendingAppointmentsMobileFocus = false;
+      try {
+        appointmentsViewInstance._switchStatsView('week');
+        requestAnimationFrame(() => {
+          const headerRow = document.getElementById('week-period-display')?.parentElement ?? document.getElementById('stats-week-view');
+          if (headerRow && headerRow.scrollIntoView) {
+            headerRow.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        });
+      } catch (focusError) {
+        console.warn('[Appointments] Mobile focus on week view failed:', focusError);
+      }
+    }
   } catch (error) {
     console.error("Fehler beim Laden der Termin-Ansicht:", error);
     container.innerHTML = `<div class="text-center p-8 bg-red-50 rounded-lg border border-red-200"><i class="fas fa-exclamation-triangle fa-3x text-red-400 mb-4"></i><h3 class="text-xl font-bold text-skt-blue">Fehler beim Laden</h3><p class="text-red-600 mt-2">${error.message}</p><p class="text-gray-500 mt-4">Bitte stelle sicher, dass die Datei 'appointments.html' im selben Verzeichnis wie 'index.html' liegt.</p></div>`;
@@ -11182,6 +11198,8 @@ function setupEventListeners() {
   });
 // KORREKTUR: Fehlende Event-Listener für Header-Buttons hinzugefügt
   dom.appointmentsHeaderBtn.addEventListener('click', () => {
+    const isMobileDevice = window.matchMedia?.('(max-width: 768px)').matches;
+    pendingAppointmentsMobileFocus = Boolean(isMobileDevice);
     switchView('appointments');
   });
 
