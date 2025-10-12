@@ -35,6 +35,11 @@
 .bg-skt-green-accent { background-color: var(--color-accent-green); }
 .text-skt-red-accent { color: var(--color-accent-red); }
 .border-skt-red-accent { border-color: var(--color-accent-red); }
+.text-skt-green-accent { color: var(--color-accent-green); }
+.border-skt-green-accent { border-color: var(--color-accent-green); }
+.bg-skt-green-accent { background-color: var(--color-accent-green); }
+.text-skt-red-accent { color: var(--color-accent-red); }
+.border-skt-red-accent { border-color: var(--color-accent-red); }
 .border-skt-red-accent { border-color: var(--color-accent-red); }
 .bg-skt-red-accent { background-color: var(--color-accent-red); }
 .bg-accent-red-light { background-color: var(--color-accent-red-light); } /* NEU */
@@ -55,10 +60,9 @@
 .bg-accent-immo { background-color: var(--color-accent-immo); } /* KORREKTUR: Fehlende CSS-Klasse hinzugefügt */
 .border-skt-blue-accent { border-color: var(--color-skt-blue-main); }
 
-body {
-    font-family: 'Inter', sans-serif;
-    background-color: var(--color-skt-grey-light);
-}
+    /* FINALE KORREKTUR: Die `height: 100%`-Regel hat das Scrollen auf Mobilgeräten blockiert.
+   Die neue Methode mit `overflow: hidden` ist robuster und verhindert das Scrollen des Hintergrunds,
+   ohne die Scroll-Position zu verändern. */
 
 html.modal-open, body.modal-open {
     overflow: hidden; /* Verhindert das Scrollen des Hintergrunds */
@@ -172,6 +176,16 @@ summary::-webkit-details-marker {
     background-color: var(--color-skt-grey-light);
     color: var(--color-skt-blue-light);
 }
+/* NEU: Eigener Stil für einzelne Toggle-Buttons, die nicht Teil einer Gruppe sind */
+.view-toggle-btn {
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    border: 2px solid transparent;
+    font-weight: 600;
+    transition: all 0.2s ease-in-out;
+    background-color: var(--color-skt-grey-light);
+    color: var(--color-skt-blue-light);
+}
 
 /* Blur-Effekt für neue Mitarbeiter */
 .blurred-section-overlay {
@@ -266,10 +280,14 @@ summary::-webkit-details-marker {
 .timeline-date-marker-end {
     bottom: -0.75rem; /* Position below the line */
 }
+/* NEU: Stile für die neue "Heute"-Linie */
 .timeline-today-marker {
     position: absolute;
     left: 50%;
-    transform: translate(-50%, -50%);
+    /* KORREKTUR: Die Y-Transformation hat die `top`-Position überschrieben.
+       Jetzt wird nur noch horizontal zentriert, die vertikale Positionierung erfolgt über `top` und `margin-top`. */
+    transform: translateX(-50%);
+    margin-top: -6px; /* Zentriert den Punkt vertikal (Hälfte der Höhe) */
     width: 12px;
     height: 12px;
     background-color: var(--color-accent-red);
@@ -278,6 +296,7 @@ summary::-webkit-details-marker {
     z-index: 11;
     cursor: help;
 }
+
 /* Entfernt die alte Linie neben dem Datum */
 /*.timeline-date-marker::after {
     content: '';
@@ -550,10 +569,19 @@ summary::-webkit-details-marker {
     border-bottom: 2px solid #e2e8f0;
     cursor: pointer;
     user-select: none;
-    white-space: nowrap;
 }
 .appointments-table thead th:hover {
     background-color: #e2e8f0;
+}
+.appointments-table tbody tr {
+    /* KORREKTUR: Auf kleinen Bildschirmen wird die Zeile als Block dargestellt,
+       um ein besseres vertikales Layout zu ermöglichen. */
+    display: table-row;
+}
+@media (max-width: 767px) {
+    .appointments-table tbody tr {
+        display: block;
+    }
 }
 .appointments-table tbody tr {
     border-bottom: 1px solid #e2e8f0;
@@ -563,7 +591,7 @@ summary::-webkit-details-marker {
     background-color: #f8fafc;
 }
 .appointments-table td {
-    padding: 1rem;
+    padding: 0.75rem 1rem; /* KORREKTUR: Padding leicht reduziert */
     vertical-align: middle;
 }
 .sort-icon { margin-left: 0.5rem; opacity: 0.4; transition: opacity 0.2s ease; }
@@ -614,6 +642,11 @@ summary::-webkit-details-marker {
 .sort-icon { margin-left: 0.5rem; opacity: 0.4; transition: opacity 0.2s ease; }
 .sort-icon.active { opacity: 1; color: var(--color-skt-blue); }
 
+/* NEU: Stellt sicher, dass das Planungs-Icon in der Tabelle zentriert ist */
+.planung-edit-btn {
+    display: inline-flex;
+    align-items: center;
+}
 /* Modern Form Elements */
 .modern-input, .modern-select {
     display: block;
@@ -846,11 +879,27 @@ summary::-webkit-details-marker {
         var(--color-accent-gold)
     );
 }
-#pqq-indicator {
+#pqq-indicator,
+#pqq-eh-indicator,
+#pqq-et-indicator {
     transform: translateX(-50%);
     transition: left 0.7s ease-out;
     left: 50%; /* Default position */
 }
+
+#pqq-value-display,
+#pqq-eh-value-display,
+#pqq-et-value-display {
+    top: -25px; /* Position above the indicator */
+    transform: translateX(-50%);
+    transition: left 0.7s ease-out;
+    left: 50%; /* Default position */
+    background-color: white;
+    padding: 2px 6px;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
 #pqq-value-display {
     top: -25px; /* Position above the indicator */
     transform: translateX(-50%);
@@ -1256,6 +1305,38 @@ summary::-webkit-details-marker {
     overflow: hidden;
     transition: all 0.2s ease;
     /* border-left: 4px solid; */ /* Wird für die Statusfarbe verwendet */ /* KORREKTUR: Wird nicht mehr benötigt, da die farbige Leiste jetzt ein div ist. */
+    /* NEU: Cursor für Größenänderung am unteren Rand */
+    &:hover {
+        cursor: ns-resize;
+    }
+    /* KORREKTUR: Verhindert das Markieren von Text beim Ziehen */
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+/* NEU: Stile für das neue Sticky-Kalender-Layout */
+#week-calendar-layout-wrapper {
+    display: grid;
+    grid-template-columns: 60px 1fr; /* Breite der Zeitleiste + Rest */
+    grid-template-rows: auto 1fr; /* Höhe des Headers + Rest */
+}
+#week-calendar-corner {
+    grid-column: 1;
+    grid-row: 1;
+}
+#week-calendar-header-container {
+    grid-column: 2;
+    grid-row: 1;
+}
+#week-calendar-time-labels-container {
+    grid-column: 1;
+    grid-row: 2;
+}
+#week-calendar-scroll-container {
+    grid-column: 1 / -1; /* Erstreckt sich über alle Spalten */
+    grid-row: 1 / -1;    /* Erstreckt sich über alle Zeilen */
 }
 
 /* KORREKTUR: Grid-Layout für Header und Body, um vertikale Linien sicherzustellen */
@@ -1285,6 +1366,31 @@ summary::-webkit-details-marker {
     background-color: var(--color-accent-red);
     z-index: 20; /* Über den Terminen */
 }
+
+/* NEU: Stil für den Termin-Platzhalter beim Erstellen */
+.week-calendar-appointment-placeholder {
+    position: absolute;
+    left: 0;
+    right: 0;
+    background-color: rgba(56, 189, 248, 0.3); /* bg-sky-300/30 */
+    border: 2px dashed rgba(56, 189, 248, 0.7); /* border-sky-400 */
+    border-radius: 0.5rem; /* rounded-lg */
+    z-index: 5; /* Unter den bestehenden Terminen, aber über den Slots */
+    pointer-events: none; /* Lässt Klicks durch */
+}
+
+/* NEU: Stil für den Termin-Platzhalter beim Erstellen */
+.week-calendar-appointment-placeholder {
+    position: absolute;
+    left: 0;
+    right: 0;
+    background-color: rgba(56, 189, 248, 0.3); /* bg-sky-300/30 */
+    border: 2px dashed rgba(56, 189, 248, 0.7); /* border-sky-400 */
+    border-radius: 0.5rem; /* rounded-lg */
+    z-index: 5; /* Unter den bestehenden Terminen, aber über den Slots */
+    pointer-events: none; /* Lässt Klicks durch */
+}
+
 
 /* NEU: Priorisierung der Inhalte in kleinen Kalendereinträgen */
 /* Bei mittlerer Höhe (unter 60px): Uhrzeit ausblenden */
@@ -1462,7 +1568,7 @@ summary::-webkit-details-marker {
 }
 .mobile-day-time-label {
     position: absolute;
-    top: -0.5em; /* Zentriert das Label auf der Linie */
+    transform: translateY(-50%); /* KORREKTUR: Zentriert das Label exakt auf der Linie, unabhängig von der Schriftgröße. */
     left: 0;
     font-size: 0.75rem; /* text-xs */
     color: #6b7280; /* gray-500 */
@@ -1478,10 +1584,18 @@ summary::-webkit-details-marker {
     height: 1px;
     background-color: #e5e7eb; /* gray-200 */
 }
+.mobile-day-timeline {
+    /* KORREKTUR: Stellt sicher, dass die Timeline die volle Breite einnimmt und nicht "wackelt" */
+    width: 100%;
+    box-sizing: border-box; /* KORREKTUR: Verhindert horizontales Überlaufen */
+}
 .mobile-appointment-block {
     /* Die Positionierung (top, height, left, width) wird per JS gesetzt */
     z-index: 10;
     border-left: 3px solid rgba(0,0,0,0.2);
+    /* KORREKTUR: Verhindert das Markieren von Text beim Ziehen auf Mobilgeräten */
+    user-select: none;
+    -webkit-user-select: none;
 }
 .mobile-appointment-block p {
     line-height: 1.2;

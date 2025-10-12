@@ -258,6 +258,60 @@
                     </div>
                 </section>
 
+                <!-- NEU: Planungsqualitätsquote (PQQ) - jetzt klickbar -->
+                <section id="pqq-view" class="hidden bg-white rounded-2xl p-6 md:p-8 shadow-lg cursor-pointer">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-2xl font-semibold text-skt-blue mb-2">Planungsqualitätsquote (PQQ)</h2>
+                        <i id="pqq-chevron" class="fas fa-chevron-down text-skt-blue-light transition-transform duration-300"></i>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-6">Erfüllungsquote deiner ursprünglichen Ziele des Vormonats.</p>
+                    <div class="w-full max-w-xl mx-auto">
+                        <div id="pqq-gauge" class="relative h-8 rounded-full">
+                            <div id="pqq-bar" class="h-full rounded-full"></div>
+                            <div id="pqq-indicator" class="absolute top-0 h-full flex items-center" style="left: 50%;">
+                                <div class="w-1 h-10 bg-skt-blue rounded-full shadow-md"></div>
+                            </div>
+                            <div id="pqq-value-display" class="absolute text-skt-blue font-bold" style="left: 50%;"></div>
+                        </div>
+                        <div class="flex justify-between text-xs font-semibold text-gray-500 mt-2 px-1">
+                            <span>0%</span>
+                            <span>100%</span>
+                            <span>200%</span>
+                        </div>
+                    </div>
+                    <!-- NEU: Detail-Container -->
+                    <div id="pqq-details-container" class="pqq-details-collapsible collapsed mt-8 space-y-6">
+                        <!-- EH Quote -->
+                        <div>
+                            <h3 class="text-lg font-semibold text-skt-blue mb-2">EH-Quote</h3>
+                            <div class="w-full max-w-xl mx-auto">
+                                <div class="relative h-8 rounded-full">
+                                    <div class="h-full rounded-full" style="background: linear-gradient(to right, var(--color-accent-red), var(--color-accent-green) 50%, var(--color-accent-gold));"></div>
+                                    <div id="pqq-eh-indicator" class="absolute top-0 h-full flex items-center" style="left: 50%;">
+                                        <div class="w-1 h-10 bg-skt-blue rounded-full shadow-md"></div>
+                                    </div>
+                                    <div id="pqq-eh-value-display" class="absolute text-skt-blue font-bold" style="left: 50%;"></div>
+                                </div>
+                                <div class="flex justify-between text-xs font-semibold text-gray-500 mt-2 px-1"><span>0%</span><span>100%</span><span>200%</span></div>
+                            </div>
+                        </div>
+                        <!-- ET Quote -->
+                        <div>
+                            <h3 class="text-lg font-semibold text-skt-blue mb-2">ET-Quote</h3>
+                            <div class="w-full max-w-xl mx-auto">
+                                <div class="relative h-8 rounded-full">
+                                    <div class="h-full rounded-full" style="background: linear-gradient(to right, var(--color-accent-red), var(--color-accent-green) 50%, var(--color-accent-gold));"></div>
+                                    <div id="pqq-et-indicator" class="absolute top-0 h-full flex items-center" style="left: 50%;">
+                                        <div class="w-1 h-10 bg-skt-blue rounded-full shadow-md"></div>
+                                    </div>
+                                    <div id="pqq-et-value-display" class="absolute text-skt-blue font-bold" style="left: 50%;"></div>
+                                </div>
+                                <div class="flex justify-between text-xs font-semibold text-gray-500 mt-2 px-1"><span>0%</span><span>100%</span><span>200%</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 <section id="employee-view" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
                     <h2 class="text-2xl font-semibold text-skt-blue mb-6 text-center">Dein aktueller Fortschritt</h2>
                     
@@ -305,60 +359,6 @@
                             </div>
                             <div id="employee-additional-info-container" class="hidden p-4 col-span-2 bg-accent-gold-light rounded-xl shadow-md border-2 border-accent-gold text-center">
                                 <!-- Inhalt wird per JS generiert -->
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- NEU: Planungsqualitätsquote (PQQ) - jetzt klickbar -->
-                <section id="pqq-view" class="hidden bg-white rounded-2xl p-6 md:p-8 shadow-lg cursor-pointer">
-                    <div class="flex justify-between items-center">
-                        <h2 class="text-2xl font-semibold text-skt-blue mb-2">Planungsqualitätsquote (PQQ)</h2>
-                        <i id="pqq-chevron" class="fas fa-chevron-down text-skt-blue-light transition-transform duration-300"></i>
-                    </div>
-                    <p class="text-sm text-gray-500 mb-6">Erfüllungsquote deiner ursprünglichen Ziele des Vormonats.</p>
-                    <div class="w-full max-w-xl mx-auto">
-                        <div id="pqq-gauge" class="relative h-8 rounded-full">
-                            <div id="pqq-bar" class="h-full rounded-full"></div>
-                            <div id="pqq-indicator" class="absolute top-0 h-full flex items-center">
-                                <div class="w-1 h-10 bg-skt-blue rounded-full shadow-md"></div>
-                            </div>
-                            <div id="pqq-value-display" class="absolute text-skt-blue font-bold"></div>
-                        </div>
-                        <div class="flex justify-between text-xs font-semibold text-gray-500 mt-2 px-1">
-                            <span>60%</span>
-                            <span>100%</span>
-                            <span>140%</span>
-                        </div>
-                    </div>
-                    <!-- NEU: Detail-Container -->
-                    <div id="pqq-details-container" class="pqq-details-collapsible collapsed mt-8 space-y-6">
-                        <!-- EH Quote -->
-                        <div>
-                            <h3 class="text-lg font-semibold text-skt-blue mb-2">EH-Quote</h3>
-                            <div class="w-full max-w-xl mx-auto">
-                                <div class="relative h-8 rounded-full">
-                                    <div class="h-full rounded-full" style="background: linear-gradient(to right, var(--color-accent-red), var(--color-accent-green) 50%, var(--color-accent-gold));"></div>
-                                    <div id="pqq-eh-indicator" class="absolute top-0 h-full flex items-center" style="left: 50%; transition: left 0.7s ease-out;">
-                                        <div class="w-1 h-10 bg-skt-blue rounded-full shadow-md"></div>
-                                    </div>
-                                    <div id="pqq-eh-value-display" class="absolute text-skt-blue font-bold" style="top: -25px; left: 50%; transform: translateX(-50%); transition: left 0.7s ease-out;"></div>
-                                </div>
-                                <div class="flex justify-between text-xs font-semibold text-gray-500 mt-2 px-1"><span>60%</span><span>100%</span><span>140%</span></div>
-                            </div>
-                        </div>
-                        <!-- ET Quote -->
-                        <div>
-                            <h3 class="text-lg font-semibold text-skt-blue mb-2">ET-Quote</h3>
-                            <div class="w-full max-w-xl mx-auto">
-                                <div class="relative h-8 rounded-full">
-                                    <div class="h-full rounded-full" style="background: linear-gradient(to right, var(--color-accent-red), var(--color-accent-green) 50%, var(--color-accent-gold));"></div>
-                                    <div id="pqq-et-indicator" class="absolute top-0 h-full flex items-center" style="left: 50%; transition: left 0.7s ease-out;">
-                                        <div class="w-1 h-10 bg-skt-blue rounded-full shadow-md"></div>
-                                    </div>
-                                    <div id="pqq-et-value-display" class="absolute text-skt-blue font-bold" style="top: -25px; left: 50%; transform: translateX(-50%); transition: left 0.7s ease-out;"></div>
-                                </div>
-                                <div class="flex justify-between text-xs font-semibold text-gray-500 mt-2 px-1"><span>60%</span><span>100%</span><span>140%</span></div>
                             </div>
                         </div>
                     </div>
@@ -576,7 +576,13 @@
                         <input type="checkbox" id="appointment-download-ical" class="sr-only peer" checked>
                         <div class="toggle-slider"></div>
                     </label>
-                    <label for="appointment-download-ical" class="text-sm font-medium text-gray-700">iCal-Datei nach Speichern herunterladen</label>
+                    <label for="appointment-download-ical" class="text-sm font-medium text-gray-700">Termin nach Speichern herunterladen</label>
+                </div>
+                <!-- NEU: Löschen-Button -->
+                <div class="pt-4">
+                    <button type="button" id="delete-appointment-btn" class="hidden text-skt-red-accent font-semibold hover:underline">
+                        <i class="fas fa-trash-alt mr-2"></i>Diesen Termin löschen
+                    </button>
                 </div>
                 <div class="pt-4 flex justify-end items-center gap-4"><div class="flex space-x-3"><button type="button" id="cancel-appointment-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button><button type="submit" id="save-appointment-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors flex items-center justify-center" style="min-width: 110px; min-height: 42px;"><span id="save-btn-text">Speichern</span><div class="loader-small hidden"></div></button></div></div>
             </form>

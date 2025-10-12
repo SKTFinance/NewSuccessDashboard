@@ -16,65 +16,40 @@
             <div class="flex items-center gap-4 flex-wrap">
                 <h3 class="text-2xl font-semibold text-skt-blue">Terminübersicht</h3>
                 <div id="stats-view-toggle" class="view-toggle flex space-x-2">
-                    <button id="stats-view-timeline-btn" class="active" title="Timeline-Ansicht"><i class="fas fa-stream"></i></button>
-                    <button id="stats-view-table-btn" title="Tabellenansicht"><i class="fas fa-list"></i></button>
-                    <button id="stats-view-week-btn" title="Wochenansicht"><i class="fas fa-calendar-week"></i></button>
-                    <button id="stats-view-info-btn" title="Nächstes Info"><i class="fas fa-users"></i></button>
+                    <button id="stats-view-timeline-btn" class="active" title="Timeline-Ansicht"><i class="fas fa-chart-bar"></i></button><button id="stats-view-table-btn" title="Tabellenansicht"><i class="fas fa-list"></i></button><button id="stats-view-week-btn" title="Kalenderansicht"><i class="fas fa-calendar-week"></i></button><button id="stats-view-info-btn" title="Nächstes Info"><i class="fas fa-users"></i></button>
                 </div>
+                <!-- KORREKTUR: Filter-Button in die Haupt-Button-Leiste integriert, um auf allen Geräten in einer Zeile zu sein. -->
+                <button id="mobile-filter-toggle-btn" class="view-toggle-btn" title="Filter anzeigen/verstecken"><i class="fas fa-filter"></i></button>
             </div>
-            <!-- NEU: Button, der nur auf mobilen Geräten sichtbar ist -->
-            <button id="mobile-filter-toggle-btn" class="md:hidden bg-white border border-gray-300 text-skt-blue font-semibold py-2 px-4 rounded-lg shadow-sm flex items-center gap-2">
-                <i class="fas fa-filter"></i> Filter
-            </button>
         </div>
 
-        <!-- NEU: Wrapper für alle Filter, der auf mobil ein- und ausgeklappt wird -->
-        <div id="appointments-filter-wrapper" class="hidden md:block">
-            <div class="flex flex-col md:flex-row md:justify-end md:items-center gap-4 w-full mb-6">
-                <div class="flex flex-col sm:flex-row gap-4 w-full md:w-auto items-center flex-wrap">
-                    <div class="w-full sm:w-auto">
-                        <div id="stats-category-filter-dropdown" class="relative">
-                            <button id="stats-category-filter-btn" class="modern-select w-full text-left">Filter</button>
-                            <div id="stats-category-filter-panel" class="hidden absolute right-0 z-40 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 p-4"></div>
-                        </div>
-                    </div>
-                    <div class="flex gap-4 w-full sm:w-auto">
-                        <div class="w-full sm:w-auto">
-                            <label for="appointments-scope-filter" class="sr-only">Statistik anzeigen für</label>
-                            <select id="appointments-scope-filter" class="modern-select">
-                                <option value="personal">Meine Termine</option>
-                                <option value="group">Meine Gruppe</option>
-                                <option value="structure">Meine Struktur</option>
-                            </select>
-                        </div>
-                        <div id="appointments-group-filter-container" class="relative hidden w-full sm:w-auto">
-                            <button id="appointments-group-filter-btn" class="modern-select w-full text-left">Alle Gruppen</button>
-                            <div id="appointments-group-filter-panel" class="hidden absolute right-0 z-30 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 p-4"></div>
-                        </div>
+        <!-- KORREKTUR: Wrapper für alle Filter, der jetzt immer ein- und ausgeklappt werden kann -->
+        <div id="appointments-filter-wrapper" class="hidden mt-4">
+            <div class="flex flex-col md:flex-row md:justify-end md:items-center gap-4 w-full mb-6 flex-wrap">
+                <div id="stats-category-filter-dropdown" class="relative">
+                    <button id="stats-category-filter-btn" class="modern-select w-full text-left">Filter</button>
+                    <div id="stats-category-filter-panel" class="hidden absolute right-0 z-40 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 p-4"></div>
+                </div>
+                <div class="flex gap-4 w-full md:w-auto flex-wrap">
+                    <select id="appointments-scope-filter" class="modern-select">
+                        <option value="personal">Meine Termine</option>
+                        <option value="group">Meine Gruppe</option>
+                        <option value="structure">Meine Struktur</option>
+                    </select>
+                    <div id="appointments-group-filter-container" class="relative hidden">
+                        <button id="appointments-group-filter-btn" class="modern-select w-full text-left">Alle Gruppen</button>
+                        <div id="appointments-group-filter-panel" class="hidden absolute right-0 z-30 mt-2 w-64 bg-white rounded-lg shadow-xl border border-gray-200 p-4"></div>
                     </div>
                 </div>
             </div>
-
-            <div id="appointments-main-filter-container" class="bg-skt-grey-light p-4 rounded-xl border border-gray-200">
-                <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+            <div id="appointments-main-filter-container" class="bg-skt-grey-light p-4 rounded-xl border border-gray-200 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                 <div class="md:col-span-1">
                     <label for="appointments-search-filter" class="block text-sm font-medium text-gray-700 mb-1">Suchen</label>
-                    <div class="input-wrapper">
-                        <input type="text" id="appointments-search-filter" placeholder="Kunde, Bewerber oder Mitarbeiter..." class="modern-input w-full">
-                    </div>
+                    <input type="text" id="appointments-search-filter" placeholder="Kunde, Bewerber oder Mitarbeiter..." class="modern-input w-full">
                 </div>
-                <div class="md:col-span-2">
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label for="appointments-start-date" class="block text-sm font-medium text-gray-700 mb-1">Von</label>
-                            <div class="input-wrapper"><input type="date" id="appointments-start-date" class="modern-input w-full"></div>
-                        </div>
-                        <div>
-                            <label for="appointments-end-date" class="block text-sm font-medium text-gray-700 mb-1">Bis</label>
-                            <div class="input-wrapper"><input type="date" id="appointments-end-date" class="modern-input w-full"></div>
-                        </div>
-                    </div>
-                </div>
+                <div class="md:col-span-2 grid grid-cols-2 gap-4">
+                    <div><label for="appointments-start-date" class="block text-sm font-medium text-gray-700 mb-1">Von</label><input type="date" id="appointments-start-date" class="modern-input w-full"></div>
+                    <div><label for="appointments-end-date" class="block text-sm font-medium text-gray-700 mb-1">Bis</label><input type="date" id="appointments-end-date" class="modern-input w-full"></div>
                 </div>
             </div>
         </div>
@@ -92,34 +67,35 @@
         <div id="stats-week-view" class="hidden mt-4">
             <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4 sticky top-0 bg-white/80 backdrop-blur-sm py-2 z-30">
                 <h4 id="week-period-display" class="font-semibold text-skt-blue text-lg text-center cursor-pointer" title="Zur aktuellen Woche springen"></h4>
-                <div class="flex items-center gap-4">
+                <div class="hidden sm:flex items-center gap-4">
                     <!-- KORREKTUR: Der separate User-Select wurde entfernt. Die Filterung erfolgt jetzt über die globalen Filter. -->
                     <button id="week-calendar-zoom-out" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors" title="Herauszoomen"><i class="fas fa-search-minus"></i></button>
                     <button id="week-calendar-zoom-in" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors" title="Hineinzoomen"><i class="fas fa-search-plus"></i></button>
                 </div>
             </div>
-            <!-- KORREKTUR: Die Zeitachse wird aus dem Scroll-Container herausgezogen, um sie fixieren zu können. -->
-            <!-- KORREKTUR: Die Zeitachse wird jetzt absolut positioniert und erhält einen eigenen Scroll-Container, um synchron zu scrollen. -->
-            <div class="flex relative" style="height: 70vh;">
-                <!-- KORREKTUR: Die Zeitachse wird jetzt absolut positioniert und erhält einen eigenen Scroll-Container, um synchron zu scrollen. -->
-                <div id="week-calendar-time-labels-container" class="w-[60px] flex-shrink-0 relative overflow-hidden z-20 bg-white border-r border-gray-200"></div>
-                <div id="week-calendar-scroll-container" class="relative overflow-auto flex-grow">
+            <!-- NEUE STRUKTUR: Wrapper für den gesamten Kalender mit sticky Header/Sidebar -->
+            <div id="week-calendar-layout-wrapper" class="relative" style="height: 75vh;">
+                <!-- KORREKTUR: Die Desktop-Layout-Elemente werden auf Mobilgeräten (< 768px) ausgeblendet, um die mobile Ansicht nicht zu stören. -->
+                <div id="week-calendar-corner" class="hidden md:block sticky top-0 left-0 z-30 bg-white border-b border-r border-gray-200"></div>
+                <!-- Header (Tage) -->
+                <div id="week-calendar-header-container" class="hidden md:block sticky top-0 z-20 overflow-hidden bg-white"></div>
+                <!-- Zeitleiste (Uhrzeiten) -->
+                <div id="week-calendar-time-labels-container" class="hidden md:block sticky left-0 z-20 overflow-hidden bg-white"></div>
+                <!-- Haupt-Scroll-Container für die Termine -->
+                <div id="week-calendar-scroll-container" class="absolute inset-0 overflow-auto z-10">
                     <div id="week-calendar-container" class="relative"></div>
+                </div>
+                <!-- KORREKTUR: Die mobile Tagesansicht wird absolut positioniert, um den verfügbaren Platz korrekt auszufüllen und Scroll-Probleme zu beheben. -->
+                <div id="mobile-day-view-container" class="hidden absolute inset-0 flex flex-col md:hidden p-4">
+                    <div class="flex justify-between items-center p-4 border-b border-gray-200 bg-white z-20 flex-shrink-0">
+                        <button id="mobile-day-nav-prev" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors"><i class="fas fa-chevron-left"></i></button>
+                        <h4 id="mobile-day-header" class="font-semibold text-skt-blue text-lg text-center"></h4>
+                        <button id="mobile-day-nav-next" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                    <div id="mobile-day-timeline" class="relative flex-grow overflow-y-auto"></div>
                 </div>
             </div>
         </div>
-        <!-- KORREKTUR: Der Container für die mobile Tagesansicht wird aus der Wochenansicht herausgezogen, um Fehler zu vermeiden. -->
-        <div id="mobile-day-view-container" class="hidden md:hidden h-[75vh] flex flex-col mt-4">
-            <div class="flex justify-between items-center mb-4">
-                <button id="mobile-day-nav-prev" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors"><i class="fas fa-chevron-left"></i></button>
-                <h4 id="mobile-day-header" class="font-semibold text-skt-blue text-lg text-center"></h4>
-                <button id="mobile-day-nav-next" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors"><i class="fas fa-chevron-right"></i></button>
-            </div>
-            <div id="mobile-day-timeline" class="relative flex-grow overflow-y-auto" style="height: 1440px;">
-                <!-- Die Timeline (Stunden + Termine) wird hier per JS gerendert -->
-            </div>
-        </div>
-
         <!-- Ansicht für die Tabelle -->
         <div id="stats-table-view" class="hidden">
             <div id="stats-table-container" class="max-h-[500px] overflow-y-auto"></div>

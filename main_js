@@ -1020,16 +1020,8 @@ async function seaTableUpdateTermin(rowId, rowData) {
 
     // 3. Aktualisiere Link-Daten separat am Ende
     for (const key in linkUpdates) {
-        const colName = reversedMap[key]; // KORREKTUR: Die Link-ID muss korrekt extrahiert werden.
-        // `linkUpdates[key]` kann ein Array mit einem Objekt sein (z.B. `[{ row_id: '...' }]`)
-        // oder ein Array mit einem String (z.B. `['...']`). Wir müssen beide Fälle abdecken.
-        const linkValue = linkUpdates[key] && linkUpdates[key][0] ? linkUpdates[key][0] : null; // KORREKTUR: Die Link-ID muss korrekt extrahiert werden.
-        // `linkUpdates[key]` kann ein Array mit einem Objekt sein (z.B. `[{ row_id: '...' }]`)
-        // oder ein Array mit einem String (z.B. `['...']`). Wir müssen beide Fälle abdecken.
-        const linkRowId = typeof linkValue === 'object' && linkValue !== null ? linkValue.row_id : linkValue; // KORREKTUR: Die Link-ID muss korrekt extrahiert werden.
-        // `linkUpdates[key]` kann ein Array mit einem Objekt sein (z.B. `[{ row_id: '...' }]`)
-        // oder ein Array mit einem String (z.B. `['...']`). Wir müssen beide Fälle abdecken.
-
+        const colName = reversedMap[key];
+        const linkRowId = linkUpdates[key] && linkUpdates[key][0] ? linkUpdates[key][0] : null;
         terminLog(`Aktualisiere Link-Feld '${colName}' mit ID: ${linkRowId}`);
         const success = await updateSingleLink(tableName, rowId, colName, linkRowId ? [linkRowId] : []);
         if (!success) {
@@ -1411,16 +1403,6 @@ function getCurrentDate() {
     return timeTravelDate ? new Date(timeTravelDate) : new Date();
 }
 
-function getPreviousMonthlyCycleDatesForDate(date) {
-    const { startDate: currentCycleStart } = getMonthlyCycleDatesForDate(date);
-    const endDate = new Date(currentCycleStart);
-    endDate.setDate(endDate.getDate() - 1);
-    endDate.setHours(23, 59, 59, 999);
-    const prevMonth = new Date(currentCycleStart);
-    prevMonth.setDate(0); // Go to last day of previous month
-    const { startDate } = getMonthlyCycleDatesForDate(prevMonth);
-    return { startDate, endDate };
-}
 export function setStatus(msg, isError = false) {
   dom.statusText.textContent = msg;
   dom.statusMessage.style.color = isError ? "var(--color-accent-red)" : "";
@@ -1929,12 +1911,9 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   const totalEh = users.reduce((acc, user) => { acc[user._id] = user.HistorischerUmsatz || 0; return acc; }, {});
 
   // NEU: Finde den nächsten Infoabend, um die korrekten Plandaten zu laden.
-  // KORREKTUR für Zeitreise: Das Datum für die Plan-Suche muss das relevante Info-Datum *innerhalb* des Zeitreise-Monats sein.
-  // `getCurrentDate()` gibt das Datum der Zeitreise zurück.
-  const dateForPlanSearch = getCurrentDate();
-  const nextInfoDateForPlan = findNextInfoDateAfter(dateForPlanSearch);
+  const nextInfoDateForPlan = findNextInfoDateAfter(getCurrentDate());
   const nextInfoDateStringForPlan = toLocalISOString(nextInfoDateForPlan);
-  
+
   // Plandaten (EH) aus dem vorgeladenen und normalisierten Cache laden.
   const planResults = db.monatsplanung.filter(
     (p) => p.Monat === currentMonthName && p.Jahr === currentYear
@@ -2007,9 +1986,8 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
     });
 
     // 3. ETs für den nächsten Infoabend berechnen
-    // KORREKTUR für Zeitreise: Die Logik ist identisch zur Plan-Suche oben.
-    // Wir verwenden das gleiche Datum, um Konsistenz sicherzustellen.
-    const nextInfoDateString = nextInfoDateStringForPlan;
+    const nextInfoDate = findNextInfoDateAfter(getCurrentDate());
+    const nextInfoDateString = toLocalISOString(nextInfoDate);
     
     const etAusgemacht = db.termine.filter(t => 
         t.Mitarbeiter_ID === user._id &&
@@ -2501,20 +2479,10 @@ async function calculateGesamtansichtData() {
 
 function drawSegmentDividers() {
   const { startDate, endDate } = getMonthlyCycleDates();
-  clearChildren(dom.segmentDividersEh); // KORREKTUR: Die Berechnung der Wochenanzahl war ungenau.
-  // Die neue Methode zählt die Anzahl der Donnerstage (Wochenstarts) im aktuellen Zyklus,
-  // um die exakte Anzahl der Wochen (4 oder 5) zu ermitteln.
-  let weekStarts = [];
-  let currentDate = new Date(startDate);
-  while (currentDate <= endDate) {
-    if (currentDate.getDay() === 4) {
-      // 4 = Donnerstag
-      weekStarts.push(new Date(currentDate));
-    }
-    currentDate.setDate(currentDate.getDate() + 1);
-  }
-  const totalWeeks = weekStarts.length;
-  if (totalWeeks <= 1) return; // Keine Trennlinien für eine einzelne Woche
+  clearChildren(dom.segmentDividersEh);
+  const totalDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
+  const totalWeeks = Math.ceil(totalDays / 7);
+
   for (let i = 1; i < totalWeeks; i++) {
     const angle = i * (360 / totalWeeks);
     const line = document.createElementNS(
@@ -2667,10 +2635,7 @@ function updateMonthlyPlanningView(data) {
   const today = getCurrentDate();
   const totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
   const daysPassedInCycle = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24));
-  // KORREKTUR: Im Zeitreise-Modus ist der Monat abgeschlossen, daher sollte der Soll-Fortschritt immer 100% sein.
-  const timeElapsedPercentage = timeTravelDate 
-      ? 100 
-      : (totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0);
+  const timeElapsedPercentage = totalDaysInCycle > 0 ? (daysPassedInCycle / totalDaysInCycle) * 100 : 0;
   
   if (isMoneyView) {
     let earningsToShow = 0;
@@ -4432,33 +4397,40 @@ function renderTimelineSection(
 }
 
 function renderDateMarkers(container, startDate, endDate) {
-    clearChildren(container);
-    const totalDuration = endDate.getTime() - startDate.getTime();
-    if (totalDuration <= 0) return;
+  clearChildren(container);
+  const totalDuration = endDate.getTime() - startDate.getTime();
+  if (totalDuration <= 0) return;
 
-    const today = getCurrentDate();
+  const today = getCurrentDate(); // KORREKTUR: Zeitreise-Datum berücksichtigen
+  const elapsedDuration = today.getTime() - startDate.getTime();
+  const timeProgressPercent = Math.max(
+    0,
+    Math.min(100, (elapsedDuration / totalDuration) * 100) // KORREKTUR: Die Berechnung war korrekt, aber die Verwendung von `new Date()` statt `getCurrentDate()` war der Fehler.
+  );
 
-    // Start- und Enddatum Marker
-    const createMarker = (date, topPercent, customClass = "") => {
-        const marker = document.createElement("div");
-        marker.className = `timeline-date-marker ${customClass}`;
-        marker.style.top = `${topPercent}%`;
-        marker.textContent = date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
-        container.appendChild(marker);
-    };
+  // Start- und Enddatum Marker
+  const createMarker = (date, topPercent, customClass = "") => {
+    const marker = document.createElement("div");
+    marker.className = `timeline-date-marker ${customClass}`;
+    marker.style.top = `${topPercent}%`;
+    marker.textContent = date.toLocaleDateString("de-DE", {
+      day: "2-digit",
+      month: "2-digit",
+    });
+    container.appendChild(marker);
+  };
 
-    createMarker(startDate, 0, "timeline-date-marker-start");
-    createMarker(endDate, 100, "timeline-date-marker-end");
+  createMarker(startDate, 0, "timeline-date-marker-start");
+  createMarker(endDate, 100, "timeline-date-marker-end");
 
-    // NEU: "Heute"-Linie anstelle des Punktes
-    if (today >= startDate && today <= endDate) {
-        const elapsedDuration = today.getTime() - startDate.getTime();
-        const timeProgressPercent = (elapsedDuration / totalDuration) * 100;
-        const todayMarker = document.createElement("div");
-        todayMarker.className = "timeline-today-marker"; // Die Klasse wird für die neue Linie wiederverwendet
-        todayMarker.style.top = `${timeProgressPercent}%`;
-        container.appendChild(todayMarker);
-    }
+  // "Heute" Marker
+  if (today >= startDate && today <= endDate) {
+    const todayMarker = document.createElement("div");
+    todayMarker.className = "timeline-today-marker";
+    todayMarker.style.top = `${timeProgressPercent}%`;
+    todayMarker.dataset.tooltip = "Heute";
+    container.appendChild(todayMarker);
+  }
 }
 
 async function handleOnboardingStepToggle(event) {
@@ -4797,10 +4769,6 @@ class AppointmentsView {
         this.mobileDayViewContainer = document.getElementById('mobile-day-view-container');
         this.mobileDayNavPrev = document.getElementById('mobile-day-nav-prev');
         this.mobileDayNavNext = document.getElementById('mobile-day-nav-next');
-        // NEU: Touch-Tracking-Variablen für die mobile Ansicht
-        this.touchStartX = 0;
-        this.touchStartY = 0;
-        this.isSwipe = false;
         this.weekPeriodDisplay = document.getElementById('week-period-display'); // KORREKTUR: Fehlende Zuweisung
         this.statsViewTableBtn = document.getElementById('stats-view-table-btn');
         this.statsViewInfoBtn = document.getElementById('stats-view-info-btn'); // NEU
@@ -4844,8 +4812,8 @@ class AppointmentsView {
             return;
         }
 
-        // KORREKTUR: Der Filter-Toggle ist jetzt für alle Bildschirmgrößen zuständig.
-        this._setupFilterToggle();
+        // NEU: Event-Listener für den mobilen Filter-Button einrichten
+        this._setupMobileFilterToggle(); // KORREKTUR: Die Funktion wird jetzt innerhalb der Klasse definiert.
 
         // NEU: Startdatum für die Statistik-Ansicht initialisieren
         this.statsCurrentDate = getCurrentDate();
@@ -5146,7 +5114,7 @@ class AppointmentsView {
         
     }
 
-    _setupFilterToggle() {
+    _setupMobileFilterToggle() {
         const toggleBtn = document.getElementById('mobile-filter-toggle-btn');
         const filterWrapper = document.getElementById('appointments-filter-wrapper');
         if (!toggleBtn || !filterWrapper) return;
@@ -5601,7 +5569,7 @@ class AppointmentsView {
     
     // NEU: Rendert den Wochenkalender
     _renderWeekCalendar() {
-        if (!this.weekCalendarContainer || !this.weekCalendarScrollContainer || !this.weekCalendarTimeLabelsContainer || !document.getElementById('week-calendar-header-container')) return;
+        if (!this.weekCalendarContainer || !this.weekCalendarScrollContainer) return;
 
         // NEU: Prüfe die Bildschirmbreite und rendere die entsprechende Ansicht
         if (window.innerWidth < 768) {
@@ -5612,17 +5580,10 @@ class AppointmentsView {
         // Bestehende Logik für die Desktop-Ansicht
         // KORREKTUR: Prüfen, ob das Element existiert, bevor darauf zugegriffen wird.
         if (this.mobileDayViewContainer) {
-            // Stelle sicher, dass die Desktop-Ansicht sichtbar und die mobile Ansicht versteckt ist.
             this.mobileDayViewContainer.classList.add('hidden');
-            this.weekCalendarScrollContainer.classList.remove('hidden');
         }
 
         // Reset everything for a full re-render (e.g., when user changes)
-        // KORREKTUR: Leere die Container, bevor sie neu befüllt werden.
-        this.weekCalendarTimeLabelsContainer.innerHTML = '';
-        document.getElementById('week-calendar-header-container').innerHTML = '';
-        this.weekCalendarContainer.innerHTML = '';
-
         this.weekCalendarContainer.innerHTML = '';
         this.calendarRenderedDays.clear();
 
@@ -5637,56 +5598,54 @@ class AppointmentsView {
         this.calendarStartDate = initialStartDate;
         this.calendarEndDate = initialEndDate;
 
+        // Zeit-Labels (linke Spalte, fixiert)
+        // KORREKTUR: Die Höhe wird jetzt dynamisch basierend auf der Anzahl der Slots berechnet.
         const totalSlots = 24 * 2; // 24 Stunden, 2 Slots pro Stunde
         const totalCalendarHeight = totalSlots * this.weekCalendarSlotHeight;
+        this.weekCalendarTimeLabelsContainer.innerHTML = '';
+        const timeLabelCol = document.createElement('div');
 
         // Header und Body Container
         const headerGrid = document.createElement('div');
         headerGrid.id = 'week-calendar-header-grid';
-        headerGrid.className = 'week-calendar-header-grid relative z-10'; // z-10, um über den Linien zu sein
-        document.getElementById('week-calendar-header-container').appendChild(headerGrid);
-
+        // KORREKTUR: Die Klassen für das Grid-Layout werden jetzt hier gesetzt.
+        headerGrid.className = 'week-calendar-header-grid sticky top-0 z-20 bg-white';
+        // KORREKTUR: Die Gesamthöhe des Kalender-Grids wird explizit gesetzt, um eine perfekte Synchronisation zu gewährleisten.
+        this.weekCalendarContainer.style.height = `${totalCalendarHeight}px`;
         const bodyGrid = document.createElement('div');
         bodyGrid.id = 'week-calendar-body-grid';
-        bodyGrid.className = 'week-calendar-body-grid relative'; // relative für Termin-Positionierung
-        this.weekCalendarContainer.style.height = `${totalCalendarHeight}px`;
-        this.weekCalendarContainer.appendChild(bodyGrid);
+        // KORREKTUR: Die Klassen für das Grid-Layout werden jetzt hier gesetzt.
+        bodyGrid.className = 'week-calendar-body-grid';
 
-        // KORREKTUR: Zeit-Labels werden jetzt in den Haupt-Scroll-Container (hinter den Terminen) gelegt.
-        const timeLabelsGrid = document.createElement('div');
-        timeLabelsGrid.className = 'absolute inset-0 pointer-events-none z-0';
-        timeLabelsGrid.style.height = `${totalCalendarHeight}px`;
-        timeLabelsGrid.style.width = '60px'; // Feste Breite
+        this.weekCalendarContainer.append(headerGrid, bodyGrid);
+
+        // KORREKTUR: Die Logik zum Erstellen der Zeit-Labels wurde hierher verschoben und korrigiert.
+        // Das überflüssige, leere Label, das den Versatz verursacht hat, wurde entfernt.
+        timeLabelCol.className = 'week-calendar-time-labels relative'; // relative für den "Heute"-Indikator
+        timeLabelCol.style.height = `${totalCalendarHeight}px`;
         for (let hour = 0; hour < 24; hour++) {
-            const timeLabelRow = document.createElement('div');
-            // KORREKTUR: Die Ausrichtung wird jetzt über absolute Positionierung gesteuert,
-            // um eine pixelgenaue Übereinstimmung mit der Stundenlinie zu garantieren.
-            timeLabelRow.className = 'relative'; // Benötigt für die absolute Positionierung des Kind-Elements.
-            timeLabelRow.style.height = `${this.weekCalendarSlotHeight * 2}px`;
-            timeLabelRow.innerHTML = `<span class="absolute top-0 right-2 text-xs text-gray-500" style="top: -7px;">${hour.toString().padStart(2, '0')}:00</span>`;
-            timeLabelsGrid.appendChild(timeLabelRow);
+            const label = document.createElement('div');
+            // KORREKTUR: Die Positionierung wird jetzt über `top` gesteuert, um den Offset zu beheben.
+            label.className = 'week-calendar-time-label';
+            label.textContent = `${hour.toString().padStart(2, '0')}:00`;
+            label.style.top = `${hour * this.weekCalendarSlotHeight * 2}px`;
+            timeLabelCol.appendChild(label);
         }
-        this.weekCalendarTimeLabelsContainer.appendChild(timeLabelsGrid);
+        this.weekCalendarTimeLabelsContainer.appendChild(timeLabelCol);
+        // NEU: "Heute"-Indikator zur Zeitleiste hinzufügen
+        this._addTodayIndicatorToTimeline();
 
-        // KORREKTUR: Scroll-Container muss jetzt die Zeit- und Header-Container berücksichtigen
-        this.weekCalendarScrollContainer.style.paddingTop = '53px'; // Höhe des Headers
-        this.weekCalendarScrollContainer.style.paddingLeft = '60px'; // Breite der Zeitleiste
+
         this._renderDayColumns(this.calendarStartDate, this.calendarEndDate, false, this.searchFilteredAppointments);
 
-        // Scrolle zum heutigen Tag und zur gewünschten Uhrzeit (8:00 Uhr)
-        setTimeout(() => {
-            const scrollLeft = this._getScrollLeftForToday();
-            const eightAmPosition = 8 * this.weekCalendarSlotHeight * 2;
-            if (this.weekCalendarScrollContainer) {
-                this.weekCalendarScrollContainer.scrollTo({ top: eightAmPosition, left: scrollLeft, behavior: 'auto' });
-            }
-        }, 100);
+        // Scrolle zum heutigen Tag
+        setTimeout(() => this._scrollToTodayInCalendar(), 100);
 
-        // KORREKTUR: Die manuelle Synchronisation wird durch die neue CSS-Struktur überflüssig.
-        // Die Event-Listener werden entfernt, um Fehler zu vermeiden.
+        // NEU: Synchronisiere das Scrollen der Zeitleiste mit dem Hauptkalender
         this.weekCalendarScrollContainer.addEventListener('scroll', () => {
-            document.getElementById('week-calendar-header-container').scrollLeft = this.weekCalendarScrollContainer.scrollLeft;
-            document.getElementById('week-calendar-time-labels-container').scrollTop = this.weekCalendarScrollContainer.scrollTop;
+            if (this.weekCalendarTimeLabelsContainer) {
+                this.weekCalendarTimeLabelsContainer.scrollTop = this.weekCalendarScrollContainer.scrollTop;
+            }
         });
     }
 
@@ -5699,8 +5658,8 @@ class AppointmentsView {
             return;
         }
 
-        this.weekCalendarScrollContainer.classList.add('hidden'); // Desktop-Kalender ausblenden
-        this.mobileDayViewContainer.classList.remove('hidden'); // Mobile Ansicht einblenden
+        this.mobileDayViewContainer.classList.remove('hidden');
+        this.weekCalendarScrollContainer.parentElement.classList.add('hidden'); // Versteckt den Desktop-Kalender
     
         const day = this.statsCurrentDate; // Verwende das Datum aus der Timeline-Navigation
     
@@ -5712,33 +5671,6 @@ class AppointmentsView {
         this.mobileDayNavPrev.onclick = () => this._navigateSingleDay(-1);
         this.mobileDayNavNext.onclick = () => this._navigateSingleDay(1);
     
-        // NEU: Event-Listener für Swipe-Gesten auf der mobilen Timeline
-        const timelineWrapper = this.mobileDayViewContainer.querySelector('#mobile-day-timeline');
-        if (timelineWrapper) {
-            this.mobileDayViewContainer.addEventListener('touchstart', (e) => {
-                // Starte die Geste nur, wenn nicht auf einen Termin geklickt wird
-                if (e.target.closest('.mobile-appointment-block')) return;
-                this.touchStartX = e.touches[0].clientX;
-                this.isSwipe = true;
-            }, { passive: true });
-    
-            this.mobileDayViewContainer.addEventListener('touchmove', (e) => {
-                if (!this.isSwipe) return;
-                const touchCurrentX = e.touches[0].clientX;
-                const deltaX = touchCurrentX - this.touchStartX;
-    
-                // Wenn eine signifikante Wischbewegung erkannt wird
-                if (Math.abs(deltaX) > 100) {
-                    if (deltaX > 0) { // Swipe right (to previous day)
-                        this._navigateSingleDay(-1);
-                    } else { // Swipe left (to next day)
-                        this._navigateSingleDay(1);
-                    }
-                    this.isSwipe = false; // Verhindert mehrfaches Auslösen
-                }
-            }, { passive: true });
-        }
-
         // Timeline und Termine rendern
         const timelineContainer = this.mobileDayViewContainer.querySelector('#mobile-day-timeline');
         timelineContainer.innerHTML = '';
@@ -5777,22 +5709,12 @@ class AppointmentsView {
             timelineContainer.appendChild(nowIndicator);
         }
     
-        // Zur gewünschten Zeit scrollen (8:00 Uhr) oder zum ersten Termin/Jetzt-Indikator
+        // Zur aktuellen Zeit scrollen (oder zum ersten Termin)
         setTimeout(() => {
             const nowIndicator = timelineContainer.querySelector('.mobile-now-indicator');
             const firstAppointment = timelineContainer.querySelector('.mobile-appointment-block');
-            const scrollContainer = timelineContainer.parentElement;
-    
-            // Priorität: 1. "Jetzt"-Indikator, 2. Erster Termin, 3. Standardmäßig 8:00 Uhr
-            let targetElement = nowIndicator || firstAppointment;
-            let targetPosition;
-    
-            if (targetElement) {
-                targetPosition = targetElement.offsetTop - (scrollContainer.clientHeight / 2) + (targetElement.clientHeight / 2);
-            } else {
-                targetPosition = 8 * 60; // 8 Uhr * 60px pro Stunde
-            }
-            scrollContainer.scrollTo({ top: targetPosition, behavior: 'smooth' });
+            const target = nowIndicator || firstAppointment;
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, 100);
     }
 
@@ -5893,60 +5815,45 @@ class AppointmentsView {
 
     _setupNewAppointmentCreation(dayColumn) {
         let startY = 0;
-        let startX = 0;
         let placeholder = null;
-        let isDragging = false;
 
         dayColumn.addEventListener('mousedown', (e) => {
             // Verhindere das Erstellen, wenn auf einen bestehenden Termin geklickt wird
             if (e.target.closest('.week-calendar-appointment')) return;
 
-            // NEU: Verhindert das Standardverhalten (z.B. Text markieren, Scrollen), das den Fokus verschiebt.
-            e.preventDefault();
-
-            isDragging = true;
             startY = e.offsetY;
-            startX = e.offsetX;
-            // KORREKTUR: `new Date('YYYY-MM-DD')` erzeugt ein UTC-Datum um Mitternacht, was zu Zeitzonenfehlern führen kann.
-            // Wir erstellen das Datum manuell mit der lokalen Zeitzone, um sicherzustellen, dass immer der korrekte Tag ausgewählt wird.
-            const [year, month, day] = dayColumn.dataset.date.split('-').map(Number);
-            const { hours, minutes } = this._getTimeFromY(startY, true); // FINALE KORREKTUR: Erstelle das Datum als lokales Datum, um Zeitzonenverschiebungen vollständig zu vermeiden.
-            // FINALE KORREKTUR: Erstelle das Datum als lokales Datum, um Zeitzonenverschiebungen vollständig zu vermeiden.
-            const clickedDate = new Date(year, month - 1, day, hours, minutes);
-
+            const date = new Date(dayColumn.dataset.date);
+            const { hours, minutes } = this._getTimeFromY(startY);
+            date.setHours(hours, minutes);
 
             // Platzhalter erstellen
             placeholder = document.createElement('div');
             placeholder.className = 'week-calendar-appointment-placeholder';
             placeholder.style.top = `${this._getYFromTime(hours, minutes)}px`;
-            placeholder.style.height = `${this.weekCalendarSlotHeight / 2}px`; // Standardhöhe (15 Min)
+            placeholder.style.height = `${this.weekCalendarSlotHeight}px`; // Standardhöhe (30 Min)
             dayColumn.appendChild(placeholder);
 
             const onMouseMove = (moveEvent) => {
                 const currentY = moveEvent.offsetY;
-                const height = Math.max(this.weekCalendarSlotHeight / 2, currentY - startY);
+                const height = Math.max(this.weekCalendarSlotHeight, currentY - startY);
                 placeholder.style.height = `${height}px`;
             };
 
             const onMouseUp = (upEvent) => {
-                isDragging = false;
                 dayColumn.removeEventListener('mousemove', onMouseMove);
                 dayColumn.removeEventListener('mouseup', onMouseUp);
                 dayColumn.removeEventListener('mouseleave', onMouseUp); // Auch bei Verlassen des Bereichs beenden
 
                 const endY = upEvent.offsetY;
-                const endX = upEvent.offsetX;
+                const durationInMinutes = Math.round(((Math.max(this.weekCalendarSlotHeight, endY - startY)) / this.weekCalendarSlotHeight) * 30);
 
-                // KORREKTUR: Wenn kaum Bewegung stattgefunden hat (weniger als 5px), als Klick behandeln.
-                if (Math.abs(endY - startY) < 5 && Math.abs(endX - startX) < 5) {
-                    // KORREKTUR: Verwende das korrigierte `clickedDate` für das Modal.
-                    this.openModal({ Datum: clickedDate, Dauer: 3600, Kategorie: 'AT' }); // Standarddauer 1h, Kategorie AT
-                } else {
-                    // Bestehende Logik für Drag-to-Create beibehalten
-                    const durationInMinutes = Math.round(((Math.max(this.weekCalendarSlotHeight / 2, endY - startY)) / this.weekCalendarSlotHeight) * 30 / 15) * 15;
-                    this.openModal({ Datum: clickedDate, Dauer: durationInMinutes * 60, Kategorie: 'AT' });
-                }
+                // Modal mit den berechneten Daten öffnen
+                this.openModal({
+                    Datum: date.toISOString(),
+                    Dauer: durationInMinutes * 60 // in Sekunden
+                });
 
+                // Platzhalter entfernen
                 if (placeholder) {
                     placeholder.remove();
                     placeholder = null;
@@ -6134,8 +6041,8 @@ class AppointmentsView {
                         // KORREKTUR: Das Datum wird jetzt aus dem `YYYY-MM-DD`-String geparst und als lokales Datum erstellt,
                         // um Zeitzonenfehler zu vermeiden. `new Date(YYYY, MM, DD)` ist zeitzonensicher.
                         const targetDateString = targetColumn.dataset.date;
-                        const [year, month, day] = targetDateString.split('-').map(Number);
-                        const targetDay = new Date(year, month - 1, day + 1, 20);
+                        const [year, month, day] = targetDateString.split('-').map(Number); // z.B. [2024, 7, 26]
+                        const targetDay = new Date(year, month - 1, day); // Erstellt ein Datum für den 26.07.2024, 00:00 Uhr LOKALER ZEIT
 
 
                         // Berechne die neue Uhrzeit basierend auf der Y-Position innerhalb der Zielspalte.
@@ -6143,7 +6050,7 @@ class AppointmentsView {
                         const yInCol = upEvent.clientY - colRect.top;
                         const { hours, minutes } = this._getTimeFromY(yInCol, true); // true = snap to grid
 
-                        newDate = new Date(targetDay.getFullYear(), targetDay.getMonth(), targetDay.getDate(), hours, minutes);
+                        newDate = new Date(targetDay.getFullYear(), targetDay.getMonth(), targetDay.getDate(), hours, minutes); // Setzt die korrekte Uhrzeit auf das korrekte Datum
                     } else {
                         // Fallback: Wenn außerhalb einer Spalte losgelassen wird, keine Änderung.
                         return;
@@ -6151,12 +6058,8 @@ class AppointmentsView {
                 }
 
                 // Update in der Datenbank über die bestehende API-Funktion
-                // KORREKTUR: .toISOString() konvertiert in UTC. Um die korrekte lokale Zeit zu speichern,
-                // muss der Zeitzonen-Offset manuell korrigiert werden, bevor der String erzeugt wird.
-                const dateForApi = new Date(newDate.getTime() - (newDate.getTimezoneOffset() * 60000));
-
                 const success = await seaTableUpdateTermin(termin._id, {
-                    [COLUMN_MAPS.termine.Datum]: dateForApi.toISOString().slice(0, 19).replace('T', ' '),
+                    [COLUMN_MAPS.termine.Datum]: newDate.toISOString(),
                     [COLUMN_MAPS.termine.Dauer]: newDurationInSeconds,
                 });
 
@@ -6180,95 +6083,15 @@ class AppointmentsView {
 
     }
     // NEU: Überarbeitete Funktion, um Terminblöcke für die mobile Timeline zu erstellen
-    _setupMobileAppointmentInteractions(element, termin) {
-        let startY = 0;
-        let startX = 0;
-        let initialTop = 0;
-        let isDragging = false;
-    
-        element.addEventListener('touchstart', (e) => {
-            isDragging = true;
-            startY = e.touches[0].clientY;
-            startX = e.touches[0].clientX;
-            initialTop = element.offsetTop;
-            element.style.zIndex = '30';
-            element.style.transition = 'none'; // Disable transition while dragging
-        }, { passive: false }); // passive: false, um preventDefault() zu erlauben
-    
-        element.addEventListener('touchmove', (e) => {
-            if (!isDragging) return;
-            e.preventDefault(); // Verhindert das Scrollen der Seite
-            const deltaY = e.touches[0].clientY - startY;
-            element.style.top = `${initialTop + deltaY}px`;
-        }, { passive: false });
-    
-        element.addEventListener('touchend', async (e) => {
-            if (!isDragging) return;
-            isDragging = false;
-            element.style.zIndex = '10';
-            element.style.transition = ''; // Re-enable transition
-    
-            const deltaY = e.changedTouches[0].clientY - startY;
-            const deltaX = e.changedTouches[0].clientX - startX;
-    
-            // If it was just a tap, open the modal
-            if (Math.abs(deltaY) < 10 && Math.abs(deltaX) < 10) {
-                this.openModal(termin);
-                return;
-            }
-    
-            const finalTop = element.offsetTop;
-            const { hours, minutes } = this._getTimeFromY(finalTop, true); // Snap to grid
-    
-            let newDate = new Date(termin.Datum);
-            
-            // KORREKTUR: Prüfe, ob der Termin auf einen anderen Tag verschoben wurde
-            const dayWidth = window.innerWidth; // Breite eines Tages in der mobilen Ansicht
-            const dayChange = Math.round(deltaX / dayWidth);
-    
-            if (dayChange !== 0) {
-                newDate.setDate(newDate.getDate() + dayChange);
-            }
-            
-            // KORREKTUR: Setze die neue Uhrzeit, aber behalte das (möglicherweise geänderte) Datum bei.
-            newDate.setHours(hours, minutes, 0, 0); // Sekunden und Millisekunden zurücksetzen
-    
-            // KORREKTUR: .toISOString() konvertiert in UTC. Um die korrekte lokale Zeit zu speichern,
-            // muss der Zeitzonen-Offset manuell korrigiert werden, bevor der String erzeugt wird.
-            const dateForApi = new Date(newDate.getTime() - (newDate.getTimezoneOffset() * 60000));
-    
-            const success = await seaTableUpdateTermin(termin._id, {
-                [COLUMN_MAPS.termine.Datum]: dateForApi.toISOString().slice(0, 19).replace('T', ' '),
-            });
-    
-            if (success) {
-                localStorage.removeItem(`${CACHE_PREFIX}termine`);
-                db.termine = await seaTableQuery('Termine');
-                normalizeAllData();
-                await this.fetchAndRender();
-            } else {
-                alert('Fehler beim Aktualisieren des Termins.');
-                // Reset position on failure
-                element.style.top = `${initialTop}px`;
-            }
-        });
-    }
-
-
-    // NEU: Überarbeitete Funktion, um Terminblöcke für die mobile Timeline zu erstellen
     _createMobileAppointmentElement(termin, column, totalColumns) {
         const startDate = new Date(termin.Datum);
         const durationInMinutes = (termin.Dauer || 3600) / 60;
-
-        // KORREKTUR: Die Position muss um die halbe Höhe des Zeit-Labels (-7px) nach oben korrigiert werden,
-        // damit der Termin exakt auf der Stundenlinie beginnt und nicht darunter.
-        const topOffset = (startDate.getHours() * 60 + startDate.getMinutes()); // in Minuten (1px/min)
+    
+        const topOffset = (startDate.getHours() * 60 + startDate.getMinutes()); // in Minuten
         const height = durationInMinutes;
-        // KORREKTUR: Die Breite und Position der Terminblöcke müssen den festen
-        // linken Abstand der Zeitleiste (4rem) berücksichtigen, um ein "Wackeln" zu verhindern.
-        const availableWidth = `calc(100% - 4rem)`;
-        const width = `calc(${availableWidth} / ${totalColumns} - 4px)`; // 4px Abstand zwischen Blöcken
-        const left = `calc(4rem + (${column} * (${availableWidth} / ${totalColumns})))`;
+    
+        const width = 100 / totalColumns;
+        const left = column * width;
     
         // KORREKTUR: Die Farben sollen sich jetzt nach der Kategorie richten, nicht nach dem Status.
         const { bg: categoryBgClass, text: categoryTextColorClass } = this._getAppointmentColorClasses(termin, 'category');
@@ -6279,8 +6102,8 @@ class AppointmentsView {
         el.className = `mobile-appointment-block absolute flex flex-col p-2 rounded-lg shadow-md overflow-hidden ${categoryBgClass}`;
         el.style.top = `${topOffset}px`; // 1px pro Minute
         el.style.height = `${height}px`;
-        el.style.left = left;
-        el.style.width = width;
+        el.style.left = `calc(${left}% + 4rem)`; // 4rem ist die Breite der Zeitleiste
+        el.style.width = `calc(${width}% - 4px)`; // -4px für einen kleinen Abstand
         el.dataset.id = termin._id;
     
         el.innerHTML = `
@@ -6288,8 +6111,8 @@ class AppointmentsView {
             <p class="text-xs opacity-80 ${categoryTextColorClass} mt-1 truncate">${mitarbeiterName}</p>
         `;
     
-        // KORREKTUR: Interaktionen für Drag & Drop auf Mobilgeräten hinzufügen
-        this._setupMobileAppointmentInteractions(el, termin);
+        el.addEventListener('click', () => this.openModal(termin));
+    
         return el;
     }
 
@@ -6369,15 +6192,7 @@ class AppointmentsView {
 
     // NEU: Hilfsfunktionen zur Umrechnung von Y-Position und Zeit
     _getTimeFromY(y, snapToGrid = false) {
-        // KORREKTUR: Unterscheide zwischen Desktop- und Mobile-Ansicht.
-        // Desktop: weekCalendarSlotHeight (z.B. 40px) pro 30-Minuten-Slot.
-        // Mobile: 1px pro Minute, also 60px pro Stunde.
-        let totalMinutes;
-        if (window.innerWidth < 768) { // Annahme: Mobile-Breakpoint ist 768px
-            totalMinutes = y; // In der mobilen Ansicht entspricht 1px = 1 Minute
-        } else {
-            totalMinutes = (y / (this.weekCalendarSlotHeight * 2)) * 60;
-        }
+        const totalMinutes = (y / (this.weekCalendarSlotHeight * 2)) * 60;
         let finalMinutes = totalMinutes;
         if (snapToGrid) {
             finalMinutes = Math.round(totalMinutes / 15) * 15; // Auf 15-Minuten-Raster runden
@@ -6537,26 +6352,16 @@ class AppointmentsView {
         this._scrollToTodayInCalendar();
     }
 
-    _getScrollLeftForToday() {
-        const todayString = toLocalISOString(getCurrentDate());
-        const todayHeader = this.weekCalendarScrollContainer.querySelector(`[data-date="${todayString}"]`);
+    _scrollToTodayInCalendar(behavior = 'smooth') {
+        const todayString = new Date(getCurrentDate()).toISOString().split('T')[0];
+        const todayHeader = document.querySelector(`#week-calendar-header-grid > [data-date="${todayString}"]`);
         if (todayHeader) {
             const container = this.weekCalendarScrollContainer;
             const containerRect = container.getBoundingClientRect();
             const todayRect = todayHeader.getBoundingClientRect();
-
-            // Position des "Heute"-Elements relativ zum Scroll-Container
-            const todayOffsetLeft = todayRect.left - containerRect.left + container.scrollLeft;
-            // Scroll-Position, um das Element zu zentrieren
-            const scrollLeft = todayOffsetLeft - (container.clientWidth / 2) + (todayHeader.offsetWidth / 2);
-            return Math.max(0, scrollLeft); // Verhindert negatives Scrollen
+            const scrollLeft = container.scrollLeft + todayRect.left - containerRect.left - (containerRect.width / 2) + (todayRect.width / 2);
+            container.scrollTo({ left: scrollLeft, behavior: behavior });
         }
-        return 0;
-    }
-
-    _scrollToTodayInCalendar(behavior = 'smooth') {
-        const scrollLeft = this._getScrollLeftForToday();
-        this.weekCalendarScrollContainer.scrollTo({ left: scrollLeft, behavior: behavior });
     }
 
     _getDateFromScroll() {
@@ -7397,11 +7202,11 @@ class AppointmentsView {
                 appointmentsLog('Entering edit mode for termin:', termin);
                 // NEU: Logik für Hinweise im Modal
                 this._renderModalHints(termin, hintsContainer);
-                // KORREKTUR: Titel anpassen, je nachdem ob ein neuer oder bestehender Termin bearbeitet wird.
-                title.textContent = termin._id ? 'Termin bearbeiten' : 'Neuen Termin anlegen';
-                // KORREKTUR: Löschen-Button bei bestehenden Terminen ausblenden, wie gewünscht.
-                this.form.querySelector('#delete-appointment-btn').classList.add('hidden');
-                idInput.value = termin._id || '';
+            // KORREKTUR: Titel anpassen, je nachdem ob ein neuer oder bestehender Termin bearbeitet wird.
+            title.textContent = termin._id ? 'Termin bearbeiten' : 'Neuen Termin anlegen';
+            // KORREKTUR: Löschen-Button nur bei bestehenden Terminen anzeigen.
+            this.form.querySelector('#delete-appointment-btn').classList.toggle('hidden', !termin._id);
+                idInput.value = termin._id; // KORREKTUR: Robusterer Zugriff auf die ID, da sie nach der Normalisierung ein String sein kann.
                 const mitarbeiterId = Array.isArray(termin.Mitarbeiter_ID) ? termin.Mitarbeiter_ID?.[0]?.row_id : termin.Mitarbeiter_ID;
                 if (mitarbeiterId) {
                     // Stelle sicher, dass die Option existiert, bevor du sie setzt
@@ -7418,15 +7223,11 @@ class AppointmentsView {
                 // KORREKTUR: `datetime-local` erwartet das Format YYYY-MM-DDTHH:mm
                 // `toISOString()` konvertiert in UTC, was zu Zeitzonenfehlern führt.
                 // Wir müssen das Datum manuell in das korrekte lokale Format umwandeln.
-                if (dateForForm) { // KORREKTUR: Die Konvertierung in einen lokalen ISO-String war fehlerhaft und hat den Zeitzonen-Offset falsch angewendet.
-                    // Die neue Logik erstellt den String manuell, um sicherzustellen, dass die lokale Zeit exakt übernommen wird.
+                if (dateForForm) {
                     const localDate = new Date(dateForForm);
-                    const year = localDate.getFullYear();
-                    const month = (localDate.getMonth() + 1).toString().padStart(2, '0');
-                    const day = localDate.getDate().toString().padStart(2, '0');
-                    const hours = localDate.getHours().toString().padStart(2, '0');
-                    const minutes = localDate.getMinutes().toString().padStart(2, '0');
-                    this.form.querySelector('#appointment-date').value = `${year}-${month}-${day}T${hours}:${minutes}`;
+                    // Wir ziehen den Zeitzonen-Offset ab, um die "echte" lokale Zeit zu bekommen, die dann korrekt als String formatiert wird.
+                    localDate.setMinutes(localDate.getMinutes() - localDate.getTimezoneOffset());
+                    this.form.querySelector('#appointment-date').value = localDate.toISOString().slice(0, 16);
                 } else {
                     this.form.querySelector('#appointment-date').value = '';
                 }
@@ -7468,13 +7269,11 @@ class AppointmentsView {
                 title.textContent = 'Termin anlegen';
                 idInput.value = '';
                 userSelect.value = this.currentUserId;
-                // NEU: Standardmäßig den eingeloggten Benutzer als Mitarbeiter auswählen.
-                userSelect.value = authenticatedUserData._id; // KORREKTUR: Die Konvertierung in einen lokalen ISO-String war fehlerhaft und hat den Zeitzonen-Offset falsch angewendet.
-                // Die neue Logik erstellt den String manuell, um sicherzustellen, dass die lokale Zeit exakt übernommen wird.
-                const now = new Date(); // KORREKTUR: Die Konvertierung in einen lokalen ISO-String war fehlerhaft und hat den Zeitzonen-Offset falsch angewendet.
-                // Die neue Logik erstellt den String manuell, um sicherzustellen, dass die lokale Zeit exakt übernommen wird.
-                const localNowString = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}T${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-                this.form.querySelector('#appointment-date').value = localNowString;
+                // KORREKTUR: `toISOString()` konvertiert in UTC. Um die korrekte lokale Zeit zu erhalten,
+                // muss der Zeitzonen-Offset manuell korrigiert werden, bevor der String erzeugt wird.
+                const now = new Date();
+                now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+                this.form.querySelector('#appointment-date').value = now.toISOString().slice(0, 16);
 
                 // NEU: Neue Felder leeren
                 this.form.querySelector('#appointment-location').value = '';
@@ -7484,8 +7283,8 @@ class AppointmentsView {
                 // KORREKTUR: Veraltete `currentTab`-Logik entfernt.
                 // Die Logik wird jetzt durch den neuen Event-Listener in `_handleCategoryChange` gesteuert.
                 // Wir rufen die Funktion hier einmal auf, um den initialen Zustand zu setzen.
-                // KORREKTUR: Löschen-Button bei neuen Terminen ausblenden.
-                this.form.querySelector('#delete-appointment-btn').classList.add('hidden');
+            // KORREKTUR: Löschen-Button bei neuen Terminen ausblenden.
+            this.form.querySelector('#delete-appointment-btn').classList.add('hidden');
                 this._handleCategoryChange(categorySelect.value);
             }
 
@@ -7607,6 +7406,15 @@ class AppointmentsView {
         const saveBtnText = saveBtn.querySelector('#save-btn-text');
         const saveBtnLoader = saveBtn.querySelector('.loader-small');
 
+        // NEU: Event-Listener für den Löschen-Button
+        const deleteBtn = this.form.querySelector('#delete-appointment-btn');
+        if (deleteBtn) {
+            // Klonen, um alte Listener zu entfernen
+            const newDeleteBtn = deleteBtn.cloneNode(true);
+            deleteBtn.parentNode.replaceChild(newDeleteBtn, deleteBtn);
+            newDeleteBtn.addEventListener('click', () => this.handleDelete());
+        }
+
         saveBtn.disabled = true;
         saveBtnText.classList.add('hidden');
         saveBtnLoader.classList.remove('hidden');
@@ -7617,14 +7425,12 @@ class AppointmentsView {
             const isCancellation = this.form.querySelector('#appointment-cancellation').checked;
 
             // NEU: Prüfen, ob ein AT auf "Gehalten" gesetzt wird
+            const originalTermin = isNewAppointment ? null : this.allAppointments.find(t => t._id === rowId);
             const newStatus = this.form.querySelector('#appointment-status').value;
             const newCategory = this.form.querySelector('#appointment-category').value;
-            
-            // KORREKTUR: Die Prüfung auf `isAtGehalten` darf nur für bestehende Termine erfolgen.
-            const originalTermin = !isNewAppointment ? this.allAppointments.find(t => t._id === rowId) : null;
             const isAtGehalten =
-                !isNewAppointment &&
-                originalTermin &&
+                !isNewAppointment && // Only for existing appointments
+                originalTermin && // Check if originalTermin exists
                 originalTermin.Kategorie === 'AT' &&
                 newStatus === 'Gehalten' &&
                 originalTermin.Status !== 'Gehalten';
@@ -7920,17 +7726,12 @@ class AppointmentsView {
         }
 
         if (success) {
+            await this.fetchAndRender();
             // KORREKTUR: Body-Scroll wieder aktivieren, wenn das Modal geschlossen wird.
             document.body.classList.remove('modal-open');
             // KORREKTUR: Body-Scroll wieder aktivieren, wenn das Modal geschlossen wird.
             document.documentElement.classList.remove('modal-open');
             this.btFollowUpModal.classList.remove('visible');
-            
-            // NEU: Lade die Termindaten neu und rendere die Ansicht, damit der neue BT sofort sichtbar ist.
-            localStorage.removeItem(`${CACHE_PREFIX}termine`);
-            db.termine = await seaTableQuery('Termine');
-            normalizeAllData();
-            await this.fetchAndRender();
         } else {
             alert('Ein Fehler ist aufgetreten. Die Aktion konnte nicht gespeichert werden.');
         }
@@ -10362,46 +10163,6 @@ class AuswertungView {
         alert(`PQQ-Berechnung für ${user.Name}:\n\nEH-Quote: ${(ehQuote * 100).toFixed(0)}% (${totalEH} Ist / ${ursprungszielEH} Ziel)\nET-Quote: ${(etQuote * 100).toFixed(0)}% (${totalETAusgemacht} Ist / ${ursprungszielET} Ziel)\n\nGesamt-PQQ: ${pqq.toFixed(0)}%\n\n(Details in der Entwicklerkonsole)`);
     }
 
-    async logPQQCalculationForUser(userId, forMonth, forYear) {
-        const pqqLog = (message, ...data) => console.log(`%c[PQQ_Drilldown] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
-        const user = findRowById('mitarbeiter', userId);
-        if (!user) {
-            pqqLog(`User with ID ${userId} not found.`);
-            return;
-        }
-        pqqLog(`--- PQQ-Berechnung für: ${user.Name} (für ${forMonth + 1}/${forYear}) ---`);
-
-        // 1. Get previous month's dates
-        const { startDate, endDate } = getPreviousMonthlyCycleDatesForDate(new Date(forYear, forMonth, 15));
-        const prevMonthName = startDate.toLocaleString("de-DE", { month: "long" });
-        const prevYear = startDate.getFullYear();
-        const prevStartDateIso = toLocalISOString(startDate);
-        const prevEndDateIso = toLocalISOString(endDate);
-        pqqLog(`Berechnungszeitraum (Vormonat): ${prevStartDateIso} bis ${prevEndDateIso}`);
-
-        // 2. Get planning data from cache
-        const plan = db.monatsplanung.find(p => p.Mitarbeiter_ID === userId && p.Monat === prevMonthName && p.Jahr === prevYear);
-        const infoPlan = db.infoplanung.find(p => p.Mitarbeiter_ID === userId && new Date(p.Informationsabend).getFullYear() === prevYear && new Date(p.Informationsabend).getMonth() === startDate.getMonth());
-
-        const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
-        const ursprungszielET = infoPlan?.Ursprungsziel_ET || 0;
-        pqqLog(`Plandaten (Ursprungsziel):`, { EH: ursprungszielEH, ET: ursprungszielET });
-
-        // 3. Get actual data for previous month
-        const totalEH = db.umsatz.filter(u => u.Mitarbeiter_ID === userId && new Date(u.Datum) >= startDate && new Date(u.Datum) <= endDate).reduce((sum, u) => sum + (u.EH || 0), 0);
-        const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter", "Verschoben"];
-        const totalETAusgemacht = db.termine.filter(t => t.Mitarbeiter_ID === userId && t.Kategorie === 'ET' && t.Datum && new Date(t.Datum) >= startDate && new Date(t.Datum) <= endDate && ET_STATUS_AUSGEMACHT.includes(t.Status)).length;
-        pqqLog(`Ist-Werte (Vormonat):`, { EH: totalEH, ET_Ausgemacht: totalETAusgemacht });
-
-        const ehQuote = (ursprungszielEH > 0) ? (totalEH / ursprungszielEH) : (ursprungszielEH === 0 ? 1 : 0);
-        pqqLog(`EH-Quote Berechnung: ${totalEH} (Ist) / ${ursprungszielEH} (Ziel) = ${ehQuote.toFixed(4)}`);
-        const etQuote = (ursprungszielET > 0) ? (totalETAusgemacht / ursprungszielET) : (ursprungszielET === 0 ? 1 : 0);
-        pqqLog(`ET-Quote Berechnung: ${totalETAusgemacht} (Ist) / ${ursprungszielET} (Ziel) = ${etQuote.toFixed(4)}`);
-        const pqq = ((ehQuote + etQuote) / 2) * 100;
-        pqqLog(`Gesamt-PQQ: ((${ehQuote.toFixed(4)} + ${etQuote.toFixed(4)}) / 2) * 100 = ${pqq.toFixed(2)}%`);
-        alert(`PQQ-Berechnung für ${user.Name}:\n\nEH-Quote: ${(ehQuote * 100).toFixed(0)}% (${totalEH} Ist / ${ursprungszielEH} Ziel)\nET-Quote: ${(etQuote * 100).toFixed(0)}% (${totalETAusgemacht} Ist / ${ursprungszielET} Ziel)\n\nGesamt-PQQ: ${pqq.toFixed(0)}%\n\n(Details in der Entwicklerkonsole)`);
-    }
-
     async renderPlanungen() {
         auswertungLog('Render Planungen View');
         const viewContainer = this.planungenView;
@@ -10430,18 +10191,7 @@ class AuswertungView {
         const selectedMonth = parseInt(monthSelect.value);
         const selectedYear = parseInt(yearSelect.value);
         const selectedMonthName = monthSelect.options[selectedMonth].text;
-
-        // NEU: Lade die Ist-EH für den AKTUELLEN Umsatzzyklus, unabhängig vom ausgewählten Monat.
-        const { startDate: currentCycleStart, endDate: currentCycleEnd } = getMonthlyCycleDates();
-        const currentCycleStartIso = toLocalISOString(currentCycleStart);
-        const currentCycleEndIso = toLocalISOString(currentCycleEnd);
-        const allUserNamesSql = db.mitarbeiter.filter(m => m.Status !== 'Ausgeschieden' && m.Name).map(m => `'${escapeSql(m.Name)}'`).join(',');
-
-        const currentEhQuery = `SELECT Mitarbeiter_ID, SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID IN (${allUserNamesSql}) AND Datum >= '${currentCycleStartIso}' AND Datum <= '${currentCycleEndIso}' GROUP BY Mitarbeiter_ID`;
-        const currentEhResultsRaw = await seaTableSqlQuery(currentEhQuery, true);
-        const currentEhData = mapSqlResults(currentEhResultsRaw || [], 'Umsatz');
-        const currentEhByUserId = _.keyBy(currentEhData.map(r => ({ id: r.Mitarbeiter_ID[0].row_id, totalEH: r.totalEH })), 'id');
-
+        
         // KORREKTUR: ET-Ziel und ET-Ist müssen sich immer auf den NÄCHSTEN Infoabend beziehen, nicht auf den ausgewählten Monat.
         const nextInfoDate = findNextInfoDateAfter(new Date());
         const nextInfoDateString = nextInfoDate.toISOString().split('T')[0];
@@ -10465,7 +10215,6 @@ class AuswertungView {
         const combinedData = allActiveUsers.map(user => {
             const plan = plansByUserId[user._id];
             const pqqData = pqqDataMap[user._id] || { pqq: 0, ehIst: 0, prognose: 0 };
-            const currentEh = currentEhByUserId[user._id]?.totalEH || 0; // NEU: Hole die aktuellen EH.
             return {
                 id: user._id,
                 name: user.Name,
@@ -10475,7 +10224,7 @@ class AuswertungView {
                 etGoal: infoPlansByUserId[user._id]?.ET_Ziel ?? 0,
                 etIst: etIstByUserId[user._id] || 0, // KORREKTUR: ET-Ist aus der neuen Berechnung nehmen.
                 pqq: pqqData.pqq, // PQQ bezieht sich weiterhin auf den Vormonat.
-                ehIst: currentEh, // KORREKTUR: Verwende die aktuellen EH für die Anzeige.
+                ehIst: pqqData.ehIst,
                 prognose: pqqData.prognose,
                 hasPlan: !!plan
             };
@@ -10801,37 +10550,13 @@ class AuswertungView {
 
         container.innerHTML = finalHtml || '<p class="text-center text-gray-500">Keine Mitarbeiter zum Anzeigen gefunden.</p>';
     }
-    async calculatePQQForUserList(userIds, forMonth, forYear) {
-        const pqqDataMap = {};
-        for (const userId of userIds) {
-            pqqDataMap[userId] = await getSingleUserPQQ(userId, forMonth, forYear);
-        }
-        return pqqDataMap;
-    }
 }
 
 // KORREKTUR: Eigene Speicherfunktion für das Planungsmodal, wenn es aus der Auswertungs-Ansicht aufgerufen wird.
 async function savePlanningDataFromAuswertung() {
-    const saveBtn = document.getElementById('planning-form').querySelector('button[type="submit"]');
-
-    // KORREKTUR: Stellt sicher, dass die Text- und Loader-Elemente existieren,
-    // und erstellt sie bei Bedarf, um den TypeError zu verhindern.
-    let saveBtnText = saveBtn.querySelector('span');
-    let saveBtnLoader = saveBtn.querySelector('.loader-small');
-
-    if (!saveBtnText) {
-        saveBtn.innerHTML = `<span>${saveBtn.textContent}</span>`;
-        saveBtnText = saveBtn.querySelector('span');
-    }
-    if (!saveBtnLoader) {
-        saveBtn.insertAdjacentHTML('beforeend', '<div class="loader-small hidden"></div>');
-        saveBtnLoader = saveBtn.querySelector('.loader-small');
-    }
-
+    const saveBtn = document.getElementById('save-planning-btn');
     saveBtn.disabled = true;
-    // KORREKTUR: Prüfe, ob die Elemente existieren, bevor classList verwendet wird.
-    if (saveBtnText) saveBtnText.classList.add('hidden');
-    if (saveBtnLoader) saveBtnLoader.classList.remove('hidden');
+    saveBtn.textContent = 'Speichern...';
 
     const userId = document.getElementById('planning-user-select').value;
     const ehGoal = parseFloat(document.getElementById('planning-eh-goal').value) || 0;
@@ -10840,30 +10565,13 @@ async function savePlanningDataFromAuswertung() {
     const year = parseInt(document.getElementById('planning-year-input').value);
 
     const success = await saveMonthlyPlanning(userId, monthName, year, ehGoal, etGoal);
-
     if (success) {
         // KORREKTUR: Cache leeren, damit die Änderungen sofort sichtbar sind.
         localStorage.removeItem(CACHE_PREFIX + 'monatsplanung');
         localStorage.removeItem(CACHE_PREFIX + 'infoplanung');
         await loadAllData(); // Lädt die Daten neu in den globalen `db`-Speicher.
         await auswertungViewInstance.renderPlanungen(); // Rendert die Planungs-Tabelle in der Auswertung neu.
-
-        // NEU: Visuelles Feedback exakt wie beim Termin-Speichern
-        if (saveBtnText) saveBtnText.textContent = 'Gespeichert!';
-        if (saveBtnLoader) saveBtnLoader.classList.add('hidden');
-        if (saveBtnText) saveBtnText.classList.remove('hidden');
-        saveBtn.classList.remove('bg-skt-blue', 'hover:bg-skt-blue-light');
-        saveBtn.classList.add('bg-skt-green-accent');
-
-        setTimeout(() => {
-            closePlanningModal();
-        }, 1500);
-    } else {
-        // Bei Fehler den Button direkt zurücksetzen
-        saveBtn.disabled = false;
-        if (saveBtnText) saveBtnText.classList.remove('hidden');
-        if (saveBtnLoader) saveBtnLoader.classList.add('hidden');
-        alert('Fehler beim Speichern der Planung.');
+        closePlanningModal();
     }
 }
 
@@ -11516,10 +11224,6 @@ function setupEventListeners() {
     // NEU: Blende die persönliche Karriere-Ansicht aus
     dom.employeeView.classList.add('hidden');
   });
-  dom.pqqView.addEventListener('click', () => {
-      dom.pqqDetailsContainer.classList.toggle('collapsed');
-      dom.pqqView.classList.toggle('expanded');
-  });
 
   dom.gridViewBtn.addEventListener("click", () => {
     if (currentLeadershipViewMode === "grid") return;
@@ -11623,6 +11327,11 @@ function setupEventListeners() {
     openAddUserModal();
   });
   dom.addUserForm.addEventListener("submit", (e) => { e.preventDefault(); saveNewUser(); });
+
+  dom.pqqView.addEventListener('click', () => {
+      dom.pqqDetailsContainer.classList.toggle('collapsed');
+      dom.pqqView.classList.toggle('expanded');
+  });
 
   // NEU: Zeitreise Event Listeners
   dom.timeTravelBtn.addEventListener('click', (e) => { e.preventDefault(); closeSettingsMenu(); openTimeTravelModal(); });
@@ -12151,67 +11860,48 @@ function getVerdienstForPosition(position) {
 }
 
 // NEU: Globale Funktion zur PQQ-Berechnung
-async function getSingleUserPQQ(userId, forMonth, forYear) {
-    // --- NEUE LOGIK: PQQ-Berechnung basierend auf dem letzten Infoabend-Zyklus ---
-    const today = new Date();
-    // 1. Finde den nächsten Infoabend, um den aktuellen Zyklus zu bestimmen.
-    const nextInfoDate = findNextInfoDateAfter(today);
-    // 2. Finde den Infoabend davor (das ist der abgeschlossene Zyklus, für den wir die PQQ berechnen).
-    const lastInfoDate = new Date(nextInfoDate.getTime() - 21 * 24 * 60 * 60 * 1000);
-    const lastInfoDateString = toLocalISOString(lastInfoDate).split('T')[0]; // KORREKTUR: Doppelte Deklaration entfernt
-
-    // 3. Finde den EH-Plan für den entsprechenden *Umsatz*-Monat, in den der letzte Infoabend fiel.
-    const { startDate: ehPlanStartDate } = getMonthlyCycleDatesForDate(lastInfoDate);
-    const ehPlanMonthName = ehPlanStartDate.toLocaleString("de-DE", { month: "long" });
-    const ehPlanYear = ehPlanStartDate.getFullYear();
-
+async function getSingleUserPQQ(userId) {
+    const { startDate, endDate } = getPreviousMonthlyCycleDates();
+    const prevMonthName = startDate.toLocaleString("de-DE", { month: "long" });
+    const prevYear = startDate.getFullYear();
     // Get EH plan
     const plan = db.monatsplanung.find(p => 
         p.Mitarbeiter_ID === userId &&
-        p.Monat === ehPlanMonthName &&
-        p.Jahr === ehPlanYear
+        p.Monat === prevMonthName &&
+        p.Jahr === prevYear
     );
     const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
-    
+
     // Get ET plan
-    const infoPlan = db.infoplanung.find(p => 
-        p.Mitarbeiter_ID === userId && 
-        p.Informationsabend && p.Informationsabend.startsWith(lastInfoDateString)
+    const prevMonthInfoPlan = db.infoplanung.find(p => 
+        p.Mitarbeiter_ID === userId &&
+        new Date(p.Informationsabend).getFullYear() === prevYear &&
+        new Date(p.Informationsabend).getMonth() === startDate.getMonth() // KORREKTUR: Prüft auf den Monat des Infoabends
     );
-    const ursprungszielET = infoPlan?.Ursprungsziel_ET || 0;
+    const ursprungszielET = prevMonthInfoPlan?.Ursprungsziel_ET || 0;
 
-    if (!plan && !infoPlan) {
-        return { pqq: 0, ehQuote: 0, etQuote: 0, prognose: 0 };
-    }
+    if (ursprungszielEH === 0 && ursprungszielET === 0) return { pqq: 100, ehQuote: 1, etQuote: 1 };
 
-    // Get actual EH from preloaded data
-    const ehCycleDates = getMonthlyCycleDatesForDate(lastInfoDate);
-    const actualEH = db.umsatz.filter(sale => 
-        sale.Mitarbeiter_ID === userId &&
-        sale.Datum && new Date(sale.Datum) >= ehCycleDates.startDate && new Date(sale.Datum) <= ehCycleDates.endDate
-    ).reduce((sum, sale) => sum + (sale.EH || 0), 0);
+    // KORREKTUR: Lade die Ist-EH für den Vormonat direkt per SQL.
+    const userName = findRowById('mitarbeiter', userId)?.Name;
+    const startDateIso = startDate.toISOString().split('T')[0];
+    const endDateIso = endDate.toISOString().split('T')[0];
+    const ehQuery = `SELECT SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID = '${escapeSql(userName)}' AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+    const ehResultRaw = await seaTableSqlQuery(ehQuery, true);
+    const actualEH = ehResultRaw?.[0]?.totalEH || 0;
     
     // Get actual ET
-    // Zähle alle ETs, die dem letzten Infoabend zugeordnet sind, unabhängig vom Status.
+    const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
     const actualET = db.termine.filter(t => 
-        t.Mitarbeiter_ID === userId && 
-        t.Kategorie === 'ET' && 
-        t.Infoabend && t.Infoabend.startsWith(lastInfoDateString)
+        t.Mitarbeiter_ID === userId && t.Kategorie === 'ET' && t.Datum &&
+        new Date(t.Datum) >= startDate && new Date(t.Datum) <= endDate &&
+        ET_STATUS_AUSGEMACHT.includes(t.Status)
     ).length;
 
     const ehQuote = (ursprungszielEH > 0) ? (actualEH / ursprungszielEH) : 1;
     const etQuote = (ursprungszielET > 0) ? (actualET / ursprungszielET) : 1;
     const pqq = ((ehQuote + etQuote) / 2) * 100;
-
-    // Prognose für den ausgewählten Monat
-    const selectedStartDate = new Date(forYear, forMonth, 1);
-    const selectedEndDate = new Date(forYear, forMonth + 1, 0);
-    const prognose = db.termine.filter(t => 
-        t.Mitarbeiter_ID === userId && t.Datum && new Date(t.Datum) >= selectedStartDate && new Date(t.Datum) <= selectedEndDate &&
-        (t.Kategorie === 'BT' || t.Kategorie === 'ST') &&
-        ['Ausgemacht', 'Weiterer BT', 'Verschoben', 'Offen'].includes(t.Status) &&
-        !t.Absage).reduce((sum, t) => sum + (t.Umsatzprognose || 0), 0);
-    return { pqq, ehQuote, etQuote, prognose };
+    return { pqq, ehQuote, etQuote };
 }
 
 // NEU: Globale Funktion zur KPI-Berechnung
@@ -12275,7 +11965,7 @@ async function getIndividualKpiData(user) {
     
     // KORREKTUR: `await` war hier zwingend erforderlich, da getSingleUserPQQ asynchron ist.
     log('Prüfe PQQ...');
-    const pqqData = await getSingleUserPQQ(user._id, new Date().getMonth(), new Date().getFullYear());
+    const pqqData = await getSingleUserPQQ(user._id);
     log('PQQ-Daten erhalten:', pqqData);
     if (pqqData && pqqData.pqq < 50) warnings.push(`PQQ unter 50% (${pqqData.pqq.toFixed(0)}%)`);
 
@@ -13044,8 +12734,8 @@ function _renderSinglePQQGauge(indicatorEl, valueDisplayEl, value) {
         console.warn('[PQQ_RENDER] Gauge-Elemente nicht gefunden.');
         return;
     }
-    const pqqClamped = Math.max(0, Math.min(value, 200));
-    const indicatorPosition = pqqClamped / 2; // Wandelt den Wert (0-200) in eine Prozentposition (0-100) um.
+    const pqqClamped = Math.max(60, Math.min(value, 140));
+    const indicatorPosition = ((pqqClamped - 60) / (140 - 60)) * 100;
     indicatorEl.style.left = `${indicatorPosition}%`;
     valueDisplayEl.style.left = `${indicatorPosition}%`;
     valueDisplayEl.textContent = `${value.toFixed(0)}%`;
@@ -13121,69 +12811,98 @@ async function calculateAndRenderPQQ(mitarbeiterId) {
     // 5. Render gauges
     _renderSinglePQQGauge(dom.pqqIndicator, dom.pqqValueDisplay, pqq);
     _renderSinglePQQGauge(dom.pqqEhIndicator, dom.pqqEhValueDisplay, ehQuote * 100);
-    // KORREKTUR: Die PQQ-Sektion wird jetzt auch in der persönlichen Ansicht angezeigt.
-    // Die Logik zum Ausblenden wird entfernt.
-    dom.pqqView.classList.remove('hidden');
-
     _renderSinglePQQGauge(dom.pqqEtIndicator, dom.pqqEtValueDisplay, etQuote * 100);
     pqqLog('Alle Gauges gerendert.');
 }
 
 // NEU: Berechnet und rendert die PQQ basierend auf der aktuellen Ansicht (Persönlich, Gruppe, Struktur)
 async function calculateAndRenderPQQForCurrentView() {
-    // 1. Bestimme die relevanten Mitarbeiter-IDs basierend auf der aktuellen Ansicht
+    const pqqLog = (message, ...data) => console.log(`%c[PQQ_VIEW] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
+    pqqLog('Starte PQQ-Berechnung für aktuelle Ansicht...');
+
+    // --- Caching Logic ---
+    const { startDate: prevMonthStartDate } = getPreviousMonthlyCycleDates();
+    const cachePeriodKey = `${prevMonthStartDate.getFullYear()}-${prevMonthStartDate.getMonth()}`;
+    let scopeKey;
+    if (isSuperuserView) {
+        scopeKey = 'superuser';
+    } else {
+        scopeKey = `${currentlyViewedUserData._id}-${currentPlanningView}`;
+    }
+    const cacheKey = `pqq-${cachePeriodKey}-${scopeKey}`;
+    const maxAgeMinutes = 30 * 24 * 60; // Cache für 30 Tage
+
+    const cachedPQQ = loadFromCache(cacheKey, maxAgeMinutes);
+    if (cachedPQQ) {
+        pqqLog(`PQQ-Daten aus dem Cache geladen für Key: ${cacheKey}`);
+        dom.pqqView.classList.remove('hidden');
+        _renderSinglePQQGauge(dom.pqqIndicator, dom.pqqValueDisplay, cachedPQQ.pqq);
+        _renderSinglePQQGauge(dom.pqqEhIndicator, dom.pqqEhValueDisplay, cachedPQQ.ehQuote * 100);
+        _renderSinglePQQGauge(dom.pqqEtIndicator, dom.pqqEtValueDisplay, cachedPQQ.etQuote * 100);
+        pqqLog('Alle Gauges aus dem Cache gerendert.');
+        return; // Berechnung hier beenden, da Daten aus dem Cache kamen
+    }
+    pqqLog(`Keine gültigen PQQ-Daten im Cache gefunden für Key: ${cacheKey}. Führe Neuberechnung durch.`);
+
     let userIds = [];
     const currentUser = currentlyViewedUserData;
-    const isLeader = isUserLeader(currentUser);
+    const isLeader = currentUser && currentUser.Karrierestufe ? !currentUser.Karrierestufe.toLowerCase().includes("trainee") : false;
 
+    // 1. Bestimme die relevanten Mitarbeiter-IDs basierend auf der aktuellen Ansicht
     if (isSuperuserView) {
         userIds = db.mitarbeiter.filter(m => m.Name && !m.Name.toLowerCase().startsWith("geschäftsstelle")).map(m => m._id);
+        pqqLog(`Superuser-Ansicht. Berechne PQQ für ${userIds.length} Mitarbeiter.`);
     } else if (!isLeader) {
         userIds = [currentUser._id];
+        pqqLog(`Trainee-Ansicht. Berechne PQQ für: ${currentUser.Name}`);
     } else {
         switch (currentPlanningView) {
             case 'personal':
                 userIds = [currentUser._id];
+                pqqLog(`Führungskraft-Ansicht (Persönlich). Berechne PQQ für: ${currentUser.Name}`);
                 break;
             case 'team':
                 const teamMembers = getSubordinates(currentUser._id, 'gruppe');
                 userIds = [currentUser._id, ...teamMembers.map(u => u._id)];
+                pqqLog(`Führungskraft-Ansicht (Gruppe). Berechne PQQ für ${userIds.length} Mitarbeiter.`);
                 break;
             case 'struktur':
                 const structureMembers = getAllSubordinatesRecursive(currentUser._id);
                 userIds = [currentUser._id, ...structureMembers.map(u => u._id)];
+                pqqLog(`Führungskraft-Ansicht (Struktur). Berechne PQQ für ${userIds.length} Mitarbeiter.`);
                 break;
             default:
                 userIds = [currentUser._id];
+                pqqLog(`Unbekannte Ansicht, Fallback auf Persönlich für: ${currentUser.Name}`);
         }
     }
 
     if (userIds.length === 0) {
+        pqqLog('Keine Mitarbeiter-IDs für die Berechnung gefunden. Blende PQQ aus.');
         dom.pqqView.classList.add('hidden');
         return;
     }
 
-    // 2. Ermittle den korrekten PQQ-Zyklus (letzter abgeschlossener Infoabend-Zyklus)
-    const today = new Date();
-    const nextInfoDate = findNextInfoDateAfter(today);
-    const lastInfoDate = new Date(nextInfoDate.getTime() - 21 * 24 * 60 * 60 * 1000);
-    const lastInfoDateString = toLocalISOString(lastInfoDate).split('T')[0];
-    const { startDate: ehPlanStartDate, endDate: ehPlanEndDate } = getMonthlyCycleDatesForDate(lastInfoDate);
-    const ehPlanMonthName = ehPlanStartDate.toLocaleString("de-DE", { month: "long" });
-    const ehPlanYear = ehPlanStartDate.getFullYear();
-    
-    // 3. Hole Plandaten für den ermittelten Zyklus
+    // 2. Hole Plandaten für den Vormonat
+    const { startDate, endDate } = getPreviousMonthlyCycleDates();
+    const startDateIso = startDate.toISOString().split('T')[0];
+    const endDateIso = endDate.toISOString().split('T')[0];
+    const prevMonthName = startDate.toLocaleString("de-DE", { month: "long" });
+    const prevYear = startDate.getFullYear();
+    pqqLog(`PQQ-Zeitraum: ${startDateIso} bis ${endDateIso} (${prevMonthName} ${prevYear})`);
+    pqqLog('Suche Plandaten in `db.monatsplanung` (insgesamt ' + db.monatsplanung.length + ' Einträge).');
+    const relevantInfoPlans = db.infoplanung.filter(p => userIds.includes(p.Mitarbeiter_ID) && new Date(p.Informationsabend).getFullYear() === prevYear && new Date(p.Informationsabend).getMonth() === startDate.getMonth());
     const relevantPlans = db.monatsplanung.filter(p =>
         userIds.includes(p.Mitarbeiter_ID) &&
-        p.Monat === ehPlanMonthName &&
-        p.Jahr === ehPlanYear
+        p.Monat === prevMonthName &&
+        p.Jahr === prevYear
     );
-    const relevantInfoPlans = db.infoplanung.filter(p =>
-        userIds.includes(p.Mitarbeiter_ID) &&
-        p.Informationsabend && p.Informationsabend.startsWith(lastInfoDateString)
-    );
-    
+
     if (relevantPlans.length === 0 && relevantInfoPlans.length === 0) {
+        pqqLog('FEHLER: Keine Plandaten für den Vormonat in der ausgewählten Ansicht gefunden. PQQ-Ansicht wird ausgeblendet.');
+        const usersWithPlans = new Set(db.monatsplanung.filter(p => p.Monat === prevMonthName && p.Jahr === prevYear).map(p => p.Mitarbeiter_ID));
+        const usersWithoutPlans = userIds.filter(id => !usersWithPlans.has(id));
+        pqqLog('Mitarbeiter in der Ansicht, für die kein Plan gefunden wurde:', usersWithoutPlans.map(id => findRowById('mitarbeiter', id)?.Name || `ID: ${id}`));
         dom.pqqView.classList.add('hidden');
         return;
     }
@@ -13191,57 +12910,61 @@ async function calculateAndRenderPQQForCurrentView() {
     dom.pqqView.classList.remove('hidden');
     const totalUrsprungszielEH = relevantPlans.reduce((sum, p) => sum + (p.Ursprungsziel_EH || 0), 0);
     const totalUrsprungszielET = relevantInfoPlans.reduce((sum, p) => sum + (p.Ursprungsziel_ET || 0), 0);
+    pqqLog(`Plandaten gefunden (${relevantPlans.length} Einträge): Gesamt-EH-Ziel=${totalUrsprungszielEH}, Gesamt-ET-Ziel=${totalUrsprungszielET}`);
 
-    // 4. Hole Ist-Daten für den ermittelten Zyklus
-    // FINALE KORREKTUR: Anstatt aus dem globalen Cache zu filtern, wird eine gezielte SQL-Abfrage
-    // für den PQQ-Zeitraum ausgeführt. Dies stellt sicher, dass die Daten konsistent und korrekt
-    // gefiltert sind (z.B. ohne Capitalbank-Umsätze).
-    const userNamesForSql = userIds.map(id => findRowById('mitarbeiter', id)?.Name).filter(Boolean);
-    let totalEH = 0;
-    if (userNamesForSql.length > 0) {
-        const userNamesSqlString = userNamesForSql.map(name => `'${escapeSql(name)}'`).join(',');
-        const capitalbank = db.gesellschaften.find(g => g.Gesellschaft === 'Capitalbank');
-        const capitalbankId = capitalbank ? capitalbank._id : null;
-        let capitalbankFilter = '';
-        if (capitalbankId) {
-            capitalbankFilter = ` AND NOT (\`Gesellschaft_ID\` IS NOT NULL AND \`Gesellschaft_ID\` LIKE '%${capitalbankId}%')`;
-        }
-        const ehQuery = `SELECT SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID IN (${userNamesSqlString}) AND Datum >= '${toLocalISOString(ehPlanStartDate)}' AND Datum <= '${toLocalISOString(ehPlanEndDate)}'${capitalbankFilter}`;
-        const ehResultRaw = await seaTableSqlQuery(ehQuery, true);
-        totalEH = ehResultRaw?.[0]?.totalEH || 0;
+    // 3. Hole Ist-Daten für den Vormonat
+    const mitarbeiterNames = userIds.map(id => findRowById('mitarbeiter', id)?.Name).filter(Boolean);
+    if (mitarbeiterNames.length === 0) {
+        pqqLog('Keine gültigen Mitarbeiter für die SQL-Abfrage gefunden.');
+        dom.pqqView.classList.add('hidden');
+        return;
     }
+    const mitarbeiterNamesSql = mitarbeiterNames.map(name => `'${escapeSql(name)}'`).join(',');
 
-    const totalETAusgemacht = db.termine.filter(t => 
-        userIds.includes(t.Mitarbeiter_ID) && 
-        t.Kategorie === 'ET' && 
-        t.Infoabend && t.Infoabend.startsWith(lastInfoDateString)
-    ).length;
+    const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+    const etStatusSql = ET_STATUS_AUSGEMACHT.map(s => `'${escapeSql(s)}'`).join(',');
 
-    // 5. Berechne PQQ-Teile
-    // KORREKTUR: Wenn das ET-Ziel 0 ist, soll die PQQ nur die EH-Quote widerspiegeln.
+    const ehQuery = `SELECT SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID IN (${mitarbeiterNamesSql}) AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+    const etQuery = `SELECT _id FROM Termine WHERE Mitarbeiter_ID IN (${mitarbeiterNamesSql}) AND Kategorie = 'ET' AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}' AND Status IN (${etStatusSql})`;
+
+    // NEU: Zusätzliches Logging für SQL-Abfragen und Kriterien
+    pqqLog('Sende SQL-Abfrage für IST-EH:', ehQuery);
+    pqqLog('Sende SQL-Abfrage für IST-ET (direkt gefiltert):', etQuery);
+
+    const [ehResultRaw, etResultRaw] = await Promise.all([
+        seaTableSqlQuery(ehQuery, true),
+        seaTableSqlQuery(etQuery, true)
+    ]);
+
+    const totalEH = ehResultRaw?.[0]?.totalEH || 0;
+    const totalETAusgemacht = etResultRaw ? etResultRaw.length : 0;
+    pqqLog(`Ist-Werte ermittelt: Total EH=${totalEH}, Total ET Ausgemacht=${totalETAusgemacht}`);
+
+    // 4. Berechne PQQ-Teile
+    // KORREKTUR: Formel ist Ist / Ziel
     const ehQuote = (totalUrsprungszielEH > 0) ? (totalEH / totalUrsprungszielEH) : (totalUrsprungszielEH === 0 ? 1 : 0);
-    let etQuote = null;
-    let pqq;
 
-    if (totalUrsprungszielET > 0) {
-        etQuote = totalETAusgemacht / totalUrsprungszielET;
-        pqq = ((ehQuote + etQuote) / 2) * 100;
-    } else {
-        pqq = ehQuote * 100;
-    }
+    // KORREKTUR: Formel ist Ist / Ziel
+    const etQuote = (totalUrsprungszielET > 0) ? (totalETAusgemacht / totalUrsprungszielET) : (totalUrsprungszielET === 0 ? 1 : 0);
 
-    // 6. Rendere die Gauges
+    const pqq = ((ehQuote + etQuote) / 2) * 100;
+    pqqLog(`Einzelquoten berechnet: EH-Quote=${(ehQuote * 100).toFixed(2)}%, ET-Quote=${(etQuote * 100).toFixed(2)}%`);
+    pqqLog(`Gesamt-PQQ berechnet: ${pqq.toFixed(2)}%`);
+
+    // NEU: PQQ-Daten im Cache speichern
+    const pqqDataToCache = {
+        pqq: pqq,
+        ehQuote: ehQuote,
+        etQuote: etQuote
+    };
+    saveToCache(cacheKey, pqqDataToCache);
+    pqqLog('PQQ-Daten im Cache gespeichert.', pqqDataToCache);
+
+    // 5. Rendere die Gauges
     _renderSinglePQQGauge(dom.pqqIndicator, dom.pqqValueDisplay, pqq);
     _renderSinglePQQGauge(dom.pqqEhIndicator, dom.pqqEhValueDisplay, ehQuote * 100);
-    if (etQuote !== null) {
-        _renderSinglePQQGauge(dom.pqqEtIndicator, dom.pqqEtValueDisplay, etQuote * 100);
-    } else {
-        // Verstecke das ET-Gauge, wenn kein Ziel vorhanden ist.
-        dom.pqqEtIndicator.style.left = '50%';
-        dom.pqqEtValueDisplay.style.left = '50%';
-        dom.pqqEtValueDisplay.textContent = 'Kein Ziel';
-    }
-    dom.pqqView.classList.remove('hidden'); // Sicherstellen, dass es sichtbar ist
+    _renderSinglePQQGauge(dom.pqqEtIndicator, dom.pqqEtValueDisplay, etQuote * 100);
+    pqqLog('Alle Gauges gerendert.');
 }
 
 // --- NEU: Strukturbaum View Logic ---
@@ -14736,12 +14459,6 @@ function openPlanningModal(preselectOptions = null) {
         loadPlanningDataForSelection();
     }
 
-    // KORREKTUR: Event-Listener für die Modal-Buttons hier hinzufügen,
-    // damit sie immer funktionieren, egal von wo das Modal geöffnet wird.
-    const planningModal = document.getElementById('planning-modal');
-    planningModal.querySelector('#cancel-planning-btn').addEventListener('click', closePlanningModal);
-    planningModal.querySelector('#cancel-planning-btn-2').addEventListener('click', closePlanningModal);
-
     dom.planningModal.classList.add('visible');
     document.body.classList.add('modal-open');
 }
@@ -14779,21 +14496,6 @@ function loadPlanningDataForSelection() {
 function closePlanningModal() {
     dom.planningModal.classList.remove('visible');
     document.body.classList.remove('modal-open');
-    document.documentElement.classList.remove('modal-open');
-
-    // KORREKTUR: Setzt den Speicher-Button zuverlässig in den Standardzustand zurück,
-    // wenn das Modal geschlossen wird, genau wie beim Termin-Modal.
-    const saveBtn = document.getElementById('planning-form').querySelector('button[type="submit"]');
-    if (saveBtn) {
-        const saveBtnText = saveBtn.querySelector('span');
-        saveBtn.disabled = false;
-        if (saveBtnText) saveBtnText.textContent = 'Planung speichern';
-        saveBtn.classList.remove('bg-skt-green-accent');
-        saveBtn.classList.add('bg-skt-blue', 'hover:bg-skt-blue-light');
-        // Stelle sicher, dass der Loader versteckt und der Text sichtbar ist.
-        saveBtn.querySelector('.loader-small')?.classList.add('hidden');
-        saveBtnText?.classList.remove('hidden');
-    }
 }
 
 async function saveMonthlyPlanning(userId, monthName, year, ehGoal, etGoal) {
@@ -16132,16 +15834,14 @@ class PlanungView {
 
     async _renderKPIs(userId) {
         const user = findRowById('mitarbeiter', userId);
-        // KORREKTUR: 'today' wird hier deklariert, damit es in der gesamten Funktion verfügbar ist.
-        const today = new Date();
     
         // --- PQQ ---
-        // KORREKTUR: Die PQQ wird jetzt aus den globalen `personalData` geholt, die von der
-        // Dashboard-Berechnung (`calculateAndRenderPQQForCurrentView`) befüllt werden.
-        // Dies stellt sicher, dass der Wert immer mit dem Dashboard übereinstimmt.
-        document.getElementById('planung-kpi-pqq').textContent = `${(personalData.pqq || 0).toFixed(0)}%`;
-
-        const sixtyDaysAgo = new Date(today); // Kopie erstellen
+        const pqqData = await getSingleUserPQQ(userId);
+        const pqqValue = pqqData ? pqqData.pqq : 0;
+        document.getElementById('planung-kpi-pqq').textContent = `${pqqValue.toFixed(0)}%`;
+    
+        const today = new Date();
+        const sixtyDaysAgo = new Date();
         sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
     
         const userAppointments = db.termine.filter(t => t.Mitarbeiter_ID === userId && t.Datum && new Date(t.Datum) >= sixtyDaysAgo);
