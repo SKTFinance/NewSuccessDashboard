@@ -91,7 +91,6 @@ let checkinTimerInterval = null; // NEU: Intervall für den Check-in-Timer
 let lastCheckinDateCheck = null; // NEU: Datum der letzten Check-in-Prüfung
 // --- NEU: Gekapselte Instanzen für jede Ansicht ---
 let appointmentsViewInstance = null;
-let pendingAppointmentsMobileFocus = false;
 let timeTravelDate = null; // NEU
 let currentOnboardingSubView = "leader-list"; // Wird von der Einarbeitungslogik verwaltet
 
@@ -1371,47 +1370,14 @@ function _escapeHtml(str) {
 }
 
 function saveToCache(key, data) {
-  const namespacedKey = CACHE_PREFIX + key;
-  const buildPayload = () => JSON.stringify({ timestamp: Date.now(), data });
-
-  const attemptSet = (payload) => {
-    localStorage.setItem(namespacedKey, payload);
-  };
-
-  const payload = buildPayload();
-
   try {
-    attemptSet(payload);
-    return;
+    const item = {
+      timestamp: new Date().getTime(),
+      data: data,
+    };
+    localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(item));
   } catch (e) {
-    if (!isQuotaExceededError(e)) {
-      console.error("Fehler beim Speichern im Cache", e);
-      return;
-    }
-  }
-
-  console.warn("Speicherlimit erreicht. Entferne ältere Cache-Einträge …");
-  pruneCacheEntries(namespacedKey, 10);
-
-  try {
-    attemptSet(buildPayload());
-    console.info("Cache-Eintrag nach Bereinigung erfolgreich gespeichert:", namespacedKey);
-    return;
-  } catch (retryError) {
-    if (!isQuotaExceededError(retryError)) {
-      console.error("Cache konnte nach Bereinigung nicht gespeichert werden.", retryError);
-      return;
-    }
-  }
-
-  console.warn("Cache weiterhin voll. Lösche alle Cache-Einträge für dieses Dashboard …");
-  clearWholeCacheNamespace();
-
-  try {
-    attemptSet(buildPayload());
-    console.info("Cache-Eintrag nach vollständiger Bereinigung gespeichert:", namespacedKey);
-  } catch (finalError) {
-    console.error("Cache konnte auch nach vollständiger Bereinigung nicht gespeichert werden. Speichere nicht.", finalError);
+    console.error("Fehler beim Speichern im Cache", e);
   }
 }
 
@@ -1426,58 +1392,6 @@ function loadFromCache(key, maxAgeMinutes = 60) {
   } catch (e) {
     return null;
   }
-}
-
-function isQuotaExceededError(error) {
-  if (!error) return false;
-  if (error.code && error.code === 22) return true;
-  if (error.name && (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED')) return true;
-  if (typeof error.message === 'string' && error.message.includes('quota')) return true;
-  return false;
-}
-
-function pruneCacheEntries(excludeKey, maxRemovals = 5) {
-  const cacheEntries = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (!key || !key.startsWith(CACHE_PREFIX)) continue;
-    if (key === excludeKey) continue;
-    try {
-      const parsed = JSON.parse(localStorage.getItem(key));
-      cacheEntries.push({
-        key,
-        timestamp: parsed?.timestamp || 0
-      });
-    } catch (_ignored) {
-      cacheEntries.push({ key, timestamp: 0 });
-    }
-  }
-
-  // Sort by oldest first
-  cacheEntries.sort((a, b) => a.timestamp - b.timestamp);
-
-  let removals = 0;
-  for (const entry of cacheEntries) {
-    localStorage.removeItem(entry.key);
-    removals++;
-    if (removals >= maxRemovals) break;
-  }
-
-  if (removals === 0 && excludeKey) {
-    // As a last resort, drop the existing value for the same key.
-    localStorage.removeItem(excludeKey);
-  }
-}
-
-function clearWholeCacheNamespace() {
-  const keysToRemove = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && key.startsWith(CACHE_PREFIX)) {
-      keysToRemove.push(key);
-    }
-  }
-  keysToRemove.forEach(key => localStorage.removeItem(key));
 }
 
 function getCacheItemInfo(key) {
@@ -1680,13 +1594,6 @@ function saveUiSetting(key, value) {
 function loadUiSetting(key, defaultValue) {
     const settings = getUiSettings();
     return settings[key] !== undefined ? settings[key] : defaultValue;
-}
-
-function formatDateYMD(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
 }
 
 // NEU: Generische Funktion für das Bestätigungs-Modal
@@ -4747,9 +4654,6 @@ class AppointmentsView {
         this.statsWeekView = null;
         this.weekCalendarContainer = null;
         this.weekCalendarScrollContainer = null;
-        this.weekCalendarTimeLabelsContainer = null;
-        this.forceWeekView = false;
-        this.isMobileWeekCalendar = false;
 
         this.weekPeriodDisplay = null; // NEU: Wochenkalender-Ansicht
         this.statsPeriodDisplay = null; // Beibehalten für die Wochenanzeige
@@ -4804,17 +4708,6 @@ class AppointmentsView {
         this.savedCategoryFilter = loadUiSetting('appointmentsCategoryFilter', defaultCategories);
         this.savedShowCancelled = loadUiSetting('appointmentsShowCancelled', false);
         this.savedShowHeld = loadUiSetting('appointmentsShowHeld', true); // Standardmäßig jetzt true
-    }
-
-    _formatDateTimeForInput(date) {
-        const local = new Date(date);
-        if (Number.isNaN(local.getTime())) return '';
-        const year = local.getFullYear();
-        const month = String(local.getMonth() + 1).padStart(2, '0');
-        const day = String(local.getDate()).padStart(2, '0');
-        const hours = String(local.getHours()).padStart(2, '0');
-        const minutes = String(local.getMinutes()).padStart(2, '0');
-        return `${year}-${month}-${day}T${hours}:${minutes}`;
     }
 
     _saveCategoryFilters() {
@@ -5338,9 +5231,6 @@ class AppointmentsView {
         this.statsTableView.classList.toggle('hidden', view !== 'table');
         this.statsWeekView.classList.toggle('hidden', view !== 'week'); // NEU
         this.naechstesInfoView.classList.toggle('hidden', view !== 'info');
-        if (view !== 'week') {
-            this.forceWeekView = false;
-        }
 
         // NEU: Hauptfilter-Maske ausblenden, wenn die Info-Ansicht aktiv ist.
         if (this.mainFilterContainer) {
@@ -5739,24 +5629,10 @@ class AppointmentsView {
         // Initialer Render-Bereich: 2 Wochen vor und 4 Wochen nach heute
         const today = new Date(getCurrentDate());
         today.setHours(0, 0, 0, 0);
-        let initialStartDate;
-        let initialEndDate;
-
-        if (this.isMobileWeekCalendar) {
-            const weekStart = new Date(today);
-            const dayOffset = (weekStart.getDay() + 6) % 7; // Montag als Wochenstart
-            weekStart.setDate(weekStart.getDate() - dayOffset);
-            weekStart.setHours(0, 0, 0, 0);
-            const weekEnd = new Date(weekStart);
-            weekEnd.setDate(weekStart.getDate() + 6);
-            initialStartDate = weekStart;
-            initialEndDate = weekEnd;
-        } else {
-            initialStartDate = new Date(today);
-            initialStartDate.setDate(today.getDate() - 14);
-            initialEndDate = new Date(today);
-            initialEndDate.setDate(today.getDate() + 28);
-        }
+        const initialStartDate = new Date(today);
+        initialStartDate.setDate(today.getDate() - 14);
+        const initialEndDate = new Date(today);
+        initialEndDate.setDate(today.getDate() + 28);
 
         this.calendarStartDate = initialStartDate;
         this.calendarEndDate = initialEndDate;
@@ -5883,16 +5759,14 @@ class AppointmentsView {
         if (appointmentsForDay.length === 0) {
             const noAppointmentsEl = document.createElement('div');
             noAppointmentsEl.className = 'absolute inset-x-0 top-1/3 text-center text-gray-500';
-            noAppointmentsEl.style.pointerEvents = 'none';
             noAppointmentsEl.innerHTML = '<p>Keine Termine für diesen Tag.</p>';
             timelineContainer.appendChild(noAppointmentsEl);
         }
 
         const layout = this._calculateOverlaps(appointmentsForDay); // Überlappungen berechnen
-        const timelineWidth = timelineContainer.getBoundingClientRect().width;
-
+    
         layout.forEach(({ termin, column, totalColumns }) => {
-            const terminEl = this._createMobileAppointmentElement(termin, column, totalColumns, timelineWidth);
+            const terminEl = this._createMobileAppointmentElement(termin, column, totalColumns);
             timelineContainer.appendChild(terminEl);
         });
     
@@ -5920,52 +5794,6 @@ class AppointmentsView {
             }
             scrollContainer.scrollTo({ top: targetPosition, behavior: 'smooth' });
         }, 100);
-
-        let mobilePointerState = null;
-        timelineContainer.onpointerdown = (event) => {
-            if ((event.pointerType === 'mouse' && event.button !== 0) || (event.pointerType === 'touch' && event.button !== undefined && event.button !== 0)) return;
-            const rect = timelineContainer.getBoundingClientRect();
-            if (event.clientY < rect.top || event.clientY > rect.bottom) return;
-            mobilePointerState = {
-                id: event.pointerId,
-                x: event.clientX,
-                y: event.clientY,
-                moved: false,
-            };
-        };
-        timelineContainer.onpointermove = (event) => {
-            if (!mobilePointerState || mobilePointerState.id !== event.pointerId) return;
-            if (Math.abs(event.clientX - mobilePointerState.x) > 6 || Math.abs(event.clientY - mobilePointerState.y) > 6) {
-                mobilePointerState.moved = true;
-            }
-        };
-        timelineContainer.onpointerup = (event) => {
-            if (!mobilePointerState || mobilePointerState.id !== event.pointerId) {
-                mobilePointerState = null;
-                return;
-            }
-            const rect = timelineContainer.getBoundingClientRect();
-            const wasMove = mobilePointerState.moved;
-            mobilePointerState = null;
-            if (wasMove) return;
-            if (event.target.closest('.mobile-appointment-block') || event.target.closest('.mobile-now-indicator')) return;
-            if (rect.height <= 0) return;
-
-            const scrollTop = timelineContainer.scrollTop;
-            const scrollHeight = timelineContainer.scrollHeight;
-            let offsetY = event.clientY - rect.top + scrollTop;
-            offsetY = Math.max(0, Math.min(scrollHeight, offsetY));
-            const minutes = Math.min(23 * 60 + 30, Math.round(offsetY / 30) * 30);
-            const startDate = new Date(day);
-            startDate.setHours(0, 0, 0, 0);
-            startDate.setMinutes(minutes);
-            event.preventDefault();
-            event.stopPropagation();
-            this._openCreateModalAt(startDate);
-        };
-        timelineContainer.onpointercancel = () => {
-            mobilePointerState = null;
-        };
     }
 
     _navigateSingleDay(days) {
@@ -6017,16 +5845,10 @@ class AppointmentsView {
 
         // Update container width
         const totalDays = this.calendarRenderedDays.size;
-        if (this.isMobileWeekCalendar) {
-            this.weekCalendarContainer.style.width = '100%';
-            headerGrid.style.gridTemplateColumns = `repeat(${totalDays}, minmax(0, 1fr))`;
-            bodyGrid.style.gridTemplateColumns = `repeat(${totalDays}, minmax(0, 1fr))`;
-        } else {
-            const dayWidth = 250; // Breite einer Tages-Spalte in px
-            this.weekCalendarContainer.style.width = `${60 + totalDays * dayWidth}px`;
-            headerGrid.style.gridTemplateColumns = `repeat(${totalDays}, ${dayWidth}px)`;
-            bodyGrid.style.gridTemplateColumns = `repeat(${totalDays}, ${dayWidth}px)`;
-        }
+        const dayWidth = 250; // Breite einer Tages-Spalte in px
+        this.weekCalendarContainer.style.width = `${60 + totalDays * dayWidth}px`;
+        headerGrid.style.gridTemplateColumns = `repeat(${totalDays}, ${dayWidth}px)`;
+        bodyGrid.style.gridTemplateColumns = `repeat(${totalDays}, ${dayWidth}px)`;
     }
 
     _createDayColumn(day, appointments) {
@@ -6048,48 +5870,10 @@ class AppointmentsView {
                 const slot = document.createElement('div');
                 slot.className = 'week-calendar-time-slot h-full'; // h-full für Grid-Layout
                 slot.style.height = `${this.weekCalendarSlotHeight}px`;
-                slot.dataset.startMinutes = (hour * 60 + minute).toString();
                 if (minute === 0) slot.classList.add('full-hour');
                 dayCol.appendChild(slot);
             }
         }
-
-        let pointerState = null;
-        dayCol.addEventListener('pointerdown', (event) => {
-            if ((event.pointerType === 'mouse' && event.button !== 0) || event.pointerType === 'touch' && event.button !== undefined && event.button !== 0) return;
-            pointerState = {
-                id: event.pointerId,
-                x: event.clientX,
-                y: event.clientY,
-                moved: false,
-                type: event.pointerType
-            };
-        });
-        dayCol.addEventListener('pointermove', (event) => {
-            if (!pointerState || pointerState.id !== event.pointerId) return;
-            if (Math.abs(event.clientX - pointerState.x) > 6 || Math.abs(event.clientY - pointerState.y) > 6) {
-                pointerState.moved = true;
-            }
-        });
-        dayCol.addEventListener('pointerup', (event) => {
-            if (!pointerState || pointerState.id !== event.pointerId) return;
-            const slotEl = event.target.closest('.week-calendar-time-slot');
-            if (!slotEl || pointerState.moved) {
-                pointerState = null;
-                return;
-            }
-            if (slotEl.closest('.week-calendar-appointment')) {
-                pointerState = null;
-                return;
-            }
-            event.preventDefault();
-            event.stopPropagation();
-            this._handleEmptySlotSelection(slotEl, day);
-            pointerState = null;
-        });
-        dayCol.addEventListener('pointercancel', () => {
-            pointerState = null;
-        });
 
         // Termine für diesen Tag platzieren
         const dayAppointments = appointments.filter(t => t.Datum && new Date(t.Datum).toDateString() === day.toDateString());
@@ -6105,24 +5889,6 @@ class AppointmentsView {
         this._setupNewAppointmentCreation(dayCol);
 
         return dayCol;
-    }
-
-    _handleEmptySlotSelection(slotElement, day) {
-        const startMinutes = parseInt(slotElement.dataset.startMinutes, 10);
-        if (Number.isNaN(startMinutes)) return;
-
-        const startDate = new Date(day);
-        startDate.setHours(0, 0, 0, 0);
-        startDate.setMinutes(startMinutes);
-        this._openCreateModalAt(startDate);
-    }
-
-    _openCreateModalAt(date) {
-        this.openModal(null);
-        const dateInput = this.form?.querySelector('#appointment-date');
-        if (dateInput) {
-            dateInput.value = this._formatDateTimeForInput(date);
-        }
     }
 
     _setupNewAppointmentCreation(dayColumn) {
@@ -6489,141 +6255,6 @@ class AppointmentsView {
     }
 
 
-    _setupAppointmentInteractions(element, termin) { // KORREKTUR: Die Logik für Drag & Drop und Resize wird hier implementiert.
-        let placeholder = null;
-        let isDragging = false;
-        let isResizing = false;
-        let startY, startTop, startHeight;
-
-        element.addEventListener('mousedown', (e) => {
-            // Klick auf den unteren Rand (letzte 10px) startet die Größenänderung
-            if (e.offsetY > element.clientHeight - 10) {
-                isResizing = true;
-                document.body.style.cursor = 'ns-resize';
-            } else {
-                isDragging = true;
-                document.body.style.cursor = 'grabbing'; // Feedback für den Nutzer
-            }
-
-            e.stopPropagation(); // Verhindert, dass ein neuer Termin erstellt wird
-
-            startY = e.clientY;
-            startTop = element.offsetTop;
-            startHeight = element.offsetHeight;
-
-            // Visuellen Platzhalter für die neue Position/Größe erstellen
-            placeholder = document.createElement('div');
-            placeholder.className = 'week-calendar-appointment-placeholder';
-            placeholder.style.top = `${startTop}px`;
-            placeholder.style.height = `${startHeight}px`;
-            placeholder.style.left = element.style.left;
-            placeholder.style.width = element.style.width;
-            element.parentElement.appendChild(placeholder);
-            element.style.opacity = '0.5'; // Original-Termin ausblenden
-
-            // KORREKTUR: Die Logik zum Verschieben zwischen Tagen wurde hinzugefügt.
-            // Der Platzhalter wird jetzt an die Mausposition gehängt, um freies Verschieben zu ermöglichen.
-            placeholder.style.position = 'fixed'; // Position relativ zum Viewport
-            placeholder.style.pointerEvents = 'none'; // Lässt Maus-Events durch
-            const onMouseMove = (moveEvent) => {
-                const deltaY = moveEvent.clientY - startY;
-
-                if (isResizing) {
-                    // Höhe des Platzhalters anpassen, Mindesthöhe ist ein halber Slot (15 Min)
-                    const newHeight = Math.max(this.weekCalendarSlotHeight / 2, startHeight + deltaY);
-                    placeholder.style.height = `${newHeight}px`;
-                } else if (isDragging) {
-                    // KORREKTUR: Der Platzhalter folgt jetzt der Maus und rastet in der Zielspalte ein,
-                    // was ein konsistentes visuelles Feedback gibt.
-                    const targetCol = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY).closest('.week-calendar-day-col');
-                    if (targetCol) {
-                        const colRect = targetCol.getBoundingClientRect();
-                        placeholder.style.top = `${moveEvent.clientY - e.offsetY}px`;
-                        placeholder.style.left = `${colRect.left}px`;
-                        placeholder.style.width = `${colRect.width}px`; // KORREKTUR: Breite an die Zielspalte anpassen.
-                    }
-                }
-            };
-
-            const onMouseUp = async (upEvent) => {
-                document.body.style.cursor = 'default';
-                // Event-Listener wieder entfernen, um Speicherlecks zu vermeiden
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', onMouseUp);
-
-                // KORREKTUR: Platzhalter wieder in den normalen Fluss einfügen und ausblenden.
-                element.style.opacity = '1';
-                if (placeholder) placeholder.remove();
-
-                const deltaY = upEvent.clientY - startY;
-                // KORREKTUR: Prüfe auf X- und Y-Bewegung. Wenn kaum Bewegung, als Klick behandeln.
-                if (Math.abs(deltaY) < 5 && Math.abs(upEvent.clientX - e.clientX) < 5) {
-                    this.openModal(termin);
-                    isDragging = isResizing = false;
-                    return; // KORREKTUR: Fehlendes 'return' hinzugefügt, um die Funktion hier zu beenden.
-                }
-
-                let newDate = new Date(termin.Datum);
-                let newDurationInSeconds = termin.Dauer || 3600;
-
-                if (isResizing) {
-                    // Neue Dauer aus der Höhe des Platzhalters berechnen
-                    const newHeight = Math.max(this.weekCalendarSlotHeight / 2, startHeight + deltaY);
-                    // Dauer auf das nächste 15-Minuten-Raster runden
-                    const newDurationInMinutes = Math.round((newHeight / this.weekCalendarSlotHeight) * 30 / 15) * 15;
-                    newDurationInSeconds = newDurationInMinutes * 60;
-                } else if (isDragging) {
-                    // KORREKTUR: Finde die Ziel-Spalte und berechne das neue Datum.
-                    const targetColumn = document.elementFromPoint(upEvent.clientX, upEvent.clientY).closest('.week-calendar-day-col');
-                    if (targetColumn) {
-                        // KORREKTUR: Das Datum wird jetzt aus dem `YYYY-MM-DD`-String geparst und als lokales Datum erstellt,
-                        // um Zeitzonenfehler zu vermeiden. `new Date(YYYY, MM, DD)` ist zeitzonensicher.
-                        const targetDateString = targetColumn.dataset.date;
-                        const [year, month, day] = targetDateString.split('-').map(Number);
-                        const targetDay = new Date(year, month - 1, day + 1, 20);
-
-
-                        // Berechne die neue Uhrzeit basierend auf der Y-Position innerhalb der Zielspalte.
-                        const colRect = targetColumn.getBoundingClientRect();
-                        const yInCol = upEvent.clientY - colRect.top;
-                        const { hours, minutes } = this._getTimeFromY(yInCol, true); // true = snap to grid
-
-                        newDate = new Date(targetDay.getFullYear(), targetDay.getMonth(), targetDay.getDate(), hours, minutes);
-                    } else {
-                        // Fallback: Wenn außerhalb einer Spalte losgelassen wird, keine Änderung.
-                        return;
-                    }
-                }
-
-                // Update in der Datenbank über die bestehende API-Funktion
-                // KORREKTUR: .toISOString() konvertiert in UTC. Um die korrekte lokale Zeit zu speichern,
-                // muss der Zeitzonen-Offset manuell korrigiert werden, bevor der String erzeugt wird.
-                const dateForApi = new Date(newDate.getTime() - (newDate.getTimezoneOffset() * 60000));
-
-                const success = await seaTableUpdateTermin(termin._id, {
-                    [COLUMN_MAPS.termine.Datum]: dateForApi.toISOString().slice(0, 19).replace('T', ' '),
-                    [COLUMN_MAPS.termine.Dauer]: newDurationInSeconds,
-                });
-
-                if (success) { // KORREKTUR: Die Logik zum Neuladen der Daten nach einem Update war fehlerhaft und führte zum Verschwinden des Termins.
-                    // Die korrekte Vorgehensweise ist, den Cache zu leeren, die Daten neu zu laden,
-                    // zu normalisieren und dann die Ansicht neu zu rendern.
-                    // Dies stellt sicher, dass der verschobene Termin sofort an der richtigen Stelle erscheint.
-                    localStorage.removeItem(`${CACHE_PREFIX}termine`);
-                    db.termine = await seaTableQuery('Termine'); // Lädt die Termine sofort neu.
-                    normalizeAllData(); // Normalisiert die neu geladenen Daten.
-                    await this.fetchAndRender(); // Rendert die Ansicht mit den frischen Daten.
-                } else {
-                    alert('Fehler beim Aktualisieren des Termins.');
-                }
-                isDragging = isResizing = false;
-            };
-
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-        });
-
-    }
     // NEU: Überarbeitete Funktion, um Terminblöcke für die mobile Timeline zu erstellen
     _createMobileAppointmentElement(termin, column, totalColumns) {
         const startDate = new Date(termin.Datum);
@@ -6642,7 +6273,7 @@ class AppointmentsView {
         // KORREKTUR: Die Farben sollen sich jetzt nach der Kategorie richten, nicht nach dem Status.
         const { bg: categoryBgClass, text: categoryTextColorClass } = this._getAppointmentColorClasses(termin, 'category');
         const mitarbeiterName = findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
-
+    
         const el = document.createElement('div');
         // KORREKTUR: Verwende die neuen Kategorie-Farben.
         el.className = `mobile-appointment-block absolute flex flex-col p-2 rounded-lg shadow-md overflow-hidden ${categoryBgClass}`;
@@ -8520,30 +8151,6 @@ async function loadAndInitAppointmentsView() {
     
     console.log('%c[Loader] %cInitializing appointments view instance...', 'color: orange; font-weight: bold;', 'color: black;');
     await appointmentsViewInstance.init(currentlyViewedUserData._id);
-
-    if (pendingAppointmentsMobileFocus) {
-      pendingAppointmentsMobileFocus = false;
-      try {
-        const isMobile = window.innerWidth < 768;
-        appointmentsViewInstance.forceWeekView = false;
-        appointmentsViewInstance._switchStatsView('week');
-        requestAnimationFrame(() => {
-          if (isMobile) {
-            const mobileContainer = document.getElementById('mobile-day-view-container');
-            if (mobileContainer?.scrollIntoView) {
-              mobileContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              return;
-            }
-          }
-          const weekHeader = document.querySelector('#stats-week-view .flex.flex-col');
-          if (weekHeader?.scrollIntoView) {
-            weekHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-        });
-      } catch (focusError) {
-        console.warn('[Appointments] Mobile focus on week view failed:', focusError);
-      }
-    }
   } catch (error) {
     console.error("Fehler beim Laden der Termin-Ansicht:", error);
     container.innerHTML = `<div class="text-center p-8 bg-red-50 rounded-lg border border-red-200"><i class="fas fa-exclamation-triangle fa-3x text-red-400 mb-4"></i><h3 class="text-xl font-bold text-skt-blue">Fehler beim Laden</h3><p class="text-red-600 mt-2">${error.message}</p><p class="text-gray-500 mt-4">Bitte stelle sicher, dass die Datei 'appointments.html' im selben Verzeichnis wie 'index.html' liegt.</p></div>`;
@@ -10722,27 +10329,15 @@ class AuswertungView {
             p.Jahr === prevYear
         );
 
-        const infoPlansForUser = db.infoplanung.filter(p =>
-            p.Mitarbeiter_ID === userId &&
-            p.Informationsabend &&
-            (() => {
-                const infoDate = new Date(p.Informationsabend);
-                return infoDate >= prevMonthStartDate && infoDate <= prevMonthEndDate;
-            })()
-        );
-
-        if (!plan && infoPlansForUser.length === 0) {
-            pqqLog(`Keine Plan- oder Info-Plan-Daten für ${user.Name} im ${prevMonthName} ${prevYear} gefunden.`);
-            alert(`Für ${user.Name} wurden keine Plan- oder Info-Plan-Daten im ${prevMonthName} ${prevYear} gefunden. PQQ kann nicht berechnet werden.`);
+        if (!plan) {
+            pqqLog(`Keine Plandaten für ${user.Name} im ${prevMonthName} ${prevYear} gefunden.`);
+            alert(`Für ${user.Name} wurden keine Plandaten im ${prevMonthName} ${prevYear} gefunden. PQQ kann nicht berechnet werden.`);
             return;
         }
 
         const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
-        const ursprungszielET = infoPlansForUser.reduce(
-            (sum, p) => sum + (p.Ursprungsziel_ET ?? p.ET_Ziel ?? 0),
-            0
-        );
-        pqqLog(`Plan-/Info-Daten (Ursprungsziel):`, { EH: ursprungszielEH, ET: ursprungszielET });
+        const ursprungszielET = plan?.Ursprungsziel_ET || 0;
+        pqqLog(`Plandaten (Ursprungsziel):`, { EH: ursprungszielEH, ET: ursprungszielET });
 
         // 3. Get actual data for previous month via SQL
         const mitarbeiterNameSql = `'${escapeSql(user.Name)}'`;
@@ -10758,58 +10353,6 @@ class AuswertungView {
         pqqLog(`Ist-Werte (Vormonat):`, { EH: totalEH, ET_Ausgemacht: totalETAusgemacht });
 
         // 4. Calculate PQQ parts
-        const ehQuote = (ursprungszielEH > 0) ? (totalEH / ursprungszielEH) : (ursprungszielEH === 0 ? 1 : 0);
-        pqqLog(`EH-Quote Berechnung: ${totalEH} (Ist) / ${ursprungszielEH} (Ziel) = ${ehQuote.toFixed(4)}`);
-        const etQuote = (ursprungszielET > 0) ? (totalETAusgemacht / ursprungszielET) : (ursprungszielET === 0 ? 1 : 0);
-        const includeEt = ursprungszielET > 0;
-        if (includeEt) {
-            pqqLog(`ET-Quote Berechnung: ${totalETAusgemacht} (Ist) / ${ursprungszielET} (Ziel) = ${etQuote.toFixed(4)}`);
-        } else {
-            pqqLog('ET-Ziel = 0. ET-Quote wird bei der Gesamt-PQQ nicht berücksichtigt.');
-        }
-        const { pqq, etConsidered } = computePqqScore(ehQuote, etQuote, includeEt);
-        if (etConsidered) {
-            pqqLog(`Gesamt-PQQ: ((${ehQuote.toFixed(4)} + ${etQuote.toFixed(4)}) / 2) * 100 = ${pqq.toFixed(2)}%`);
-        } else {
-            pqqLog(`Gesamt-PQQ: ${pqq.toFixed(2)}% (nur EH berücksichtigt, ET-Ziel 0)`);
-        }
-        const etAlertLine = etConsidered
-            ? `ET-Quote: ${(etQuote * 100).toFixed(0)}% (${totalETAusgemacht} Ist / ${ursprungszielET} Ziel)`
-            : 'ET-Quote: ET-Ziel 0 (nicht berücksichtigt)';
-        alert(`PQQ-Berechnung für ${user.Name}:\n\nEH-Quote: ${(ehQuote * 100).toFixed(0)}% (${totalEH} Ist / ${ursprungszielEH} Ziel)\n${etAlertLine}\n\nGesamt-PQQ: ${pqq.toFixed(0)}%\n\n(Details in der Entwicklerkonsole)`);
-    }
-
-    async logPQQCalculationForUser(userId, forMonth, forYear) {
-        const pqqLog = (message, ...data) => console.log(`%c[PQQ_Drilldown] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
-        const user = findRowById('mitarbeiter', userId);
-        if (!user) {
-            pqqLog(`User with ID ${userId} not found.`);
-            return;
-        }
-        pqqLog(`--- PQQ-Berechnung für: ${user.Name} (für ${forMonth + 1}/${forYear}) ---`);
-
-        // 1. Get previous month's dates
-        const { startDate, endDate } = getPreviousMonthlyCycleDatesForDate(new Date(forYear, forMonth, 15));
-        const prevMonthName = startDate.toLocaleString("de-DE", { month: "long" });
-        const prevYear = startDate.getFullYear();
-        const prevStartDateIso = toLocalISOString(startDate);
-        const prevEndDateIso = toLocalISOString(endDate);
-        pqqLog(`Berechnungszeitraum (Vormonat): ${prevStartDateIso} bis ${prevEndDateIso}`);
-
-        // 2. Get planning data from cache
-        const plan = db.monatsplanung.find(p => p.Mitarbeiter_ID === userId && p.Monat === prevMonthName && p.Jahr === prevYear);
-        const infoPlan = db.infoplanung.find(p => p.Mitarbeiter_ID === userId && new Date(p.Informationsabend).getFullYear() === prevYear && new Date(p.Informationsabend).getMonth() === startDate.getMonth());
-
-        const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
-        const ursprungszielET = infoPlan?.Ursprungsziel_ET || 0;
-        pqqLog(`Plandaten (Ursprungsziel):`, { EH: ursprungszielEH, ET: ursprungszielET });
-
-        // 3. Get actual data for previous month
-        const totalEH = db.umsatz.filter(u => u.Mitarbeiter_ID === userId && new Date(u.Datum) >= startDate && new Date(u.Datum) <= endDate).reduce((sum, u) => sum + (u.EH || 0), 0);
-        const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter", "Verschoben"];
-        const totalETAusgemacht = db.termine.filter(t => t.Mitarbeiter_ID === userId && t.Kategorie === 'ET' && t.Datum && new Date(t.Datum) >= startDate && new Date(t.Datum) <= endDate && ET_STATUS_AUSGEMACHT.includes(t.Status)).length;
-        pqqLog(`Ist-Werte (Vormonat):`, { EH: totalEH, ET_Ausgemacht: totalETAusgemacht });
-
         const ehQuote = (ursprungszielEH > 0) ? (totalEH / ursprungszielEH) : (ursprungszielEH === 0 ? 1 : 0);
         pqqLog(`EH-Quote Berechnung: ${totalEH} (Ist) / ${ursprungszielEH} (Ziel) = ${ehQuote.toFixed(4)}`);
         const etQuote = (ursprungszielET > 0) ? (totalETAusgemacht / ursprungszielET) : (ursprungszielET === 0 ? 1 : 0);
@@ -10964,14 +10507,9 @@ class AuswertungView {
                 acc.ursprungsEhGoal += member.ursprungsEhGoal ?? 0;
                 acc.ehIst += member.ehIst ?? 0;
                 acc.prognose += member.prognose ?? 0;
-                if (member.pqq && member.pqq > 0) {
-                    acc.pqqSum += member.pqq;
-                    acc.pqqCount += 1;
-                }
                 return acc;
             
-            }, { ehGoal: 0, etGoal: 0, etIst: 0, ursprungsEhGoal: 0, ehIst: 0, prognose: 0, pqqSum: 0, pqqCount: 0 });
-            groupSums.pqqAverage = groupSums.pqqCount > 0 ? groupSums.pqqSum / groupSums.pqqCount : null;
+            }, { ehGoal: 0, etGoal: 0, etIst: 0, ursprungsEhGoal: 0, ehIst: 0, prognose: 0 });
             
             const groupObject = {
                 leader: leader,
@@ -11013,9 +10551,8 @@ class AuswertungView {
             </div>`;
 
         const renderUserRow = (user) => {
-            const hasPqq = typeof user.pqq === 'number' && user.pqq > 0;
-            const pqq = hasPqq ? user.pqq : 0;
-            const pqqColor = hasPqq ? (pqq > 120 ? 'text-skt-green-accent' : pqq >= 80 ? 'text-skt-yellow-accent' : 'text-skt-red-accent') : 'text-gray-400';
+            const pqq = user.pqq || 0;
+            const pqqColor = pqq > 120 ? 'text-skt-green-accent' : pqq >= 80 ? 'text-skt-yellow-accent' : 'text-skt-red-accent';
             
             // NEU: CSS-Klasse für Null-Ziele
             const ehGoalClass = (user.ehGoal || 0) === 0 ? 'zero-goal' : '';
@@ -11045,7 +10582,7 @@ class AuswertungView {
                     <div class="text-center font-bold ${ehIstClass}">${(user.ehIst || 0).toLocaleString('de-DE', { maximumFractionDigits: 2 })}</div>
                     <div class="text-center font-bold">${(user.prognose || 0).toLocaleString('de-DE', { maximumFractionDigits: 0 })}</div>
                     <div class="text-center font-bold ${planChangeColor}">${planChangeHtml}</div>
-                    <div class="text-center font-bold ${pqqColor} cursor-pointer" data-pqq-userid="${user.id}" title="PQQ-Berechnung anzeigen">${hasPqq ? `${pqq.toFixed(0)}%` : '-'}</div>
+                    <div class="text-center font-bold ${pqqColor} cursor-pointer" data-pqq-userid="${user.id}" title="PQQ-Berechnung anzeigen">${pqq.toFixed(0)}%</div>
                     <div class="text-center text-gray-400 hover:text-skt-blue cursor-pointer" data-edit-userid="${user.id}" title="Planung bearbeiten"><i class="fas fa-pen"></i></div>
                 </div>
             `;
@@ -11065,9 +10602,6 @@ class AuswertungView {
                 sumPlanChangeColorClass = 'text-green-400';
                 sumPlanChangeHtml = 'Neu';
             }
-            const sumPqqValue = (typeof group.sums.pqqAverage === 'number') ? group.sums.pqqAverage : null;
-            const sumPqqClass = sumPqqValue !== null ? (sumPqqValue > 120 ? 'text-green-200' : sumPqqValue >= 80 ? 'text-yellow-200' : 'text-red-200') : 'text-white';
-            const sumPqqHtml = sumPqqValue !== null ? `${sumPqqValue.toFixed(0)}%` : '-';
 
             const sumRowHtml = `
                 <div class="grid grid-cols-11 gap-4 items-center py-2 px-4 bg-skt-blue-light text-white rounded-b-md">
@@ -11079,7 +10613,7 @@ class AuswertungView {
                     <div class="text-center font-bold">${group.sums.ehIst.toLocaleString('de-DE', { maximumFractionDigits: 2 })}</div>
                     <div class="text-center font-bold">${group.sums.prognose.toLocaleString('de-DE', { maximumFractionDigits: 0 })}</div>
                     <div class="text-center font-bold ${sumPlanChangeColorClass}">${sumPlanChangeHtml}</div>
-                    <div class="text-center font-bold ${sumPqqClass}">${sumPqqHtml}</div>
+                    <div class="text-center font-bold"></div>
                     <div class="text-center"></div>
             `;
 
@@ -11148,14 +10682,10 @@ class AuswertungView {
         
         // KORREKTUR: Verwende die übergebenen Infoplan-Daten
         const relevantPlans = db.monatsplanung.filter(p => userIds.includes(p.Mitarbeiter_ID) && p.Monat === prevMonthName && p.Jahr === prevYear);
-        const relevantInfoPlans = db.infoplanung.filter(p => {
-            if (!userIds.includes(p.Mitarbeiter_ID) || !p.Informationsabend) return false;
-            const infoDate = new Date(p.Informationsabend);
-            return infoDate >= prevMonthStartDate && infoDate <= prevMonthEndDate;
-        });
+        const relevantInfoPlans = db.infoplanung.filter(p => userIds.includes(p.Mitarbeiter_ID) && new Date(p.Informationsabend).getFullYear() === prevYear && new Date(p.Informationsabend).getMonth() === prevMonthDate.getMonth());
         
         const plansByUserId = _.keyBy(relevantPlans, 'Mitarbeiter_ID');
-        const infoPlansByUserId = _.groupBy(relevantInfoPlans, 'Mitarbeiter_ID');
+        const infoPlansByUserId = _.keyBy(relevantInfoPlans, 'Mitarbeiter_ID');
 
         const mitarbeiterNames = userIds.map(id => findRowById('mitarbeiter', id)?.Name).filter(Boolean);
         if (mitarbeiterNames.length === 0) return pqqDataMap;
@@ -11187,24 +10717,20 @@ class AuswertungView {
         const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
         userIds.forEach(userId => {
             const plan = plansByUserId[userId];
-            const infoPlansForUser = infoPlansByUserId[userId] || [];
+            const infoPlan = infoPlansByUserId[userId];
             const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
-            const ursprungszielET = infoPlansForUser.reduce(
-                (sum, p) => sum + (p.Ursprungsziel_ET ?? p.ET_Ziel ?? 0),
-                0
-            );
+            const ursprungszielET = infoPlan?.Ursprungsziel_ET || 0;
             const totalEH = ehByMitarbeiterId[userId]?.totalEH || 0;
             const userEts = etByMitarbeiterId[userId] || [];
             const totalETAusgemacht = userEts.filter(t => ET_STATUS_AUSGEMACHT.includes(t.Status)).length;
 
             // KORREKTUR: Formel ist Ist / Ziel
             const ehQuote = (ursprungszielEH > 0) ? (totalEH / ursprungszielEH) : (ursprungszielEH === 0 ? 1 : 0);
+
+            // KORREKTUR: Formel ist Ist / Ziel
             const etQuote = (ursprungszielET > 0) ? (totalETAusgemacht / ursprungszielET) : (ursprungszielET === 0 ? 1 : 0);
-            const includeEt = ursprungszielET > 0;
-            const { pqq, etConsidered } = computePqqScore(ehQuote, etQuote, includeEt);
             pqqDataMap[userId] = {
-                pqq,
-                etIncluded: etConsidered,
+                pqq: ((ehQuote + etQuote) / 2) * 100,
                 etIst: totalETAusgemacht, // NEU: ET-Ist-Wert hinzufügen
                 ehIst: istEhByMitarbeiterId[userId]?.totalEH || 0,
                 prognose: prognoseByMitarbeiterId[userId]?.totalPrognose || 0
@@ -11417,13 +10943,10 @@ class BildschirmView {
     }
 
     _getMonthlyDates() {
-        // Verwende denselben Umsatzmonat wie das restliche Dashboard.
-        const { startDate, endDate } = getMonthlyCycleDates();
-        // Defensive copy, damit das lokale Auftauen keine globalen Werte beschneidet.
-        return {
-            startDate: new Date(startDate),
-            endDate: new Date(endDate)
-        };
+        const today = new Date();
+        const startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+        const endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+        return { startDate, endDate };
     }
 
     async fetchAndRenderRankings() {
@@ -11432,10 +10955,10 @@ class BildschirmView {
             const { startDate: monthStartDate, endDate: monthEndDate } = this._getMonthlyDates();
             const { startDate: weekStartDate, endDate: weekEndDate } = this._getWeeklyDates();
 
-            const monthStartDateIso = formatDateYMD(monthStartDate);
-            const monthEndDateIso = formatDateYMD(monthEndDate);
-            const weekStartDateIso = formatDateYMD(weekStartDate);
-            const weekEndDateIso = formatDateYMD(weekEndDate);
+            const monthStartDateIso = monthStartDate.toISOString().split('T')[0];
+            const monthEndDateIso = monthEndDate.toISOString().split('T')[0];
+            const weekStartDateIso = weekStartDate.toISOString().split('T')[0];
+            const weekEndDateIso = weekEndDate.toISOString().split('T')[0];
 
             // Helper function to build and run a query
             const getRanking = async (dateFilter, table, aggregation, categoryFilter = "") => {
@@ -11494,7 +11017,7 @@ class BildschirmView {
     _renderList(container, data, unit) {
         container.innerHTML = '';
 
-        const displayData = [...data].slice(0, 3);
+        const displayData = [...data];
         while (displayData.length < 3) {
             displayData.push(null); // Platzhalter für leere Felder hinzufügen
         }
@@ -12027,8 +11550,6 @@ function setupEventListeners() {
   });
 // KORREKTUR: Fehlende Event-Listener für Header-Buttons hinzugefügt
   dom.appointmentsHeaderBtn.addEventListener('click', () => {
-    const isMobileDevice = (window.matchMedia?.('(pointer: coarse)').matches ?? false) || window.innerWidth <= 900;
-    pendingAppointmentsMobileFocus = Boolean(isMobileDevice);
     switchView('appointments');
   });
 
@@ -13515,78 +13036,7 @@ async function handleAIAssistantClick() {
     console.error("Fehler bei der Gemini-API-Anfrage:", error);
     dom.hinweisModalContent.textContent =
       "Der KI-Assistent ist im Moment leider nicht verfügbar. Bitte versuchen Sie es später erneut.";
-}
-}
-
-function computePqqScore(ehQuote, etQuote, includeEt) {
-    const contributions = [];
-    const safeEhQuote = Number.isFinite(ehQuote) ? ehQuote : 0;
-    const etConsidered = includeEt && Number.isFinite(etQuote);
-    if (Number.isFinite(safeEhQuote)) {
-        contributions.push(safeEhQuote);
-    }
-    if (etConsidered) {
-        contributions.push(etQuote);
-    }
-    if (contributions.length === 0) {
-        return { pqq: 0, etConsidered: false };
-    }
-    const averageQuote = contributions.reduce((sum, value) => sum + value, 0) / contributions.length;
-    return { pqq: averageQuote * 100, etConsidered };
-}
-
-function updatePqqUiForEtContribution({ etConsidered, totalPercent, ehPercent, etPercent }) {
-    if (!dom || !dom.pqqView) return;
-
-    const totalIndicator = dom.pqqIndicator?.querySelector('div');
-    const ehIndicator = dom.pqqEhIndicator?.querySelector('div');
-    const etIndicator = dom.pqqEtIndicator?.querySelector('div');
-
-    if (totalIndicator) {
-        totalIndicator.style.backgroundColor = etConsidered ? '' : '#94a3b8';
-    }
-    if (ehIndicator) {
-        ehIndicator.style.backgroundColor = etConsidered ? '' : '#94a3b8';
-    }
-    if (etIndicator) {
-        etIndicator.style.backgroundColor = etConsidered ? '' : '#d1d5db';
-        etIndicator.style.opacity = etConsidered ? '1' : '0.35';
-    }
-
-    if (dom.pqqValueDisplay) {
-        dom.pqqValueDisplay.textContent = `${Math.round(totalPercent)}%${etConsidered ? '' : ' (nur EH)'}`;
-        dom.pqqValueDisplay.classList.toggle('pqq-muted', !etConsidered);
-    }
-
-    if (dom.pqqEhValueDisplay) {
-        dom.pqqEhValueDisplay.textContent = `${Math.round(ehPercent)}%${etConsidered ? '' : ' (maßgeblich)'}`;
-        dom.pqqEhValueDisplay.classList.toggle('pqq-muted', !etConsidered);
-    }
-
-    if (dom.pqqEtValueDisplay) {
-        if (etConsidered) {
-            dom.pqqEtValueDisplay.textContent = `${Math.round(etPercent)}%`;
-            dom.pqqEtValueDisplay.classList.remove('pqq-muted');
-        } else {
-            dom.pqqEtValueDisplay.textContent = 'ET-Ziel 0';
-            dom.pqqEtValueDisplay.classList.add('pqq-muted');
-        }
-    }
-
-    const noteId = 'pqq-eh-only-note';
-    let noteEl = document.getElementById(noteId);
-    if (!etConsidered) {
-        if (!noteEl) {
-            noteEl = document.createElement('p');
-            noteEl.id = noteId;
-            noteEl.className = 'text-xs text-gray-500 mt-3 text-center';
-            const gaugeWrapper = dom.pqqView.querySelector('#pqq-gauge')?.parentElement || dom.pqqView;
-            gaugeWrapper.appendChild(noteEl);
-        }
-        noteEl.textContent = 'ET-Ziel 0 – Gesamt-PQQ entspricht der EH-Quote.';
-    } else if (noteEl) {
-        noteEl.remove();
-    }
+  }
 }
 
 function _renderSinglePQQGauge(indicatorEl, valueDisplayEl, value) {
@@ -13620,28 +13070,16 @@ async function calculateAndRenderPQQ(mitarbeiterId) {
         p.Jahr === prevYear
     );
 
-    const infoPlansForUser = db.infoplanung.filter(p =>
-        p.Mitarbeiter_ID === mitarbeiterId &&
-        p.Informationsabend &&
-        (() => {
-            const infoDate = new Date(p.Informationsabend);
-            return infoDate >= startDate && infoDate <= endDate;
-        })()
-    );
-
-    if (!plan && infoPlansForUser.length === 0) {
-        pqqLog('Keine Plan- oder Info-Plan-Daten für den Vormonat gefunden. PQQ-Ansicht wird ausgeblendet.');
+    if (!plan) {
+        pqqLog('Keine Plandaten für den Vormonat gefunden. PQQ-Ansicht wird ausgeblendet.');
         dom.pqqView.classList.add('hidden');
         return;
     }
     dom.pqqView.classList.remove('hidden');
 
     const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
-    const ursprungszielET = infoPlansForUser.reduce(
-        (sum, p) => sum + (p.Ursprungsziel_ET ?? p.ET_Ziel ?? 0),
-        0
-    );
-    pqqLog(`Plandaten gefunden: EH-Ziel=${ursprungszielEH}, ET-Ziel (Infoabende)=${ursprungszielET}`);
+    const ursprungszielET = plan?.Ursprungsziel_ET || 0;
+    pqqLog(`Plandaten gefunden: EH-Ziel=${ursprungszielEH}, ET-Ziel=${ursprungszielET}`);
 
     // 3. Get actual data for previous month via SQL
     const mitarbeiterName = findRowById('mitarbeiter', mitarbeiterId)?.Name;
@@ -13663,27 +13101,22 @@ async function calculateAndRenderPQQ(mitarbeiterId) {
 
     // 4. Calculate PQQ parts
     let ehQuote = 0;
-    if (ursprungszielEH > 0) {
-        ehQuote = totalEH / ursprungszielEH;
-    } else if (ursprungszielEH === 0) { // Kein Ziel gesetzt -> als erfüllt werten
+    if (totalEH > 0) {
+        ehQuote = ursprungszielEH / totalEH;
+    } else if (ursprungszielEH === 0) { // Ziel 0, Ist 0 -> 100% Zielerreichung
         ehQuote = 1;
     }
 
     let etQuote = 0;
-    if (ursprungszielET > 0) {
-        etQuote = totalETAusgemacht / ursprungszielET;
-    } else if (ursprungszielET === 0) { // Kein Ziel gesetzt -> als erfüllt werten
+    if (totalETAusgemacht > 0) {
+        etQuote = ursprungszielET / totalETAusgemacht;
+    } else if (ursprungszielET === 0) { // Ziel 0, Ist 0 -> 100% Zielerreichung
         etQuote = 1;
     }
 
-    const includeEt = ursprungszielET > 0;
-    const { pqq, etConsidered } = computePqqScore(ehQuote, etQuote, includeEt);
-    if (etConsidered) {
-        pqqLog(`Einzelquoten berechnet: EH-Quote=${(ehQuote * 100).toFixed(2)}%, ET-Quote=${(etQuote * 100).toFixed(2)}%`);
-        pqqLog(`Gesamt-PQQ berechnet: ${pqq.toFixed(2)}%`);
-    } else {
-        pqqLog(`ET-Ziel = 0. Gesamt-PQQ entspricht EH-Quote ${ (ehQuote * 100).toFixed(2)}%`);
-    }
+    const pqq = ((ehQuote + etQuote) / 2) * 100;
+    pqqLog(`Einzelquoten berechnet: EH-Quote=${(ehQuote * 100).toFixed(2)}%, ET-Quote=${(etQuote * 100).toFixed(2)}%`);
+    pqqLog(`Gesamt-PQQ berechnet: ${pqq.toFixed(2)}%`);
 
     // 5. Render gauges
     _renderSinglePQQGauge(dom.pqqIndicator, dom.pqqValueDisplay, pqq);
@@ -13693,12 +13126,6 @@ async function calculateAndRenderPQQ(mitarbeiterId) {
     dom.pqqView.classList.remove('hidden');
 
     _renderSinglePQQGauge(dom.pqqEtIndicator, dom.pqqEtValueDisplay, etQuote * 100);
-    updatePqqUiForEtContribution({
-        etConsidered,
-        totalPercent: pqq,
-        ehPercent: ehQuote * 100,
-        etPercent: etQuote * 100
-    });
     pqqLog('Alle Gauges gerendert.');
 }
 
@@ -14078,12 +13505,6 @@ class StrukturbaumView {
         const ehByMitarbeiter = _.groupBy(mapSqlResults(ehResultsRaw, 'Umsatz'), r => r.Mitarbeiter_ID[0].display_value);
         const etByMitarbeiter = _.groupBy(mapSqlResults(etResultsRaw, 'Termine'), r => r.Mitarbeiter_ID[0].display_value);
         const plans = db.monatsplanung.filter(p => p.Monat === prevMonthName && p.Jahr === prevYear);
-        const infoPlans = db.infoplanung.filter(p => {
-            if (!p.Informationsabend) return false;
-            const infoDate = new Date(p.Informationsabend);
-            return infoDate >= prevStart && infoDate <= prevEnd;
-        });
-        const infoPlansByUser = _.groupBy(infoPlans, 'Mitarbeiter_ID');
 
         for (const userId of userIds) {
             const user = findRowById('mitarbeiter', userId);
@@ -14095,7 +13516,7 @@ class StrukturbaumView {
                 idsForPqqCalc.push(...groupMembers.map(m => m._id));
             }
 
-            const pqq = await this.calculatePQQForIds(idsForPqqCalc, plans, infoPlansByUser, ehByMitarbeiter, etByMitarbeiter);
+            const pqq = await this.calculatePQQForIds(idsForPqqCalc, plans, ehByMitarbeiter, etByMitarbeiter);
             if (dataMap[userId]) {
                 dataMap[userId].pqq = pqq;
             }
@@ -14104,7 +13525,7 @@ class StrukturbaumView {
         return dataMap;
     }
 
-    async calculatePQQForIds(userIds, allPlans, allInfoPlans, allEh, allEt) {
+    async calculatePQQForIds(userIds, allPlans, allEh, allEt) {
         const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
 
         let totalUrsprungszielEH = 0;
@@ -14118,9 +13539,7 @@ class StrukturbaumView {
 
             const plan = allPlans.find(p => p.Mitarbeiter_ID === id);
             totalUrsprungszielEH += plan?.Ursprungsziel_EH || 0;
-            const infoPlansForUser = allInfoPlans[id] || [];
-            const userEtGoal = infoPlansForUser.reduce((sum, p) => sum + (p.Ursprungsziel_ET ?? p.ET_Ziel ?? 0), 0);
-            totalUrsprungszielET += userEtGoal;
+            totalUrsprungszielET += plan?.Ursprungsziel_ET || 0;
 
             totalActualEH += allEh[user.Name]?.[0]?.totalEH || 0;
             const userEts = allEt[user.Name] || [];
@@ -14128,15 +13547,14 @@ class StrukturbaumView {
         }
 
         let ehQuote = 0;
-        if (totalUrsprungszielEH > 0) ehQuote = totalActualEH / totalUrsprungszielEH;
+        if (totalActualEH > 0) ehQuote = totalUrsprungszielEH / totalActualEH;
         else if (totalUrsprungszielEH === 0) ehQuote = 1;
 
         let etQuote = 0;
-        if (totalUrsprungszielET > 0) etQuote = totalActualET / totalUrsprungszielET;
+        if (totalActualET > 0) etQuote = totalUrsprungszielET / totalActualET;
         else if (totalUrsprungszielET === 0) etQuote = 1;
 
-        const { pqq } = computePqqScore(ehQuote, etQuote, totalUrsprungszielET > 0);
-        return pqq;
+        return ((ehQuote + etQuote) / 2) * 100;
     }
 }
 
@@ -15858,9 +15276,6 @@ async function loadAndInitWettbewerbView() {
 }
 
 function switchView(viewName) {
-  if (viewName !== 'appointments' && appointmentsViewInstance) {
-    appointmentsViewInstance.forceWeekView = false;
-  }
   currentView = viewName;
   dom.mainDashboardView.classList.toggle("hidden", viewName !== "dashboard");
   dom.einarbeitungView.classList.toggle("hidden", viewName !== "einarbeitung");
@@ -17491,20 +16906,14 @@ async openCheckinModal(isEditMode = false) {
         const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
 
         // Get ET plan
-    const prevMonthInfoPlans = db.infoplanung.filter(p => 
-        p.Mitarbeiter_ID === userId &&
-        p.Informationsabend &&
-        (() => {
-            const infoDate = new Date(p.Informationsabend);
-            return infoDate >= startDate && infoDate <= endDate;
-        })()
-    );
-    const ursprungszielET = prevMonthInfoPlans.reduce(
-        (sum, p) => sum + (p.Ursprungsziel_ET ?? p.ET_Ziel ?? 0),
-        0
-    );
+        const prevMonthInfoPlan = db.infoplanung.find(p => 
+            p.Mitarbeiter_ID === userId &&
+            new Date(p.Informationsabend).getFullYear() === prevYear &&
+            new Date(p.Informationsabend).getMonth() === startDate.getMonth()
+        );
+        const ursprungszielET = prevMonthInfoPlan?.Ursprungsziel_ET || 0;
 
-    if (!plan && prevMonthInfoPlans.length === 0) return null;
+        if (!plan && !prevMonthInfoPlan) return null;
 
         // Get actual EH
         const actualEH = db.umsatz.filter(sale => 
@@ -17522,7 +16931,7 @@ async openCheckinModal(isEditMode = false) {
 
         const ehQuote = (ursprungszielEH > 0) ? (actualEH / ursprungszielEH) : 1;
         const etQuote = (ursprungszielET > 0) ? (actualET / ursprungszielET) : 1;
-        return computePqqScore(ehQuote, etQuote, ursprungszielET > 0).pqq;
+        return ((ehQuote + etQuote) / 2) * 100;
     }
 
     renderRedFlags(checkins) {
@@ -18412,4 +17821,3 @@ window.SKT_APP = {
     return currentlyViewedUserData;
   },
 };
-

@@ -1316,7 +1316,6 @@ summary::-webkit-details-marker {
 }
 
 #week-calendar-scroll-container {
-    overflow-x: hidden;
     overscroll-behavior-x: contain;
     touch-action: pan-y;
 }
