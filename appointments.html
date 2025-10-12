@@ -65,9 +65,9 @@
         </div>
         <!-- NEU: Container für die Wochenkalender-Ansicht -->
         <div id="stats-week-view" class="hidden mt-4">
-            <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4 sticky top-0 bg-white/80 backdrop-blur-sm py-2 z-30">
+            <div class="hidden md:flex flex-col sm:flex-row justify-between items-center mb-4 gap-4 sticky top-0 bg-white/80 backdrop-blur-sm py-2 z-30">
                 <h4 id="week-period-display" class="font-semibold text-skt-blue text-lg text-center cursor-pointer" title="Zur aktuellen Woche springen"></h4>
-                <div class="hidden sm:flex items-center gap-4">
+                <div class="hidden sm:flex items-center gap-4 sm:visible">
                     <!-- KORREKTUR: Der separate User-Select wurde entfernt. Die Filterung erfolgt jetzt über die globalen Filter. -->
                     <button id="week-calendar-zoom-out" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors" title="Herauszoomen"><i class="fas fa-search-minus"></i></button>
                     <button id="week-calendar-zoom-in" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors" title="Hineinzoomen"><i class="fas fa-search-plus"></i></button>
@@ -86,8 +86,8 @@
                     <div id="week-calendar-container" class="relative"></div>
                 </div>
                 <!-- KORREKTUR: Die mobile Tagesansicht wird absolut positioniert, um den verfügbaren Platz korrekt auszufüllen und Scroll-Probleme zu beheben. -->
-                <div id="mobile-day-view-container" class="hidden absolute inset-0 flex flex-col md:hidden p-4">
-                    <div class="flex justify-between items-center p-4 border-b border-gray-200 bg-white z-20 flex-shrink-0">
+                <div id="mobile-day-view-container" class="hidden absolute inset-0 flex flex-col md:hidden">
+                    <div class="flex justify-between items-center p-2 border-b border-gray-200 bg-white z-20 flex-shrink-0 px-4">
                         <button id="mobile-day-nav-prev" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors"><i class="fas fa-chevron-left"></i></button>
                         <h4 id="mobile-day-header" class="font-semibold text-skt-blue text-lg text-center"></h4>
                         <button id="mobile-day-nav-next" class="text-skt-blue-light hover:text-skt-blue p-2 rounded-full hover:bg-gray-200 transition-colors"><i class="fas fa-chevron-right"></i></button>

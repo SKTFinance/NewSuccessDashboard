@@ -5780,15 +5780,12 @@ class AppointmentsView {
         // Zur gewünschten Zeit scrollen (8:00 Uhr) oder zum ersten Termin/Jetzt-Indikator
         setTimeout(() => {
             const nowIndicator = timelineContainer.querySelector('.mobile-now-indicator');
-            const firstAppointment = timelineContainer.querySelector('.mobile-appointment-block');
-            const scrollContainer = timelineContainer.parentElement;
-    
-            // Priorität: 1. "Jetzt"-Indikator, 2. Erster Termin, 3. Standardmäßig 8:00 Uhr
-            let targetElement = nowIndicator || firstAppointment;
+            const scrollContainer = timelineContainer; // KORREKTUR: Der Scroll-Container ist die Timeline selbst.
             let targetPosition;
-    
-            if (targetElement) {
-                targetPosition = targetElement.offsetTop - (scrollContainer.clientHeight / 2) + (targetElement.clientHeight / 2);
+
+            // KORREKTUR: Scrolle zu "Jetzt", wenn sichtbar, ansonsten zu 8:00 Uhr.
+            if (nowIndicator) {
+                targetPosition = nowIndicator.offsetTop - (scrollContainer.clientHeight / 2);
             } else {
                 targetPosition = 8 * 60; // 8 Uhr * 60px pro Stunde
             }
@@ -6047,6 +6044,13 @@ class AppointmentsView {
     _setupAppointmentInteractions(element, termin) { // KORREKTUR: Die Logik für Drag & Drop und Resize wird hier implementiert.
         let placeholder = null;
         let isDragging = false;
+        // NEU: Drag-and-Drop auf Touch-Geräten deaktivieren, um Scroll-Konflikte zu vermeiden.
+        // 'ontouchstart' in window ist ein gängiger Indikator für Touch-Geräte.
+        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        if (isTouchDevice) {
+            return; // Keine Drag-Listener für Touch-Geräte hinzufügen.
+        }
+
         let isResizing = false;
         let startY, startTop, startHeight;
 
@@ -6185,73 +6189,73 @@ class AppointmentsView {
         let startX = 0;
         let initialTop = 0;
         let isDragging = false;
+        // Die Drag-and-Drop-Funktionalität für Touch-Geräte wird hier deaktiviert.
+        // element.addEventListener('touchstart', (e) => {
+        //     isDragging = true;
+        //     startY = e.touches[0].clientY;
+        //     startX = e.touches[0].clientX;
+        //     initialTop = element.offsetTop;
+        //     element.style.zIndex = '30';
+        //     element.style.transition = 'none'; // Disable transition while dragging
+        // }, { passive: false }); // passive: false, um preventDefault() zu erlauben
     
-        element.addEventListener('touchstart', (e) => {
-            isDragging = true;
-            startY = e.touches[0].clientY;
-            startX = e.touches[0].clientX;
-            initialTop = element.offsetTop;
-            element.style.zIndex = '30';
-            element.style.transition = 'none'; // Disable transition while dragging
-        }, { passive: false }); // passive: false, um preventDefault() zu erlauben
+        // element.addEventListener('touchmove', (e) => {
+        //     if (!isDragging) return;
+        //     e.preventDefault(); // Verhindert das Scrollen der Seite
+        //     const deltaY = e.touches[0].clientY - startY;
+        //     element.style.top = `${initialTop + deltaY}px`;
+        // }, { passive: false });
     
-        element.addEventListener('touchmove', (e) => {
-            if (!isDragging) return;
-            e.preventDefault(); // Verhindert das Scrollen der Seite
-            const deltaY = e.touches[0].clientY - startY;
-            element.style.top = `${initialTop + deltaY}px`;
-        }, { passive: false });
+        // element.addEventListener('touchend', async (e) => {
+        //     if (!isDragging) return;
+        //     isDragging = false;
+        //     element.style.zIndex = '10';
+        //     element.style.transition = ''; // Re-enable transition
     
-        element.addEventListener('touchend', async (e) => {
-            if (!isDragging) return;
-            isDragging = false;
-            element.style.zIndex = '10';
-            element.style.transition = ''; // Re-enable transition
+        //     const deltaY = e.changedTouches[0].clientY - startY;
+        //     const deltaX = e.changedTouches[0].clientX - startX;
     
-            const deltaY = e.changedTouches[0].clientY - startY;
-            const deltaX = e.changedTouches[0].clientX - startX;
+        //     // If it was just a tap, open the modal
+        //     if (Math.abs(deltaY) < 10 && Math.abs(deltaX) < 10) {
+        //         this.openModal(termin);
+        //         return;
+        //     }
     
-            // If it was just a tap, open the modal
-            if (Math.abs(deltaY) < 10 && Math.abs(deltaX) < 10) {
-                this.openModal(termin);
-                return;
-            }
+        //     const finalTop = element.offsetTop;
+        //     const { hours, minutes } = this._getTimeFromY(finalTop, true); // Snap to grid
     
-            const finalTop = element.offsetTop;
-            const { hours, minutes } = this._getTimeFromY(finalTop, true); // Snap to grid
-    
-            let newDate = new Date(termin.Datum);
+        //     let newDate = new Date(termin.Datum);
             
-            // KORREKTUR: Prüfe, ob der Termin auf einen anderen Tag verschoben wurde
-            const dayWidth = window.innerWidth; // Breite eines Tages in der mobilen Ansicht
-            const dayChange = Math.round(deltaX / dayWidth);
+        //     // KORREKTUR: Prüfe, ob der Termin auf einen anderen Tag verschoben wurde
+        //     const dayWidth = window.innerWidth; // Breite eines Tages in der mobilen Ansicht
+        //     const dayChange = Math.round(deltaX / dayWidth);
     
-            if (dayChange !== 0) {
-                newDate.setDate(newDate.getDate() + dayChange);
-            }
+        //     if (dayChange !== 0) {
+        //         newDate.setDate(newDate.getDate() + dayChange);
+        //     }
             
-            // KORREKTUR: Setze die neue Uhrzeit, aber behalte das (möglicherweise geänderte) Datum bei.
-            newDate.setHours(hours, minutes, 0, 0); // Sekunden und Millisekunden zurücksetzen
+        //     // KORREKTUR: Setze die neue Uhrzeit, aber behalte das (möglicherweise geänderte) Datum bei.
+        //     newDate.setHours(hours, minutes, 0, 0); // Sekunden und Millisekunden zurücksetzen
     
-            // KORREKTUR: .toISOString() konvertiert in UTC. Um die korrekte lokale Zeit zu speichern,
-            // muss der Zeitzonen-Offset manuell korrigiert werden, bevor der String erzeugt wird.
-            const dateForApi = new Date(newDate.getTime() - (newDate.getTimezoneOffset() * 60000));
+        //     // KORREKTUR: .toISOString() konvertiert in UTC. Um die korrekte lokale Zeit zu speichern,
+        //     // muss der Zeitzonen-Offset manuell korrigiert werden, bevor der String erzeugt wird.
+        //     const dateForApi = new Date(newDate.getTime() - (newDate.getTimezoneOffset() * 60000));
     
-            const success = await seaTableUpdateTermin(termin._id, {
-                [COLUMN_MAPS.termine.Datum]: dateForApi.toISOString().slice(0, 19).replace('T', ' '),
-            });
+        //     const success = await seaTableUpdateTermin(termin._id, {
+        //         [COLUMN_MAPS.termine.Datum]: dateForApi.toISOString().slice(0, 19).replace('T', ' '),
+        //     });
     
-            if (success) {
-                localStorage.removeItem(`${CACHE_PREFIX}termine`);
-                db.termine = await seaTableQuery('Termine');
-                normalizeAllData();
-                await this.fetchAndRender();
-            } else {
-                alert('Fehler beim Aktualisieren des Termins.');
-                // Reset position on failure
-                element.style.top = `${initialTop}px`;
-            }
-        });
+        //     if (success) {
+        //         localStorage.removeItem(`${CACHE_PREFIX}termine`);
+        //         db.termine = await seaTableQuery('Termine');
+        //         normalizeAllData();
+        //         await this.fetchAndRender();
+        //     } else {
+        //         alert('Fehler beim Aktualisieren des Termins.');
+        //         // Reset position on failure
+        //         element.style.top = `${initialTop}px`;
+        //     }
+        // });
     }
 
 
@@ -6260,15 +6264,15 @@ class AppointmentsView {
         const startDate = new Date(termin.Datum);
         const durationInMinutes = (termin.Dauer || 3600) / 60;
 
-        // KORREKTUR: Die Position muss um die halbe Höhe des Zeit-Labels (-7px) nach oben korrigiert werden,
-        // damit der Termin exakt auf der Stundenlinie beginnt und nicht darunter.
-        const topOffset = (startDate.getHours() * 60 + startDate.getMinutes()); // in Minuten (1px/min)
-        const height = durationInMinutes;
+        const minutesInDay = startDate.getHours() * 60 + startDate.getMinutes();
+        // KORREKTUR: Positionierung an die neue Höhe von 60px pro Stunde angepasst.
+        const topOffset = (minutesInDay / 60) * 60; // 60px pro Stunde
+        const height = (durationInMinutes / 60) * 60;
         // KORREKTUR: Die Breite und Position der Terminblöcke müssen den festen
-        // linken Abstand der Zeitleiste (4rem) berücksichtigen, um ein "Wackeln" zu verhindern.
-        const availableWidth = `calc(100% - 4rem)`;
-        const width = `calc(${availableWidth} / ${totalColumns} - 4px)`; // 4px Abstand zwischen Blöcken
-        const left = `calc(4rem + (${column} * (${availableWidth} / ${totalColumns})))`;
+        // linken Abstand der Zeitleiste (2.5rem) berücksichtigen.
+        const availableWidth = `calc(100% - 2.5rem)`;
+        const width = `calc(${availableWidth} / ${totalColumns} - 4px)`;
+        const left = `calc(2.5rem + (${column} * (${availableWidth} / ${totalColumns})))`;
     
         // KORREKTUR: Die Farben sollen sich jetzt nach der Kategorie richten, nicht nach dem Status.
         const { bg: categoryBgClass, text: categoryTextColorClass } = this._getAppointmentColorClasses(termin, 'category');
@@ -6283,10 +6287,11 @@ class AppointmentsView {
         el.style.width = width;
         el.dataset.id = termin._id;
     
-        el.innerHTML = `
-            <p class="font-bold text-sm truncate ${categoryTextColorClass}">${termin.Terminpartner || 'Unbekannt'}</p>
-            <p class="text-xs opacity-80 ${categoryTextColorClass} mt-1 truncate">${mitarbeiterName}</p>
-        `;
+        // KORREKTUR: Klick-Listener für das Öffnen des Modals direkt hier hinzufügen
+        el.innerHTML = `<div class="w-full h-full p-2"><p class="font-bold text-sm truncate ${categoryTextColorClass}">${termin.Terminpartner || 'Unbekannt'}</p><p class="text-xs opacity-80 ${categoryTextColorClass} mt-1 truncate">${mitarbeiterName}</p></div>`;
+        el.addEventListener('click', () => {
+            this.openModal(termin);
+        });
     
         // KORREKTUR: Interaktionen für Drag & Drop auf Mobilgeräten hinzufügen
         this._setupMobileAppointmentInteractions(el, termin);

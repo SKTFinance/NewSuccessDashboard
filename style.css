@@ -1602,22 +1602,22 @@ summary::-webkit-details-marker {
 /* --- NEU: Stile für die mobile Tagesansicht im iOS-Stil --- */
 .mobile-day-hour-slot {
     position: relative;
-    height: 60px; /* 1px pro Minute, also 60px pro Stunde */
+    height: 60px; /* KORREKTUR: Höhe pro Stunde wieder reduziert */
 }
 .mobile-day-time-label {
-    position: absolute;
+    position: absolute; /* KORREKTUR: Zentriert das Label exakt auf der Linie, unabhängig von der Schriftgröße. */
     transform: translateY(-50%); /* KORREKTUR: Zentriert das Label exakt auf der Linie, unabhängig von der Schriftgröße. */
     left: 0;
     font-size: 0.75rem; /* text-xs */
-    color: #6b7280; /* gray-500 */
-    width: 3.5rem; /* w-14 */
+    color: #6b7280;
+    width: 2.5rem; /* KORREKTUR: Etwas mehr Platz für den Abstand */
     text-align: right;
     padding-right: 0.5rem; /* pr-2 */
 }
 .mobile-day-hour-line {
     position: absolute;
     top: 0;
-    left: 4rem; /* w-16, Platz für das Label */
+    left: 2.5rem; /* KORREKTUR: Abstand zur Uhrzeit vergrößert */
     right: 0;
     height: 1px;
     background-color: #e5e7eb; /* gray-200 */
@@ -1650,7 +1650,7 @@ summary::-webkit-details-marker {
 
 /* --- NEU: Stile für die Beratungs-Ansicht (5-Block-Layout) --- */
 .top-level-view {
-    display: none; /* Standardmäßig versteckt */
+    display: none;
     position: fixed;
     inset: 0;
 }
@@ -1694,7 +1694,7 @@ summary::-webkit-details-marker {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-rows: repeat(2, minmax(0, 1fr));
     gap: 1rem;
-    padding: 1rem 0 2rem;
+    padding: 1rem 0 2rem; /* KORREKTUR: Höhe des Kalenders wird jetzt über die Wrapper-Klasse gesteuert. */
     height: clamp(420px, calc(100vh - var(--nav-height, 120px) - 6rem), 720px);
     max-height: calc(100vh - var(--nav-height, 120px) - 5rem);
     min-height: 0;
