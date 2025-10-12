@@ -41,6 +41,55 @@
             <input type="text" id="beratung-mitarbeitername-input" class="text-2xl text-center bg-transparent border-b-2 border-gray-400 focus:border-white focus:outline-none py-2 text-white placeholder-gray-400" placeholder="Ihr Name">
         </div>
 
+        <!-- NEU: Disclaimer-Slide nach Mitarbeitername -->
+        <div id="beratung-slide-disclaimer" class="beratung-slide hidden start-screen">
+            <div class="max-w-4xl mx-auto text-center">
+                <h1 class="text-4xl font-bold mb-6 text-red-400">Wichtiger Hinweis zur Software</h1>
+                
+                <div class="bg-red-900/20 border border-red-400/30 rounded-lg p-8 mb-8 text-left">
+                    <div class="mb-6">
+                        <h2 class="text-2xl font-bold text-red-300 mb-4">⚠️ Testsoftware - Keine vollständige Beratung</h2>
+                        <p class="text-lg text-gray-200 leading-relaxed">
+                            Diese Software dient ausschließlich zur groben Orientierung und stellt <strong>keine vollständige Finanzberatung</strong> dar. 
+                            Sie ist eine Testsoftware zur Illustration und noch nicht für den produktiven Einsatz fertiggestellt.
+                        </p>
+                    </div>
+
+                    <div class="mb-6">
+                        <h3 class="text-xl font-bold text-red-300 mb-3">Verpflichtende Analysen vor Produktverkauf</h3>
+                        <p class="text-gray-200 leading-relaxed">
+                            Vor jeder Beratung müssen die notwendigen Kundenanalysen durchgeführt werden. Es darf kein Produkt 
+                            allein aufgrund der hier gezeigten Informationen verkauft werden. Dies macht einen guten Berater aus - 
+                            wir haben hochqualifizierte Berater, die zusätzlich zu dieser Software individuelle Beratungen anbieten.
+                        </p>
+                    </div>
+
+                    <div class="mb-6">
+                        <h3 class="text-xl font-bold text-red-300 mb-3">Datenschutz & Kundenname</h3>
+                        <p class="text-gray-200 leading-relaxed">
+                            Sollte keine Einwilligung zur Datenverarbeitung vorliegen, ist der Kundenname zu verschleiern oder 
+                            kein Name einzugeben, da sonst keine personenbezogenen Daten (auch nicht der Name) gesammelt werden dürfen.
+                        </p>
+                    </div>
+
+                    <div class="mb-6">
+                        <h3 class="text-xl font-bold text-red-300 mb-3">Haftungsausschluss</h3>
+                        <p class="text-gray-200 leading-relaxed">
+                            <strong>Samuel Königslehner</strong> hat diese Software erstellt und ist jedenfalls schad- und klaglos zu halten. 
+                            Die Nutzung erfolgt auf eigene Verantwortung.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="bg-blue-900/20 border border-blue-400/30 rounded-lg p-6 mb-8">
+                    <label class="flex items-center justify-center text-lg cursor-pointer">
+                        <input type="checkbox" id="disclaimer-checkbox" class="w-6 h-6 mr-4 accent-blue-500">
+                        <span class="text-white font-semibold">Ich habe die obigen Hinweise gelesen und verstanden</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
         <!-- Slide 1: Kundenname Eingabe -->
         <div id="beratung-slide-kundenname" class="beratung-slide hidden start-screen">
             <h1 class="text-4xl font-bold mb-4">Willkommen zur digitalen Beratung</h1>
