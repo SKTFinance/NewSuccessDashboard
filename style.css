@@ -910,6 +910,9 @@ summary::-webkit-details-marker {
     border-radius: 6px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
+.pqq-muted {
+    color: #94a3b8 !important;
+}
 
 /* NEU: PQQ Details Collapsible */
 .pqq-details-collapsible {
@@ -1280,6 +1283,42 @@ summary::-webkit-details-marker {
 .wettbewerb-slide .leaderboard-list {
     justify-content: flex-start; /* Listen oben ausrichten */
     gap: 1.5rem; /* Mehr Abstand zwischen den Listen */
+}
+
+/* NEU: Zusätzliche Layout-Anpassungen für den Wochenkalender */
+#week-calendar-container {
+    width: 100%;
+    max-width: 100%;
+}
+
+.week-calendar-day-col {
+    min-width: 0;
+}
+
+#mobile-day-view-container {
+    overflow-x: hidden;
+    touch-action: pan-y;
+    width: 100%;
+    max-width: 100%;
+}
+
+#mobile-day-timeline {
+    overflow-x: hidden;
+    position: relative;
+}
+
+#stats-week-view {
+    overflow-x: hidden;
+}
+
+#stats-week-view .flex.flex-col {
+    scroll-margin-top: 80px;
+}
+
+#week-calendar-scroll-container {
+    overflow-x: hidden;
+    overscroll-behavior-x: contain;
+    touch-action: pan-y;
 }
 
 /* NEU: Stile für den detaillierten Wochenkalender */

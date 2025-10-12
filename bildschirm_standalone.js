@@ -20,6 +20,13 @@ let COLUMN_MAPS = {}; // NEU
 // --- HILFSFUNKTIONEN (vereinfacht) ---
 const delay = (ms) => new Promise((res) => setTimeout(res, ms));
 
+function formatDateYMD(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 async function getSeaTableAccessToken() {
     try {
         const url = `${SEATABLE_APP_ACCESS_TOKEN_URL}?dtable_uuid=${SEATABLE_DTABLE_UUID}`;
@@ -284,10 +291,11 @@ class BildschirmView {
     }
 
     _getMonthlyDates() {
-        const today = new Date();
-        const startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-        const endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
-        return { startDate, endDate };
+        const { startDate, endDate } = getMonthlyCycleDates();
+        return {
+            startDate: new Date(startDate),
+            endDate: new Date(endDate)
+        };
     }
 
     async fetchAndRenderRankings() {
@@ -296,10 +304,8 @@ class BildschirmView {
             const { startDate: monthStartDate, endDate: monthEndDate } = this._getMonthlyDates();
             const { startDate: weekStartDate, endDate: weekEndDate } = this._getWeeklyDates();
 
-            // KORREKTUR: toLocalISOString verwenden, um Zeitzonenfehler zu vermeiden.
-
             const getRanking = async (dateFilter, table, aggregation, categoryFilter = "") => {
-                const query = `SELECT Mitarbeiter_ID, ${aggregation} as value FROM \`${table}\` WHERE ${dateFilter} ${categoryFilter} GROUP BY Mitarbeiter_ID ORDER BY value DESC LIMIT 5`;
+                const query = `SELECT Mitarbeiter_ID, ${aggregation} as value FROM \`${table}\` WHERE ${dateFilter} ${categoryFilter} GROUP BY Mitarbeiter_ID ORDER BY value DESC LIMIT 3`;
                 console.log(`[DEBUG] Führe SQL-Abfrage aus: ${query}`);
                 const resultRaw = await seaTableSqlQuery(query, true);
                 return (resultRaw || []).map(item => {
@@ -330,10 +336,10 @@ class BildschirmView {
             const etCategoryFilter = "AND Kategorie = 'ET' AND (Absage IS NULL OR Absage = false) AND Status != 'Storno'";
 
             const [wochenEhRanking, wochenEtRanking, monatsEhRanking, monatsEtRanking] = await Promise.all([
-                getRanking(`Datum >= '${toLocalISOString(weekStartDate)}' AND Datum <= '${toLocalISOString(weekEndDate)}'`, 'Umsatz', 'SUM(EH)'),
-                getRanking(`Datum >= '${toLocalISOString(weekStartDate)}' AND Datum <= '${toLocalISOString(weekEndDate)}'`, 'Termine', 'COUNT(_id)', etCategoryFilter),
-                getRanking(`Datum >= '${toLocalISOString(monthStartDate)}' AND Datum <= '${toLocalISOString(monthEndDate)}'`, 'Umsatz', 'SUM(EH)'),
-                getRanking(`Datum >= '${toLocalISOString(monthStartDate)}' AND Datum <= '${toLocalISOString(monthEndDate)}'`, 'Termine', 'COUNT(_id)', etCategoryFilter)
+                getRanking(`Datum >= '${formatDateYMD(weekStartDate)}' AND Datum <= '${formatDateYMD(weekEndDate)}'`, 'Umsatz', 'SUM(EH)'),
+                getRanking(`Datum >= '${formatDateYMD(weekStartDate)}' AND Datum <= '${formatDateYMD(weekEndDate)}'`, 'Termine', 'COUNT(_id)', etCategoryFilter),
+                getRanking(`Datum >= '${formatDateYMD(monthStartDate)}' AND Datum <= '${formatDateYMD(monthEndDate)}'`, 'Umsatz', 'SUM(EH)'),
+                getRanking(`Datum >= '${formatDateYMD(monthStartDate)}' AND Datum <= '${formatDateYMD(monthEndDate)}'`, 'Termine', 'COUNT(_id)', etCategoryFilter)
             ]);
             
             const wettbewerbData = await this._getWettbewerbData();
@@ -503,7 +509,7 @@ class BildschirmView {
 
     _renderList(container, data, unit) {
         container.innerHTML = '';
-        const displayData = [...data];
+        const displayData = [...data].slice(0, 3);
         while (displayData.length < 3) {
             displayData.push(null);
         }

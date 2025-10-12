@@ -2,11 +2,12 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8" />
-<title>Vertrag-Extractor + DSGVO + Gemini-Analyse</title>
+<title>Vertrag-Extractor + Gemini 2.5 Flash</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
 :root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --accent:#60a5fa; --good:#22c55e; --warn:#f59e0b; --bad:#ef4444; }
-*{box-sizing:border-box} body{margin:0;background:var(--bg);color:#e5e7eb;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:#e5e7eb;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
 .wrap{max-width:1100px;margin:0 auto;padding:24px}
 .card{background:var(--card);border:1px solid #1f2937;border-radius:12px;padding:16px;margin:12px 0}
 button{background:var(--accent);border:none;color:#0b1220;padding:10px 14px;border-radius:10px;font-weight:600;cursor:pointer}
@@ -16,6 +17,7 @@ textarea{width:100%;min-height:200px;background:#0b1220;color:#e5e7eb;border:1px
 .progress{height:8px;background:#0b1220;border:1px solid #1f2937;border-radius:999px;overflow:hidden}
 .bar{height:100%;width:0%;background:var(--accent);transition:width .25s}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,"Courier New",monospace}
+.muted{color:#94a3b8}
 </style>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -24,17 +26,17 @@ textarea{width:100%;min-height:200px;background:#0b1220;color:#e5e7eb;border:1px
 
 <body>
 <div class="wrap">
-  <h1>Vertrag-Extractor <span class="muted">mit DSGVO-Anonymisierung + Gemini-Analyse</span></h1>
+  <h1>Vertrag-Extractor <span class="muted">mit DSGVO + Gemini 2.5 Flash</span></h1>
 
   <div class="card">
     <label>PDF-Datei hochladen:</label>
     <input id="file" type="file" accept=".pdf" style="width:100%;padding:8px;border:1px dashed #334155;background:#0b1220;color:#cbd5e1;border-radius:8px" />
     <div style="display:flex;gap:8px;margin-top:10px">
       <button id="anonBtn" disabled>Anonymisieren</button>
-      <button id="aiBtn" disabled>An Gemini senden</button>
+      <button id="aiBtn" disabled>An Gemini 2.5 Flash senden</button>
     </div>
     <div class="progress"><div class="bar" id="bar"></div></div>
-    <div id="phase" style="text-align:right;color:#94a3b8;margin-top:6px">Bereit</div>
+    <div id="phase" class="muted" style="text-align:right;margin-top:6px">Bereit</div>
   </div>
 
   <div class="card">
@@ -51,7 +53,8 @@ textarea{width:100%;min-height:200px;background:#0b1220;color:#e5e7eb;border:1px
 </div>
 
 <script>
-const apiKey = "AIzaSyAUnqTaKJ1B7mvltFTWvHcz4szfA1YDFek"; // 🔑 dein Gemini-Key
+const apiKey = "AIzaSyAUnqTaKJ1B7mvltFTWvHcz4szfA1YDFek";
+const model = "gemini-2.5-flash";
 
 const fileEl=document.getElementById("file"),
       anonBtn=document.getElementById("anonBtn"),
@@ -61,15 +64,20 @@ const fileEl=document.getElementById("file"),
       barEl=document.getElementById("bar"),
       phaseEl=document.getElementById("phase"),
       logEl=document.getElementById("log");
+
 let currentFile=null, anonymizedText="";
 
 function log(m,c){const d=document.createElement("div");d.textContent=m;if(c)d.classList.add(c);logEl.appendChild(d);logEl.scrollTop=logEl.scrollHeight;}
 function bar(p){barEl.style.width=Math.max(0,Math.min(100,p))+"%";}
 function phase(t){phaseEl.textContent=t;}
 
-fileEl.addEventListener("change",()=>{currentFile=fileEl.files?.[0]??null;anonBtn.disabled=!currentFile;log("Datei gewählt: "+currentFile.name,"ok");});
+fileEl.addEventListener("change",()=>{
+  currentFile=fileEl.files?.[0]??null;
+  anonBtn.disabled=!currentFile;
+  log("Datei gewählt: "+(currentFile?.name||"–"),"ok");
+});
 
-// --- PDF lesen ---
+/* --- PDF lesen --- */
 async function extractFromPDF(file){
   const buf=await file.arrayBuffer();
   const pdf=await pdfjsLib.getDocument({data:buf}).promise;
@@ -83,91 +91,243 @@ async function extractFromPDF(file){
   return text;
 }
 
-// --- DSGVO-Anonymisierung ---
+/* --- DSGVO-Anonymisierung --- */
 function anonymizeSensitiveData(text){
+  const financialKeywords=["rückkaufs","rueckkaufs","wert","kosten","prämie","praemie","beitrag","betrag","laufzeit","versicherungssumme","ablaufleistung","einzahlung","prämien"];
+  const telContextRegex=/\b(tel|telefon|telefonnummer|handy|mobile|kontakt|fax|nr\.?|nummer)\b/i;
+  let replaced=0;
+
+  const labelMasks=[
+    {
+      regex:/(Versicherungsnehmer[_\s]*(?:in)?(?:\s*\(Name,\s*Geb\.?\.?\s*Dat\.?\))?)\s*:\s*([^,\n]+?)(?:,\s*(\d{1,2}\.\d{1,2}\.\d{2,4}))?(?=\s|$)/gi,
+      replacer:(_match,label,_name,date)=>`${label}: [NAME]${date ? ", [DATUM]" : ""}`
+    },
+    {
+      regex:/(Versicherte\s+Person|Versicherungsnehmer|Versicherungsnehmerin|Name|Kunde|Kundin|VN)\s*:\s*([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)+)/gi,
+      replacer:(_match,label)=>`${label}: [NAME]`
+    }
+  ];
+
+  for(const {regex,replacer} of labelMasks){
+    text=text.replace(regex,(...args)=>{
+      const match=args[0];
+      const result=replacer(...args);
+      if(result!==match) replaced++;
+      return result;
+    });
+  }
+
+  function hasFinancialContext(fullText,start,end){
+    const windowStart=Math.max(0,start-40);
+    const windowEnd=Math.min(fullText.length,end+40);
+    const snippet=fullText.slice(windowStart,windowEnd).toLowerCase();
+    if(snippet.includes("€")||snippet.includes("eur")) return true;
+    return financialKeywords.some(keyword=>snippet.includes(keyword));
+  }
+
+  function shouldMaskTel(match,start,fullText){
+    const end=start+match.length;
+    if(hasFinancialContext(fullText,start,end)) return false;
+    const digits=match.replace(/\D/g,"");
+    if(digits.length<7) return false;
+
+    const trimmed=match.trim();
+    const dateLike=/^\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}$/;
+    if(dateLike.test(trimmed)) return false;
+
+    const dateContextRegex=/beginn|start|laufzeit|vertrags|polizzierungs|gueltig/i;
+    const contextSnippet=fullText.slice(Math.max(0,start-30),Math.min(fullText.length,end+30));
+    if(dateContextRegex.test(contextSnippet)) return false;
+
+    const left=fullText.slice(Math.max(0,start-20),start).toLowerCase();
+    const right=fullText.slice(end,Math.min(fullText.length,end+20)).toLowerCase();
+    if(telContextRegex.test(left) || telContextRegex.test(right)) return true;
+
+    const hasSeparator=/[\/\- ]/.test(trimmed);
+    const startsWithDial=trimmed.startsWith("+")||trimmed.startsWith("0");
+    if(startsWithDial && (hasSeparator || digits.length>=10)) return true;
+
+    return false;
+  }
+
   const patterns=[
-    {re:/\b(Herrn?|Frau)\s+[A-ZÄÖÜ][a-zäöüß]+\s+[A-ZÄÖÜ][a-zäöüß]+/g,ph:"[NAME]"},
-    {re:/\b[A-ZÄÖÜ][a-zäöüß]+straße\s*\d+\b/g,ph:"[ADRESSE]"},
-    {re:/\b\d{4,5}\s+[A-ZÄÖÜ][a-zäöüß]+/g,ph:"[ORT]"},
-    {re:/\b\d{1,2}\.\d{1,2}\.\d{2,4}\b/g,ph:"[DATUM]"},
-    {re:/\b[A-Z]{2}\d{2}\s?\d{4,}\b/g,ph:"[IBAN]"},
-    {re:/\bBIC\s+[A-Z0-9]{8,11}\b/g,ph:"[BIC]"},
-    {re:/\+?\d[\d\s\/\-]{5,}\d/g,ph:"[TEL]"},
+    {re:/\b(Herrn?|Frau)\s+[A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)+/g,ph:"[NAME]"},
+    {re:/\b[A-Z]{2}\d{2}(?:\s?\d{4}){3,5}\b/g,ph:"[IBAN]"},
+    {re:/\bBIC\s+[A-Z0-9]{8,11}\b/gi,ph:"[BIC]"},
+    {re:/\+?\d[\d\s\/\-]{5,}\d/g,ph:"[TEL]",validator:shouldMaskTel},
     {re:/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,ph:"[EMAIL]"},
   ];
-  let replaced=0;
-  for(const {re,ph} of patterns){const before=text;text=text.replace(re,ph);if(text!==before)replaced++;}
+  for(const {re,ph,validator} of patterns){
+    text=text.replace(re,(match,offset,fullText)=>{
+      if(validator && !validator(match,offset,fullText)) return match;
+      replaced++;
+      return ph;
+    });
+  }
+  const birthDateRegex=/(Geburtsdatum|Geb\.|geboren am)[^0-9]{0,20}(\d{1,2}\.\d{1,2}\.\d{2,4})/gi;
+  text=text.replace(birthDateRegex,(m,p1)=>{
+    replaced++;
+    return `${p1} [DATUM]`;
+  });
   return {clean:text,count:replaced};
 }
 
-// --- Schritt 1: Anonymisierung ---
+/* --- Schritt 1: Anonymisieren --- */
 anonBtn.addEventListener("click",async()=>{
-  if(!currentFile)return;
-  phase("Lese PDF …");bar(5);
+  if(!currentFile) return;
+  phase("Lese PDF …"); bar(5);
   const text=await extractFromPDF(currentFile);
   const {clean,count}=anonymizeSensitiveData(text);
   anonymizedText=clean; rawEl.value=clean;
   log(`Anonymisierung abgeschlossen (${count} Elemente ersetzt).`,"ok");
-  bar(100);phase("Bereit für Gemini");aiBtn.disabled=false;
+  bar(100); phase("Bereit für Gemini"); aiBtn.disabled=false;
 });
 
-// --- Schritt 2: Gemini-Analyse (robuste Version) ---
-aiBtn.addEventListener("click", async () => {
-  if (!anonymizedText) {
-    alert("Bitte zuerst anonymisieren!");
-    return;
-  }
-  phase("Sende an Gemini …");
-  bar(10);
+/* --- Schritt 2: Analyse mit Gemini 2.5 Flash --- */
+aiBtn.addEventListener("click", async ()=>{
+  if(!anonymizedText){alert("Bitte zuerst anonymisieren!");return;}
 
-  const prompt = `Analysiere folgenden anonymisierten Versicherungsvertrag.
-Extrahiere bitte:
-- Vertragsbeginn
-- Vertragsende
-- monatliche Beiträge
-- Rückkaufswerttabellen (wenn vorhanden)
-- wichtige Versicherungsleistungen
-Antworte im JSON-Format:
-{ "Startdatum": "...", "Enddatum": "...", "Beitrag": "...", "Rueckkaufswerte": [...], "Komponenten": [...] }
+  phase("Sende an Gemini 2.5 Flash …"); bar(30);
+  const prompt=`🤖 Prompt – Versicherungsagent-KI zur Vertragsanalyse (Österreich)
+Du bist eine spezialisierte Versicherungsagent-KI mit umfassender Expertise im österreichischen Versicherungsmarkt.
+Deine Aufgabe ist es, anonymisierte Versicherungsverträge inhaltlich zu verstehen, alle relevanten Werte aufzuspüren, zu kombinieren oder logisch herzuleiten, und sie präzise in JSON-Struktur auszugeben.
+Du arbeitest wie ein erfahrener Versicherungsberater, der komplexe Verträge liest, interpretiert und bewertet.
 
-Text:
-${anonymizedText.slice(0, 15000)}
+🧭 Arbeitsweise
+Ganzheitliche Analyse:
+- Lies das gesamte Dokument (Deckblatt, Tabellen, Fußnoten, Anhänge, Produktbeilagen, Fondsinformationen).
+- Verstehe die Struktur und erkenne die Bedeutung jedes Abschnitts.
+
+Versicherungslogik anwenden:
+- Nutze dein Wissen über Versicherungsprodukte (Lebens-, Unfall-, Haushalts-, Eigenheim-, Rechtsschutzversicherung).
+- Wenn Werte nicht klar angegeben sind, leite sie aus Kontext, Berechnungen oder Produkterfahrung ab.
+- Beispiel: Wenn nur die monatliche Prämie und Laufzeit angegeben sind, berechne die Gesamteinzahlung. Wenn kein Vertragsende steht, rechne es aus dem Beginn + Laufzeit. Wenn Fonds genannt sind, erkenne sie auch in Tabellen oder Fondslisten.
+
+Synonyme und Formulierungen erkennen:
+- Beachte unterschiedliche Bezeichnungen, z.B. Prämie = Beitrag, laufende Zahlung, Versicherungsprämie; Vertragsbeginn = Beginn, Start, Polizzierungsdatum; Laufzeit = Dauer, Versicherungsdauer; Kündigung = Storno, Vertragsauflösung, Rücktritt.
+
+Tiefensuche & logische Ableitung:
+- Untersuche jedes Dokumentsegment, jede Tabelle und jeden Anhang.
+- Suche nach Zahlen, Datumsangaben, Prozenten, Eurobeträgen und Beschreibungen.
+- Rekonstruiere fehlende Werte, wenn sie rechnerisch oder durch Produktlogik eindeutig ableitbar sind.
+- Wenn ein Wert selbst nach gründlicher Analyse nicht vorhanden oder rekonstruierbar ist, verwende "NICHT IM VERTRAG ENTHALTEN".
+
+Plausibilitätsprüfung:
+- Prüfe Widersprüche zwischen Text und Tabellen.
+- Berechne einfache Kennzahlen (z. B. Kostenquote = Rückkaufswert ÷ Summe Einzahlungen × 100).
+- Gib immer die fachlich plausibelste Version aus.
+
+📋 Analyseauftrag
+1. Produkttyp
+   Ordne den Vertrag genau einem dieser Typen zu:
+   lebensversicherung, unfallversicherung, haushaltsversicherung, eigenheimversicherung, rechtschutzversicherung.
+
+2. Grunddaten
+   Ermittle: "vertragsbeginn" (YYYY-MM-DD, falls rekonstruierbar), "laufzeit" (in Jahren oder Monaten), "vertragsende" (direkt oder berechnet), "praemie" (Betrag + Zahlungsintervall, z. B. "150 €/Monat").
+
+3. Kündigung
+   Gib die vertraglich festgelegte ordentliche Kündigung wieder (Frist, Zeitpunkt, Form). Keine allgemeinen Gesetzesangaben – nur, was im Vertrag oder den Bedingungen steht.
+
+4. Produktspezifische Details
+   Verwende genau den passenden Block unter "details":
+   • Lebensversicherung
+     "lebensversicherung": {
+       "fondsveranlagungen": [],
+       "rueckkaufswertZumEnde": {
+         "0_prozent": "",
+         "3_prozent": "",
+         "6_prozent": ""
+       },
+       "kostenquoteProzent": ""
+     }
+   • Unfallversicherung
+     "unfallversicherung": {
+       "unfallkosten": "",
+       "dauerndeInvaliditaet": "",
+       "progressionProzent": "",
+       "unfallrente": "",
+       "spitalgeld": "",
+       "krankengeld": ""
+     }
+   • Haushaltsversicherung
+     "haushaltsversicherung": {
+       "wohnnutzflaecheQm": "",
+       "versicherungssummen": {},
+       "grobeFahrlaessigkeit100Prozent": ""
+     }
+   • Eigenheimversicherung
+     "eigenheimversicherung": {
+       "wohnnutzflaecheQm": "",
+       "verbauteFlaecheQm": "",
+       "anzahlStockwerke": "",
+       "versicherungssummen": {},
+       "grobeFahrlaessigkeit100Prozent": ""
+     }
+   • Rechtsschutzversicherung
+     "rechtschutzversicherung": {
+       "versicherteBereiche": [],
+       "deckungssummen": {}
+     }
+
+⚙️ Ausgaberegeln
+- Gib nur ein gültiges JSON-Objekt aus, ohne zusätzlichen Text.
+- Kein Feld darf leer bleiben.
+- Wenn ein Wert nach gründlicher Dokument- und Kontextanalyse nicht eindeutig ermittelt werden kann, verwende den Text "NICHT IM VERTRAG ENTHALTEN".
+- Füge zusätzlich "missingFields" hinzu – ein Array mit allen Feldern, die du nicht belegen konntest.
+
+📤 Endgültiges JSON-Schema
+{
+  "produktTyp": "",
+  "vertragsbeginn": "",
+  "laufzeit": "",
+  "vertragsende": "",
+  "praemie": "",
+  "kuendigung": "",
+  "details": {},
+  "missingFields": []
+}
+
+💡 Fachliche Zusatzlogik
+- Wenn mehrere Produkte vorkommen, analysiere nur das Hauptprodukt (z. B. Lebensversicherung bei Kombiprodukten).
+- Berücksichtige Fondsnamen, Tarife, Risikoklassen, Zusatzbausteine etc.
+- Verwende ausschließlich vertragliche Werte – keine Beispielrechnungen.
+- Prüfe interne Konsistenz zwischen Prämie, Laufzeit und Werten.
+- Am Ende muss jedes Pflichtfeld einen konkreten Wert oder "NICHT IM VERTRAG ENTHALTEN" haben.
+
+Textauszug:
+${(() => {
+  const MAX_CHARS = 40000;
+  return anonymizedText.length > MAX_CHARS
+    ? anonymizedText.slice(0, MAX_CHARS) + "\n[Text gekürzt]"
+    : anonymizedText;
+})()}
 `;
 
   try {
     const res = await fetch(
-      \`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=\${apiKey}\`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body:JSON.stringify({
+          contents:[{ role:"user", parts:[{ text:prompt }] }],
         }),
       }
     );
-
-    const data = await res.json();
-    let output = "Keine Antwort erhalten.";
-
-    // 🔍 Robuste Auswertung aller möglichen Strukturen
-    if (data?.candidates?.[0]?.content?.parts) {
-      const parts = data.candidates[0].content.parts;
-      if (Array.isArray(parts)) {
-        output = parts.map(p => p.text || JSON.stringify(p)).join("\n");
-      } else if (typeof parts.text === "string") {
-        output = parts.text;
-      }
-    } else if (data?.candidates?.[0]?.content?.text) {
-      output = data.candidates[0].content.text;
+    const data=await res.json();
+    console.log("🔍 RAW RESPONSE:",data);
+    if(data.error){
+      resultEl.textContent="❌ Fehler: "+data.error.message;
+      log(data.error.message,"err"); phase("Fehler"); return;
     }
-
-    resultEl.textContent = output.trim() || "Leere Antwort.";
-    bar(100);
-    phase("Fertig");
-    log("Gemini-Antwort empfangen.", "ok");
-  } catch (e) {
-    log("Fehler: " + e.message, "err");
-    phase("Fehler");
+    let output="";
+    if(data?.candidates?.[0]?.content?.parts){
+      output=data.candidates[0].content.parts.map(p=>p.text||JSON.stringify(p)).join("\n");
+    }
+    resultEl.textContent=output||"(Keine Antwort)";
+    phase("Fertig"); bar(100); log("Antwort empfangen.","ok");
+  } catch(e){
+    log("Fehler: "+e.message,"err"); phase("Fehler");
   }
 });
 </script>
