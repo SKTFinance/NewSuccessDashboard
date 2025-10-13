@@ -1,0 +1,1458 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Finanzanalyse – Präsentation</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    /* === Transition Styles === */
+    .slide {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.8s ease, visibility 0.8s ease;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 1;
+    }
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: all;
+      z-index: 10;
+    }
+    .fade-in {
+      opacity: 0;
+      transform: translateY(15px);
+      transition: all 0.6s ease;
+    }
+    .fade-in.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    
+    /* Überschriften die immer sichtbar sein sollen */
+    .always-visible {
+      opacity: 1 !important;
+      transform: translateY(0) !important;
+      visibility: visible !important;
+    }
+    
+    /* Zoom-safe styling */
+    @media screen and (min-width: 1024px) {
+      .content-container {
+        transform-origin: center center;
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+    }
+    
+    /* Responsive text scaling */
+    .responsive-text {
+      font-size: clamp(1.2rem, 4vw, 3rem);
+    }
+    .responsive-title {
+      font-size: clamp(2rem, 6vw, 4.5rem);
+    }
+    .responsive-subtitle {
+      font-size: clamp(1.5rem, 5vw, 2.5rem);
+    }
+    
+    /* Control buttons styling */
+    .control-buttons {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      gap: 12px;
+      z-index: 1001;
+    }
+    
+    .control-btn {
+      width: 50px;
+      height: 50px;
+      border-radius: 12px;
+      background: rgba(30, 64, 175, 0.9);
+      border: 2px solid rgba(56, 189, 248, 0.6);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(10px);
+    }
+    
+    .control-btn:hover {
+      background: rgba(56, 189, 248, 0.9);
+      border-color: rgba(56, 189, 248, 1);
+      transform: scale(1.1);
+    }
+    
+
+    
+    /* Navigation indicator */
+    .nav-indicator {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 14px;
+      z-index: 1000;
+    }
+
+    /* Berater-Seite Styling */
+    .bg-accent-gold {
+      background-color: #fbbf24;
+    }
+
+    .text-skt-blue {
+      color: #1e40af;
+    }
+
+    .bg-skt-blue-light {
+      background-color: #3b82f6;
+    }
+
+    .text-gold {
+      color: #fbbf24;
+    }
+
+    .loader-white {
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top: 3px solid #ffffff;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body class="bg-sky-950 text-white font-sans overflow-hidden">
+
+  <!-- ====================================== -->
+  <!-- // Folie 0 – Berater-Name Eingabe -->
+  <!-- ====================================== -->
+  <section id="folie0" class="slide active flex flex-col items-center justify-center px-4 content-container">
+    <div class="text-center w-full max-w-2xl">
+      <h1 class="text-4xl font-bold mb-4">Willkommen zur digitalen Beratung</h1>
+      <p class="text-xl mb-8 text-gray-300">Bitte geben Sie Ihren Namen ein, um zu starten.</p>
+      <input type="text" id="beraterNameInput" class="text-2xl text-center bg-transparent border-b-2 border-gray-400 focus:border-white focus:outline-none py-2 text-white placeholder-gray-400" placeholder="Ihr Name">
+    </div>
+  </section>
+
+
+    <!-- ====================================== -->
+  <!-- // Folie 1 – Herzlich Willkommen -->
+  <!-- ====================================== -->
+  <section id="folie1" class="slide flex flex-col items-center justify-center text-center px-4 cursor-pointer content-container" onclick="nextSlide(2)">
+    <img src="AnalyseBilder/business-intelligence-in-der-finanzanalyse.webp"
+         alt="Business Intelligence / Finanzanalyse"
+         class="absolute inset-0 w-full h-full object-cover opacity-15 pointer-events-none" />
+    <div class="relative z-10 max-w-5xl w-full">
+      <h1 class="text-6xl md:text-7xl font-bold mb-16 drop-shadow-lg leading-tight text-center">
+        Herzlich Willkommen<br>zur Finanzanalyse
+      </h1>
+      <p class="responsive-subtitle mb-10" id="beraterInfo">
+        <span id="beraterRang">Finanzexperte</span> <span class="font-semibold text-sky-300" id="beraterNameDisplay">Ihr Berater</span>
+      </p>
+      <blockquote class="text-lg md:text-xl lg:text-2xl italic text-sky-100 leading-relaxed border-l-4 border-sky-400 pl-6 mb-4 max-w-4xl">
+        „Manchmal ist es besser, eine Stunde über sein Geld nachzudenken,<br>
+        als eine Woche dafür zu arbeiten."
+      </blockquote>
+      <p class="text-base md:text-lg text-sky-200 mb-10">– André Kostolany (1906 – 1999)</p>
+      <p class="text-sky-400 text-xl animate-pulse">Klicken oder tippen, um fortzufahren →</p>
+    </div>
+  </section>
+
+  <!-- ====================================== -->
+  <!-- // Folie 2 – Berater-Vorstellung -->
+  <!-- ====================================== -->
+  <section id="folie2" class="slide flex flex-col items-center justify-center px-4 cursor-pointer content-container" onclick="nextSlide(3)">
+    <div id="berater-slide-container" class="w-full max-w-7xl fade-in">
+      <!-- Berater-Inhalt wird dynamisch per JavaScript generiert -->
+      <div class="flex justify-center items-center h-64">
+        <div class="text-center">
+          <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-white mb-4"></div>
+          <p class="text-xl">Lade Beraterinformationen...</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================== -->
+  <!-- // Folie 3 – OVB → SKT Finance -->
+  <!-- ====================================== -->
+  <section id="folie3" class="slide flex flex-col items-center justify-center px-4 cursor-pointer content-container" onclick="nextStep()">
+    <!-- Überschrift -->
+    <h1 class="text-6xl md:text-7xl font-bold mb-16 text-center text-white always-visible">Ein starkes Netzwerk</h1>
+    
+    <div class="flex items-center justify-center gap-20 w-full max-w-6xl">
+      
+      <!-- SKT Finance Logo -->
+      <div class="flex flex-col items-center fade-in" id="sktLogo">
+        <div class="rounded-2xl p-12 shadow-2xl">
+          <img src="AnalyseBilder/SKT Logo_transparent Kopie.png" alt="SKT Finance Logo" class="w-80 h-80 object-contain">
+        </div>
+      </div>
+
+      <!-- Pfeil -->
+      <div class="flex justify-center fade-in" id="arrow">
+        <svg class="w-20 h-20 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M12.293 5.293a1 1 0 011.414 0l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+        </svg>
+      </div>
+
+      <!-- OVB Logo -->
+      <div class="flex flex-col items-center fade-in" id="ovbLogo">
+        <div class="bg-white rounded-2xl p-12 shadow-2xl">
+          <img src="AnalyseBilder/ovb logo.png" alt="OVB Logo" class="w-80 h-80 object-contain">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================== -->
+  <!-- // Folie 4 – OVB Fakten -->
+  <!-- ====================================== -->
+  <section id="folie4" class="slide flex flex-col items-center justify-center px-4 cursor-pointer content-container" onclick="nextStep()">
+    
+    <!-- Hauptcontainer mit flexibler Aufteilung -->
+    <div class="flex flex-col w-full h-full items-center justify-center gap-12 py-16">
+      
+      <!-- Überschrift mit Abstand -->
+      <h1 class="text-6xl md:text-7xl font-bold text-center text-white mt-8">Fakten zu OVB</h1>
+      
+      <!-- Inhalt Container -->
+      <div class="flex w-full items-center justify-center gap-12 flex-1">
+      
+      <!-- Linke Seite: Fakten und TÜV Logo -->
+      <div class="flex flex-col justify-center items-end w-1/3">
+        <!-- Fakten Liste -->
+        <div class="space-y-8 mb-12">
+          <div class="flex items-center text-3xl text-white fade-in" id="fakt1">
+            <div class="w-4 h-4 bg-sky-400 rounded-full mr-8"></div>
+            <span>Gründung 1970, Deutschland</span>
+          </div>
+          <div class="flex items-center text-3xl text-white fade-in" id="fakt2">
+            <div class="w-4 h-4 bg-sky-400 rounded-full mr-8"></div>
+            <span>Seit 1992 in Österreich</span>
+          </div>
+          <div class="flex items-center text-3xl text-white fade-in" id="fakt3">
+            <div class="w-4 h-4 bg-sky-400 rounded-full mr-8"></div>
+            <span>&gt; 5.800 Berater</span>
+          </div>
+          <div class="flex items-center text-3xl text-white fade-in" id="fakt4">
+            <div class="w-4 h-4 bg-sky-400 rounded-full mr-8"></div>
+            <span>&gt; 4.500.000 Kunden</span>
+          </div>
+          <div class="flex items-center text-3xl text-white fade-in" id="fakt5">
+            <div class="w-4 h-4 bg-sky-400 rounded-full mr-8"></div>
+            <span>&gt; 100 Produktpartner</span>
+          </div>
+          <div class="flex items-center text-3xl text-white fade-in" id="fakt6">
+            <div class="w-4 h-4 bg-sky-400 rounded-full mr-8"></div>
+            <span>16 europäische Länder</span>
+          </div>
+          <div class="flex items-center text-3xl text-white fade-in" id="fakt7">
+            <div class="w-4 h-4 bg-sky-400 rounded-full mr-8"></div>
+            <span>Seit 2006 TÜV-zertifiziert</span>
+          </div>
+        </div>
+        
+        <!-- TÜV Logo -->
+        <div class="flex justify-end fade-in" id="tuvLogo">
+          <img src="AnalyseBilder/tuv.png" alt="TÜV Zertifikat" class="h-40 object-contain">
+        </div>
+      </div>
+
+      <!-- Rechte Seite: Große Länderkarte -->
+      <div class="flex justify-center items-center w-2/3 fade-in" id="laenderkarte">
+        <img src="AnalyseBilder/Länderkarte.png" alt="OVB Länder Europa" class="h-[60vh] w-auto object-contain">
+      </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================== -->
+  <!-- // Folie 5 – Arzt vs Finanzexperte -->
+  <!-- ====================================== -->
+  <section id="folie5" class="slide flex flex-col items-center justify-center px-4 cursor-pointer content-container" onclick="nextStep()">
+    <h1 class="text-6xl md:text-7xl font-bold mb-16 text-center text-white">System mit Erfolg</h1>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 w-full max-w-7xl items-start">
+      
+      <!-- Arzt -->
+      <div class="flex flex-col items-center">
+        <!-- rheumatology-animate.svg eingebettet -->
+        <div class="w-96 h-96 mb-10 fade-in" id="imgArzt">
+          <img src="AnalyseBilder/rheumatology-animate.svg" alt="Rheumatology Animation" class="w-full h-full object-contain">
+        </div>
+
+        <h3 class="text-3xl md:text-4xl lg:text-5xl font-semibold mb-8 text-sky-300 fade-in" id="titleArzt">Arzt</h3>
+        <div class="flex flex-col items-center space-y-6">
+          <div class="fade-in" id="a1">
+            <div class="bg-sky-700 px-10 py-6 rounded-xl text-center text-2xl font-medium min-w-[280px]">Untersuchung</div>
+          </div>
+          <div class="fade-in" id="arrow1">
+            <svg class="w-10 h-16 text-sky-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L11 6.414V16a1 1 0 11-2 0V6.414L7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3z" clip-rule="evenodd" transform="rotate(180 10 10)"></path>
+            </svg>
+          </div>
+          <div class="fade-in" id="a2">
+            <div class="bg-sky-600 px-10 py-6 rounded-xl text-center text-2xl font-medium min-w-[280px]">Diagnose</div>
+          </div>
+          <div class="fade-in" id="arrow2">
+            <svg class="w-10 h-16 text-sky-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L11 6.414V16a1 1 0 11-2 0V6.414L7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3z" clip-rule="evenodd" transform="rotate(180 10 10)"></path>
+            </svg>
+          </div>
+          <div class="fade-in" id="a3">
+            <div class="bg-sky-500 px-10 py-6 rounded-xl text-center text-2xl font-medium min-w-[280px]">Rezept</div>
+          </div>
+          <div class="fade-in" id="arrow3">
+            <svg class="w-10 h-16 text-sky-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L11 6.414V16a1 1 0 11-2 0V6.414L7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3z" clip-rule="evenodd" transform="rotate(180 10 10)"></path>
+            </svg>
+          </div>
+          <div class="fade-in" id="a4">
+            <div class="bg-sky-400 px-10 py-6 rounded-xl text-center text-2xl font-semibold text-sky-900 min-w-[280px]">Anwendung</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Finanzexperte -->
+      <div class="flex flex-col items-center">
+        <!-- finance-app-animate.svg eingebettet -->
+        <div class="w-96 h-96 mb-10 fade-in" id="imgFin">
+          <img src="AnalyseBilder/finance-app-animate.svg" alt="Finance App Animation" class="w-full h-full object-contain">
+        </div>
+        
+        <h3 class="text-3xl md:text-4xl lg:text-5xl font-semibold mb-8 text-sky-300 fade-in" id="titleFin">Finanzexperte</h3>
+        <div class="flex flex-col items-center space-y-6">
+          <div class="fade-in" id="f1">
+            <div class="bg-emerald-700 px-10 py-6 rounded-xl text-center text-2xl font-medium min-w-[280px]">Aktuelle Datenerfassung</div>
+          </div>
+          <div class="fade-in" id="arrow4">
+            <svg class="w-10 h-16 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L11 6.414V16a1 1 0 11-2 0V6.414L7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3z" clip-rule="evenodd" transform="rotate(180 10 10)"></path>
+            </svg>
+          </div>
+          <div class="fade-in" id="f2">
+            <div class="bg-emerald-600 px-10 py-6 rounded-xl text-center text-2xl font-medium min-w-[280px]">Auswertung</div>
+          </div>
+          <div class="fade-in" id="arrow5">
+            <svg class="w-10 h-16 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L11 6.414V16a1 1 0 11-2 0V6.414L7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3z" clip-rule="evenodd" transform="rotate(180 10 10)"></path>
+            </svg>
+          </div>
+          <div class="fade-in" id="f3">
+            <div class="bg-emerald-500 px-10 py-6 rounded-xl text-center text-2xl font-medium min-w-[280px]">Konzept</div>
+          </div>
+          <div class="fade-in" id="arrow6">
+            <svg class="w-10 h-16 text-emerald-400" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L11 6.414V16a1 1 0 11-2 0V6.414L7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3z" clip-rule="evenodd" transform="rotate(180 10 10)"></path>
+            </svg>
+          </div>
+          <div class="fade-in" id="f4">
+            <div class="bg-emerald-400 px-10 py-6 rounded-xl text-center text-2xl font-semibold text-emerald-900 min-w-[280px]">Nutzen</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="mt-16 text-center text-sky-300 text-2xl md:text-4xl lg:text-5xl leading-relaxed fade-in font-medium" id="footer">
+      Der <span class="text-pink-400 font-semibold">Arzt</span> ist für Ihre physische Gesundheit verantwortlich.<br>
+      Ihr <span class="text-pink-400 font-semibold">Finanzexperte</span> für die finanzielle.
+    </p>
+  </section>
+
+  <!-- ====================================== -->
+  <!-- // Folie 6 – Finanzmarkt Donut -->
+  <!-- ====================================== -->
+  <section id="folie6" class="slide flex flex-col items-center justify-center px-4 cursor-pointer content-container" onclick="nextStep()">
+    <!-- Überschrift -->
+    <h1 class="text-6xl md:text-7xl font-bold mb-20 text-center text-white">Finanzmarkt</h1>
+    
+    <!-- Donut-Diagramm Container -->
+    <div class="flex items-center justify-center w-full h-full">
+      <img src="AnalyseBilder/Kreis.png" alt="Donut Chart" class="w-3/4 h-3/4 object-contain" />
+    </div>
+  </section>
+
+  <!-- ====================================== -->
+  <!-- // Folie Banken (Folie 7) -->
+  <!-- ====================================== -->
+  <section id="folie7" class="slide cursor-pointer content-container" onclick="nextStep()">
+    <!-- Überschrift ganz oben -->
+    <div class="absolute top-24 left-0 right-0 z-50">
+      <h1 class="text-6xl md:text-7xl font-bold text-center text-white" style="opacity: 1 !important; transform: translateY(0) !important; visibility: visible !important; z-index: 1000;">Banken</h1>
+    </div>
+    
+    <div class="relative w-full h-full flex items-center justify-center pt-32">
+      <!-- Kreis mit rechter Hälfte im Bild -->
+      <div class="flex-shrink-0 relative" style="width: 30vw; height: 100vh;">
+        <div class="absolute left-[-68%] top-1/2 transform -translate-y-1/2">
+          <img src="AnalyseBilder/Kreis.png" alt="Kreis" class="w-[70vh] h-[70vh] object-contain" />
+        </div>
+      </div>
+
+      <!-- Text direkt links neben dem Kreis mit mehr Abstand -->
+      <div class="flex flex-col justify-center items-start mr-8" style="width: 30vw; margin-left: calc(-5vw + 4px);">
+        <h2 class="text-6xl font-bold text-sky-300 mb-6 always-visible">ca. 500 Banken</h2>
+        <p class="text-3xl text-sky-300 mb-12 always-visible">~40% seit 2012</p>
+        <ul class="space-y-6">
+          <li class="flex items-center text-4xl text-sky-300 fade-in" id="bankPunkt1">
+            <span class="text-red-500 text-5xl mr-6">✗</span> Ansprechpartner
+          </li>
+          <li class="flex items-center text-4xl text-sky-300 fade-in" id="bankPunkt2">
+            <span class="text-red-500 text-5xl mr-6">✗</span> Hohe Gebühren
+          </li>
+          <li class="flex items-center text-4xl text-sky-300 fade-in" id="bankPunkt3">
+            <span class="text-red-500 text-5xl mr-6">✗</span> Niedrige Zinsen
+          </li>
+        </ul>
+      </div>
+
+      <!-- Bank SVG Animation - noch größer -->
+      <div class="flex-shrink-0 flex items-center justify-center flex-1">
+        <object data="AnalyseBilder/Bank.svg" type="image/svg+xml" class="w-full h-auto" style="max-width: 800px; max-height: 90vh;">
+          <img src="AnalyseBilder/Bank.svg" alt="Bank Animation" class="w-full h-auto" style="max-width: 800px; max-height: 90vh;" />
+        </object>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================== -->
+  <!-- // Folie Versicherungen (Folie 8) -->
+  <!-- ====================================== -->
+  <section id="folie8" class="slide cursor-pointer content-container" onclick="nextStep()">
+    <!-- Überschrift ganz oben -->
+    <div class="absolute top-24 left-0 right-0 z-50">
+      <h1 class="text-6xl md:text-7xl font-bold text-center text-white" style="opacity: 1 !important; transform: translateY(0) !important; visibility: visible !important; z-index: 1000;">Versicherungen</h1>
+    </div>
+    
+    <div class="relative w-full h-full flex items-center justify-center pt-32">
+      <!-- Kreis mit rechter Hälfte im Bild - wird animiert gedreht -->
+      <div class="flex-shrink-0 relative" style="width: 30vw; height: 100vh;">
+        <div class="absolute left-[-68%] top-1/2 transform -translate-y-1/2" id="versicherungKreis">
+          <img src="AnalyseBilder/Kreis.png" alt="Kreis" class="w-[70vh] h-[70vh] object-contain" style="transform: rotate(0deg); transition: transform 3s ease-in-out;" />
+        </div>
+      </div>
+
+      <!-- Text direkt links neben dem Kreis mit mehr Abstand -->
+      <div class="flex flex-col justify-center items-start mr-8" style="width: 30vw; margin-left: calc(-5vw + 4px);">
+        <h2 class="text-6xl font-bold text-sky-300 mb-8 always-visible">ca. 100 Versicherungen</h2>
+        
+        <div class="space-y-8">
+          <div class="flex items-start space-x-6 fade-in" id="versicherungPunkt1">
+            <span class="text-red-500 text-5xl mt-1 flex-shrink-0">✗</span>
+            <div>
+              <p class="text-3xl font-semibold text-sky-300 mb-2">Vertreter</p>
+              <p class="text-2xl text-sky-300 leading-relaxed">handelt im Auftrag eines<br>Versicherungsunternehmens<br>(z.B. Uniqa, Allianz, ...)</p>
+            </div>
+          </div>
+          
+          <div class="flex items-start space-x-6 fade-in" id="versicherungPunkt2">
+            <span class="text-green-500 text-5xl mt-1 flex-shrink-0">✓</span>
+            <div>
+              <p class="text-3xl font-semibold text-sky-300 mb-2">Mehrfachagent</p>
+              <p class="text-2xl text-sky-300 leading-relaxed">vergleicht zw. beliebig vielen<br>Gesellschaften und sucht das<br>beste Angebot für den Kunden</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Versicherungen SVG Animation - noch größer -->
+      <div class="flex-shrink-0 flex items-center justify-center flex-1">
+        <object data="AnalyseBilder/versicherungen.svg" type="image/svg+xml" class="w-full h-auto" style="max-width: 800px; max-height: 90vh;">
+          <img src="AnalyseBilder/versicherungen.svg" alt="Versicherungen Animation" class="w-full h-auto" style="max-width: 800px; max-height: 90vh;" />
+        </object>
+      </div>
+    </div>
+  </section>
+
+  <!-- Folie 9: Bausparkassen -->
+  <section id="folie9" class="slide cursor-pointer content-container" onclick="nextStep()">
+    <!-- Überschrift ganz oben -->
+    <div class="absolute top-24 left-0 right-0 z-50">
+      <h1 class="text-6xl md:text-7xl font-bold text-center text-white" style="opacity: 1 !important; transform: translateY(0) !important; visibility: visible !important; z-index: 1000;">Bausparkassen</h1>
+    </div>
+    
+    <div class="relative w-full h-full flex items-center justify-center pt-32">
+      <!-- Kreis mit rechter Hälfte im Bild - wird animiert gedreht -->
+      <div class="flex-shrink-0 relative" style="width: 30vw; height: 100vh;">
+        <div class="absolute left-[-68%] top-1/2 transform -translate-y-1/2" id="bausparkassenKreis">
+          <img src="AnalyseBilder/Kreis.png" alt="Kreis" class="w-[70vh] h-[70vh] object-contain" style="transform: rotate(-60deg); transition: transform 3s ease-in-out;" />
+        </div>
+      </div>
+
+      <!-- Text direkt links neben dem Kreis mit mehr Abstand -->
+      <div class="flex flex-col justify-center items-start mr-8" style="width: 30vw; margin-left: calc(-5vw + 4px);">
+        <h2 class="text-6xl font-bold text-sky-300 mb-8 always-visible">4 Bausparkassen</h2>
+        
+        <div class="space-y-6">
+          <div class="flex items-start space-x-6 fade-in" id="bausparkassenPunkt1">
+            <span class="text-green-500 text-4xl mt-1 flex-shrink-0">✓</span>
+            <p class="text-3xl text-sky-300 font-medium">staatl. Zuschüsse</p>
+          </div>
+          
+          <div class="flex items-start space-x-6 fade-in" id="bausparkassenPunkt2">
+            <span class="text-red-500 text-4xl mt-1 flex-shrink-0">✗</span>
+            <p class="text-3xl text-sky-300 font-medium">Niedrige Zinsen</p>
+          </div>
+          
+          <div class="flex items-start space-x-6 fade-in" id="bausparkassenPunkt3">
+            <span class="text-red-500 text-4xl mt-1 flex-shrink-0">✗</span>
+            <p class="text-3xl text-sky-300 font-medium">Geringe Flexibilität</p>
+          </div>
+          
+          <div class="flex items-start space-x-6 fade-in" id="bausparkassenPunkt4">
+            <span class="text-red-500 text-4xl mt-1 flex-shrink-0">✗</span>
+            <p class="text-3xl text-sky-300 font-medium">Vorzeitige Kündigung</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bausparkassen SVG Animation -->
+      <div class="flex-shrink-0 flex items-center justify-center flex-1">
+        <object data="AnalyseBilder/sparkasse.svg" type="image/svg+xml" class="w-full h-auto" style="max-width: 800px; max-height: 90vh;">
+          <img src="AnalyseBilder/sparkasse.svg" alt="Bausparkassen Animation" class="w-full h-auto" style="max-width: 800px; max-height: 90vh;" />
+        </object>
+      </div>
+    </div>
+  </section>
+
+  <!-- Folie 10: Investment -->
+  <section id="folie10" class="slide cursor-pointer content-container" onclick="nextStep()">
+    <!-- Überschrift ganz oben -->
+    <div class="absolute top-24 left-0 right-0 z-50">
+      <h1 class="text-6xl md:text-7xl font-bold text-center text-white" style="opacity: 1 !important; transform: translateY(0) !important; visibility: visible !important; z-index: 1000;">Investment</h1>
+    </div>
+    
+    <!-- Kreis ganz links -->
+    <div class="flex-shrink-0 relative" style="width: 30vw; height: 100vh;">
+      <div class="absolute left-[-68%] top-1/2 transform -translate-y-1/2" id="investmentKreis">
+        <img src="AnalyseBilder/Kreis.png" alt="Kreis" class="w-[70vh] h-[70vh] object-contain" style="transform: rotate(-120deg); transition: transform 3s ease-in-out;" />
+      </div>
+    </div>
+
+    <!-- Text direkt links neben dem Kreis mit mehr Abstand -->
+    <div class="flex flex-col justify-center items-start mr-8" style="width: 70vw; margin-left: calc(-5vw + 4px);">
+      <div class="w-full flex items-center justify-center space-x-8">
+        
+        <!-- Aktien Spalte -->
+        <div class="flex-1 flex flex-col items-center justify-between text-center bg-gray-800 bg-opacity-30 backdrop-blur-sm rounded-xl p-8" style="height: 60vh;">
+          <h2 class="text-5xl font-bold text-white fade-in" id="aktienTitle">Aktien</h2>
+          
+          <!-- Aktien Icons -->
+          <div class="flex flex-col items-center" style="gap: 27px;">
+            <!-- Kerzenchart PNG -->
+            <div class="fade-in" id="aktienChart">
+              <img src="AnalyseBilder/kerzenchart.png" alt="Kerzenchart" class="w-37 h-37 object-contain" />
+            </div>
+            
+            <!-- Haus PNG -->
+            <div class="fade-in" id="aktienBuilding">
+              <img src="AnalyseBilder/haus.png" alt="Haus" class="w-37 h-37 object-contain" />
+            </div>
+          </div>
+          
+          <div class="flex flex-col items-center space-y-4">
+            <div class="text-7xl font-bold text-emerald-400 fade-in" id="aktienPercent">10%</div>
+            
+            <div class="text-center space-y-3">
+              <div class="flex items-center justify-center text-2xl text-emerald-400 fade-in" id="aktienPro">
+                <span class="text-3xl mr-3">+</span> hohe Rendite
+              </div>
+              <div class="flex items-center justify-center text-2xl text-red-400 fade-in" id="aktienCon">
+                <span class="text-3xl mr-3">−</span> hohes Risiko
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Trennlinie -->
+        <div class="w-1 h-96 bg-white opacity-30"></div>
+        
+        <!-- Anleihen Spalte -->
+        <div class="flex-1 flex flex-col items-center justify-between text-center bg-gray-800 bg-opacity-30 backdrop-blur-sm rounded-xl p-8" style="height: 60vh;">
+          <h2 class="text-5xl font-bold text-white fade-in" id="anleihenTitle">Anleihen</h2>
+          
+          <!-- Anleihen Icons -->
+          <div class="flex flex-col items-center" style="gap: 19px;">
+            <!-- Geldsack PNG -->
+            <div class="flex justify-center fade-in" id="anleihenMoney">
+              <img src="AnalyseBilder/geldsack.png" alt="Geldsack" class="w-37 h-37 object-contain" />
+            </div>
+            
+            <div class="text-3xl font-bold text-yellow-400 fade-in" id="anleihenAmount">1.000.000 EUR</div>
+            
+            <!-- Hand PNG -->
+            <div class="flex justify-center fade-in" id="anleihenBills">
+              <img src="AnalyseBilder/hand.png" alt="Hand" class="w-37 h-37 object-contain" />
+            </div>
+          </div>
+          
+          <div class="flex flex-col items-center space-y-4">
+            <div class="text-7xl font-bold text-yellow-400 fade-in" id="anleihenPercent">2%</div>
+            
+            <div class="text-center space-y-3">
+              <div class="flex items-center justify-center text-2xl text-red-400 fade-in" id="anleihenCon">
+                <span class="text-3xl mr-3">−</span> niedrige Rendite
+              </div>
+              <div class="flex items-center justify-center text-2xl text-emerald-400 fade-in" id="anleihenPro">
+                <span class="text-3xl mr-3">+</span> geringes Risiko
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Trennlinie -->
+        <div class="w-1 h-96 bg-white opacity-30"></div>
+        
+        <!-- Fonds Spalte -->
+        <div class="flex-1 flex flex-col items-center justify-between text-center bg-gray-800 bg-opacity-30 backdrop-blur-sm rounded-xl p-8" style="height: 60vh;">
+          <h2 class="text-5xl font-bold text-white fade-in" id="fondsTitle">Fonds</h2>
+          
+          <!-- Fonds Icons -->
+          <div class="flex flex-col items-center" style="gap: 27px;">
+            <!-- Fonds PNG -->
+            <div class="fade-in" id="fondsPie">
+              <img src="AnalyseBilder/fonds.png" alt="Fonds" class="w-37 h-37 object-contain" />
+            </div>
+            
+            <!-- Manager PNG -->
+            <div class="fade-in" id="fondsManager">
+              <img src="AnalyseBilder/manager.png" alt="Manager" class="w-37 h-37 object-contain" />
+            </div>
+          </div>
+          
+          <div class="flex flex-col items-center space-y-4">
+            <div class="text-7xl font-bold text-purple-400 fade-in" id="fondsPercent">7-8%</div>
+            
+            <div class="text-center space-y-3">
+              <div class="flex items-center justify-center text-2xl text-emerald-400 fade-in" id="fondsPro1">
+                <span class="text-3xl mr-3">+</span> höhere Rendite
+              </div>
+              <div class="flex items-center justify-center text-2xl text-emerald-400 fade-in" id="fondsPro2">
+                <span class="text-3xl mr-3">+</span> geringeres Risiko
+              </div>
+            </div>
+          </div>
+        </div>
+        
+      </div>
+    </div>
+  </section>
+
+  <!-- Control Buttons (rechts unten) -->
+  <div class="control-buttons">
+    <!-- Fullscreen Button -->
+    <button class="control-btn" onclick="toggleFullscreen()" title="Vollbild">
+      <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+      </svg>
+    </button>
+    
+    <!-- Calculator Button -->
+    <button class="control-btn" onclick="openCalculator()" title="Rechner">
+      <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zm-8-4H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zm-8-4H7V7h2v2zm4 0h-2V7h2v2zm4 0h-2V7h2v2z"/>
+      </svg>
+    </button>
+  </div>
+
+
+
+  <!-- ====================================== -->
+  <!-- // JS Logic -->
+  <!-- ====================================== -->
+  <script>
+    let currentSlide = 0;  // Starte bei 0 für Eingabefeld
+    const totalSlides = 11; // Jetzt 11 Slides total (0-10)
+    
+    // Berater-Name Eingabe und Start
+    function startAnalyse() {
+      const beraterName = document.getElementById('beraterNameInput').value.trim();
+      if (!beraterName) {
+        alert('Bitte geben Sie Ihren Namen ein.');
+        return;
+      }
+      
+      // Speichere Berater-Name global
+      window.currentBeraterName = beraterName;
+      
+      console.log('Starte Analyse für Berater:', beraterName);
+      
+      // Aktualisiere Berater-Info auf Startseite
+      updateBeraterInfoOnStartpage(beraterName);
+      
+      // Springe zur ersten richtigen Folie
+      nextSlide(1);
+    }
+
+    // Berater-Info auf Startseite aktualisieren
+    function updateBeraterInfoOnStartpage(beraterName) {
+      const beraterRangElement = document.getElementById('beraterRang');
+      const beraterNameElement = document.getElementById('beraterNameDisplay');
+      
+      if (!beraterRangElement || !beraterNameElement) return;
+      
+      // Standard-Fallback
+      beraterRangElement.textContent = 'Finanzexperte';
+      beraterNameElement.textContent = beraterName;
+      
+      // Wenn SeaTable verfügbar ist, lade echte Daten
+      if (typeof COLUMN_MAPS !== 'undefined' && typeof db !== 'undefined' && db.mitarbeiter && db.mitarbeiter.length > 0) {
+        const nameKey = COLUMN_MAPS.mitarbeiter?.Name;
+        const berater = nameKey 
+          ? db.mitarbeiter.find(m => m && m[nameKey] && m[nameKey].toLowerCase() === beraterName.toLowerCase())
+          : null;
+        
+        if (berater) {
+          // Karrierestufe aus DB holen
+          const karrierestufeLink = berater[COLUMN_MAPS.mitarbeiter.Karrierestufe];
+          const karrierestufe = (Array.isArray(karrierestufeLink) && karrierestufeLink[0]) ? karrierestufeLink[0].display_value : 'Finanzexperte';
+          
+          beraterRangElement.textContent = karrierestufe;
+          beraterNameElement.textContent = berater[nameKey];
+          console.log('✅ Berater-Info auf Startseite aktualisiert:', karrierestufe, berater[nameKey]);
+        }
+      }
+    }
+    
+    // Seitenwechsel
+    function nextSlide(nr) {
+      console.log('🔄 Wechsle zu Folie:', nr);
+
+      // Verstecke alle Folien komplett
+      document.querySelectorAll('.slide').forEach(s => {
+        s.classList.remove('active');
+        s.style.display = 'none';
+        s.style.opacity = '0';
+        s.style.visibility = 'hidden';
+      });
+
+      // Zeige gewünschte Folie
+      const targetSlide = document.getElementById('folie' + nr);
+      if (targetSlide) {
+        targetSlide.classList.add('active');
+        targetSlide.style.display = 'flex';
+        targetSlide.style.opacity = '1';
+        targetSlide.style.visibility = 'visible';
+        currentSlide = nr;
+        updateSlideNumber();
+
+        // Reset Animation Index für neue Folie
+        resetAnimationIndex();
+
+        // Stelle sicher, dass Überschriften sofort sichtbar sind
+        const headlines = targetSlide.querySelectorAll('h1, h2');
+        headlines.forEach(headline => {
+          headline.style.opacity = '1';
+          headline.style.transform = 'translateY(0)';
+          headline.style.visibility = 'visible';
+          headline.classList.remove('fade-in');
+        });
+
+        // Spezielle Aktionen für bestimmte Folien
+        if (nr === 2 && window.currentBeraterName) {
+          // Berater-Daten für Folie 2 laden
+          console.log('🔄 Springe zu Folie 2 - lade Berater-Daten');
+          setTimeout(() => {
+            renderBeraterVorstellung();
+          }, 100);
+        } else if (nr === 6) {
+          // Reset Donut Position für Folie 6
+          resetFinanzmarktDonut();
+        } else if (nr === 7) {
+          // Morph transition to Folie 7
+          morphTransitionToFolie7();
+        } else if (nr === 8) {
+          // Starte Kreis-Rotation für Versicherungen-Folie
+          setTimeout(() => {
+            rotateVersicherungKreis();
+          }, 500); // Kleine Verzögerung damit die Folie erst geladen ist
+        } else if (nr === 9) {
+          // Starte Kreis-Rotation für Bausparkassen-Folie
+          setTimeout(() => {
+            rotateBausparkassenKreis();
+          }, 500); // Kleine Verzögerung damit die Folie erst geladen ist
+        } else if (nr === 10) {
+          // Starte Kreis-Rotation für Investment-Folie
+          setTimeout(() => {
+            rotateInvestmentKreis();
+          }, 500); // Kleine Verzögerung damit die Folie erst geladen ist
+        }
+
+        // Reset Kreis bei Folienwechsel
+        if (oldSlideNr === 7) { // Von Folie 8 (index 7) kommend
+          resetVersicherungKreis();
+        } else if (oldSlideNr === 8) { // Von Folie 9 (index 8) kommend
+          resetBausparkassenKreis();
+        } else if (oldSlideNr === 9) { // Von Folie 10 (index 9) kommend
+          resetInvestmentKreis();
+        }
+      } else {
+        console.error('❌ Folie nicht gefunden:', 'folie' + nr);
+      }
+    }
+
+    // Slide-Nummer aktualisieren
+    function updateSlideNumber() {
+      const slideElement = document.getElementById('slideNumber');
+      if (slideElement) {
+        if (currentSlide === 0) {
+          slideElement.textContent = 'Eingabe';
+        } else {
+          slideElement.textContent = currentSlide;
+        }
+      }
+    }
+
+    // Einheitliche Animation für alle Folien
+    const slideAnimations = {
+      3: ['sktLogo', 'arrow', 'ovbLogo'],
+      4: ['fakt1', 'fakt2', 'fakt3', 'fakt4', 'fakt5', 'fakt6', 'fakt7', 'tuvLogo', 'laenderkarte'],
+      5: ["imgArzt","titleArzt","a1","arrow1","a2","arrow2","a3","arrow3","a4","imgFin","titleFin","f1","arrow4","f2","arrow5","f3","arrow6","f4","footer"],
+      7: ['bankPunkt1', 'bankPunkt2', 'bankPunkt3'],
+      8: ['versicherungPunkt1', 'versicherungPunkt2'],
+      9: ['bausparkassenPunkt1', 'bausparkassenPunkt2', 'bausparkassenPunkt3', 'bausparkassenPunkt4'],
+      10: ['aktienTitle', 'aktienChart', 'aktienBuilding', 'aktienPercent', 'aktienPro', 'aktienCon', 'anleihenTitle', 'anleihenMoney', 'anleihenAmount', 'anleihenBills', 'anleihenPercent', 'anleihenCon', 'anleihenPro', 'fondsTitle', 'fondsPie', 'fondsManager', 'fondsPercent', 'fondsPro1', 'fondsPro2']
+      // Folie 6 hat keine Animationen mehr - springt direkt zur nächsten Folie
+    };
+    
+    let animationIndex = 0;
+    
+    function nextStep() {
+      const currentAnimations = slideAnimations[currentSlide];
+      
+      if (currentAnimations && animationIndex < currentAnimations.length) {
+        // Spezielle Behandlung für Finanzmarkt-Donut
+        if (currentSlide === 6 && currentAnimations[animationIndex] === 'finanzmarkt-rotation') {
+          rotateFinanzmarktDonut();
+        } else {
+          // Zeige nächstes Animations-Element
+          const element = document.getElementById(currentAnimations[animationIndex]);
+          if (element) {
+            element.classList.add("show");
+          }
+        }
+        animationIndex++;
+      } else {
+        // Animation abgeschlossen -> nächste Folie
+        if (currentSlide < totalSlides - 1) {
+          nextSlide(currentSlide + 1);
+        } else {
+          // Am Ende angekommen -> zurück zum Anfang
+          nextSlide(1);
+        }
+        resetAnimationIndex();
+      }
+    }
+    
+    // Finanzmarkt-Donut Rotation
+    function rotateFinanzmarktDonut() {
+      const donut = document.getElementById('finanzmarkt-donut');
+      if (donut) {
+        // Rotiere den Donut um 60 Grad (360°/6 Segmente) und verschiebe ihn zur Hälfte aus dem Bildschirm
+        donut.style.transform = 'translateX(-400px) rotate(60deg)';
+        donut.style.transition = 'all 1.5s ease-in-out';
+      }
+    }
+    
+    // Reset Donut Position bei Folienwechsel
+    function resetFinanzmarktDonut() {
+      const donut = document.getElementById('finanzmarkt-donut');
+      if (donut) {
+        donut.style.transform = 'translateX(0px) rotate(0deg)';
+        donut.style.transition = 'all 0.8s ease-in-out';
+      }
+    }
+    
+    function resetAnimationIndex() {
+      animationIndex = 0;
+    }
+    
+    // Keyboard Navigation - EINHEITLICH
+    document.addEventListener('keydown', function(event) {
+      if (event.key === 'ArrowRight') {
+        // Nächste Animation oder nächste Folie
+        if (currentSlide === 0) {
+          startAnalyse();
+        } else {
+          nextStep();
+        }
+        event.preventDefault();
+      } else if (event.key === 'ArrowLeft') {
+        // Vorherige Folie
+        if (currentSlide > 0) {
+          resetAllAnimations();
+          nextSlide(currentSlide - 1);
+        }
+        event.preventDefault();
+      } else if (event.key === 'Enter' && currentSlide === 0) {
+        startAnalyse();
+        event.preventDefault();
+      } else if (event.key === 'Escape') {
+        // Vollbild beenden
+        if (document.fullscreenElement) {
+          document.exitFullscreen();
+        }
+      }
+    });
+    
+    // Fullscreen Toggle
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+          console.log('Fullscreen not supported:', err);
+        });
+      } else {
+        document.exitFullscreen();
+      }
+    }
+    
+    // Calculator
+    function openCalculator() {
+      
+    }
+    
+    // Jump to specific slide (dynamisch)
+    function jumpToSlide(slideNumber) {
+      // Reset alle Animationen für alle Folien
+      resetAllAnimations();
+      
+      // Springe zur gewünschten Folie
+      nextSlide(slideNumber);
+      
+      // Spezielle Behandlung für bestimmte Folien
+      if (slideNumber === 4) {
+        // Folie 4: Zeige alle Animationen sofort
+        showAllAnimations();
+      }
+    }
+    
+    // Hilfsfunktion: Alle Animationen zurücksetzen
+    function resetAllAnimations() {
+      // Reset alle Animationen für alle Folien
+      Object.values(slideAnimations).forEach(animationList => {
+        animationList.forEach(id => {
+          const element = document.getElementById(id);
+          if (element) element.classList.remove("show");
+        });
+      });
+      
+      // Reset alle fade-in Elemente
+      document.querySelectorAll('.fade-in').forEach(element => {
+        element.classList.remove('show');
+      });
+      
+      resetAnimationIndex();
+    }
+    
+    // Hilfsfunktion: Alle Animationen für aktuelle Folie anzeigen
+    function showAllAnimations() {
+      const currentAnimations = slideAnimations[currentSlide];
+      if (currentAnimations) {
+        currentAnimations.forEach(id => {
+          const element = document.getElementById(id);
+          if (element) element.classList.add("show");
+        });
+        animationIndex = currentAnimations.length;
+      }
+    }
+    
+    // === SEATABLE-KONFIGURATION & FUNKTIONEN (aus beratung_standalone.js kopiert) ===
+    
+    // Konstanten & Globale Variablen
+    const SEATABLE_API_TOKEN = "b148f4c735d193f77841ce4e4ddb2bb8bc2e446b";
+    const SEATABLE_APP_ACCESS_TOKEN_URL = "https://cloud.seatable.io/api/v2.1/dtable/app-access-token/";
+    const SEATABLE_DTABLE_UUID = "5b374b51-789c-4aac-a12f-02574f8f4855";
+
+    let seaTableAccessToken = null;
+    let apiGatewayUrl = null;
+    let COLUMN_MAPS = {};
+    let METADATA = {};
+    let db = {
+      mitarbeiter: [],
+      gesellschaften: [], // Für Logos
+    };
+
+    // SeaTable Access Token holen
+    async function getSeaTableAccessToken() {
+      try {
+        const url = `${SEATABLE_APP_ACCESS_TOKEN_URL}?dtable_uuid=${SEATABLE_DTABLE_UUID}`;
+        const response = await fetch(url, { headers: { Authorization: `Token ${SEATABLE_API_TOKEN}` } });
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        seaTableAccessToken = data.access_token;
+        apiGatewayUrl = data.dtable_server;
+      } catch (error) {
+        console.error("Error getting SeaTable access token:", error);
+      }
+    }
+
+    // SeaTable Tabellen abfragen
+    async function seaTableQuery(tableName) {
+      if (!seaTableAccessToken || !apiGatewayUrl) {
+        await getSeaTableAccessToken();
+      }
+      try {
+        const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/?table_name=${encodeURIComponent(tableName)}&convert_link_id=true`;
+        const response = await fetch(url, { headers: { Authorization: `Bearer ${seaTableAccessToken}` } });
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        return data.rows || [];
+      } catch (error) {
+        console.error(`Error fetching data from table ${tableName}:`, error);
+        return [];
+      }
+    }
+
+    // Spalten-Maps von SeaTable holen
+    async function fetchColumnMaps() {
+      if (!seaTableAccessToken || !apiGatewayUrl) return {};
+      try {
+        const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/metadata/`;
+        const response = await fetch(url, { headers: { Authorization: `Bearer ${seaTableAccessToken}` } });
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        const newColumnMaps = {};
+        if (data && data.metadata && data.metadata.tables) {
+          METADATA.tables = data.metadata.tables;
+          data.metadata.tables.forEach((table) => {
+            newColumnMaps[table.name.toLowerCase()] = {};
+            table.columns.forEach((col) => { newColumnMaps[table.name.toLowerCase()][col.name] = col.key; });
+          });
+        }
+        return newColumnMaps;
+      } catch (error) {
+        console.error("Error fetching column maps:", error);
+        return {};
+      }
+    }
+
+    // Download-Links für Dateien holen
+    async function getSeaTableDownloadLink(filePath) {
+      const log = (message, ...data) => console.log(`%c[DownloadLink] %c${message}`, 'color: #17a2b8; font-weight: bold;', 'color: black;', ...data);
+      log(`Anfrage für Download-Link für Pfad: ${filePath}`);
+
+      if (!SEATABLE_API_TOKEN) {
+        log("!!! FEHLER: Haupt-API-Token (SEATABLE_API_TOKEN) fehlt.");
+        console.error("Cannot get download link without the main SeaTable API Token.");
+        return null;
+      }
+      try {
+        let relativePath = filePath;
+        const assetPrefix = `/asset/${SEATABLE_DTABLE_UUID}/`;
+        const assetIndex = relativePath.indexOf(assetPrefix);
+
+        if (assetIndex !== -1) {
+          relativePath = relativePath.substring(assetIndex + assetPrefix.length);
+          log(`Asset-Pfad extrahiert: ${relativePath}`);
+        } else {
+          log(`WARNUNG: Asset-Präfix nicht im Pfad gefunden. Verwende Pfad wie er ist: ${relativePath}`);
+        }
+
+        let rawPath;
+        try {
+          const correctedPath = relativePath.replace(/%6s/g, '%20');
+          rawPath = decodeURIComponent(correctedPath);
+          log(`Pfad dekodiert zu: ${rawPath}`);
+        } catch (e) {
+          log(`Konnte Pfad nicht dekodieren, wird unverändert verwendet. Fehler: ${e.message}`);
+          rawPath = relativePath;
+        }
+
+        const url = `https://cloud.seatable.io/api/v2.1/dtable/app-download-link/?dtable_uuid=${SEATABLE_DTABLE_UUID}&path=${rawPath}`;
+        const response = await fetch(url, { method: 'GET', headers: { Authorization: `Token ${SEATABLE_API_TOKEN}` } });
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        return data.download_link;
+      } catch (error) {
+        log('!!! KRITISCHER FEHLER beim Abrufen des Download-Links:', error);
+        return null;
+      }
+    }
+
+    // SeaTable initialisieren
+    async function initSeaTable() {
+      console.log('Initialisiere SeaTable-Verbindung...');
+      
+      try {
+        // 1. Access Token holen
+        await getSeaTableAccessToken();
+        if (!seaTableAccessToken) {
+          throw new Error('Konnte SeaTable Access Token nicht erhalten');
+        }
+
+        // 2. Spalten-Maps laden
+        const columnMaps = await fetchColumnMaps();
+        COLUMN_MAPS = columnMaps;
+        console.log('COLUMN_MAPS geladen:', COLUMN_MAPS);
+
+        // 3. Mitarbeiter-Daten laden
+        const mitarbeiterData = await seaTableQuery('Mitarbeiter');
+        db.mitarbeiter = mitarbeiterData;
+        console.log(`${mitarbeiterData.length} Mitarbeiter geladen`);
+
+        // 4. Gesellschaften für Logos laden (optional)
+        try {
+          const gesellschaftenData = await seaTableQuery('Gesellschaften');
+          db.gesellschaften = gesellschaftenData;
+          console.log(`${gesellschaftenData.length} Gesellschaften geladen`);
+        } catch (error) {
+          console.warn('Gesellschaften-Tabelle nicht gefunden, weiter ohne Logos');
+        }
+
+        console.log('SeaTable erfolgreich initialisiert');
+        return true;
+      } catch (error) {
+        console.error('Fehler bei SeaTable-Initialisierung:', error);
+        return false;
+      }
+    }
+
+    // HTML Escaping
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Berater-Vorstellung rendern (Kopie der _renderBeraterVorstellung Methode)
+    async function renderBeraterVorstellung() {
+      console.log('🔍 renderBeraterVorstellung() gestartet');
+      const container = document.getElementById('berater-slide-container');
+      if (!container) {
+        console.error('❌ Container berater-slide-container nicht gefunden');
+        return;
+      }
+
+      container.innerHTML = '<div class="loader-white mx-auto"></div>';
+
+      const beraterName = window.currentBeraterName;
+      console.log('👤 Berater-Name:', beraterName);
+      if (!beraterName) {
+        container.innerHTML = '<p class="text-center text-xl">Kein Berater-Name angegeben.</p>';
+        return;
+      }
+
+      // Prüfe ob SeaTable-Daten verfügbar sind (brauchen wir die globalen Variablen)
+      console.log('🔗 SeaTable Check - COLUMN_MAPS:', typeof COLUMN_MAPS, 'db:', typeof db);
+      console.log('📊 db.mitarbeiter length:', db?.mitarbeiter?.length);
+      
+      if (typeof COLUMN_MAPS === 'undefined' || typeof db === 'undefined' || !db.mitarbeiter || db.mitarbeiter.length === 0) {
+        console.warn('⚠️ SeaTable-Daten nicht verfügbar - verwende Fallback');
+        // Fallback wenn SeaTable nicht verfügbar
+        renderBeraterFallback(beraterName);
+        return;
+      }
+
+      const nameKey = COLUMN_MAPS.mitarbeiter?.Name;
+      console.log('🔑 nameKey:', nameKey);
+      
+      const berater = nameKey 
+        ? db.mitarbeiter.find(m => m && m[nameKey] && m[nameKey].toLowerCase() === beraterName.toLowerCase())
+        : null;
+
+      console.log('👨‍💼 Berater gefunden:', !!berater);
+      if (berater) {
+        console.log('📝 Berater-Daten:', berater);
+      }
+
+      if (!berater) {
+        console.warn('❌ Berater nicht gefunden');
+        container.innerHTML = `<p class="text-center text-xl">Informationen zum Berater "${escapeHtml(beraterName)}" konnten nicht geladen werden.</p>`;
+        return;
+      }
+
+      console.log('✅ Berater gefunden - extrahiere Daten...');
+      
+      // Berater-Daten extrahieren
+      const karrierestufeLink = berater[COLUMN_MAPS.mitarbeiter.Karrierestufe];
+      const karrierestufe = (Array.isArray(karrierestufeLink) && karrierestufeLink[0]) ? karrierestufeLink[0].display_value : 'Berater';
+      console.log('💼 Karrierestufe:', karrierestufe);
+
+      const bueroLink = berater[COLUMN_MAPS.mitarbeiter.Buero];
+      const buero = (Array.isArray(bueroLink) && bueroLink[0]) ? bueroLink[0].display_value : 'Hauptzentrale';
+      console.log('🏢 Büro:', buero);
+
+      const textZuMir = berater[COLUMN_MAPS.mitarbeiter.TextZuMir] || 'Ihr Experte für eine sichere finanzielle Zukunft.';
+      console.log('📝 Text zu mir:', textZuMir);
+      
+      const bildUrlRaw = berater[COLUMN_MAPS.mitarbeiter.Bild]?.[0];
+      console.log('🖼️ Bild URL Raw:', bildUrlRaw);
+
+      const hatVA = berater[COLUMN_MAPS.mitarbeiter.VA] === true;
+      const hatVB = berater[COLUMN_MAPS.mitarbeiter.VB] === true;
+      const hatImmo = berater[COLUMN_MAPS.mitarbeiter.Immobilienexperte] === true;
+      console.log('🔧 Qualifikationen - VA:', hatVA, 'VB:', hatVB, 'Immo:', hatImmo);
+
+      // Bild laden
+      console.log('🖼️ Starte Bild-Laden...');
+      let bildHtml = '<div class="w-80 h-80 bg-sky-700 rounded-full flex items-center justify-center"><i class="fas fa-user fa-8x text-white"></i></div>';
+      if (bildUrlRaw && typeof getSeaTableDownloadLink === 'function') {
+        try {
+          console.log('📸 Lade Bild von SeaTable...');
+          const finalBildUrl = await getSeaTableDownloadLink(bildUrlRaw);
+          console.log('🔗 Final Bild URL:', finalBildUrl);
+          if (finalBildUrl) {
+            bildHtml = `<img src="${finalBildUrl}" alt="Portrait von ${escapeHtml(berater[nameKey])}" class="w-80 h-80 rounded-full object-cover shadow-2xl border-4 border-white">`;
+            console.log('✅ Bild HTML erstellt');
+          }
+        } catch (error) {
+          console.warn('❌ Fehler beim Laden des Beraterbildes:', error);
+        }
+      } else {
+        console.log('ℹ️ Kein Bild oder getSeaTableDownloadLink nicht verfügbar');
+      }
+
+      // Siegel erstellen
+      const createSiegel = (text, icon) => `
+        <div class="flex flex-col items-center text-center">
+          <div class="w-24 h-24 rounded-full bg-accent-gold text-skt-blue flex items-center justify-center shadow-lg mb-2 border-4 border-skt-blue-light">
+            <i class="fas ${icon} fa-3x"></i>
+          </div>
+          <p class="font-semibold">${text}</p>
+        </div>
+      `;
+
+      let siegelHtml = '<div class="flex justify-center gap-8 mt-8">';
+      if (hatVA) siegelHtml += createSiegel('Versicherungsagent', 'fa-shield-alt');
+      if (hatVB) siegelHtml += createSiegel('Vermögensberater', 'fa-piggy-bank');
+      if (hatImmo) siegelHtml += createSiegel('Immobilienexperte', 'fa-home');
+      siegelHtml += '</div>';
+
+      // Berater-Inhalt rendern (50% größer skaliert)
+      console.log('🎨 Erstelle HTML für Container...');
+      const finalHtml = `
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-18 items-center transform scale-150">
+          <div class="md:col-span-2 text-left">
+            <h2 class="text-7xl font-bold mb-2">${escapeHtml(berater[nameKey])}</h2>
+            <p class="text-gold font-bold text-3xl mb-3">${karrierestufe}</p>
+            <p class="text-2xl text-gray-300 mb-9"><i class="fas fa-map-marker-alt mr-3"></i>${escapeHtml(buero)}</p>
+            <div class="prose prose-2xl text-white max-w-none">
+              ${textZuMir}
+            </div>
+            ${(hatVA || hatVB || hatImmo) ? siegelHtml : ''}
+          </div>
+          <div class="flex justify-center md:justify-end">
+            ${bildHtml.replace('w-80 h-80', 'w-96 h-96')}
+          </div>
+        </div>
+      `;
+      
+      console.log('📄 Final HTML length:', finalHtml.length);
+      container.innerHTML = finalHtml;
+      
+      // Mache den Container sichtbar
+      container.classList.add('show');
+      console.log('✅ Berater-Inhalt erfolgreich gerendert und sichtbar gemacht!');
+    }
+
+    // Fallback wenn SeaTable nicht verfügbar
+    function renderBeraterFallback(beraterName) {
+      const container = document.getElementById('berater-slide-container');
+      if (!container) return;
+
+      const siegelHtml = `
+        <div class="flex justify-center gap-8 mt-8">
+          <div class="flex flex-col items-center text-center">
+            <div class="w-24 h-24 rounded-full bg-accent-gold text-skt-blue flex items-center justify-center shadow-lg mb-2 border-4 border-skt-blue-light">
+              <i class="fas fa-shield-alt fa-3x"></i>
+            </div>
+            <p class="font-semibold">Versicherungsagent</p>
+          </div>
+          <div class="flex flex-col items-center text-center">
+            <div class="w-24 h-24 rounded-full bg-accent-gold text-skt-blue flex items-center justify-center shadow-lg mb-2 border-4 border-skt-blue-light">
+              <i class="fas fa-piggy-bank fa-3x"></i>
+            </div>
+            <p class="font-semibold">Vermögensberater</p>
+          </div>
+          <div class="flex flex-col items-center text-center">
+            <div class="w-24 h-24 rounded-full bg-accent-gold text-skt-blue flex items-center justify-center shadow-lg mb-2 border-4 border-skt-blue-light">
+              <i class="fas fa-home fa-3x"></i>
+            </div>
+            <p class="font-semibold">Immobilienexperte</p>
+          </div>
+        </div>
+      `;
+
+      container.innerHTML = `
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-18 items-center transform scale-150">
+          <div class="md:col-span-2 text-left">
+            <h2 class="text-7xl font-bold mb-2">${escapeHtml(beraterName)}</h2>
+            <p class="text-gold font-bold text-3xl mb-3">Regionaldirektor</p>
+            <p class="text-2xl text-gray-300 mb-9"><i class="fas fa-map-marker-alt mr-3"></i>Hauptzentrale Wien</p>
+            <div class="prose prose-2xl text-white max-w-none">
+              <p>Als erfahrener Finanzexperte mit über 10 Jahren Branchenerfahrung unterstütze ich Sie dabei, Ihre finanziellen Ziele zu erreichen und eine sichere Zukunft aufzubauen.</p>
+              <p class="mt-6">Meine Spezialisierung liegt in der ganzheitlichen Finanzberatung – von der Risikoabsicherung über Vermögensaufbau bis hin zur Altersvorsorge.</p>
+            </div>
+            ${siegelHtml}
+          </div>
+          <div class="flex justify-center md:justify-end">
+            <div class="w-96 h-96 bg-sky-700 rounded-full flex items-center justify-center border-4 border-white shadow-2xl">
+              <i class="fas fa-user fa-8x text-white"></i>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      // Mache den Container sichtbar
+      container.classList.add('show');
+    }
+
+    // Beim Laden der Seite - initialisiere alles
+    document.addEventListener('DOMContentLoaded', async function() {
+      console.log('📄 Seite geladen - initialisiere...');
+      
+      // 1. Erstmal alle Slides verstecken
+      document.querySelectorAll('.slide').forEach(s => {
+        s.classList.remove('active');
+        s.style.display = 'none';
+      });
+      
+      // 2. SeaTable initialisieren
+      console.log('Starte SeaTable-Initialisierung...');
+      const seaTableSuccess = await initSeaTable();
+      if (seaTableSuccess) {
+        console.log('✅ SeaTable bereit');
+      } else {
+        console.warn('⚠️ SeaTable-Initialisierung fehlgeschlagen - Fallback aktiv');
+      }
+
+      // 3. Starte mit Folie 0
+      nextSlide(0);
+      
+      // 3. Fokus auf Eingabefeld setzen
+      setTimeout(() => {
+        const input = document.getElementById('beraterNameInput');
+        if (input) {
+          input.focus();
+        }
+      }, 100);
+      
+      // 4. Enter-Key im Eingabefeld abfangen
+      const input = document.getElementById('beraterNameInput');
+      if (input) {
+        input.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') {
+            startAnalyse();
+          }
+        });
+      }
+      
+      // 5. Auch bei normaler Enter-Taste in der Eingabe
+      input.addEventListener('focus', function() {
+        document.addEventListener('keydown', function handleEnter(e) {
+          if (e.key === 'Enter' && document.activeElement === input) {
+            startAnalyse();
+            document.removeEventListener('keydown', handleEnter);
+          }
+        });
+      });
+      
+      // 6. Optional: URL-Parameter laden falls vorhanden
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlBerater = urlParams.get('advisor') || urlParams.get('berater');
+      if (urlBerater && input) {
+        input.value = urlBerater;
+        startAnalyse();
+      }
+    });
+
+    // Define morphTransitionToFolie7 function
+    function morphTransitionToFolie7() {
+      const folie6 = document.getElementById('folie6');
+      const folie7 = document.getElementById('folie7');
+
+      if (folie6 && folie7) {
+        folie6.style.transition = 'opacity 1s ease, transform 1s ease';
+        folie6.style.opacity = '0';
+        folie6.style.transform = 'scale(0.9)';
+
+        setTimeout(() => {
+          folie6.style.display = 'none';
+          folie7.style.display = 'flex';
+          folie7.style.opacity = '1';
+          folie7.style.transform = 'scale(1)';
+        }, 1000);
+      }
+    }
+
+    // Kreis-Rotation für Versicherungen-Folie
+    function rotateVersicherungKreis() {
+      const kreis = document.querySelector('#versicherungKreis img');
+      if (kreis) {
+        // Starte von 0° und drehe zu -60°
+        kreis.style.transform = 'rotate(-60deg)';
+        console.log('🔄 Versicherung-Kreis wird gedreht');
+      }
+    }
+
+    // Reset Kreis Position bei Folienwechsel
+    function resetVersicherungKreis() {
+      const kreis = document.querySelector('#versicherungKreis img');
+      if (kreis) {
+        kreis.style.transform = 'rotate(0deg)';
+      }
+    }
+
+    // Kreis-Rotation für Bausparkassen-Folie
+    function rotateBausparkassenKreis() {
+      const kreis = document.querySelector('#bausparkassenKreis img');
+      if (kreis) {
+        // Starte von -60° und drehe zu -120°
+        kreis.style.transform = 'rotate(-120deg)';
+        console.log('🔄 Bausparkassen-Kreis wird gedreht');
+      }
+    }
+
+    // Reset Bausparkassen-Kreis Position bei Folienwechsel
+    function resetBausparkassenKreis() {
+      const kreis = document.querySelector('#bausparkassenKreis img');
+      if (kreis) {
+        kreis.style.transform = 'rotate(-60deg)';
+      }
+    }
+
+    // Kreis-Rotation für Investment-Folie
+    function rotateInvestmentKreis() {
+      const kreis = document.querySelector('#investmentKreis img');
+      if (kreis) {
+        // Starte von -120° und drehe zu -180°
+        kreis.style.transform = 'rotate(-180deg)';
+        console.log('🔄 Investment-Kreis wird gedreht');
+      }
+    }
+
+    // Reset Investment-Kreis Position bei Folienwechsel
+    function resetInvestmentKreis() {
+      const kreis = document.querySelector('#investmentKreis img');
+      if (kreis) {
+        kreis.style.transform = 'rotate(-120deg)';
+      }
+    }
+
+
+  </script>
+  </script>
+</body>
+</html>
