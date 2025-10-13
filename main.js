@@ -70,7 +70,7 @@ let potentialViewInstance = null;
 let umsatzViewInstance = null;
 let auswertungViewInstance = null;
 let planungViewInstance = null; // NEU
-let strukturbaumViewInstance = null;
+let strukturbaumViewInstance = null; // NEU
 let workingDayAuswertungViewInstance = null; // NEU
 let leadCenterViewInstance = null; // NEU
 let pgTagebuchViewInstance = null;
@@ -88,6 +88,7 @@ let HIERARCHY_CACHE = null;
 let checkinStartTime = null; // NEU: Zeitstempel für den Start des Check-ins
 let checkinTimerInterval = null; // NEU: Intervall für den Check-in-Timer
 
+let businessPlanQuill = null; // NEU: Instanz für den Businessplan-Editor
 let lastCheckinDateCheck = null; // NEU: Datum der letzten Check-in-Prüfung
 // --- NEU: Gekapselte Instanzen für jede Ansicht ---
 let appointmentsViewInstance = null;
@@ -231,11 +232,12 @@ const dom = {
   addUserForm: document.getElementById("add-user-form"),
   cancelAddUserBtn: document.getElementById("cancel-add-user-btn"),
   cancelAddUserBtn2: document.getElementById("cancel-add-user-btn-2"),
+  savePlanningBtn: document.getElementById("save-planning-btn"), // NEU: Fehlende DOM-Referenz
   saveNewUserBtn: document.getElementById("save-new-user-btn"),
   planningBtn: document.getElementById("planung-header-btn"), // KORREKTUR: ID war falsch
   planningModal: document.getElementById("planning-modal"),
   planningForm: document.getElementById("planning-form"),
-  pqqView: document.getElementById('pqq-view'),
+  pqqView: document.getElementById('pqq-view'), // NEU
   pqqIndicator: document.getElementById('pqq-indicator'),
   pqqValueDisplay: document.getElementById('pqq-value-display'),
   pqqChevron: document.getElementById('pqq-chevron'),
@@ -1187,6 +1189,15 @@ function normalizeAllData() {
             }
           }
           newRow[colName] = value;
+          // NEU: Explizite Zuweisung für die Businessplan-Felder, um sicherzustellen,
+          // dass sie immer korrekt aus den Rohdaten (mit kryptischen Keys) in das
+          // lesbare Format (mit Namen wie 'Vision') übernommen werden.
+          if (colKey === COLUMN_MAPS.mitarbeiter.Vision) newRow.Vision = value;
+          if (colKey === COLUMN_MAPS.mitarbeiter.ErstesZiel) newRow.ErstesZiel = value;
+          if (colKey === COLUMN_MAPS.mitarbeiter.WarumZiel) newRow.WarumZiel = value;
+          if (colKey === COLUMN_MAPS.mitarbeiter.Veraenderung) newRow.Veraenderung = value;
+          if (colKey === COLUMN_MAPS.mitarbeiter.WannZiel) newRow.WannZiel = value;
+          if (colKey === COLUMN_MAPS.mitarbeiter.Schritte) newRow.Schritte = value;
         }
         return newRow;
       });
@@ -3138,6 +3149,7 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
             </div>
             <div class="flex items-center space-x-3">
                  ${outstandingAppointmentsHtml}
+                 <button data-userid="${member.id}" class="planning-modal-btn text-skt-blue-light hover:text-skt-blue-main transition-colors p-2 -m-2 rounded-full" title="Planung bearbeiten"><i class="fas fa-clipboard-list"></i></button>
                  <button data-userid="${member.id}" class="calendar-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Termine anzeigen"><i class="fas fa-calendar-alt"></i></button>
                  <i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i>
             </div>
@@ -3217,7 +3229,11 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
     // Trainees in der Gruppenansicht haben keine unterstellten Mitarbeiter, die angezeigt werden könnten.
     const isLeader = member.position && !member.position.toLowerCase().includes('trainee');
     summary.addEventListener('click', (e) => {
-        if (e.target.closest('.calendar-view-btn')) return; // Klick auf Kalender-Button ignorieren
+        // KORREKTUR: Klicks auf die Action-Buttons ignorieren, um die Navigation zu verhindern.
+        if (e.target.closest('.calendar-view-btn') || e.target.closest('.planning-modal-btn')) {
+            return;
+        }
+
         if (isLeader && e.target.closest('.chevron-icon')) {
             details.classList.toggle('open');
             summary.classList.toggle('open');
@@ -3231,6 +3247,26 @@ function createMemberCardGrid(member, totalDaysInCycle, daysPassedInCycle) {
             fetchAndRenderDashboard(member.id);
         }
     });
+    // NEU: Event-Listener für den Planungs-Button
+    const planningBtnGrid = summary.querySelector('.planning-modal-btn');
+    if (planningBtnGrid) {
+        planningBtnGrid.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // KORREKTUR: Die AuswertungView muss initialisiert werden, bevor das Modal aufgerufen wird.
+            // Wir erstellen eine neue Instanz und rufen ihre init-Methode auf.
+            (async () => {
+                if (!auswertungViewInstance) {
+                    auswertungViewInstance = new AuswertungView();
+                }
+                // Die init-Methode stellt sicher, dass alle benötigten Daten geladen sind.
+                await auswertungViewInstance.init(authenticatedUserData._id);
+                
+                const userId = e.currentTarget.dataset.userid;
+                const today = new Date();
+                auswertungViewInstance.openPlanningModal({ userId: userId, monthName: today.toLocaleString('de-DE', { month: 'long' }), year: today.getFullYear() });
+            })();
+        });
+    }
     const calendarBtnGrid = summary.querySelector('.calendar-view-btn');
     if (calendarBtnGrid) {
         calendarBtnGrid.addEventListener('click', (e) => {
@@ -3339,7 +3375,7 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
 
     summary.innerHTML = `<div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-skt-blue text-lg break-words">${
         member.leaderName || member.name
-    }</p>${positionHtml}</div><div class="flex items-center space-x-3 flex-shrink-0">${outstandingAppointmentsHtml}<button data-userid="${member.id}" class="calendar-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Termine anzeigen"><i class="fas fa-calendar-alt"></i></button><i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i></div></div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">${ehUnit}</p><p class="text-xs font-semibold text-skt-blue">${ehDisplayValue} ${ehGoalDisplay}</p></div>${
+    }</p>${positionHtml}</div><div class="flex items-center space-x-3 flex-shrink-0">${outstandingAppointmentsHtml}<button data-userid="${member.id}" class="planning-modal-btn text-skt-blue-light hover:text-skt-blue-main transition-colors p-2 -m-2 rounded-full" title="Planung bearbeiten"><i class="fas fa-clipboard-list"></i></button><button data-userid="${member.id}" class="calendar-view-btn text-skt-blue-light hover:text-skt-blue-main transition-colors" title="Termine anzeigen"><i class="fas fa-calendar-alt"></i></button><i class="fas fa-chevron-down chevron-icon text-skt-blue-light"></i></div></div><div class="mt-2"><div class="flex justify-between items-baseline"><p class="text-xs text-skt-blue-light">${ehUnit}</p><p class="text-xs font-semibold text-skt-blue">${ehDisplayValue} ${ehGoalDisplay}</p></div>${
         !isMoneyView
         ? `<div class="w-full bg-skt-grey-medium h-2.5 rounded-full overflow-hidden mt-1 relative">
             <div class="h-full ${ehColorClass}" style="width: ${Math.min(ehPercentage, 100)}%;"></div>
@@ -3383,7 +3419,11 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
     // KORREKTUR: Die Ausklapp-Funktion nur für Führungskräfte aktivieren.
     const isLeader = member.position && !member.position.toLowerCase().includes('trainee');
     summary.addEventListener('click', (e) => {
-        if (e.target.closest('.calendar-view-btn')) return; // Klick auf Kalender-Button ignorieren
+        // KORREKTUR: Klicks auf die Action-Buttons ignorieren, um die Navigation zu verhindern.
+        if (e.target.closest('.calendar-view-btn') || e.target.closest('.planning-modal-btn')) {
+            return;
+        }
+
         if (isLeader && e.target.closest('.chevron-icon')) {
             details.classList.toggle('open');
             summary.classList.toggle('open');
@@ -3409,7 +3449,20 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
     } else {
         summary.querySelector('.chevron-icon').classList.add('hidden'); // Pfeil für Trainees ausblenden
     }
-
+    
+    // NEU: Event-Listener für den Planungs-Button in der Listenansicht
+    const planningBtnList = summary.querySelector('.planning-modal-btn');
+    if (planningBtnList) {
+        planningBtnList.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // KORREKTUR: openPlanningModal ist eine globale Funktion und nicht Teil von auswertungViewInstance.
+            // Die Initialisierung der AuswertungView ist hier nicht notwendig.
+            const userId = e.currentTarget.dataset.userid;
+            const today = new Date();
+            // Rufe die globale Funktion direkt auf.
+            openPlanningModal({ userId: userId, monthName: today.toLocaleString('de-DE', { month: 'long' }), year: today.getFullYear() });
+        });
+    }
     // NEU: Event-Listener für den Kalender-Button
     const calendarBtnList = summary.querySelector('.calendar-view-btn');
     if (calendarBtnList) {
@@ -10317,66 +10370,6 @@ class AuswertungView {
         pqqLog(`--- PQQ-Berechnung für: ${user.Name} (für ${forMonth + 1}/${forYear}) ---`);
 
         // 1. Get previous month's dates
-        const prevMonthDate = new Date(forYear, forMonth, 1);
-        prevMonthDate.setDate(0); // Go to last day of previous month
-        const prevMonthName = prevMonthDate.toLocaleString("de-DE", { month: "long" });
-        const prevYear = prevMonthDate.getFullYear();
-        const prevMonthStartDate = new Date(prevYear, prevMonthDate.getMonth(), 1);
-        const prevMonthEndDate = new Date(prevYear, prevMonthDate.getMonth() + 1, 0);
-        const prevStartDateIso = prevMonthStartDate.toISOString().split('T')[0];
-        const prevEndDateIso = prevMonthEndDate.toISOString().split('T')[0];
-        pqqLog(`Berechnungszeitraum (Vormonat): ${prevStartDateIso} bis ${prevEndDateIso}`);
-
-        // 2. Get planning data from cache
-        const plan = db.monatsplanung.find(p => 
-            p.Mitarbeiter_ID === userId &&
-            p.Monat === prevMonthName &&
-            p.Jahr === prevYear
-        );
-
-        if (!plan) {
-            pqqLog(`Keine Plandaten für ${user.Name} im ${prevMonthName} ${prevYear} gefunden.`);
-            alert(`Für ${user.Name} wurden keine Plandaten im ${prevMonthName} ${prevYear} gefunden. PQQ kann nicht berechnet werden.`);
-            return;
-        }
-
-        const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
-        const ursprungszielET = plan?.Ursprungsziel_ET || 0;
-        pqqLog(`Plandaten (Ursprungsziel):`, { EH: ursprungszielEH, ET: ursprungszielET });
-
-        // 3. Get actual data for previous month via SQL
-        const mitarbeiterNameSql = `'${escapeSql(user.Name)}'`;
-
-        const ehQuery = `SELECT SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID = ${mitarbeiterNameSql} AND Datum >= '${prevStartDateIso}' AND Datum <= '${prevEndDateIso}'`;
-        const etQuery = `SELECT Status FROM Termine WHERE Mitarbeiter_ID = ${mitarbeiterNameSql} AND Kategorie = 'ET' AND Datum >= '${prevStartDateIso}' AND Datum <= '${prevEndDateIso}'`;
-
-        const [ehResultRaw, etResultRaw] = await Promise.all([ seaTableSqlQuery(ehQuery, true), seaTableSqlQuery(etQuery, true) ]);
-
-        const totalEH = ehResultRaw?.[0]?.totalEH || 0;
-        const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
-        const totalETAusgemacht = etResultRaw.filter(t => ET_STATUS_AUSGEMACHT.includes(t.Status)).length;
-        pqqLog(`Ist-Werte (Vormonat):`, { EH: totalEH, ET_Ausgemacht: totalETAusgemacht });
-
-        // 4. Calculate PQQ parts
-        const ehQuote = (ursprungszielEH > 0) ? (totalEH / ursprungszielEH) : (ursprungszielEH === 0 ? 1 : 0);
-        pqqLog(`EH-Quote Berechnung: ${totalEH} (Ist) / ${ursprungszielEH} (Ziel) = ${ehQuote.toFixed(4)}`);
-        const etQuote = (ursprungszielET > 0) ? (totalETAusgemacht / ursprungszielET) : (ursprungszielET === 0 ? 1 : 0);
-        pqqLog(`ET-Quote Berechnung: ${totalETAusgemacht} (Ist) / ${ursprungszielET} (Ziel) = ${etQuote.toFixed(4)}`);
-        const pqq = ((ehQuote + etQuote) / 2) * 100;
-        pqqLog(`Gesamt-PQQ: ((${ehQuote.toFixed(4)} + ${etQuote.toFixed(4)}) / 2) * 100 = ${pqq.toFixed(2)}%`);
-        alert(`PQQ-Berechnung für ${user.Name}:\n\nEH-Quote: ${(ehQuote * 100).toFixed(0)}% (${totalEH} Ist / ${ursprungszielEH} Ziel)\nET-Quote: ${(etQuote * 100).toFixed(0)}% (${totalETAusgemacht} Ist / ${ursprungszielET} Ziel)\n\nGesamt-PQQ: ${pqq.toFixed(0)}%\n\n(Details in der Entwicklerkonsole)`);
-    }
-
-    async logPQQCalculationForUser(userId, forMonth, forYear) {
-        const pqqLog = (message, ...data) => console.log(`%c[PQQ_Drilldown] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
-        const user = findRowById('mitarbeiter', userId);
-        if (!user) {
-            pqqLog(`User with ID ${userId} not found.`);
-            return;
-        }
-        pqqLog(`--- PQQ-Berechnung für: ${user.Name} (für ${forMonth + 1}/${forYear}) ---`);
-
-        // 1. Get previous month's dates
         const { startDate, endDate } = getPreviousMonthlyCycleDatesForDate(new Date(forYear, forMonth, 15));
         const prevMonthName = startDate.toLocaleString("de-DE", { month: "long" });
         const prevYear = startDate.getFullYear();
@@ -10882,6 +10875,759 @@ async function loadAndInitAuswertungView() {
         await auswertungViewInstance.init(authenticatedUserData._id);
     } catch (error) {
         console.error("Fehler beim Laden der Auswertungs-Ansicht:", error);
+    }
+}
+
+const planungLog = (message, ...data) => console.log(`%c[PlanungView] %c${message}`, 'color: #9b59b6; font-weight: bold;', 'color: black;', ...data);
+
+class PlanungView {
+    constructor() {
+        this.initialized = false; // Verhindert mehrfache Initialisierung
+        // KORREKTUR: Scope wird jetzt über die Buttons gesteuert
+        this.currentScope = 'group'; // 'group', 'structure', 'personal'
+        this.currentScopeId = null; // ID der Gruppe (FK) oder des Mitarbeiters
+        this.timespan = 30; // in Tagen
+        this.flowType = 'AT'; // 'AT' oder 'BT'
+        this.allUsersInScope = []; // Alle Mitarbeiter, die zur aktuellen Auswahl gehören
+        this.activeSankeyNode = null; // Speichert den aktuell geklickten Sankey-Knoten
+    }
+
+    _getDomElements() {
+        // Holt alle benötigten DOM-Elemente für die neue Ansicht
+        // KORREKTUR: Neue Filterelemente holen
+        this.scopeToggle = document.getElementById('planung-scope-toggle');
+        this.strukturBtn = document.getElementById('planung-struktur-btn');
+        this.groupBtn = document.getElementById('planung-group-btn');
+        this.personalBtn = document.getElementById('planung-personal-btn');
+        this.memberFilter = document.getElementById('planung-member-filter');
+        this.timespanFilter = document.getElementById('planung-timespan-filter');
+        this.kpiContainer = document.getElementById('planung-kpi-container');
+        this.flowTypeFilter = document.getElementById('planung-flow-type-filter');
+        this.sankeyContainer = document.getElementById('planung-sankey-container');
+        this.sankeyDescription = document.getElementById('planung-sankey-description');
+        this.detailsSection = document.getElementById('planung-termine-details-section');
+        this.detailsTitle = document.getElementById('planung-termine-status-title');
+        this.detailsTableBody = document.getElementById('planung-termine-table-body');
+        this.detailsCloseBtn = document.getElementById('planung-close-termine-details');
+
+        return this.scopeToggle && this.memberFilter && this.timespanFilter && this.kpiContainer && this.sankeyContainer && this.detailsSection;
+    }
+
+    async init(userId) {
+        planungLog('Initialisiere Planungs-Ansicht...');
+        if (!this._getDomElements()) {
+            planungLog('!!! FEHLER: Benötigte DOM-Elemente wurden nicht gefunden.');
+            return;
+        }
+
+        // Lade gespeicherte Einstellungen oder setze Standardwerte
+        const isLeader = isUserLeader(authenticatedUserData);
+        this.currentScope = loadUiSetting('planungViewScope', isLeader ? 'group' : 'personal');
+        this.currentScopeId = userId;
+
+        this._setupEventListeners();
+        this._updateScopeButtons();
+        this._populateMemberFilter();
+        await this.updateView();
+        this.initialized = true;
+    }
+
+    _setupEventListeners() {
+        const debouncedUpdate = _.debounce(() => this.updateView(), 300);
+
+        this.strukturBtn.addEventListener('click', () => { this.currentScope = 'structure'; this._onScopeChange(); });
+        this.groupBtn.addEventListener('click', () => { this.currentScope = 'group'; this._onScopeChange(); });
+        this.personalBtn.addEventListener('click', () => { this.currentScope = 'personal'; this._onScopeChange(); });
+
+        this.memberFilter.addEventListener('change', debouncedUpdate);
+        this.timespanFilter.addEventListener('change', debouncedUpdate);
+        this.flowTypeFilter.addEventListener('change', debouncedUpdate);
+        this.detailsCloseBtn.addEventListener('click', () => this.detailsSection.classList.add('hidden'));
+    }
+
+    _onScopeChange() {
+        saveUiSetting('planungViewScope', this.currentScope);
+        this._updateScopeButtons();
+        this._populateMemberFilter();
+        this.updateView();
+    }
+
+    _updateScopeButtons() {
+        this.strukturBtn.classList.toggle('active', this.currentScope === 'structure');
+        this.groupBtn.classList.toggle('active', this.currentScope === 'group');
+        this.personalBtn.classList.toggle('active', this.currentScope === 'personal');
+    }
+
+    _populateMemberFilter() {
+        this.memberFilter.innerHTML = '';
+        this.memberFilter.classList.add('hidden');
+
+        if (this.currentScope === 'personal') return;
+
+        const members = this.currentScope === 'structure'
+            ? [authenticatedUserData, ...getAllSubordinatesRecursive(authenticatedUserData._id).filter(isUserLeader)]
+            : [authenticatedUserData, ...getSubordinates(authenticatedUserData._id, 'gruppe')];
+
+        this.memberFilter.add(new Option(`Alle in ${this.currentScope === 'structure' ? 'Struktur' : 'Gruppe'}`, 'all'));
+        members.filter(Boolean).sort((a, b) => a.Name.localeCompare(b.Name)).forEach(user => {
+            this.memberFilter.add(new Option(user.Name, user._id));
+        });
+
+        this.memberFilter.classList.remove('hidden');
+    }
+
+    async updateView() {
+    planungLog('Aktualisiere Ansicht...');
+    this.kpiContainer.innerHTML = '<div class="kpi-card p-5 flex items-center justify-center col-span-full"><div class="loader"></div></div>';
+    this.sankeyContainer.innerHTML = '<div class="loader mx-auto"></div>';
+    this.detailsSection.classList.add('hidden');
+
+    // NEU: Wenn in der Strukturansicht eine Person ausgewählt wird, wechsle zur Gruppenansicht dieser Person.
+    if (this.currentScope === 'structure' && this.memberFilter.value !== 'all') {
+        planungLog(`Wechsle von Strukturansicht zur Gruppenansicht für User: ${this.memberFilter.value}`);
+        this.currentScope = 'group';
+        this._updateScopeButtons(); // UI des Toggles aktualisieren
+        // Die `updateView` wird durch diesen Aufruf effektiv neu gestartet, aber mit dem korrekten Scope.
+        this.updateView();
+        return; // Beende den aktuellen Lauf, um doppelte Ausführung zu vermeiden.
+    }
+
+    // 1. Filter-Werte auslesen
+    const selectedMemberId = this.memberFilter.value;
+    this.timespan = parseInt(this.timespanFilter.value, 10);
+    this.flowType = this.flowTypeFilter.value;
+
+    // 2. Relevante Benutzer ermitteln
+    let usersInScopeRaw = [];
+    this.allUsersInScope = [];
+    if (this.currentScope === 'personal') {
+        usersInScopeRaw = [authenticatedUserData];
+    } else if (this.currentScope === 'group') {
+        const leaderId = selectedMemberId === 'all' ? authenticatedUserData._id : selectedMemberId;
+        this.currentScopeId = leaderId; // Wichtig für die _renderGroupView
+        usersInScopeRaw = [findRowById('mitarbeiter', leaderId), ...getSubordinates(leaderId, 'gruppe')].filter(Boolean);
+    } else if (this.currentScope === 'structure') {
+        const leaderId = selectedMemberId === 'all' ? authenticatedUserData._id : selectedMemberId;
+        this.currentScopeId = leaderId; // Wichtig für die _renderGroupView
+        
+        // KORREKTUR: Verwende die gleiche Logik wie im Haupt-Dashboard, um ALLE unterstellten Führungskräfte anzuzeigen,
+        // nicht nur die direkten. getSubordinates('struktur') durchläuft die gesamte Downline.
+        const leader = findRowById('mitarbeiter', leaderId);
+        const subordinateLeaders = getSubordinates(leaderId, 'struktur');
+        usersInScopeRaw = [leader, ...subordinateLeaders].filter(Boolean);
+    }
+
+    // NEU: Filtere Benutzer heraus, die keine Ziele für den aktuellen Zyklus haben.
+    const { startDate: cycleStartDate } = getMonthlyCycleDates();
+    const currentMonthName = cycleStartDate.toLocaleString('de-DE', { month: 'long' });
+    const currentYear = cycleStartDate.getFullYear();
+    const nextInfoDateString = toLocalISOString(findNextInfoDateAfter(new Date()));
+    this.allUsersInScope = usersInScopeRaw.filter(user => {
+        const hasEhGoal = db.monatsplanung.some(p => p.Mitarbeiter_ID === user._id && p.Monat === currentMonthName && p.Jahr === currentYear && p.EH_Ziel > 0);
+        const hasEtGoal = db.infoplanung.some(p => p.Mitarbeiter_ID === user._id && p.Informationsabend?.startsWith(nextInfoDateString) && p.ET_Ziel > 0);
+        return hasEhGoal || hasEtGoal;
+    });
+
+    planungLog(`Scope gesetzt: ${this.allUsersInScope.length} Benutzer`);
+
+    // 3. Daten abrufen und rendern
+    // KORREKTUR: Das Ergebnis von _fetchData wird jetzt korrekt destrukturiert.
+    const { kpiData, sankeyData, memberKpis } = await this._fetchData();
+    this._renderKPIs({ kpiData, memberKpis }); // _renderKPIs erwartet ein Objekt mit diesen Eigenschaften
+    this._renderSankey(sankeyData); // sankeyData ist jetzt eine definierte Variable
+    }
+
+    async _fetchData() {
+        const userIds = this.allUsersInScope.map(u => u._id).filter(Boolean);
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(endDate.getDate() - this.timespan);
+
+        // Alle Termine und Umsätze für den Zeitraum und die Benutzer laden
+        const appointments = db.termine.filter(t => 
+            userIds.includes(t.Mitarbeiter_ID) && 
+            t.Datum && new Date(t.Datum) >= startDate && new Date(t.Datum) <= endDate
+        );
+        const sales = db.umsatz.filter(s => 
+            // KORREKTUR: Nach der Normalisierung ist `Mitarbeiter_ID` nur noch die ID (ein String).
+            userIds.includes(s.Mitarbeiter_ID) &&
+            s.Datum && new Date(s.Datum) >= startDate && new Date(s.Datum) <= endDate
+        );
+
+        // --- KPI-Daten berechnen ---
+        const totalEH = sales.reduce((sum, s) => sum + (s.EH || 0), 0);
+        
+        const pqqUsers = this.currentScope === 'group' ? getSubordinates(this.currentScopeId, 'gruppe') : this.allUsersInScope;
+        const pqqPromises = pqqUsers.map(u => getSingleUserPQQ(u._id));
+        const pqqResults = await Promise.all(pqqPromises);
+        const validPqqs = pqqResults.filter(p => p && p.pqq > 0);
+        const avgPqq = validPqqs.length > 0 ? _.meanBy(validPqqs, 'pqq') : 0;
+
+        const totalAppointments = appointments.length;
+        const cancelledAppointments = appointments.filter(t => t.Absage === true || t.Status === 'Storno').length;
+        const cancellationRate = totalAppointments > 0 ? (cancelledAppointments / totalAppointments) * 100 : 0;
+
+        const heldBTs = appointments.filter(t => t.Kategorie === 'BT' && t.Status === 'Gehalten');
+        const avgEhPerBt = heldBTs.length > 0 ? totalEH / heldBTs.length : 0;
+
+        const heldATs = appointments.filter(t => (t.Kategorie === 'AT' || (t.Kategorie === 'ST' && t.Umsatzprognose > 1)) && t.Status === 'Gehalten');
+        const avgEhPerAt = heldATs.length > 0 ? totalEH / heldATs.length : 0;
+
+        const heldSTs = appointments.filter(t => t.Kategorie === 'ST' && t.Status === 'Gehalten');
+        const avgEhPerSt = heldSTs.length > 0 ? totalEH / heldSTs.length : 0;
+
+        // --- Sankey-Daten berechnen ---
+        const appointmentsForSankey = this.currentScope === 'personal'
+            ? appointments.filter(t => t.Mitarbeiter_ID === authenticatedUserData._id)
+            : appointments;
+
+        const flowAppointments = appointmentsForSankey.filter(t => t.Kategorie === this.flowType);
+        const totalFlow = flowAppointments.length;
+        const gehalten = flowAppointments.filter(t => t.Status === 'Gehalten').length; // KORREKTUR: Die Berechnung der PQQ-Werte für die Mitarbeiter wurde hinzugefügt.
+        const verschoben = flowAppointments.filter(t => t.Status === 'Verschoben').length; // KORREKTUR: Die Berechnung der PQQ-Werte für die Mitarbeiter wurde hinzugefügt.
+        const ausfall = flowAppointments.filter(t => t.Status === 'Storno' || t.Absage === true).length; // KORREKTUR: Die Berechnung der PQQ-Werte für die Mitarbeiter wurde hinzugefügt.
+        const offen = totalFlow - gehalten - verschoben - ausfall;
+
+        let outcome1 = 0, outcome2 = 0;
+        if (this.flowType === 'AT') {
+            // Finde alle BTs, die aus den gehaltenen ATs resultieren
+            const heldATsWithPartner = appointments.filter(t => t.Kategorie === 'AT' && t.Status === 'Gehalten' && t.Terminpartner);
+            const heldAtPartners = new Set(heldATsWithPartner.map(t => t.Terminpartner.trim().toLowerCase()));
+            
+            const resultingBTs = appointments.filter(t => t.Kategorie === 'BT' && t.Terminpartner && heldAtPartners.has(t.Terminpartner.trim().toLowerCase()));
+            const partnersWithResultingBT = new Set(resultingBTs.map(t => t.Terminpartner.trim().toLowerCase()));
+            
+            const heldATsWithoutBT = heldATsWithPartner.filter(at => !partnersWithResultingBT.has(at.Terminpartner.trim().toLowerCase()));
+
+            outcome1 = resultingBTs.length;
+            outcome2 = heldATsWithoutBT.length;
+
+            this.appointmentsForOutcomes = { resultingBTs, heldATsWithoutBT };
+        } else { // BT
+            // Finde alle Umsätze, die aus den gehaltenen BTs resultieren
+            const heldBTsWithPartner = appointments.filter(t => t.Kategorie === 'BT' && t.Status === 'Gehalten' && t.Terminpartner);
+            const heldBtPartners = new Set(heldBTsWithPartner.map(t => t.Terminpartner.trim().toLowerCase()));
+
+            const resultingSales = sales.filter(s => s.Kunde && heldBtPartners.has(s.Kunde.trim().toLowerCase()));
+            const partnersWithResultingSale = new Set(resultingSales.map(s => s.Kunde.trim().toLowerCase()));
+            const heldBTsWithoutSale = heldBTsWithPartner.filter(bt => !partnersWithResultingSale.has(bt.Terminpartner.trim().toLowerCase()));
+
+            outcome1 = resultingSales.length;
+            outcome2 = heldBTsWithoutSale.length;
+            this.appointmentsForOutcomes = { resultingSales, heldBTsWithoutSale };
+        }
+
+        const pqqDataPromises = this.allUsersInScope.map(user => getSingleUserPQQ(user._id));
+        const pqqDataMap = new Map(this.allUsersInScope.map((user, index) => [user._id, pqqResults[index]]));
+
+
+        // NEU: KPIs pro Mitarbeiter für die Gruppenansicht berechnen
+        const memberKpis = this.allUsersInScope.map(user => {
+            const userAppointments = appointments.filter(t => t.Mitarbeiter_ID === user._id);
+            // KORREKTUR: Der Filter für `userSales` muss ebenfalls die normalisierte ID verwenden.
+            const userSales = sales.filter(s => s.Mitarbeiter_ID === user._id);
+            const userTotalEH = userSales.reduce((sum, s) => sum + (s.EH || 0), 0);
+            const userHeldBTs = userAppointments.filter(t => t.Kategorie === 'BT' && t.Status === 'Gehalten').length;
+            const userHeldATs = userAppointments.filter(t => (t.Kategorie === 'AT' || (t.Kategorie === 'ST' && t.Umsatzprognose > 1)) && t.Status === 'Gehalten').length;
+            const userHeldSTs = userAppointments.filter(t => t.Kategorie === 'ST' && t.Status === 'Gehalten').length;
+            const userTotalAppointments = userAppointments.length;
+            const userCancelledAppointments = userAppointments.filter(t => t.Absage === true || t.Status === 'Storno').length;
+
+            return {
+                id: user._id,
+                name: user.Name,
+                totalEH: userTotalEH,
+                avgEhPerBt: userHeldBTs > 0 ? userTotalEH / userHeldBTs : 0,
+                avgEhPerAt: userHeldATs > 0 ? userTotalEH / userHeldATs : 0,
+                avgEhPerSt: userHeldSTs > 0 ? userTotalEH / userHeldSTs : 0,
+                cancellationRate: userTotalAppointments > 0 ? (userCancelledAppointments / userTotalAppointments) * 100 : 0,
+                pqq: pqqDataMap.get(user._id)?.pqq || 0,
+            };
+        });
+
+        return {
+            kpiData: { avgPqq, cancellationRate, avgEhPerBt, avgEhPerAt, avgEhPerSt },
+            sankeyData: { total: totalFlow, gehalten, verschoben, ausfall, offen, outcome1, outcome2, appointments: flowAppointments },
+            memberKpis: memberKpis
+        };
+    }
+
+    _renderKPIs({ kpiData: groupKpiData, memberKpis }) {
+        const mitarbeiterDetailsSection = document.getElementById('planung-mitarbeiter-details-section');
+
+        // Haupt-KPIs (Durchschnitt/Gesamt) rendern
+        const kpis = [
+            { label: 'PQQ', value: `${groupKpiData.avgPqq.toFixed(1)}%`, icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', color: 'indigo' },
+            { label: 'Terminausfall', value: `${groupKpiData.cancellationRate.toFixed(1)}%`, icon: 'M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636', color: 'red' },
+            { label: 'EH / BT', value: groupKpiData.avgEhPerBt.toFixed(2), icon: 'M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4z', color: 'blue' },
+            { label: 'EH / AT', value: groupKpiData.avgEhPerAt.toFixed(2), icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', color: 'blue' }, // KORREKTUR: Fehlendes Komma hinzugefügt
+            { label: 'EH / ST', value: groupKpiData.avgEhPerSt.toFixed(2), icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', color: 'blue' }
+        ];
+
+        this.kpiContainer.innerHTML = kpis.map(kpi => `
+            <div class="kpi-card p-5 flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-semibold text-gray-500">${this.currentScope === 'group' ? 'Ø ' : ''}${kpi.label}</h3>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-${kpi.color}-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="${kpi.icon}" />
+                        </svg>
+                    </div>
+                    <p class="text-3xl font-bold text-gray-800 mt-2">${kpi.value}</p>
+                </div>
+            </div>
+        `).join('');
+
+        // Wenn Gruppen- oder Strukturansicht, dann die individuellen Mitarbeiter-Karten rendern
+        if (this.currentScope === 'group' || this.currentScope === 'structure') {
+            this._renderGroupView(memberKpis);
+        } else {
+            // Für andere Ansichten die Mitarbeiter-Sektion ausblenden
+            if (mitarbeiterDetailsSection) mitarbeiterDetailsSection.classList.add('hidden');
+        }
+    }
+
+    _renderGroupView(memberKpis) {
+        const section = document.getElementById('planung-mitarbeiter-details-section');
+        const diagramWrapper = document.getElementById('mitarbeiter-rad-diagram-wrapper');
+        const detailsContainer = document.getElementById('mitarbeiter-rad-details');
+        
+        section.classList.remove('hidden');
+        diagramWrapper.innerHTML = '';
+        detailsContainer.innerHTML = '';
+        detailsContainer.classList.add('hidden');
+        diagramWrapper.parentElement.classList.remove('details-visible');
+
+        const leader = memberKpis.find(m => m.id === this.currentScopeId);
+        const members = memberKpis.filter(m => m.id !== this.currentScopeId);
+
+        if (!leader) {
+            diagramWrapper.innerHTML = '<p class="text-center text-gray-500">Führungskraft nicht gefunden.</p>';
+            return;
+        }
+
+        this._renderRadialDiagram(diagramWrapper, leader, members);
+
+        diagramWrapper.querySelectorAll('.member-segment, .center-circle').forEach(el => {
+            el.addEventListener('click', () => {
+                const memberId = el.dataset.memberId;
+                const selectedMember = memberKpis.find(m => m.id === memberId);
+                if (selectedMember) {
+                    this._showMemberDetails(selectedMember);
+                }
+            });
+        });
+    }
+
+    _renderRadialDiagram(container, leader, members) {
+        const getPqqColor = (pqq) => {
+            if (pqq >= 120) return '#27ae60'; // green
+            if (pqq >= 80) return '#f1c40f'; // yellow
+            return '#FF6347'; // red
+        };
+
+        const memberCount = members.length;
+        const angleStep = memberCount > 0 ? 360 / memberCount : 0;
+        const radius = 150;
+        const segmentRadius = 60;
+
+        let segmentsHtml = '';
+        members.forEach((member, i) => {
+            const angle = angleStep * i - 90; // Start at top
+            const x = radius * Math.cos(angle * Math.PI / 180);
+            const y = radius * Math.sin(angle * Math.PI / 180);
+            const pqqColor = getPqqColor(member.pqq);
+
+            // KORREKTUR: Wenn das ET-Ziel 0 ist, soll die Quote 0% sein.
+            const etQuote = member.etGoal > 0 ? (member.etIst / member.etGoal) * 100 : 0;
+            segmentsHtml += `
+                <g class="member-segment" transform="translate(${x}, ${y})" data-member-id="${member.id}">
+                    <circle r="${segmentRadius}" fill="${pqqColor}" class="cursor-pointer transition-transform duration-300 hover:scale-110"/>
+                    <text y="5" text-anchor="middle" fill="white" font-weight="bold" font-size="16" class="pointer-events-none">${member.name.split(' ')[0]}</text> <!-- KORREKTUR: ET-Quote wird jetzt hier angezeigt -->
+                    <text y="25" text-anchor="middle" fill="white" font-size="14" class="pointer-events-none">${member.pqq.toFixed(0)}%</text>
+                </g>
+            `;
+        });
+
+        const leaderPqqColor = getPqqColor(leader.pqq);
+        const svgHtml = `
+            <svg viewBox="-250 -250 500 500" class="w-full h-auto max-w-full">
+                ${segmentsHtml}
+                <g class="center-circle" data-member-id="${leader.id}">
+                    <circle r="80" fill="${leaderPqqColor}" class="cursor-pointer transition-transform duration-300 hover:scale-105"/>
+                    <text y="-10" text-anchor="middle" fill="white" font-weight="bold" font-size="20">${leader.name}</text>
+                    <text y="20" text-anchor="middle" fill="white" font-size="24" font-weight="bold">${leader.pqq.toFixed(0)}%</text>
+                </g>
+            </svg>
+        `;
+        container.innerHTML = svgHtml;
+    }
+
+    _showMemberDetails(member) {
+        const diagramWrapper = document.getElementById('mitarbeiter-rad-diagram-wrapper');
+        const detailsContainer = document.getElementById('mitarbeiter-rad-details');
+        
+        diagramWrapper.parentElement.classList.add('details-visible');
+        diagramWrapper.classList.add('details-visible');
+        detailsContainer.classList.remove('hidden');
+
+        const kpis = [
+            { label: 'PQQ', value: `${member.pqq.toFixed(1)}%`, icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', color: 'indigo' },
+            { label: 'Terminausfall', value: `${member.cancellationRate.toFixed(1)}%`, icon: 'M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636', color: 'red' },
+            { label: 'EH / BT', value: member.avgEhPerBt.toFixed(2), icon: 'M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4z', color: 'blue' },
+            { label: 'EH / AT', value: member.avgEhPerAt.toFixed(2), icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', color: 'blue' },
+            { label: 'EH / ST', value: member.avgEhPerSt.toFixed(2), icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', color: 'blue' }
+        ];
+
+        detailsContainer.innerHTML = `
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <h3 class="text-2xl font-bold text-skt-blue mb-4">${member.name}</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    ${kpis.map(kpi => `
+                        <div class="kpi-card p-4">
+                            <h4 class="font-semibold text-gray-500">${kpi.label}</h4>
+                            <p class="text-2xl font-bold text-gray-800 mt-1">${kpi.value}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    _renderSankey(data) {
+        // NEU: Prüfe die Bildschirmbreite, um die passende Darstellung zu wählen.
+        if (window.innerWidth < 768) {
+            this._renderSankeyMobile(data);
+        } else {
+            this._renderSankeyDesktop(data);
+        }
+    }
+
+    // NEU: Eigene Methode für die mobile Darstellung
+    _renderSankeyMobile(data) {
+        const outcome1Label = this.flowType === 'AT' ? 'Beratungstermin' : 'Abschluss';
+        const outcome2Label = this.flowType === 'AT' ? 'Kein BT' : 'Kein Abschluss';
+
+        // Setze die Höhe des Containers zurück, da wir jetzt vertikal arbeiten
+        this.sankeyContainer.style.height = 'auto';
+
+        const createNode = (title, value, colorClass, icon, level = 1) => {
+            if (value === 0) return ''; // Knoten mit Wert 0 nicht anzeigen
+            return `
+                <div class="sankey-mobile-node-wrapper" style="padding-left: ${level * 1.5}rem;">
+                    <a href="#" data-status="${title}" class="sankey-mobile-node ${colorClass}">
+                        <div class="sankey-mobile-node-icon"><i class="fas ${icon} fa-lg"></i></div>
+                        <div class="sankey-mobile-node-content">
+                            <div class="sankey-mobile-node-title">${title}</div>
+                            <div class="sankey-mobile-node-value">${value}</div>
+                        </div>
+                        <i class="fas fa-chevron-right sankey-mobile-node-chevron"></i>
+                    </a>
+                </div>
+            `;
+        };
+
+        this.sankeyContainer.innerHTML = `
+            <div class="flex flex-col items-center gap-y-4">
+                <!-- Source Node -->
+                <div class="sankey-mobile-source-node">
+                    <div class="sankey-mobile-source-title">${this.flowType === 'AT' ? 'Analysetermine' : 'Beratungstermine'}</div>
+                    <div class="sankey-mobile-source-value">${data.total}</div>
+                </div>
+                <div class="sankey-mobile-connector"></div>
+
+                <!-- Status Nodes -->
+                <div class="sankey-mobile-level">
+                    <div class="sankey-mobile-level-line"></div>
+                    <div class="sankey-mobile-node-container">
+                        ${createNode('Gehalten', data.gehalten, 'bg-green-100 text-green-800', 'fa-check-circle')}
+                        ${createNode('Verschoben', data.verschoben, 'bg-orange-100 text-orange-800', 'fa-clock')}
+                        ${createNode('Ausfall', data.ausfall, 'bg-red-100 text-red-800', 'fa-times-circle')}
+                        ${createNode('Offen', data.offen, 'bg-gray-100 text-gray-800', 'fa-question-circle')}
+                    </div>
+                </div>
+
+                <!-- Outcome Nodes (nur wenn "Gehalten" > 0) -->
+                ${data.gehalten > 0 ? `
+                    <div class="sankey-mobile-connector"></div>
+                    <div class="sankey-mobile-level">
+                        <div class="sankey-mobile-level-line"></div>
+                        <div class="sankey-mobile-node-container">
+                            ${createNode(outcome1Label, data.outcome1, 'bg-emerald-100 text-emerald-800', 'fa-handshake', 2)}
+                            ${createNode(outcome2Label, data.outcome2, 'bg-yellow-100 text-yellow-800', 'fa-thumbs-down', 2)}
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+        this._setupSankeyEventListeners(data.appointments);
+    }
+
+    // NEU: Die bestehende Logik wurde in eine eigene Methode für die Desktop-Ansicht verschoben.
+    _renderSankeyDesktop(data) {
+        const outcome1Label = this.flowType === 'AT' ? 'Beratungstermin' : 'Abschluss';
+        const outcome2Label = this.flowType === 'AT' ? 'Kein BT' : 'Kein Abschluss';
+
+        // Stelle sicher, dass die Höhe für die Desktop-Ansicht gesetzt ist
+        this.sankeyContainer.style.height = '350px';
+
+        this.sankeyContainer.innerHTML = `
+            <svg id="planung-sankey-svg" class="absolute top-0 left-0 w-full h-full" preserveAspectRatio="none">
+                <path id="path-gehalten" stroke-width="${data.gehalten}" fill="none" stroke-opacity="0.5" class="stroke-green-400"></path>
+                <path id="path-verschoben" stroke-width="${data.verschoben}" fill="none" stroke-opacity="0.5" class="stroke-orange-400"></path>
+                <path id="path-ausfall" stroke-width="${data.ausfall}" fill="none" stroke-opacity="0.5" class="stroke-red-400"></path>
+                <path id="path-offen" stroke-width="${data.offen}" fill="none" stroke-opacity="0.5" class="stroke-gray-400"></path>
+                <path id="path-outcome1" stroke-width="${data.outcome1}" fill="none" stroke-opacity="0.5" class="stroke-emerald-500"></path> <!-- KORREKTUR: Die Logik für die Anzeige der Ergebnis-Pfade wurde korrigiert. -->
+                <path id="path-outcome2" stroke-width="${data.outcome2}" fill="none" stroke-opacity="0.5" class="stroke-yellow-400"></path> <!-- KORREKTUR: Die Logik für die Anzeige der Ergebnis-Pfade wurde korrigiert. -->
+            </svg>
+            <div class="relative w-full h-full flex justify-between items-center z-10">
+                <div class="w-1/4 flex justify-start">
+                    <div id="source-node" class="p-4 bg-gray-600 text-white rounded-lg shadow-lg text-center">
+                        <span class="font-semibold">${this.flowType === 'AT' ? 'Analysetermine' : 'Beratungstermine'}</span>
+                        <span class="block text-2xl font-bold">${data.total}</span>
+                    </div>
+                </div>
+                <div class="w-1/2 flex flex-col justify-around items-center h-full py-4"> <!-- KORREKTUR: Die Logik für die Anzeige der Ergebnis-Pfade wurde korrigiert. -->
+                    <a href="#" data-status="Gehalten" id="status-gehalten" class="p-3 bg-green-100 border-l-4 border-green-500 rounded-md shadow-md hover:shadow-xl hover:bg-green-200 transition w-48 text-center sankey-status-node">
+                        <span class="font-semibold text-green-800">Gehalten</span><span class="block text-xl font-bold text-green-900">${data.gehalten}</span>
+                    </a>
+                    <a href="#" data-status="Verschoben" id="status-verschoben" class="p-3 bg-orange-100 border-l-4 border-orange-500 rounded-md shadow-md hover:shadow-xl hover:bg-orange-200 transition w-48 text-center sankey-status-node">
+                        <span class="font-semibold text-orange-800">Verschoben</span><span class="block text-xl font-bold text-orange-900">${data.verschoben}</span>
+                    </a>
+                    <a href="#" data-status="Ausfall" id="status-ausfall" class="p-3 bg-red-100 border-l-4 border-red-500 rounded-md shadow-md hover:shadow-xl hover:bg-red-200 transition w-48 text-center sankey-status-node">
+                        <span class="font-semibold text-red-800">Ausfall</span><span class="block text-xl font-bold text-red-900">${data.ausfall}</span>
+                    </a>
+                    <a href="#" data-status="Offen" id="status-offen" class="p-3 bg-gray-100 border-l-4 border-gray-500 rounded-md shadow-md hover:shadow-xl hover:bg-gray-200 transition w-48 text-center sankey-status-node">
+                        <span class="font-semibold text-gray-800">Offen</span><span class="block text-xl font-bold text-gray-900">${data.offen}</span>
+                    </a>
+                </div>
+                <div class="w-1/4 flex flex-col justify-evenly items-end h-full py-10 gap-4"> <!-- KORREKTUR: Die Logik für die Anzeige der Ergebnis-Pfade wurde korrigiert. -->
+                    <a href="#" data-status="outcome1" id="outcome1-node" class="p-4 bg-emerald-600 text-white rounded-lg shadow-lg text-center w-48 hover:shadow-xl hover:bg-emerald-700 transition sankey-status-node">
+                        <span class="font-semibold">${outcome1Label}</span><span class="block text-2xl font-bold">${data.outcome1}</span>
+                    </a>
+                    <a href="#" data-status="outcome2" id="outcome2-node" class="p-4 bg-yellow-500 text-white rounded-lg shadow-lg text-center w-48 hover:shadow-xl hover:bg-yellow-600 transition sankey-status-node">
+                        <span class="font-semibold">${outcome2Label}</span><span class="block text-2xl font-bold">${data.outcome2}</span>
+                    </a>
+                </div>
+            </div>
+        `;
+        this._drawSankeyLinks();
+        this._setupSankeyEventListeners(data.appointments);
+    }
+
+    _drawSankeyLinks() {
+        const svg = document.getElementById('planung-sankey-svg');
+        if (!svg) return;
+        const containerRect = svg.getBoundingClientRect();
+
+        const connections = [
+            ['source-node', 'status-gehalten', 'path-gehalten'],
+            ['source-node', 'status-verschoben', 'path-verschoben'],
+            ['source-node', 'status-ausfall', 'path-ausfall'],
+            ['source-node', 'status-offen', 'path-offen'],
+            ['status-gehalten', 'outcome1-node', 'path-outcome1'],
+            ['status-gehalten', 'outcome2-node', 'path-outcome2']
+        ];
+
+        connections.forEach(([startId, endId, pathId]) => {
+            const startNode = document.getElementById(startId);
+            const endNode = document.getElementById(endId);
+            const path = document.getElementById(pathId);
+            if (!startNode || !endNode || !path) return;
+
+            const strokeWidth = parseFloat(path.getAttribute('stroke-width')) || 0;
+            if (strokeWidth === 0) {
+                path.style.display = 'none';
+                return;
+            }
+            path.style.display = '';
+
+            const startRect = startNode.getBoundingClientRect();
+            const endRect = endNode.getBoundingClientRect();
+            const startX = startRect.right - containerRect.left;
+            const startY = startRect.top - containerRect.top + startRect.height / 2;
+            const endX = endRect.left - containerRect.left;
+            const endY = endRect.top - containerRect.top + endRect.height / 2;
+            const controlX1 = startX + (endX - startX) / 2;
+            const controlX2 = endX - (endX - startX) / 2;
+            path.setAttribute('d', `M ${startX} ${startY} C ${controlX1} ${startY}, ${controlX2} ${endY}, ${endX} ${endY}`);
+        });
+    }
+
+    _setupSankeyEventListeners(appointments) {
+        // KORREKTUR: Die Event-Listener werden jetzt auf alle Knoten mit der Klasse .sankey-status-node angewendet,
+        // was die neuen Ergebnis-Knoten miteinschließt.
+        // Die Logik wurde erweitert, um die "outcome"-Status zu behandeln.
+        this.sankeyContainer.querySelectorAll('.sankey-status-node').forEach(node => {
+            node.addEventListener('click', (e) => {
+                e.preventDefault();
+                const status = node.dataset.status;
+
+                // Toggle active state
+                if (this.activeSankeyNode === node) {
+                    this.detailsSection.classList.add('hidden');
+                    node.classList.remove('active');
+                    this.activeSankeyNode = null;
+                    return;
+                }
+                
+                if (this.activeSankeyNode) this.activeSankeyNode.classList.remove('active');
+                node.classList.add('active');
+                this.activeSankeyNode = node;
+
+                let filteredAppointments = [];
+                if (status === 'Gehalten') filteredAppointments = appointments.filter(t => t.Status === 'Gehalten');
+                else if (status === 'Verschoben') filteredAppointments = appointments.filter(t => t.Status === 'Verschoben');
+                else if (status === 'Ausfall') filteredAppointments = appointments.filter(t => t.Status === 'Storno' || t.Absage === true);
+                else if (status === 'Offen') filteredAppointments = appointments.filter(t => !['Gehalten', 'Verschoben', 'Storno'].includes(t.Status) && t.Absage !== true);
+                else if (status === 'outcome1') {
+                    if (this.flowType === 'AT') {
+                        filteredAppointments = this.appointmentsForOutcomes.resultingBTs;
+                    } else { // BT
+                        // Hier zeigen wir die BTs an, die zum Abschluss geführt haben.
+                        const partnersWithSale = new Set(this.appointmentsForOutcomes.resultingSales.map(s => s.Kunde.trim().toLowerCase()));
+                        filteredAppointments = appointments.filter(t => t.Kategorie === 'BT' && t.Status === 'Gehalten' && t.Terminpartner && partnersWithSale.has(t.Terminpartner.trim().toLowerCase()));
+                    }
+                } else if (status === 'outcome2') {
+                    filteredAppointments = this.flowType === 'AT' ? this.appointmentsForOutcomes.heldATsWithoutBT : this.appointmentsForOutcomes.heldBTsWithoutSale;
+                }
+
+                this._renderDetailsTable(status, filteredAppointments);
+            });
+        });
+    }
+
+    _renderDetailsTable(status, appointments) {
+        // KORREKTUR: Der Titel der Detailansicht wird jetzt benutzerfreundlicher gestaltet.
+        const titleMap = {
+            'Gehalten': 'Gehaltene Termine',
+            'Verschoben': 'Verschobene Termine',
+            'Ausfall': 'Ausgefallene Termine',
+            'Offen': 'Offene Termine',
+            'outcome1': this.flowType === 'AT' ? 'Resultierende Beratungstermine' : 'Beratungstermine mit Abschluss',
+            'outcome2': this.flowType === 'AT' ? 'Gehaltene ATs ohne BT' : 'Gehaltene BTs ohne Abschluss'
+        };
+        this.detailsTitle.textContent = titleMap[status] || status;
+
+        this.detailsTableBody.innerHTML = '';
+
+        if (appointments.length === 0) {
+            this.detailsTableBody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-gray-500">Keine Termine für diesen Status gefunden.</td></tr>';
+        } else {
+            const tableRowsHtml = appointments.map(termin => {
+                const mitarbeiter = findRowById('mitarbeiter', termin.Mitarbeiter_ID);
+                // KORREKTUR: Der Termin kann auch ein Umsatzobjekt sein (bei "Abschluss").
+                // Wir müssen sicherstellen, dass wir die richtigen Felder verwenden.
+                const partnerName = termin.Terminpartner || termin.Kunde || '-';
+                const hinweis = termin.Hinweis || '-';
+                const terminId = termin._id;
+
+                // KORREKTUR: Die gesamte Zeile ist nicht mehr klickbar. Nur der Kundenname hat jetzt eine Aktion.
+                return `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${termin.Datum ? new Date(termin.Datum).toLocaleDateString('de-DE') : '-'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <span class="text-skt-blue hover:underline cursor-pointer customer-timeline-link" data-customer-name="${_escapeHtml(partnerName)}" title="Zeige alle Termine für diesen Kunden">
+                                ${partnerName}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${mitarbeiter?.Name || 'Unbekannt'}</td>
+                        <td class="px-6 py-4 text-sm text-gray-500">${hinweis}</td>
+                    </tr>
+                `;
+            }).join('');
+            this.detailsTableBody.innerHTML = tableRowsHtml;
+
+            // KORREKTUR: Der Event-Listener wird jetzt nur noch auf den Kundennamen angewendet.
+            this.detailsTableBody.querySelectorAll('.customer-timeline-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    this._showCustomerTimeline(e.currentTarget.dataset.customerName);
+                });
+            });
+        }
+
+        this.detailsSection.classList.remove('hidden');
+        this.detailsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    
+    _showCustomerTimeline(customerName) {
+        const modal = document.getElementById('customer-timeline-modal');
+        const titleEl = document.getElementById('customer-timeline-modal-title');
+        const contentEl = document.getElementById('customer-timeline-modal-content');
+        const closeBtn = document.getElementById('close-customer-timeline-modal-btn');
+    
+        if (!modal || !titleEl || !contentEl || !closeBtn) {
+            console.error('Customer timeline modal elements not found.');
+            return;
+        }
+    
+        titleEl.textContent = `Termin-Historie für: ${customerName}`;
+        contentEl.innerHTML = '<div class="loader mx-auto"></div>';
+    
+        const customerAppointments = db.termine.filter(t => t.Terminpartner && t.Terminpartner.toLowerCase() === customerName.toLowerCase())
+            .sort((a, b) => new Date(a.Datum) - new Date(b.Datum));
+    
+        if (customerAppointments.length === 0) {
+            contentEl.innerHTML = '<p class="text-center text-gray-500">Keine Termine für diesen Kunden gefunden.</p>';
+        } else {
+            let timelineHtml = '<div class="customer-timeline">';
+            customerAppointments.forEach((termin, index) => {
+                // Zwischenschritt: Zeitdifferenz zum vorherigen Termin
+                if (index > 0) {
+                    const prevTermin = customerAppointments[index - 1];
+                    const diffMs = new Date(termin.Datum) - new Date(prevTermin.Datum);
+                    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+                    let diffText = '';
+                    if (diffDays === 0) {
+                        diffText = 'Am selben Tag';
+                    } else if (diffDays === 1) {
+                        diffText = '1 Tag später';
+                    } else {
+                        diffText = `${diffDays} Tage später`;
+                    }
+                    timelineHtml += `<div class="timeline-gap"><span>${diffText}</span></div>`;
+                }
+    
+                // Termin-Eintrag
+                const mitarbeiter = findRowById('mitarbeiter', termin.Mitarbeiter_ID);
+                const { border: statusColorClass } = appointmentsViewInstance ? appointmentsViewInstance._getAppointmentColorClasses(termin) : { border: 'border-gray-400' };
+                
+                const categoryColors = {
+                    'AT': 'bg-skt-green-accent', 'BT': 'bg-skt-blue-accent', 'ST': 'bg-skt-red-accent',
+                    'ET': 'bg-accent-gold', 'Immo': 'bg-accent-immo', 'NT': 'bg-accent-purple', 'default': 'bg-skt-grey-medium'
+                };
+                const categoryPillColor = categoryColors[termin.Kategorie] || categoryColors['default'];
+    
+                timelineHtml += `
+                    <div class="timeline-entry">
+                        <div class="timeline-dot ${statusColorClass.replace('border-', 'bg-')}"></div>
+                        <div class="p-4 bg-skt-grey-light rounded-lg shadow-sm">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <span class="inline-block px-3 py-1 text-xs font-semibold text-white ${categoryPillColor} rounded-full">${termin.Kategorie}</span>
+                                    <p class="font-bold text-lg text-skt-blue mt-1">${termin.Terminpartner}</p>
+                                </div>
+                                <p class="text-sm text-gray-500 font-medium">${new Date(termin.Datum).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} Uhr</p>
+                            </div>
+                            <div class="mt-3 pt-3 border-t border-gray-200 text-sm text-gray-600 space-y-1">
+                                <p><strong>Status:</strong> <span class="font-semibold ${statusColorClass.replace('border-', 'text-')}">${termin.Status || '-'}</span></p>
+                                <p><strong>Mitarbeiter:</strong> ${mitarbeiter?.Name || 'Unbekannt'}</p>
+                                ${termin.Hinweis ? `<p><strong>Hinweis:</strong> ${_escapeHtml(termin.Hinweis)}</p>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            timelineHtml += '</div>';
+            contentEl.innerHTML = timelineHtml;
+        }
+    
+        modal.classList.add('visible');
+        document.body.classList.add('modal-open');
+        closeBtn.onclick = () => {
+            modal.classList.remove('visible');
+            document.body.classList.remove('modal-open');
+        };
     }
 }
 
@@ -12111,6 +12857,126 @@ async function mainRouter() {
     }
 }
 
+// KORREKTUR: Event-Listener für den Businessplan an die richtige Stelle verschoben.
+document.getElementById('open-business-plan-btn').addEventListener('click', openBusinessPlanModal);
+document.getElementById('close-business-plan-btn').addEventListener('click', closeBusinessPlanModal);
+document.getElementById('cancel-business-plan-btn').addEventListener('click', closeBusinessPlanModal);
+document.getElementById('business-plan-form').addEventListener('submit', (e) => {
+    e.preventDefault(); saveBusinessPlan();
+});
+// NEU: Event-Listener für "Aufgabe hinzufügen"
+document.getElementById('bp-add-schritt-btn').addEventListener('click', () => {
+    addBusinessPlanStep();
+});
+// --- NEU: Businessplan-Funktionen ---
+function openBusinessPlanModal() {
+    const modal = document.getElementById('business-plan-modal');
+    const userIdInput = document.getElementById('business-plan-user-id');
+    const user = currentlyViewedUserData;
+
+    userIdInput.value = user._id;
+
+    // Befülle die Formularfelder mit den Daten des Benutzers
+    document.getElementById('bp-vision').value = user.Vision || '';
+    document.getElementById('bp-erstes-ziel').value = user.ErstesZiel || '';
+    document.getElementById('bp-warum-ziel').value = user.WarumZiel || '';
+    document.getElementById('bp-veraenderung').value = user.Veraenderung || '';
+    document.getElementById('bp-wann-ziel').value = user.WannZiel || '';
+
+    // Rendere die Schritte
+    const schritteContainer = document.getElementById('bp-schritte-container');
+    schritteContainer.innerHTML = '';
+    try {
+        const schritte = JSON.parse(user.Schritte || '[]');
+        if (Array.isArray(schritte)) {
+            schritte.forEach(schritt => addBusinessPlanStep(schritt));
+        }
+    } catch (e) {
+        console.error("Fehler beim Parsen der Schritte:", e);
+        // Wenn das Parsen fehlschlägt, behandle es als einfachen Text
+        if (typeof user.Schritte === 'string' && user.Schritte.trim() !== '') {
+            addBusinessPlanStep(user.Schritte);
+        }
+    }
+
+    modal.classList.add('visible');
+    document.body.classList.add('modal-open');
+}
+
+// NEU: Fügt ein neues Eingabefeld für einen Schritt hinzu
+function addBusinessPlanStep(text = '') {
+    const container = document.getElementById('bp-schritte-container');
+    const stepDiv = document.createElement('div');
+    stepDiv.className = 'flex items-center gap-2';
+    stepDiv.innerHTML = `
+        <input type="text" class="modern-input flex-grow bp-schritt-input" value="${_escapeHtml(text)}">
+        <button type="button" class="text-red-500 hover:text-red-700 h-8 w-8 flex-shrink-0" title="Schritt entfernen">
+            <i class="fas fa-trash"></i>
+        </button>
+    `;
+    stepDiv.querySelector('button').addEventListener('click', () => {
+        stepDiv.remove();
+    });
+    container.appendChild(stepDiv);
+}
+
+function closeBusinessPlanModal() {
+    const modal = document.getElementById('business-plan-modal');
+    modal.classList.remove('visible');
+    document.body.classList.remove('modal-open');
+}
+
+async function saveBusinessPlan() {
+    const saveBtn = document.getElementById('save-business-plan-btn');
+    const btnText = document.getElementById('save-bp-btn-text');
+    const loader = saveBtn.querySelector('.loader-small');
+
+    saveBtn.disabled = true;
+    btnText.classList.add('hidden');
+    loader.classList.remove('hidden');
+
+    const userId = document.getElementById('business-plan-user-id').value;
+    
+    // Sammle die Schritte und speichere sie als JSON-String
+    const schritteInputs = document.querySelectorAll('.bp-schritt-input');
+    const schritte = Array.from(schritteInputs).map(input => input.value.trim()).filter(Boolean);
+
+    // KORREKTUR: Die Spalte 'Businessplan' wird nicht mehr verwendet.
+    // Stattdessen werden die neuen, strukturierten Felder gespeichert.
+    const rowData = {
+        [COLUMN_MAPS.mitarbeiter.Vision]: document.getElementById('bp-vision').value,
+        [COLUMN_MAPS.mitarbeiter.ErstesZiel]: document.getElementById('bp-erstes-ziel').value,
+        [COLUMN_MAPS.mitarbeiter.WarumZiel]: document.getElementById('bp-warum-ziel').value,
+        [COLUMN_MAPS.mitarbeiter.Veraenderung]: document.getElementById('bp-veraenderung').value,
+        [COLUMN_MAPS.mitarbeiter.WannZiel]: document.getElementById('bp-wann-ziel').value,
+        [COLUMN_MAPS.mitarbeiter.Schritte]: JSON.stringify(schritte)
+    };
+
+    const success = await seaTableUpdateRow('Mitarbeiter', userId, rowData);
+
+    if (success) {
+        // Lokale Daten aktualisieren und UI-Feedback geben
+        const userInDb = findRowById('mitarbeiter', userId); // KORREKTUR: `findRowById` verwenden
+        if (userInDb) {
+            // KORREKTUR: Die lokalen Benutzerdaten müssen mit den neuen Werten aktualisiert werden.
+            // `dataToUpdate` war nicht definiert.
+            userInDb.Vision = document.getElementById('bp-vision').value;
+            userInDb.ErstesZiel = document.getElementById('bp-erstes-ziel').value;
+            userInDb.WarumZiel = document.getElementById('bp-warum-ziel').value;
+            userInDb.Veraenderung = document.getElementById('bp-veraenderung').value;
+            userInDb.WannZiel = document.getElementById('bp-wann-ziel').value;
+            userInDb.Schritte = JSON.stringify(schritte);
+        }
+        closeBusinessPlanModal();
+    } else {
+        alert('Fehler beim Speichern des Businessplans.');
+    }
+
+    saveBtn.disabled = false;
+    btnText.classList.remove('hidden');
+    loader.classList.add('hidden');
+}
+
 // --- START ---
 // Der neue Einstiegspunkt ist der mainRouter.
 document.addEventListener("DOMContentLoaded", mainRouter);
@@ -12156,19 +13022,27 @@ function getVerdienstForPosition(position) {
 }
 
 // NEU: Globale Funktion zur PQQ-Berechnung
-async function getSingleUserPQQ(userId, forMonth, forYear) {
-    // --- NEUE LOGIK: PQQ-Berechnung basierend auf dem letzten Infoabend-Zyklus ---
+async function getSingleUserPQQ(userId) {
+    // --- KORREKTUR: PQQ-Berechnung an die Logik aus `calculateAndRenderPQQForCurrentView` angepasst ---
+    const user = findRowById('mitarbeiter', userId);
+    const pqqLog = (message, ...data) => console.log(`%c[PQQ-Calc] %c[${user?.Name || 'Unbekannt'}] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: #8e44ad; font-weight: bold;', 'color: black;', ...data);
+    pqqLog(`--- Starte PQQ-Berechnung für User-ID: ${userId} ---`);
+
     const today = new Date();
     // 1. Finde den nächsten Infoabend, um den aktuellen Zyklus zu bestimmen.
     const nextInfoDate = findNextInfoDateAfter(today);
+    pqqLog(`1. Nächster Infoabend gefunden:`, nextInfoDate.toLocaleDateString('de-DE'));
+
     // 2. Finde den Infoabend davor (das ist der abgeschlossene Zyklus, für den wir die PQQ berechnen).
     const lastInfoDate = new Date(nextInfoDate.getTime() - 21 * 24 * 60 * 60 * 1000);
-    const lastInfoDateString = toLocalISOString(lastInfoDate).split('T')[0]; // KORREKTUR: Doppelte Deklaration entfernt
+    const lastInfoDateString = toLocalISOString(lastInfoDate);
+    pqqLog(`2. Relevanter (letzter) Infoabend für die Berechnung:`, lastInfoDate.toLocaleDateString('de-DE'));
 
     // 3. Finde den EH-Plan für den entsprechenden *Umsatz*-Monat, in den der letzte Infoabend fiel.
     const { startDate: ehPlanStartDate } = getMonthlyCycleDatesForDate(lastInfoDate);
     const ehPlanMonthName = ehPlanStartDate.toLocaleString("de-DE", { month: "long" });
     const ehPlanYear = ehPlanStartDate.getFullYear();
+    pqqLog(`3. Suche Plandaten für den Zyklus: ${ehPlanMonthName} ${ehPlanYear}`);
 
     // Get EH plan
     const plan = db.monatsplanung.find(p => 
@@ -12177,6 +13051,7 @@ async function getSingleUserPQQ(userId, forMonth, forYear) {
         p.Jahr === ehPlanYear
     );
     const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
+    pqqLog(`4. EH-Plan gefunden:`, { plan, ursprungszielEH });
     
     // Get ET plan
     const infoPlan = db.infoplanung.find(p => 
@@ -12184,39 +13059,41 @@ async function getSingleUserPQQ(userId, forMonth, forYear) {
         p.Informationsabend && p.Informationsabend.startsWith(lastInfoDateString)
     );
     const ursprungszielET = infoPlan?.Ursprungsziel_ET || 0;
+    pqqLog(`5. ET-Plan gefunden:`, { infoPlan, ursprungszielET });
 
-    if (!plan && !infoPlan) {
-        return { pqq: 0, ehQuote: 0, etQuote: 0, prognose: 0 };
-    }
-
-    // Get actual EH from preloaded data
+    // KORREKTUR: Lade die Ist-EH für den PQQ-Zeitraum direkt per SQL, anstatt den
+    // limitierten globalen Cache zu verwenden. Dies behebt den Fehler, dass immer 0 EH angezeigt werden.
     const ehCycleDates = getMonthlyCycleDatesForDate(lastInfoDate);
-    const actualEH = db.umsatz.filter(sale => 
-        sale.Mitarbeiter_ID === userId &&
-        sale.Datum && new Date(sale.Datum) >= ehCycleDates.startDate && new Date(sale.Datum) <= ehCycleDates.endDate
-    ).reduce((sum, sale) => sum + (sale.EH || 0), 0);
+    pqqLog(`6. Suche Ist-EH im Zeitraum:`, { start: ehCycleDates.startDate.toLocaleDateString(), end: ehCycleDates.endDate.toLocaleDateString() });
+    const mitarbeiterName = user?.Name;
+    let actualEH = 0;
+    if (mitarbeiterName) {
+        const startDateIso = toLocalISOString(ehCycleDates.startDate);
+        const endDateIso = toLocalISOString(ehCycleDates.endDate);
+        const ehQuery = `SELECT SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID = '${escapeSql(mitarbeiterName)}' AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+        const ehResultRaw = await seaTableSqlQuery(ehQuery, true);
+        actualEH = ehResultRaw?.[0]?.totalEH || 0;
+    } else {
+        pqqLog(`WARNUNG: Mitarbeitername für ID ${userId} nicht gefunden. Kann Ist-EH nicht laden.`);
+    }
+    pqqLog(`   -> Gefundene Ist-EH: ${actualEH}`);
     
-    // Get actual ET
-    // Zähle alle ETs, die dem letzten Infoabend zugeordnet sind, unabhängig vom Status.
+    // KORREKTUR: Zähle nur ETs, die nicht storniert wurden.
+    pqqLog(`7. Suche Ist-ETs für Infoabend am ${lastInfoDate.toLocaleDateString()}`);
     const actualET = db.termine.filter(t => 
         t.Mitarbeiter_ID === userId && 
-        t.Kategorie === 'ET' && 
-        t.Infoabend && t.Infoabend.startsWith(lastInfoDateString)
+        t.Kategorie === 'ET' &&
+        t.Infoabend && t.Infoabend.startsWith(lastInfoDateString) &&
+        t.Status !== 'Storno' && t.Absage !== true
     ).length;
+    pqqLog(`   -> Gefundene Ist-ETs: ${actualET}`);
 
     const ehQuote = (ursprungszielEH > 0) ? (actualEH / ursprungszielEH) : 1;
     const etQuote = (ursprungszielET > 0) ? (actualET / ursprungszielET) : 1;
     const pqq = ((ehQuote + etQuote) / 2) * 100;
+    pqqLog(`8. Berechnung: EH-Quote=${ehQuote.toFixed(2)}, ET-Quote=${etQuote.toFixed(2)} -> PQQ=${pqq.toFixed(2)}%`);
 
-    // Prognose für den ausgewählten Monat
-    const selectedStartDate = new Date(forYear, forMonth, 1);
-    const selectedEndDate = new Date(forYear, forMonth + 1, 0);
-    const prognose = db.termine.filter(t => 
-        t.Mitarbeiter_ID === userId && t.Datum && new Date(t.Datum) >= selectedStartDate && new Date(t.Datum) <= selectedEndDate &&
-        (t.Kategorie === 'BT' || t.Kategorie === 'ST') &&
-        ['Ausgemacht', 'Weiterer BT', 'Verschoben', 'Offen'].includes(t.Status) &&
-        !t.Absage).reduce((sum, t) => sum + (t.Umsatzprognose || 0), 0);
-    return { pqq, ehQuote, etQuote, prognose };
+    return { pqq, ehQuote, etQuote };
 }
 
 // NEU: Globale Funktion zur KPI-Berechnung
@@ -14745,6 +15622,10 @@ function openPlanningModal(preselectOptions = null) {
     // damit sie immer funktionieren, egal von wo das Modal geöffnet wird.
     const planningModal = document.getElementById('planning-modal');
     planningModal.querySelector('#cancel-planning-btn').addEventListener('click', closePlanningModal);
+    // KORREKTUR: Der Submit-Handler für das Formular muss hier gesetzt werden,
+    // damit er auch funktioniert, wenn das Modal aus der Gruppenübersicht geöffnet wird.
+    // Wir verwenden die allgemeine `savePlanningData`-Funktion.
+    dom.planningForm.onsubmit = (e) => { e.preventDefault(); savePlanningData(); };
     planningModal.querySelector('#cancel-planning-btn-2').addEventListener('click', closePlanningModal);
 
     dom.planningModal.classList.add('visible');
@@ -15400,7 +16281,6 @@ async function loadAndInitPlanungView() {
         container.innerHTML = `<p class="text-red-500 text-center">${error.message}</p>`;
     }
 }
-
 const leadCenterLog = (message, ...data) => console.log(`%c[LeadCenter] %c${message}`, 'color: #f39c12; font-weight: bold;', 'color: black;', ...data);
 
 class LeadCenterView {
@@ -16048,336 +16928,6 @@ async function loadAndInitLeadCenterView() {
     } catch (error) {
         console.error("Fehler beim Laden der Lead-Center-Ansicht:", error);
         container.innerHTML = `<p class="text-red-500 text-center">${error.message}</p>`;
-    }
-}
-
-const planungLog = (message, ...data) => console.log(`%c[PlanungView] %c${message}`, 'color: #9b59b6; font-weight: bold;', 'color: black;', ...data);
-
-class PlanungView {
-    constructor() {
-        this.initialized = false;
-        this.currentUserId = null;
-        this.currentViewedUserId = null;
-    }
-
-    _getDomElements() {
-        this.userSelectContainer = document.getElementById('planung-user-select-container');
-        this.userSelect = document.getElementById('planung-user-select');
-        this.tabMonatsplanung = document.getElementById('planung-tab-monatsplanung');
-        this.tabBusinessplan = document.getElementById('planung-tab-businessplan');
-        this.contentMonatsplanung = document.getElementById('planung-content-monatsplanung');
-        this.contentBusinessplan = document.getElementById('planung-content-businessplan');
-        this.monatsplanungForm = document.getElementById('monatsplanung-form');
-        this.businessplanForm = document.getElementById('businessplan-form');
-        return this.userSelect && this.tabMonatsplanung && this.monatsplanungForm && this.businessplanForm;
-    }
-
-    async init(userId) {
-        planungLog('Initialisiere Planungs-Ansicht...');
-        this.currentUserId = userId;
-        this.currentViewedUserId = userId;
-
-        if (!this._getDomElements()) {
-            planungLog('!!! FEHLER: Benötigte DOM-Elemente wurden nicht gefunden.');
-            return;
-        }
-
-        this._setupEventListeners();
-        await this._populateUserSelect();
-        await this._loadDataForUser(this.currentViewedUserId); // KORREKTUR: await hinzugefügt
-        this.initialized = true;
-    }
-
-    _setupEventListeners() {
-        this.userSelect.addEventListener('change', () => {
-            this.currentViewedUserId = this.userSelect.value;
-            this._loadDataForUser(this.currentViewedUserId);
-        });
-
-        this.tabMonatsplanung.addEventListener('click', () => this._switchTab('monatsplanung'));
-        this.tabBusinessplan.addEventListener('click', () => this._switchTab('businessplan'));
-
-        this.monatsplanungForm.addEventListener('submit', (e) => this._handleMonatsplanungSave(e));
-        this.businessplanForm.addEventListener('submit', (e) => this._handleBusinessplanSave(e));
-    }
-
-    _populateUserSelect() {
-        const currentUser = findRowById('mitarbeiter', this.currentUserId);
-        if (currentUser && isUserLeader(currentUser)) { // KORREKTUR: Sicherheitsprüfung für currentUser
-            this.userSelectContainer.classList.remove('hidden');
-            const subordinates = getAllSubordinatesRecursive(this.currentUserId);
-            const usersForSelect = [currentUser, ...subordinates].sort((a, b) => a.Name.localeCompare(b.Name));
-            this.userSelect.innerHTML = '';
-            usersForSelect.forEach(u => {
-                this.userSelect.add(new Option(u.Name, u._id));
-            });
-            this.userSelect.value = this.currentViewedUserId;
-        } else {
-            this.userSelectContainer.classList.add('hidden');
-        }
-    }
-
-    _switchTab(tabName) {
-        const activeClass = 'border-skt-blue text-skt-blue';
-        const inactiveClass = 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300';
-
-        this.tabMonatsplanung.className = `planung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg ${tabName === 'monatsplanung' ? activeClass : inactiveClass}`;
-        this.tabBusinessplan.className = `planung-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg ${tabName === 'businessplan' ? activeClass : inactiveClass}`;
-
-        this.contentMonatsplanung.classList.toggle('hidden', tabName !== 'monatsplanung');
-        this.contentBusinessplan.classList.toggle('hidden', tabName !== 'businessplan');
-    }
-
-    async _loadDataForUser(userId) {
-        planungLog(`Lade Daten für Benutzer: ${userId}`);
-        await this._renderKPIs(userId);
-        this._renderMonatsplanung(userId);
-        await this._renderBusinessplan(userId);
-    }
-
-    async _renderKPIs(userId) {
-        const user = findRowById('mitarbeiter', userId);
-        // KORREKTUR: 'today' wird hier deklariert, damit es in der gesamten Funktion verfügbar ist.
-        const today = new Date();
-    
-        // --- PQQ ---
-        // KORREKTUR: Die PQQ wird jetzt aus den globalen `personalData` geholt, die von der
-        // Dashboard-Berechnung (`calculateAndRenderPQQForCurrentView`) befüllt werden.
-        // Dies stellt sicher, dass der Wert immer mit dem Dashboard übereinstimmt.
-        document.getElementById('planung-kpi-pqq').textContent = `${(personalData.pqq || 0).toFixed(0)}%`;
-
-        const sixtyDaysAgo = new Date(today); // Kopie erstellen
-        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-    
-        const userAppointments = db.termine.filter(t => t.Mitarbeiter_ID === userId && t.Datum && new Date(t.Datum) >= sixtyDaysAgo);
-        
-        const startDateIso = sixtyDaysAgo.toISOString().split('T')[0];
-        const endDateIso = today.toISOString().split('T')[0];
-        const ehQuery = `SELECT EH, Kunde, Datum FROM Umsatz WHERE Mitarbeiter_ID = '${escapeSql(user.Name)}' AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
-        
-        const ehResultRaw = await seaTableSqlQuery(ehQuery, true);
-        const mappedSales = mapSqlResults(ehResultRaw || [], 'Umsatz');
-        
-        const totalEhLast60Days = mappedSales.reduce((sum, sale) => sum + (sale.EH || 0), 0);
-    
-        // 2. Terminausfallquote (letzte 30 Tage)
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const appointmentsLast30Days = userAppointments.filter(t => new Date(t.Datum) >= thirtyDaysAgo);
-        const totalAppointments = appointmentsLast30Days.length;
-        const cancelledAppointments = appointmentsLast30Days.filter(t => t.Absage === true || t.Status === 'Storno').length;
-        const cancellationRate = totalAppointments > 0 ? (cancelledAppointments / totalAppointments) * 100 : 0;
-        document.getElementById('planung-kpi-ausfallquote').textContent = `${cancellationRate.toFixed(0)}%`;
-
-        // 3. Ø EH / BT (letzte 60 Tage) - NEUE BERECHNUNG
-        const heldBTsLast60Days = userAppointments.filter(t => t.Status === 'Gehalten' && t.Kategorie === 'BT' && t.Datum);
-        const avgEhPerBt = heldBTsLast60Days.length > 0 ? totalEhLast60Days / heldBTsLast60Days.length : 0;
-        document.getElementById('planung-kpi-eh-pro-bt').textContent = avgEhPerBt.toFixed(2);
-
-        // 4. Ø EH / AT (letzte 60 Tage) - NEUE BERECHNUNG
-        // KORREKTUR: Die Logik für ATs muss auch STs mit Prognose > 1 berücksichtigen, um konsistent zu sein.
-        const heldATsLast60Days = userAppointments.filter(t => 
-            t.Status === 'Gehalten' && 
-            (t.Kategorie === 'AT' || (t.Kategorie === 'ST' && t.Umsatzprognose > 1))
-        );
-        const avgEhPerAt = heldATsLast60Days.length > 0 ? totalEhLast60Days / heldATsLast60Days.length : 0;
-        document.getElementById('planung-kpi-eh-pro-at').textContent = avgEhPerAt.toFixed(2);
-    }
-
-    _renderMonatsplanung(userId) {
-        const monthSelect = document.getElementById('monatsplanung-month-select');
-        const yearInput = document.getElementById('monatsplanung-year-input');
-        if (monthSelect.options.length === 0) {
-            const months = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
-            months.forEach((m, i) => monthSelect.add(new Option(m, m)));
-        }
-        const today = new Date();
-        monthSelect.value = today.toLocaleString('de-DE', { month: 'long' });
-        yearInput.value = today.getFullYear();
-
-        this._loadMonatsplanungData();
-
-        monthSelect.onchange = () => this._loadMonatsplanungData();
-        yearInput.onchange = () => this._loadMonatsplanungData();
-    }
-
-    _loadMonatsplanungData() {
-        const userId = this.currentViewedUserId;
-        const month = document.getElementById('monatsplanung-month-select').value;
-        const year = document.getElementById('monatsplanung-year-input').value;
-
-        const plan = db.monatsplanung.find(p => p.Mitarbeiter_ID === userId && p.Monat === month && p.Jahr == year);
-        document.getElementById('monatsplanung-eh-goal').value = plan?.EH_Ziel || 0;
-
-        const nextInfoDate = findNextInfoDateAfter(new Date());
-        const nextInfoDateString = nextInfoDate.toISOString().split('T')[0];
-        document.getElementById('monatsplanung-infoabend-date').value = nextInfoDateString;
-
-        const infoPlan = db.infoplanung.find(p => p.Mitarbeiter_ID === userId && p.Informationsabend && p.Informationsabend.startsWith(nextInfoDateString));
-        document.getElementById('monatsplanung-et-goal').value = infoPlan?.ET_Ziel || 0;
-    }
-
-    async _renderBusinessplan(userId) {
-        const userVisions = db.visionen.filter(v => v.Mitarbeiter === userId).sort((a, b) => new Date(b.Edited) - new Date(a.Edited));
-        const latestVision = userVisions[0];
-
-        this.businessplanForm.reset();
-        document.getElementById('businessplan-id').value = latestVision?._id || '';
-        document.getElementById('businessplan-vision').value = latestVision?.Vision || '';
-        document.getElementById('businessplan-ziel').value = latestVision?.Ziel || '';
-        document.getElementById('businessplan-warum').value = latestVision?.Warum || '';
-        document.getElementById('businessplan-change').value = latestVision?.Change || '';
-        // KORREKTUR: Das Datum wird jetzt inklusive Uhrzeit geladen und für das datetime-local Input formatiert.
-        const datumInput = document.getElementById('businessplan-datum');
-        if (latestVision?.Datum) {
-            const date = new Date(latestVision.Datum); // Parses ISO string into local Date object
-            // Format for datetime-local input (YYYY-MM-DDTHH:mm)
-            const year = date.getFullYear();
-            const month = (date.getMonth() + 1).toString().padStart(2, '0');
-            const day = date.getDate().toString().padStart(2, '0');
-            const hours = date.getHours().toString().padStart(2, '0');
-            const minutes = date.getMinutes().toString().padStart(2, '0');
-            datumInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
-        } else {
-            datumInput.value = '';
-        }
-
-        this._renderTodos(latestVision?.Todos || '- [ ] Dein erster Schritt');
-    }
-
-    _renderTodos(text) {
-        const container = document.getElementById('businessplan-todos-container');
-        container.innerHTML = '';
-        const lines = text.split('\n');
-        lines.forEach(line => {
-            const trimmedLine = line.trim();
-            if (trimmedLine.startsWith('-')) {
-                const isChecked = trimmedLine.startsWith('- [x]');
-                const todoText = trimmedLine.substring(trimmedLine.indexOf(']') + 2).trim();
-                const todoItem = document.createElement('div');
-                todoItem.className = 'flex items-center gap-2 my-1 pg-todo-item group';
-                todoItem.innerHTML = `
-                    <input type="checkbox" class="h-5 w-5 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light pg-todo-checkbox" ${isChecked ? 'checked' : ''}>
-                    <input type="text" class="flex-grow bg-transparent border-b border-gray-200 focus:outline-none focus:border-skt-blue pg-todo-text" value="${_escapeHtml(todoText)}">
-                    <button type="button" class="text-gray-400 hover:text-red-500 pg-todo-delete-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Löschen"><i class="fas fa-times"></i></button>
-                `;
-                container.appendChild(todoItem);
-                todoItem.querySelector('.pg-todo-delete-btn').addEventListener('click', () => todoItem.remove());
-            } else if (trimmedLine) {
-                container.innerHTML += `<input type="text" class="w-full bg-transparent font-bold text-skt-blue mt-2 border-b border-transparent focus:outline-none focus:border-skt-blue pg-heading-text" value="${_escapeHtml(trimmedLine)}">`;
-            }
-        });
-        const addTodoBtn = document.createElement('button');
-        addTodoBtn.type = 'button';
-        addTodoBtn.className = 'mt-2 text-skt-blue hover:underline text-sm';
-        addTodoBtn.innerHTML = '<i class="fas fa-plus mr-1"></i> Aufgabe hinzufügen';
-        addTodoBtn.onclick = () => {
-            const todoItem = document.createElement('div');
-            todoItem.className = 'flex items-center gap-2 my-1 pg-todo-item group';
-            todoItem.innerHTML = `
-                <input type="checkbox" class="h-5 w-5 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light pg-todo-checkbox">
-                <input type="text" class="flex-grow bg-transparent border-b border-gray-200 focus:outline-none focus:border-skt-blue pg-todo-text" value="">
-                <button type="button" class="text-gray-400 hover:text-red-500 pg-todo-delete-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Löschen"><i class="fas fa-times"></i></button>
-            `;
-            container.insertBefore(todoItem, addTodoBtn);
-            todoItem.querySelector('.pg-todo-delete-btn').addEventListener('click', () => todoItem.remove());
-            todoItem.querySelector('.pg-todo-text').focus();
-        };
-        container.appendChild(addTodoBtn);
-    }
-
-    _serializeTodos() {
-        const container = document.getElementById('businessplan-todos-container');
-        return Array.from(container.children).map(child => {
-            if (child.classList.contains('pg-todo-item')) {
-                const checkbox = child.querySelector('.pg-todo-checkbox');
-                const textInput = child.querySelector('.pg-todo-text');
-                return `${checkbox.checked ? '- [x]' : '- [ ]'} ${textInput.value}`;
-            } else if (child.classList.contains('pg-heading-item')) {
-                return child.querySelector('.pg-heading-text').value;
-            }
-            return null;
-        }).filter(line => line !== null).join('\n');
-    }
-
-    async _handleMonatsplanungSave(e) {
-        e.preventDefault();
-        const btn = document.getElementById('save-monatsplanung-btn');
-        btn.disabled = true;
-        btn.textContent = 'Speichern...';
-
-        // KORREKTUR: Die savePlanningData-Funktion war für das alte Modal gedacht.
-        // Wir müssen die Logik hier direkt aufrufen, um den korrekten Kontext zu haben.
-        const userId = this.currentViewedUserId;
-        const ehGoal = parseFloat(document.getElementById('monatsplanung-eh-goal').value) || 0;
-        const etGoal = parseInt(document.getElementById('monatsplanung-et-goal').value) || 0;
-        const monthName = document.getElementById('monatsplanung-month-select').value;
-        const year = parseInt(document.getElementById('monatsplanung-year-input').value);
-        const success = await saveMonthlyPlanning(userId, monthName, year, ehGoal, etGoal);
-
-        if (success) {
-            btn.textContent = 'Gespeichert!';
-            localStorage.removeItem(CACHE_PREFIX + 'monatsplanung');
-            localStorage.removeItem(CACHE_PREFIX + 'infoplanung');
-            await loadAllData();
-            setTimeout(() => {
-                btn.disabled = false;
-                btn.textContent = 'Planung speichern';
-            }, 2000);
-        } else {
-            alert('Fehler beim Speichern der Monatsplanung.');
-            btn.disabled = false;
-            btn.textContent = 'Planung speichern';
-        }
-    }
-
-    async _handleBusinessplanSave(e) {
-        e.preventDefault();
-        const btn = document.getElementById('save-businessplan-btn');
-        btn.disabled = true;
-        btn.textContent = 'Speichern...';
-
-        // KORREKTUR: Sicherheitsprüfung, um Absturz zu verhindern, falls die Tabelle nicht existiert.
-        if (!COLUMN_MAPS.visionen) {
-            alert("Fehler: Die Konfiguration für die Tabelle 'Visionen' konnte nicht geladen werden. Bitte stelle sicher, dass die Tabelle in der Datenbank existiert und korrekt benannt ist.");
-            btn.disabled = false;
-            btn.textContent = 'Businessplan speichern';
-            return;
-        }
-
-        const rowData = {
-            [COLUMN_MAPS.visionen.Mitarbeiter]: [this.currentViewedUserId],
-            [COLUMN_MAPS.visionen.Vision]: document.getElementById('businessplan-vision').value,
-            [COLUMN_MAPS.visionen.Ziel]: document.getElementById('businessplan-ziel').value,
-            [COLUMN_MAPS.visionen.Warum]: document.getElementById('businessplan-warum').value,
-            [COLUMN_MAPS.visionen.Change]: document.getElementById('businessplan-change').value,
-            [COLUMN_MAPS.visionen.Datum]: document.getElementById('businessplan-datum').value || null,
-            [COLUMN_MAPS.visionen.Todos]: this._serializeTodos(),
-            [COLUMN_MAPS.visionen.Edited]: new Date().toISOString(),
-        };
-
-        const success = await genericAddRowWithLinks('Visionen', rowData, ['Mitarbeiter']);
-
-        if (success) {
-            planungLog('Businessplan erfolgreich gespeichert. Aktualisiere UI.');
-            localStorage.removeItem(CACHE_PREFIX + 'visionen');
-            await loadAllData();
-            await this._renderBusinessplan(this.currentViewedUserId);
-
-            // KORREKTUR: Button-Zustand permanent ändern und Häkchen hinzufügen.
-            btn.classList.remove('bg-skt-blue', 'hover:bg-skt-blue-light');
-            btn.classList.add('bg-skt-green-accent', 'cursor-default');
-            btn.innerHTML = '<i class="fas fa-check mr-2"></i> Gespeichert!';
-            // Der Button bleibt deaktiviert, um erneutes, unnötiges Speichern zu verhindern.
-            btn.disabled = true;
-
-            // Die alte Timeout-Logik wird entfernt, damit der Zustand bestehen bleibt.
-        } else {
-            alert('Fehler beim Speichern des Businessplans.');
-            // KORREKTUR: Button-Zustand bei Fehler zurücksetzen.
-            btn.disabled = false;
-            btn.textContent = 'Businessplan speichern';
-        }
     }
 }
 
