@@ -872,13 +872,14 @@ summary::-webkit-details-marker {
 #prognosis-details-container::-webkit-scrollbar-thumb:hover { background: #aaa; }
 
 /* NEU: PQQ Gauge Styles */
-#pqq-bar {
-    background: linear-gradient(to right, 
-        var(--color-accent-red), 
-        var(--color-accent-green) 50%, 
-        var(--color-accent-gold)
-    );
+.pqq-gauge-bar {
+    background: linear-gradient(to right,
+        var(--color-accent-red),
+        var(--color-accent-green) 50%,
+        var(--color-accent-gold) 100%
+    ) !important;
 }
+
 #pqq-indicator,
 #pqq-eh-indicator,
 #pqq-et-indicator {
@@ -900,6 +901,14 @@ summary::-webkit-details-marker {
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
+/* NEU: Farbverlauf für die PQQ-Leiste */
+.pqq-gauge-bar {
+    background: linear-gradient(to right,
+        var(--color-accent-red),
+        var(--color-accent-green) 50%,
+        var(--color-accent-gold) 100%
+    );
+}
 #pqq-value-display {
     top: -25px; /* Position above the indicator */
     transform: translateX(-50%);
@@ -924,6 +933,26 @@ summary::-webkit-details-marker {
 .pqq-details-collapsible:not(.collapsed) {
     max-height: 500px; /* A large enough value to show content */
     opacity: 1;
+}
+
+/* NEU: Stile für das radiale Mitarbeiter-Diagramm */
+#mitarbeiter-rad-container.details-visible #mitarbeiter-rad-diagram-wrapper {
+    width: 33.333333%; /* md:w-1/3 */
+    max-width: 24rem; /* max-w-sm */
+}
+
+.member-segment circle {
+    transition: transform 0.3s ease-in-out;
+}
+.member-segment:hover circle {
+    transform: scale(1.1);
+}
+.center-circle circle {
+    transition: transform 0.3s ease-in-out;
+}
+.center-circle:hover circle {
+    transform: scale(1.05);
+}
 }
 #pqq-view.expanded #pqq-chevron {
     transform: rotate(180deg);
@@ -1021,100 +1050,193 @@ summary::-webkit-details-marker {
     transform: translateY(-2px);
     box-shadow: 0 8px 12px rgba(0,0,0,0.1);
 }
-.strukturbaum-node .node-name {
-    font-weight: bold;
-    font-size: 1.1rem;
-}
-.strukturbaum-node .node-position {
-    font-size: 0.85rem;
-    color: var(--color-skt-blue-light);
-    margin-top: 4px;
-}
-.strukturbaum-node .node-kpis {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.4s ease-in-out, margin-top 0.4s ease-in-out, opacity 0.4s ease-in-out;
-    font-size: 0.8rem;
-    text-align: left;
-    margin-top: 0;
-    opacity: 0;
-}
-/* NEU: Globaler KPI-Schalter */
-.strukturbaum.kpis-visible .strukturbaum-node .node-kpis {
-    max-height: 100px;
-    margin-top: 10px;
-    opacity: 1;
-}
-.strukturbaum-node .node-actions {
-    margin-top: 8px;
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-}
-.strukturbaum-node .node-actions button {
-    background: none;
-    border: 1px solid #ccc;
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    font-size: 0.7rem;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-.strukturbaum-node .node-actions button:hover {
-    background-color: #e0e0e0;
-}
-.strukturbaum ul.collapsed {
-    display: none;
-}
 
-/* NEU: Stile für Zoom-Buttons */
-.zoom-btn {
-    background-color: white;
-    border: 1px solid transparent;
-    color: var(--color-skt-blue);
-    font-weight: bold;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
+/* --- NEU: Stile für die mobile Sankey-Darstellung --- */
+.sankey-mobile-source-node {
+    background-color: #374151; /* gray-700 */
+    color: white;
+    padding: 1rem;
+    border-radius: 0.75rem; /* rounded-xl */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+.sankey-mobile-source-title {
+    font-weight: 600;
+    font-size: 1.125rem; /* text-lg */
+}
+.sankey-mobile-source-value {
+    display: block;
+    font-weight: 700;
+    font-size: 2.25rem; /* text-4xl */
+}
+.sankey-mobile-connector {
+    width: 2px;
+    height: 1.5rem; /* h-6 */
+    background-color: #d1d5db; /* gray-300 */
+    margin-left: auto;
+    margin-right: auto;
+}
+.sankey-mobile-level {
+    width: 100%;
+    padding-left: 2rem; /* pl-8 */
+    position: relative;
+}
+.sankey-mobile-level-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 1rem; /* pl-4 */
+    width: 2px;
+    background-color: #d1d5db; /* gray-300 */
+}
+.sankey-mobile-node-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem; /* space-y-3 */
+}
+.sankey-mobile-node-wrapper {
+    position: relative;
+    padding: 0.25rem 0.5rem; /* px-2 py-1 */
+}
+.sankey-mobile-node-wrapper::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: -1rem; /* -left-4 */
+    width: 1rem; /* w-4 */
+    height: 2px;
+    background-color: #d1d5db; /* gray-300 */
+}
+.sankey-mobile-node {
     display: flex;
     align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: background-color 0.2s;
+    padding: 0.75rem; /* p-3 */
+    border-radius: 0.5rem; /* rounded-lg */
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease-in-out;
+    text-decoration: none;
 }
-.zoom-btn:hover {
-    background-color: #e9e9e9;
+.sankey-mobile-node:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+    --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+    --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
+    box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
+    --tw-ring-color: var(--color-skt-blue-main);
 }
+.sankey-mobile-node-icon {
+    width: 2.5rem; /* w-10 */
+    text-align: center;
+}
+.sankey-mobile-node-content {
+    flex-grow: 1;
+}
+.sankey-mobile-node-title {
+    font-weight: 600;
+}
+.sankey-mobile-node-value {
+    display: block;
+    font-weight: 700;
+    font-size: 1.25rem; /* text-xl */
+}
+.sankey-mobile-node-chevron {
+    color: #9ca3af; /* text-gray-400 */
+    margin-left: 0.5rem; /* ml-2 */
+}
+ 
+ /* KORREKTUR: Komplett überarbeitete Stile für eine robustere mobile Ansicht */
+ .sankey-mobile-source-node {
+     background-color: #374151; /* gray-700 */
+     color: white;
+     padding: 1rem;
+     border-radius: 0.75rem; /* rounded-xl */
+     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+     text-align: center;
+ }
+ .sankey-mobile-source-title {
+     font-weight: 600;
+     font-size: 1.125rem; /* text-lg */
+ }
+ .sankey-mobile-source-value {
+     display: block;
+     font-weight: 700;
+     font-size: 2.25rem; /* text-4xl */
+ }
+ .sankey-mobile-connector {
+     width: 2px;
+     height: 1.5rem; /* h-6 */
+     background-color: #d1d5db; /* gray-300 */
+     margin-left: auto;
+     margin-right: auto;
+ }
+ .sankey-mobile-level {
+     width: 100%;
+     padding-left: 2rem; /* pl-8 */
+     position: relative;
+ }
+ .sankey-mobile-level-line {
+     position: absolute;
+     top: 0;
+     bottom: 0;
+     left: 1rem; /* pl-4 */
+     width: 2px;
+     background-color: #d1d5db; /* gray-300 */
+ }
+ .sankey-mobile-node-container {
+     display: flex;
+     flex-direction: column;
+     gap: 0.75rem; /* space-y-3 */
+ }
+ .sankey-mobile-node-wrapper {
+     position: relative;
+     padding: 0.25rem 0.5rem; /* px-2 py-1 */
+ }
+ .sankey-mobile-node-wrapper::before {
+     content: '';
+     position: absolute;
+     top: 50%;
+     left: -1rem; /* -left-4 */
+     width: 1rem; /* w-4 */
+     height: 2px;
+     background-color: #d1d5db; /* gray-300 */
+ }
+ .sankey-mobile-node {
+     display: flex;
+     align-items: center;
+     padding: 0.75rem; /* p-3 */
+     border-radius: 0.5rem; /* rounded-lg */
+     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+     transition: all 0.2s ease-in-out;
+ }
+ .sankey-mobile-node:hover {
+     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+     --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+     --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);
+     box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
+     --tw-ring-color: var(--color-skt-blue-main);
+ }
+ .sankey-mobile-node-icon {
+     width: 2.5rem; /* w-10 */
+     text-align: center;
+ }
+ .sankey-mobile-node-content {
+     flex-grow: 1;
+ }
+ .sankey-mobile-node-title {
+     font-weight: 600;
+ }
+ .sankey-mobile-node-value {
+     display: block;
+     font-weight: 700;
+     font-size: 1.25rem; /* text-xl */
+ }
+ .sankey-mobile-node-chevron {
+     color: #9ca3af; /* text-gray-400 */
+     margin-left: 0.5rem; /* ml-2 */
+ }
 
-/* NEU: Stile für PG-Tagebuch */
-#pg-list-container .p-3.bg-skt-blue .text-sm {
-    color: #cbd5e1; /* helleres Grau für Datum im aktiven Zustand */
-}
-
-#pg-list-container {
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-skt-grey-medium) var(--color-skt-grey-light);
-}
-#pg-list-container::-webkit-scrollbar { width: 8px; }
-#pg-list-container::-webkit-scrollbar-track { background: var(--color-skt-grey-light); }
-#pg-list-container::-webkit-scrollbar-thumb { background-color: var(--color-skt-grey-medium); border-radius: 10px; border: 2px solid var(--color-skt-grey-light); }
-
-#pg-editor-container textarea { min-height: 200px; }
-
-/* Utility to hide scrollbars but keep scrolling */
-.hide-scrollbar::-webkit-scrollbar {
-    display: none;
-}
-.hide-scrollbar {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
-}
-
-/* Utility to hide scrollbars but keep scrolling */
-.hide-scrollbar::-webkit-scrollbar {
-    display: none;
-}
+.strukturbaum-node .node-name  n t
+   - kig-uupi--ne; ngrs */
+.}
 .hide-scrollbar {
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
@@ -2173,6 +2295,70 @@ summary::-webkit-details-marker {
 .pensionsrechner-legend .legend-dot.gap { background-color: var(--color-accent-red); }
 
 /* NEU: Stile für das Einklappen der Pensionsrechner-Eingaben */
+.modern-input-dark {
+    display: block;
+    width: 100%;
+    padding: 0.65rem 1rem;
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0.5rem;
+    color: white;
+    transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+.modern-input-dark:focus { outline: none; border-color: var(--color-skt-blue-main); box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.3); }
+.beratung-nav-btn { background-color: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.3); padding: 0.75rem 1.5rem; border-radius: 999px; font-weight: 600; display: flex; align-items: center; gap: 0.5rem; transition: all 0.2s; }
+.beratung-nav-btn:hover { background-color: rgba(255, 255, 255, 0.2); }
+.beratung-nav-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.kategorie-item { background-color: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.3); transition: all 0.2s; }
+.kategorie-item.selected { background-color: var(--color-accent-gold); border-color: var(--color-accent-gold); color: var(--color-skt-blue); }
+.agenda-item { background-color: rgba(255, 255, 255, 0.15); cursor: grab; }
+.agenda-item:active { cursor: grabbing; }
+
+/* --- NEU: Stile für die Kunden-Timeline --- */
+.customer-timeline {
+    position: relative;
+    padding-left: 30px; /* Platz für die Linie */
+}
+.customer-timeline::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    top: 10px;
+    bottom: 10px;
+    width: 4px;
+    background-color: #e2e8f0; /* gray-200 */
+    border-radius: 2px;
+}
+.timeline-entry {
+    position: relative;
+    margin-bottom: 1.5rem; /* 24px */
+}
+.timeline-dot {
+    position: absolute;
+    left: -24px; /* (30px padding - 12px breite) / 2 - 12px breite */
+    top: 4px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 3px solid white;
+    box-shadow: 0 0 0 2px var(--color-skt-blue);
+}
+.timeline-gap {
+    position: relative;
+    text-align: center;
+    margin: 1.5rem 0;
+}
+.timeline-gap span {
+    background-color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem; /* text-xs */
+    font-weight: 600;
+    color: #64748b; /* gray-500 */
+    border: 1px solid #e2e8f0;
+    position: relative;
+    left: -18px;
+}
 .pr-input-collapsible {
     max-height: 500px; /* Genug Höhe für den Inhalt */
     overflow: hidden;

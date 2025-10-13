@@ -267,7 +267,7 @@
                     <p class="text-sm text-gray-500 mb-6">Erfüllungsquote deiner ursprünglichen Ziele des Vormonats.</p>
                     <div class="w-full max-w-xl mx-auto">
                         <div id="pqq-gauge" class="relative h-8 rounded-full">
-                            <div id="pqq-bar" class="h-full rounded-full"></div>
+                            <div id="pqq-bar" class="h-full rounded-full pqq-gauge-bar"></div>
                             <div id="pqq-indicator" class="absolute top-0 h-full flex items-center" style="left: 50%;">
                                 <div class="w-1 h-10 bg-skt-blue rounded-full shadow-md"></div>
                             </div>
@@ -314,7 +314,6 @@
 
                 <section id="employee-view" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg">
                     <h2 class="text-2xl font-semibold text-skt-blue mb-6 text-center">Dein aktueller Fortschritt</h2>
-                    
                     <!-- NEU: Einarbeitungs-Banner -->
                     <div id="einarbeitung-banner" class="hidden mb-6 p-4 bg-skt-blue-light text-white rounded-xl shadow-lg flex justify-between items-center cursor-pointer hover:bg-skt-blue transition-colors">
                         <div>
@@ -341,7 +340,9 @@
                         </div>
                         <div class="flex-grow md:w-1/2 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
                             <div class="p-4 bg-skt-grey-light rounded-xl shadow-md flex flex-col items-center justify-center text-center">
-                                <p id="eh-value-title" class="text-xs text-skt-blue-light font-bold" data-tooltip="Deine gesamten erreichten Einheiten">Erreichte EH (insgesamt)</p>
+                                <p id="eh-value-title" class="text-xs text-skt-blue-light font-bold" data-tooltip="Deine gesamten erreichten Einheiten">
+                                    Erreichte EH (insgesamt)
+                                </p>
                                 <div class="flex items-center justify-center h-full">
                                     <p id="eh-value-display" class="text-2xl font-bold text-skt-blue mt-1"><span id="current-eh-display">0</span><span id="eh-value-unit"> EH</span></p><i id="eh-checkmark" class="fas fa-check-circle text-5xl text-green-500 hidden"></i>
                                 </div>
@@ -354,8 +355,13 @@
                                 </div>
                                 <div id="employee-slots-container" class="flex space-x-2 mt-2"></div>
                             </div>
-                            <div class="p-4 col-span-2 bg-skt-grey-light rounded-xl shadow-md flex flex-col items-center justify-center text-center">
+                            <!-- KORREKTUR: Businessplan-Button hier platziert -->
+                            <div class="p-4 col-span-2 bg-skt-grey-light rounded-xl shadow-md flex items-center justify-center text-center relative">
                                 <p id="next-milestone" class="text-skt-blue-light text-sm font-bold">Nächster Meilenstein: <span class="text-skt-blue font-semibold">...</span></p>
+                                <!-- NEU: Button hier platziert -->
+                                <button id="open-business-plan-btn" class="absolute top-1/2 -translate-y-1/2 right-4 bg-skt-blue-light text-white font-semibold rounded-full shadow-md hover:bg-skt-blue-main transition-colors h-8 w-8 flex items-center justify-center" title="Businessplan bearbeiten">
+                                    <i class="fas fa-edit text-sm"></i>
+                                </button>
                             </div>
                             <div id="employee-additional-info-container" class="hidden p-4 col-span-2 bg-accent-gold-light rounded-xl shadow-md border-2 border-accent-gold text-center">
                                 <!-- Inhalt wird per JS generiert -->
@@ -608,6 +614,19 @@
             <div id="hinweis-modal-content" class="text-gray-700"></div>
         </div>
     </div>
+
+    <!-- NEU: Modal für die Kunden-Timeline -->
+    <div id="customer-timeline-modal" class="modal-overlay">
+        <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-2xl w-full relative max-h-[90vh] flex flex-col">
+             <button id="close-customer-timeline-modal-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
+             <h3 id="customer-timeline-modal-title" class="text-2xl font-bold text-skt-blue mb-6">Termin-Historie</h3>
+             <div id="customer-timeline-modal-content" class="flex-grow overflow-y-auto pr-4 -mr-4">
+                <!-- Timeline wird hier per JS eingefügt -->
+                <div class="loader mx-auto"></div>
+             </div>
+        </div>
+    </div>
+
 
     <!-- NEU: Modal zum Bearbeiten von Benutzerdaten -->
     <div id="edit-user-modal" class="modal-overlay">
@@ -1025,7 +1044,53 @@
             </form>
         </div>
     </div>
-
+    <!-- NEU: Modal für den Businessplan -->
+    <div id="business-plan-modal" class="modal-overlay">
+        <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-4xl w-full relative max-h-[90vh] flex flex-col">
+             <button id="close-business-plan-btn" class="absolute top-2 right-3 text-3xl text-gray-400 hover:text-skt-blue">&times;</button>
+             <h3 class="text-2xl font-bold text-skt-blue mb-6">Mein Businessplan</h3>
+             <form id="business-plan-form" class="flex-grow flex flex-col min-h-0">
+                <input type="hidden" id="business-plan-user-id">
+                 <!-- NEU: Strukturierte Formularfelder anstelle des Editors -->
+                 <div class="space-y-4 overflow-y-auto pr-4 -mr-4 flex-grow">
+                     <div>
+                         <label for="bp-vision" class="block text-sm font-medium text-gray-700">Was ist deine Vision?</label>
+                         <textarea id="bp-vision" rows="2" class="modern-input mt-1"></textarea>
+                     </div>
+                     <div>
+                         <label for="bp-erstes-ziel" class="block text-sm font-medium text-gray-700">Was ist dein erstes großes Ziel auf diesem Weg?</label>
+                         <input type="text" id="bp-erstes-ziel" class="modern-input mt-1">
+                     </div>
+                     <div>
+                         <label for="bp-warum-ziel" class="block text-sm font-medium text-gray-700">Warum möchtest du dieses Ziel erreichen?</label>
+                         <textarea id="bp-warum-ziel" rows="2" class="modern-input mt-1"></textarea>
+                     </div>
+                     <div>
+                         <label for="bp-veraenderung" class="block text-sm font-medium text-gray-700">Was verändert sich für dich, wenn du dieses Ziel erreicht hast?</label>
+                         <textarea id="bp-veraenderung" rows="2" class="modern-input mt-1"></textarea>
+                     </div>
+                     <div>
+                         <label for="bp-wann-ziel" class="block text-sm font-medium text-gray-700">Wann willst du dieses Ziel erreichen?</label>
+                         <input type="date" id="bp-wann-ziel" class="modern-input mt-1">
+                     </div>
+                     <div>
+                         <label class="block text-sm font-medium text-gray-700">Welche konkreten Schritte musst du umsetzen, um dieses Ziel zu erreichen?</label>
+                         <div id="bp-schritte-container" class="mt-2 space-y-2">
+                             <!-- Schritte werden hier dynamisch per JS eingefügt -->
+                         </div>
+                         <button type="button" id="bp-add-schritt-btn" class="mt-2 text-sm text-skt-blue hover:underline"><i class="fas fa-plus mr-1"></i>Aufgabe hinzufügen</button>
+                     </div>
+                 </div>
+                <div class="pt-6 flex justify-end space-x-3">
+                    <button type="button" id="cancel-business-plan-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button>
+                    <button type="submit" id="save-business-plan-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors flex items-center justify-center" style="min-width: 110px;">
+                        <span id="save-bp-btn-text">Speichern</span>
+                        <div class="loader-small hidden"></div>
+                    </button>
+                </div>
+             </form>
+        </div>
+    </div>
     <!-- Lodash für Hilfsfunktionen wie _.debounce -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
     <!-- NEU: Marked.js für Markdown-Rendering -->
