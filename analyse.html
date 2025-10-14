@@ -660,6 +660,483 @@
     </div>
   </section>
 
+  <!-- Folie 11: Immobilien Hauptseite -->
+  <section id="folie11" class="slide content-container">
+    <!-- Überschrift ganz oben -->
+    <div class="absolute top-24 left-0 right-0 z-50">
+      <h1 class="text-6xl md:text-7xl font-bold text-center text-white" style="opacity: 1 !important; transform: translateY(0) !important; visibility: visible !important; z-index: 1000;">Immobilien</h1>
+    </div>
+    
+    <div class="relative w-full h-full flex items-center justify-center pt-32">
+      <!-- Kreis mit rechter Hälfte im Bild - wird animiert gedreht -->
+      <div class="flex-shrink-0 relative" style="width: 30vw; height: 100vh;">
+        <div class="absolute left-[-68%] top-1/2 transform -translate-y-1/2" id="immobilienKreis">
+          <img src="AnalyseBilder/Kreis.png" alt="Kreis" class="w-[70vh] h-[70vh] object-contain" style="transform: rotate(-180deg); transition: transform 3s ease-in-out;" />
+        </div>
+      </div>
+
+      <!-- Vergleichstabelle -->
+      <div class="flex justify-center items-center space-x-4" style="width: 50vw; margin-left: -8vw;">
+        
+        <!-- Linke Spalte: Privat -->
+        <div class="bg-white text-gray-800 rounded-3xl p-8 shadow-2xl flex-1 max-w-lg">
+          <h2 class="text-4xl font-bold text-center mb-8 text-blue-900">Privat</h2>
+          
+          <div class="space-y-6">
+            <div class="text-center">
+              <h3 class="text-2xl font-semibold text-blue-800 mb-3">Keinen Marktüberblick</h3>
+              <div class="flex justify-center mb-4">
+                <svg class="w-12 h-12 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 3L6 9h8l-4-6z" clip-rule="evenodd" transform="rotate(180 10 10)"></path>
+                </svg>
+              </div>
+            </div>
+            
+            <div class="text-center">
+              <h3 class="text-2xl font-semibold text-blue-800 mb-3">Sehr zeitaufwändig</h3>
+              <div class="flex justify-center mb-4">
+                <svg class="w-12 h-12 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 3L6 9h8l-4-6z" clip-rule="evenodd" transform="rotate(180 10 10)"></path>
+                </svg>
+              </div>
+            </div>
+            
+            <div class="text-center">
+              <h3 class="text-2xl font-semibold text-blue-800 mb-3">unterschätztes & kostspieliges Risiko</h3>
+              <div class="flex justify-center mb-4">
+                <svg class="w-12 h-12 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 3L6 9h8l-4-6z" clip-rule="evenodd" transform="rotate(180 10 10)"></path>
+                </svg>
+              </div>
+            </div>
+            
+            <div class="text-center mb-6">
+              <h3 class="text-2xl font-semibold text-blue-800 mb-3">Fehlende professionelle Bewertung</h3>
+            </div>
+          </div>
+          
+          <button onclick="navigateToBuy()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-2xl py-4 rounded-2xl shadow-lg transition-all duration-300 transform hover:scale-105">
+            Ich <u>suche eine</u><br>Immobilie
+          </button>
+        </div>
+
+        <!-- Mittellinie -->
+        <div class="w-1 h-96 bg-gradient-to-b from-red-500 to-blue-500 mx-8"></div>
+
+        <!-- Rechte Spalte: Mit OVB als Profi -->
+        <div class="bg-white text-gray-800 rounded-3xl p-8 shadow-2xl flex-1 max-w-lg">
+          <h2 class="text-4xl font-bold text-center mb-8 text-blue-900">Mit uns als Profi</h2>
+          
+          <div class="space-y-6">
+            <div class="text-center">
+              <h3 class="text-2xl font-semibold text-blue-800 mb-3"><u>Professionelle Beratung</u></h3>
+              <div class="flex justify-center mb-4">
+                <svg class="w-12 h-12 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 3L6 9h8l-4-6z" clip-rule="evenodd" transform="rotate(180 10 10)"></path>
+                </svg>
+              </div>
+            </div>
+            
+            <div class="text-center">
+              <h3 class="text-2xl font-semibold text-blue-800 mb-3">Zeitersparnis</h3>
+              <div class="flex justify-center mb-4">
+                <svg class="w-12 h-12 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 3L6 9h8l-4-6z" clip-rule="evenodd" transform="rotate(180 10 10)"></path>
+                </svg>
+              </div>
+            </div>
+            
+            <div class="text-center">
+              <h3 class="text-2xl font-semibold text-blue-800 mb-3">Sichere Abwicklung</h3>
+              <div class="flex justify-center mb-4">
+                <svg class="w-12 h-12 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 3L6 9h8l-4-6z" clip-rule="evenodd" transform="rotate(180 10 10)"></path>
+                </svg>
+              </div>
+            </div>
+            
+            <div class="text-center mb-6">
+              <h3 class="text-2xl font-semibold text-blue-800 mb-3">Besserer Preis der Immobilie</h3>
+            </div>
+          </div>
+          
+          <button onclick="navigateToSell()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-2xl py-4 rounded-2xl shadow-lg transition-all duration-300 transform hover:scale-105">
+            Ich <u>verkaufe eine</u><br>Immobilie
+          </button>
+        </div>
+      </div>
+
+      <!-- Immobilien SVG rechts daneben -->
+      <div class="flex-shrink-0 flex items-center justify-center flex-1">
+        <object data="AnalyseBilder/immobilien.svg" type="image/svg+xml" class="w-full h-auto" style="max-width: 800px; max-height: 90vh;">
+          <img src="AnalyseBilder/immobilien.svg" alt="Immobilien Animation" class="w-full h-auto" style="max-width: 800px; max-height: 90vh;" />
+        </object>
+      </div>
+    </div>
+  </section>
+
+  <!-- Folie 12: Immobilie verkaufen -->
+  <section id="folie12" class="slide cursor-pointer content-container" onclick="nextStep()">
+    <!-- Überschrift ganz oben -->
+    <div class="absolute top-24 left-0 right-0 z-50">
+      <h1 class="text-6xl md:text-7xl font-bold text-center text-white" style="opacity: 1 !important; transform: translateY(0) !important; visibility: visible !important; z-index: 1000;">Immobilie verkaufen</h1>
+    </div>
+    
+    <div class="relative w-full h-full flex items-center justify-center pt-32">
+      <!-- Kreis mit rechter Hälfte im Bild - wird animiert gedreht -->
+      <div class="flex-shrink-0 relative" style="width: 30vw; height: 100vh;">
+        <div class="absolute left-[-68%] top-1/2 transform -translate-y-1/2">
+          <img src="AnalyseBilder/Kreis.png" alt="Kreis" class="w-[70vh] h-[70vh] object-contain" style="transform: rotate(-240deg);" />
+        </div>
+      </div>
+
+      <!-- Content für Verkaufen -->
+      <div class="flex flex-col justify-start items-start" style="width: 50vw; margin-left: -8vw;">
+        <div class="grid grid-cols-2 gap-12 max-w-6xl">
+          <div class="bg-sky-800 bg-opacity-50 p-9 rounded-xl">
+            <i class="fas fa-chart-line text-7xl text-green-400 mb-6"></i>
+            <h3 class="text-3xl font-bold mb-4">Marktbewertung</h3>
+            <p class="text-xl">Professionelle Bewertung Ihrer Immobilie zum aktuellen Marktpreis</p>
+          </div>
+          
+          <div class="bg-sky-800 bg-opacity-50 p-9 rounded-xl">
+            <i class="fas fa-users text-7xl text-blue-400 mb-6"></i>
+            <h3 class="text-3xl font-bold mb-4">Käufersuche</h3>
+            <p class="text-xl">Gezieltes Marketing und Käuferakquise über unser Netzwerk</p>
+          </div>
+          
+          <div class="bg-sky-800 bg-opacity-50 p-9 rounded-xl">
+            <i class="fas fa-file-contract text-7xl text-yellow-400 mb-6"></i>
+            <h3 class="text-3xl font-bold mb-4">Vertragsabwicklung</h3>
+            <p class="text-xl">Sichere und professionelle Abwicklung des Verkaufsprozesses</p>
+          </div>
+          
+          <div class="bg-sky-800 bg-opacity-50 p-9 rounded-xl">
+            <i class="fas fa-piggy-bank text-7xl text-purple-400 mb-6"></i>
+            <h3 class="text-3xl font-bold mb-4">Steueroptimierung</h3>
+            <p class="text-xl">Optimale steuerliche Gestaltung Ihres Immobilienverkaufs</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Immobilien SVG rechts daneben -->
+      <div class="flex-shrink-0 flex items-center justify-center flex-1">
+        <object data="AnalyseBilder/immobilien.svg" type="image/svg+xml" class="w-full h-auto" style="max-width: 800px; max-height: 90vh;">
+          <img src="AnalyseBilder/immobilien.svg" alt="Immobilien Animation" class="w-full h-auto" style="max-width: 800px; max-height: 90vh;" />
+        </object>
+      </div>
+    </div>
+  </section>
+
+  <!-- Folie 13: Immobilie kaufen -->
+  <section id="folie13" class="slide cursor-pointer content-container" onclick="nextStep()">
+    <!-- Überschrift ganz oben -->
+    <div class="absolute top-24 left-0 right-0 z-50">
+      <h1 class="text-6xl md:text-7xl font-bold text-center text-white" style="opacity: 1 !important; transform: translateY(0) !important; visibility: visible !important; z-index: 1000;">Immobilie kaufen</h1>
+    </div>
+    
+    <div class="relative w-full h-full flex items-center justify-center pt-32">
+      <!-- Kreis mit rechter Hälfte im Bild - wird animiert gedreht -->
+      <div class="flex-shrink-0 relative" style="width: 30vw; height: 100vh;">
+        <div class="absolute left-[-68%] top-1/2 transform -translate-y-1/2">
+          <img src="AnalyseBilder/Kreis.png" alt="Kreis" class="w-[70vh] h-[70vh] object-contain" style="transform: rotate(-240deg);" />
+        </div>
+      </div>
+
+      <!-- Content für Kaufen -->
+      <div class="flex flex-col justify-start items-start" style="width: 50vw; margin-left: -8vw;">
+        <div class="grid grid-cols-2 gap-12 max-w-6xl">
+          <div class="bg-sky-800 bg-opacity-50 p-9 rounded-xl">
+            <i class="fas fa-search text-7xl text-green-400 mb-6"></i>
+            <h3 class="text-3xl font-bold mb-4">Objektsuche</h3>
+            <p class="text-xl">Maßgeschneiderte Suche nach Ihrer perfekten Immobilie</p>
+          </div>
+          
+          <div class="bg-sky-800 bg-opacity-50 p-9 rounded-xl">
+            <i class="fas fa-calculator text-7xl text-blue-400 mb-6"></i>
+            <h3 class="text-3xl font-bold mb-4">Finanzierung</h3>
+            <p class="text-xl">Optimale Finanzierungslösungen für Ihren Immobilienkauf</p>
+          </div>
+          
+          <div class="bg-sky-800 bg-opacity-50 p-9 rounded-xl">
+            <i class="fas fa-clipboard-check text-7xl text-yellow-400 mb-6"></i>
+            <h3 class="text-3xl font-bold mb-4">Objektprüfung</h3>
+            <p class="text-xl">Professionelle Bewertung und Zustandsprüfung der Immobilie</p>
+          </div>
+          
+          <div class="bg-sky-800 bg-opacity-50 p-9 rounded-xl">
+            <i class="fas fa-handshake text-7xl text-purple-400 mb-6"></i>
+            <h3 class="text-3xl font-bold mb-4">Kaufabwicklung</h3>
+            <p class="text-xl">Sicherer Kaufprozess von der Besichtigung bis zur Übergabe</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Immobilien SVG rechts daneben -->
+      <div class="flex-shrink-0 flex items-center justify-center flex-1">
+        <object data="AnalyseBilder/immobilien.svg" type="image/svg+xml" class="w-full h-auto" style="max-width: 800px; max-height: 90vh;">
+          <img src="AnalyseBilder/immobilien.svg" alt="Immobilien Animation" class="w-full h-auto" style="max-width: 800px; max-height: 90vh;" />
+        </object>
+      </div>
+    </div>
+  </section>
+
+  <!-- Folie 14: Tippgeber -->
+  <section id="folie14" class="slide cursor-pointer content-container" onclick="nextStep()">
+    <!-- Überschrift ganz oben -->
+    <div class="absolute top-24 left-0 right-0 z-50">
+      <h1 class="text-6xl md:text-7xl font-bold text-center text-white" style="opacity: 1 !important; transform: translateY(0) !important; visibility: visible !important; z-index: 1000;">Tippgeber</h1>
+    </div>
+    
+    <div class="relative w-full h-full flex items-center justify-center pt-32">
+      <!-- Kreis mit rechter Hälfte im Bild -->
+      <div class="flex-shrink-0 relative" style="width: 30vw; height: 100vh;">
+        <div class="absolute left-[-68%] top-1/2 transform -translate-y-1/2">
+          <img src="AnalyseBilder/Kreis.png" alt="Kreis" class="w-[70vh] h-[70vh] object-contain" style="transform: rotate(-240deg);" />
+        </div>
+      </div>
+
+      <!-- Content für Tippgeber -->
+      <div class="flex flex-col justify-center items-center" style="width: 50vw; margin-left: -8vw;">
+        <div class="bg-gradient-to-r from-yellow-500 to-orange-500 p-16 rounded-3xl shadow-2xl max-w-6xl text-center">
+          <i class="fas fa-gift text-8xl text-white mb-12"></i>
+          
+          <h3 class="text-5xl font-bold text-white mb-12">Jetzt bis zu 7.000€ Tippgeberprovision erhalten!</h3>
+          
+          <div class="grid grid-cols-3 gap-12 text-white mb-12">
+            <div class="text-center">
+              <i class="fas fa-euro-sign text-6xl mb-6"></i>
+              <h4 class="text-3xl font-bold mb-4">Provision</h4>
+              <p class="text-lg">Attraktive Vergütung für jeden erfolgreichen Tipp</p>
+            </div>
+            
+            <div class="text-center">
+              <i class="fas fa-network-wired text-6xl mb-6"></i>
+              <h4 class="text-3xl font-bold mb-4">Netzwerk</h4>
+              <p class="text-lg">Erweitern Sie Ihr persönliches Netzwerk</p>
+            </div>
+            
+            <div class="text-center">
+              <i class="fas fa-trophy text-6xl mb-6"></i>
+              <h4 class="text-3xl font-bold mb-4">Erfolg</h4>
+              <p class="text-lg">Helfen Sie anderen bei ihren Immobilienzielen</p>
+            </div>
+          </div>
+          
+          <div class="text-3xl font-semibold text-white text-center">
+            Sprechen Sie uns an – wir erklären Ihnen gerne die Details!
+          </div>
+        </div>
+      </div>
+
+      <!-- Immobilien SVG rechts daneben -->
+      <div class="flex-shrink-0 flex items-center justify-center flex-1">
+        <object data="AnalyseBilder/immobilien.svg" type="image/svg+xml" class="w-full h-auto" style="max-width: 800px; max-height: 90vh;">
+          <img src="AnalyseBilder/immobilien.svg" alt="Immobilien Animation" class="w-full h-auto" style="max-width: 800px; max-height: 90vh;" />
+        </object>
+      </div>
+    </div>
+  </section>
+
+  <!-- Folie 15: Immobilienfinanzierung Vergleich -->
+  <section id="folie15" class="slide cursor-pointer content-container" onclick="nextStep()">
+    <!-- Überschrift ganz oben -->
+    <div class="absolute top-24 left-0 right-0 z-50">
+      <h1 class="text-6xl md:text-7xl font-bold text-center text-white" style="opacity: 1 !important; transform: translateY(0) !important; visibility: visible !important; z-index: 1000;">Immobilienfinanzierung</h1>
+    </div>
+    
+    <div class="relative w-full h-full flex items-center justify-center pt-32">
+      <!-- Kreis mit rechter Hälfte im Bild - wird animiert gedreht -->
+      <div class="flex-shrink-0 relative" style="width: 30vw; height: 100vh;">
+        <div class="absolute left-[-68%] top-1/2 transform -translate-y-1/2">
+          <img src="AnalyseBilder/Kreis.png" alt="Kreis" class="w-[70vh] h-[70vh] object-contain" style="transform: rotate(-240deg);" />
+        </div>
+      </div>
+
+      <!-- Vergleichstabelle -->
+      <div class="flex flex-col justify-center items-center" style="width: 50vw; margin-left: -8vw;">
+        
+        <!-- Grafik mit Bank/Kunde/Berater oben -->
+        <div class="mb-8 text-center">
+          <div class="flex items-center justify-center mb-6">
+            <!-- Linke Grafik -->
+            <div class="fade-in" id="finanzierungLinks">
+              <img src="AnalyseBilder/finanzierunglinks.png" alt="Finanzierung Links" class="h-64 object-contain rounded-l-2xl" />
+            </div>
+            
+            <!-- Rechte Grafik -->
+            <div class="fade-in" id="finanzierungRechts">
+              <img src="AnalyseBilder/finanzierungrechts.png" alt="Finanzierung Rechts" class="h-64 object-contain rounded-r-2xl" />
+            </div>
+          </div>
+          
+          <!-- Schwarzer Pfeil -->
+          <div class="fade-in mb-8" id="finanzierungPfeil">
+            <svg class="w-24 h-24 mx-auto text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2L2 12h6v10h8V12h6L12 2z" transform="rotate(225 12 12)"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Vergleichstabelle Bank vs OVB -->
+        <div class="bg-white rounded-3xl p-12 shadow-2xl w-full max-w-6xl fade-in" id="finanzierungTabelle">
+          <div class="grid grid-cols-2 gap-16">
+            
+            <!-- Bank Spalte -->
+            <div class="text-center">
+              <h2 class="text-5xl font-bold text-blue-900 mb-8">Bank</h2>
+              
+              <div class="space-y-6">
+                <div class="text-4xl font-bold text-red-600">300.000,00 €</div>
+                <div class="text-3xl font-semibold text-red-600">4% Zinsen</div>
+                <div class="text-3xl font-semibold text-red-600">30 Jahre</div>
+                <div class="border-t-4 border-red-500 pt-6 mt-8">
+                  <div class="text-4xl font-bold text-red-600">511.165,88 €</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Vertikale Trennlinie -->
+            <div class="border-l-4 border-purple-500 relative">
+              <!-- OVB Spalte -->
+              <div class="text-center pl-8">
+                <h2 class="text-5xl font-bold text-blue-900 mb-8">Mit uns</h2>
+                
+                <div class="space-y-6">
+                  <div class="text-4xl font-bold text-blue-600">300.000,00 €</div>
+                  <div class="text-3xl font-semibold text-blue-600">3% Zinsen</div>
+                  <div class="text-3xl font-semibold text-blue-600">30 Jahre</div>
+                  <div class="border-t-4 border-blue-500 pt-6 mt-8">
+                    <div class="text-4xl font-bold text-blue-600">452.978,13 €</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Ersparnis unten -->
+          <div class="text-center border-t-4 border-gray-300 pt-8 mt-12">
+            <div class="text-6xl font-bold text-green-600 mb-3">58.187,75 €</div>
+            <div class="text-4xl font-bold text-green-600">Ersparnis</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Immobilien SVG rechts daneben -->
+      <div class="flex-shrink-0 flex items-center justify-center flex-1">
+        <object data="AnalyseBilder/immobilien.svg" type="image/svg+xml" class="w-full h-auto" style="max-width: 800px; max-height: 90vh;">
+          <img src="AnalyseBilder/immobilien.svg" alt="Immobilien Animation" class="w-full h-auto" style="max-width: 800px; max-height: 90vh;" />
+        </object>
+      </div>
+    </div>
+  </section>
+
+  <!-- Folie 16: Steuern -->
+  <section id="folie16" class="slide cursor-pointer content-container" onclick="nextStep()">
+    <!-- Überschrift ganz oben -->
+    <div class="absolute top-24 left-0 right-0 z-50">
+      <h1 class="text-6xl md:text-7xl font-bold text-center text-white" style="opacity: 1 !important; transform: translateY(0) !important; visibility: visible !important; z-index: 1000;">Strom & Gas</h1>
+    </div>
+    
+    <div class="relative w-full h-full flex items-center justify-center pt-32">
+      <!-- Kreis mit rechter Hälfte im Bild - wird animiert gedreht -->
+      <div class="flex-shrink-0 relative" style="width: 30vw; height: 100vh;">
+        <div class="absolute left-[-68%] top-1/2 transform -translate-y-1/2" id="steuernKreis">
+          <img src="AnalyseBilder/Kreis.png" alt="Kreis" class="w-[70vh] h-[70vh] object-contain" style="transform: rotate(-240deg); transition: transform 3s ease-in-out;" />
+        </div>
+      </div>
+
+      <!-- Content für Steuern -->
+      <div class="flex flex-col justify-start items-start" style="width: 50vw; margin-left: -8vw;">
+        
+        <!-- Staat Sektion -->
+        <div class="mb-12 fade-in" id="staatSektion">
+          <div class="flex items-start space-x-6">
+            <div class="text-6xl text-red-500 mt-2">✗</div>
+            <div>
+              <h2 class="text-5xl font-bold text-white mb-6">Hohe Energiekosten?</h2>
+              <div class="flex items-center space-x-4">
+                <div class="w-4 h-4 bg-blue-600 rounded-full"></div>
+                <p class="text-3xl text-white">95% der Österreicher zahlen zu viel für ihre Energiekosten!</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Steuerzahler Sektion -->
+        <div class="fade-in" id="steuerzahlerSektion">
+          <div class="flex items-start space-x-6">
+            <div class="text-6xl text-green-500 mt-2">✓</div>
+            <div>
+              <h2 class="text-5xl font-bold text-white mb-6">Mit uns als Energiekostenmakler</h2>
+              <div class="space-y-4">
+                <div class="flex items-center space-x-4">
+                  <div class="w-4 h-4 bg-blue-600 rounded-full"></div>
+                  <p class="text-3xl text-white">Vergleichen Sie Anbieter und sparen Sie Geld</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                  <div class="w-4 h-4 bg-blue-600 rounded-full"></div>
+                  <p class="text-3xl text-white">Unkompliziert & Kostenlos</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Steuern SVG rechts daneben -->
+      <div class="flex-shrink-0 flex items-center justify-center flex-1">
+        <object data="AnalyseBilder/steuern.svg" type="image/svg+xml" class="w-full h-auto" style="max-width: 800px; max-height: 90vh;">
+          <img src="AnalyseBilder/steuern.svg" alt="Steuern Animation" class="w-full h-auto" style="max-width: 800px; max-height: 90vh;" />
+        </object>
+      </div>
+    </div>
+  </section>
+
+  <!-- Folie 17: Finanzmarkt Donut mit OVB-Vorteilen -->
+  <section id="folie17" class="slide flex flex-col items-center justify-center px-4 cursor-pointer content-container" onclick="nextStep()">
+    <!-- Überschrift -->
+    <h1 class="text-6xl md:text-7xl font-bold mb-20 text-center text-white">Finanzmarkt</h1>
+    
+    <!-- Donut-Diagramm Container -->
+    <div class="flex items-center justify-center w-full h-full relative">
+      <!-- Donut Chart in der Mitte - Um 30% vergrößert -->
+      <div class="relative">
+        <img src="AnalyseBilder/Kreis.png" alt="Donut Chart" class="w-[62rem] h-[62rem] object-contain" id="finanzmarkt-donut-ovb" />
+      </div>
+      
+      <!-- 4 Eckpunkte - Zentral in jedem Quadranten positioniert - Um 30% vergrößert -->
+      <!-- Oben links: 0 € Kosten - Zentrum des oberen linken Quadranten -->
+      <div class="absolute top-1/4 left-1/4 transform -translate-x-1/2 -translate-y-1/2 text-center fade-in bg-white/20 backdrop-blur-md rounded-xl p-8 border border-white/30 shadow-2xl" id="corner1">
+        <h2 class="text-8xl font-bold text-yellow-400 mb-4">0€</h2>
+        <h3 class="text-3xl font-bold text-white mb-3">Kosten</h3>
+        <p class="text-xl text-blue-200">Keine versteckten Gebühren</p>
+      </div>
+      
+      <!-- Oben rechts: 100% Transparenz - Zentrum des oberen rechten Quadranten -->
+      <div class="absolute top-1/4 right-1/4 transform translate-x-1/2 -translate-y-1/2 text-center fade-in bg-white/20 backdrop-blur-md rounded-xl p-8 border border-white/30 shadow-2xl" id="corner2">
+        <h2 class="text-8xl font-bold text-green-400 mb-4">100%</h2>
+        <h3 class="text-3xl font-bold text-white mb-3">Transparenz</h3>
+        <p class="text-xl text-blue-200">Vollständige Offenlegung</p>
+      </div>
+      
+      <!-- Unten links: 100% Individuell - Zentrum des unteren linken Quadranten -->
+      <div class="absolute bottom-1/4 left-1/4 transform -translate-x-1/2 translate-y-1/2 text-center fade-in bg-white/20 backdrop-blur-md rounded-xl p-8 border border-white/30 shadow-2xl" id="corner3">
+        <h2 class="text-8xl font-bold text-purple-400 mb-4">100%</h2>
+        <h3 class="text-3xl font-bold text-white mb-3">Individuell</h3>
+        <p class="text-xl text-blue-200">Maßgeschneiderte Lösungen</p>
+      </div>
+      
+      <!-- Unten rechts: 24/7 passend zu Ihrem finanziellen Lebensplan - Zentrum des unteren rechten Quadranten -->
+      <div class="absolute bottom-1/4 right-1/4 transform translate-x-1/2 translate-y-1/2 text-center fade-in bg-white/20 backdrop-blur-md rounded-xl p-8 border border-white/30 shadow-2xl max-w-lg" id="corner4">
+        <h2 class="text-7xl font-bold text-orange-400 mb-4">24/7</h2>
+        <h3 class="text-2xl font-bold text-white mb-2">Passend zu Ihrem</h3>
+        <h3 class="text-2xl font-bold text-white mb-3">finanziellen Lebensplan</h3>
+        <p class="text-xl text-blue-200">Immer für Sie da</p>
+      </div>
+    </div>
+  </section>
+
   <!-- Control Buttons (rechts unten) -->
   <div class="control-buttons">
     <!-- Fullscreen Button -->
@@ -677,6 +1154,233 @@
     </button>
   </div>
 
+  <!-- Folie 18: Finanzieller Lebensplan - Komplett neu -->
+  <section id="folie18" class="slide flex flex-col items-center justify-center px-4 cursor-pointer content-container" onclick="nextStep()">
+    <!-- Überschrift - 20px vom oberen Bildschirmrand, horizontal zentriert -->
+    <h1 class="absolute top-5 w-full text-6xl md:text-7xl font-bold text-center text-white">Finanzieller Lebensplan</h1>
+    
+    <!-- Großer Container für die Bilder - über dem Pfeil -->
+    <div class="absolute top-20 w-full max-w-[1800px] h-[400px] flex items-center justify-center">
+      <!-- Ziele Icons - nochmal doppelt so groß und viel weiter auseinander -->
+      <div class="flex space-x-24">
+        <div class="fade-in opacity-0" id="ziel-ausbildung">
+          <img src="AnalyseBilder/ausbildung.png" alt="Ausbildung" class="w-32 h-32" />
+        </div>
+        <div class="fade-in opacity-0" id="ziel-auto">
+          <img src="AnalyseBilder/kfz.png" alt="Auto" class="w-32 h-32" />
+        </div>
+        <div class="fade-in opacity-0" id="ziel-geld">
+          <img src="AnalyseBilder/geld.png" alt="Geld" class="w-32 h-32" />
+        </div>
+        <div class="fade-in opacity-0" id="ziel-immobilie">
+          <img src="AnalyseBilder/immo.png" alt="Immobilie" class="w-32 h-32" />
+        </div>
+        <div class="fade-in opacity-0" id="ziel-reisen">
+          <img src="AnalyseBilder/flugzeug.png" alt="Reisen" class="w-32 h-32" />
+        </div>
+      </div>
+    </div>
+    
+    <!-- Hauptcontainer für den Pfeil - darunter -->
+    <div class="relative w-full max-w-6xl h-[600px] flex items-center justify-center" style="margin-top: 250px;">
+
+      <!-- Zentraler großer weißer Pfeil -->
+      <div class="relative">
+        <!-- Riesiger weißer Pfeil - Pfeilspitze dicker als Schaft -->
+        <div class="fade-in opacity-0" id="pfeil-outline">
+          <svg viewBox="0 0 1000 1000" class="w-[1200px] h-[1000px]">
+            <!-- Massiver Pfeil mit dicker Spitze nach oben in weiß -->
+            <polygon points="500,40 750,240 650,240 650,960 350,960 350,240 250,240" 
+                     fill="white" stroke="white" stroke-width="4"/>
+          </svg>
+        </div>
+        
+        <!-- Schlangenlinie im Pfeil - genauso lang wie der Pfeil -->
+        <div class="absolute top-0 bottom-0 left-0 right-0 flex items-center justify-center fade-in opacity-0" id="schlangenlinie">
+          <img src="AnalyseBilder/schlangenlinie.png" alt="Schlangenlinie" class="w-80 h-full object-fill" />
+        </div>
+
+        <!-- Risiko Labels - INNERHALB des Pfeil-Containers, direkt an der Schlangenlinie -->
+        <div class="absolute left-1 top-1/4 fade-in opacity-0 z-20" id="risiko-unvorhergesehenes">
+          <div class="text-blue-300 text-5xl font-bold text-center">
+            <div>Unvorher-</div>
+            <div>gesehenes</div>
+          </div>
+        </div>
+        <div class="absolute left-1 bottom-1/4 fade-in opacity-0 z-20" id="risiko-ams">
+          <div class="text-blue-300 text-5xl font-bold">AMS</div>
+        </div>
+        <div class="absolute right-1 top-1/4 fade-in opacity-0 z-20" id="risiko-unfall">
+          <div class="text-blue-300 text-5xl font-bold">Unfall</div>
+        </div>
+        <div class="absolute right-1 bottom-1/4 fade-in opacity-0 z-20" id="risiko-krankheit">
+          <div class="text-blue-300 text-5xl font-bold">Krankheit</div>
+        </div>
+      </div>
+
+    <!-- SPAREN - perfekt vertikal zentriert -->
+    <div class="absolute left-[-200px] top-1/2 fade-in opacity-0" id="sparen-box" style="transform: translateY(-50%);">
+      <div class="bg-yellow-500 text-blue-900 px-6 py-72 text-5xl font-bold rounded-lg flex items-center justify-center">
+        <div class="transform -rotate-90 whitespace-nowrap">SPAREN</div>
+      </div>
+    </div>
+
+    <!-- Vorteile - weiter rechts und 20% kleiner -->
+    <div class="absolute right-[-100px] top-1/2 transform -translate-y-1/2 space-y-10">
+      <div class="flex items-center fade-in opacity-0" id="vorteil-sicherer">
+        <span class="text-green-400 text-6xl mr-6">✓</span>
+        <span class="text-green-400 text-5xl font-bold">sicherer</span>
+      </div>
+      <div class="flex items-center fade-in opacity-0" id="vorteil-schneller">
+        <span class="text-green-400 text-6xl mr-6">✓</span>
+        <span class="text-green-400 text-5xl font-bold">schneller</span>
+      </div>
+      <div class="flex items-center fade-in opacity-0" id="vorteil-guenstiger">
+        <span class="text-green-400 text-6xl mr-6">✓</span>
+        <span class="text-green-400 text-5xl font-bold">günstiger</span>
+      </div>
+    </div>
+    </div>
+
+    <!-- ZIELE Box - perfekt mittig und genauso groß wie FINANZIELLE SITUATION -->
+    <div class="absolute top-[390px] w-full flex justify-center fade-in opacity-0 z-50" id="ziele-box">
+      <div class="bg-blue-700 text-white px-12 py-4 text-2xl font-bold rounded">FINANZIELLE ZIELE</div>
+    </div>
+
+    <!-- FINANZIELLE SITUATION Box - doppelt so groß -->
+    <div class="absolute bottom-20 w-full flex justify-center fade-in opacity-0" id="situation-box">
+      <div class="bg-blue-700 text-white px-12 py-4 text-2xl font-bold rounded">FINANZIELLE SITUATION</div>
+    </div>
+  </section>
+
+  <!-- ====================================== -->
+  <!-- Slide 19: A-B-S Konzept -->
+  <!-- ====================================== -->
+  <section class="slide hidden cursor-pointer content-container text-white" id="folie19" onclick="nextStep()">
+    
+    <!-- Überschrift -->
+    <div class="absolute top-24 left-0 right-0 z-50">
+      <h1 class="text-6xl md:text-7xl font-bold text-center text-white" style="opacity: 1 !important; transform: translateY(0) !important; visibility: visible !important; z-index: 1000;">A-B-S System</h1>
+    </div>
+    
+    <!-- Grid Layout: 3 gleichmäßige Spalten über den ganzen Bildschirm -->
+    <div class="grid grid-cols-3 gap-16 w-full h-full p-16 pt-32">
+      
+      <!-- Spalte 1: A-B-S Buchstaben - 50% größer -->
+      <div class="flex flex-col justify-center items-center space-y-20">
+        <!-- A-Kasten - 50% größer -->
+        <div class="bg-green-600 text-white w-60 h-60 flex items-center justify-center text-9xl font-bold rounded-lg fade-in opacity-0" id="abs-a">
+          A
+        </div>
+        
+        <!-- B-Kasten - 50% größer -->
+        <div class="bg-green-600 text-white w-60 h-60 flex items-center justify-center text-9xl font-bold rounded-lg fade-in opacity-0" id="abs-b" style="margin-top: 40px;">
+          B
+        </div>
+        
+        <!-- S-Kasten - 50% größer, weiter unten -->
+        <div class="bg-green-600 text-white w-60 h-60 flex items-center justify-center text-9xl font-bold rounded-lg fade-in opacity-0" id="abs-s" style="margin-top: 60px;">
+          S
+        </div>
+      </div>
+      
+      <!-- Spalte 2: Text und Bulletpoints - 50% größer -->
+      <div class="flex flex-col justify-center space-y-20">
+        <!-- A - Aktuelle Datenerfassung -->
+        <div class="fade-in opacity-0" id="abs-text-a">
+          <h2 class="text-6xl font-bold text-white mb-9">AKTUELLE DATENERFASSUNG</h2>
+          <ul class="text-3xl text-gray-300 space-y-4">
+            <li class="flex items-center"><span class="text-green-400 mr-6 text-3xl">■</span> Auswertung</li>
+            <li class="flex items-center"><span class="text-green-400 mr-6 text-3xl">■</span> Experten</li>
+            <li class="flex items-center"><span class="text-green-400 mr-6 text-3xl">■</span> 2-4 Tage</li>
+            <li class="flex items-center"><span class="text-green-400 mr-6 text-3xl">■</span> finanzielle Vorteile</li>
+          </ul>
+        </div>
+        
+        <!-- B - Beratung -->
+        <div class="fade-in opacity-0" id="abs-text-b" style="margin-top: 40px;">
+          <h2 class="text-6xl font-bold text-white mb-9">BERATUNG</h2>
+          <ul class="text-3xl text-gray-300 space-y-4">
+            <li class="flex items-center"><span class="text-green-400 mr-6 text-3xl">■</span> staatl. gepr. Berater</li>
+            <li class="flex items-center"><span class="text-green-400 mr-6 text-3xl">■</span> kostenlos</li>
+            <li class="flex items-center"><span class="text-green-400 mr-6 text-3xl">■</span> Konzept 80% → 100%</li>
+            <li class="flex items-center"><span class="text-green-400 mr-6 text-3xl">■</span> Entscheidung mit?</li>
+          </ul>
+        </div>
+        
+        <!-- S - Service -->
+        <div class="fade-in opacity-0" id="abs-text-s" style="margin-top: 60px;">
+          <h2 class="text-6xl font-bold text-white mb-9">SERVICE</h2>
+          <ul class="text-3xl text-gray-300 space-y-4">
+            <li class="flex items-center"><span class="text-green-400 mr-6 text-3xl">■</span> aktuelle Infos</li>
+            <li class="flex items-center"><span class="text-green-400 mr-6 text-3xl">■</span> laufend Kontakt</li>
+            <li class="flex items-center"><span class="text-green-400 mr-6 text-3xl">■</span> finanzielle Wege</li>
+          </ul>
+        </div>
+      </div>
+      
+      <!-- Spalte 3: Bilder - 20% kleiner -->
+      <div class="flex flex-col justify-center items-center space-y-20">
+        <!-- A.svg - 20% kleiner -->
+        <div class="w-120 h-72 fade-in opacity-0" id="abs-img-a">
+          <img src="AnalyseBilder/a.svg" alt="A - Datenerfassung" class="w-full h-full object-contain">
+        </div>
+        
+        <!-- B.svg - 20% kleiner -->
+        <div class="w-120 h-72 fade-in opacity-0" id="abs-img-b" style="margin-top: 40px;">
+          <img src="AnalyseBilder/b.svg" alt="B - Beratung" class="w-full h-full object-contain">
+        </div>
+        
+        <!-- C.svg - 20% kleiner -->
+        <div class="w-120 h-72 fade-in opacity-0" id="abs-img-s" style="margin-top: 60px;">
+          <img src="AnalyseBilder/c.svg" alt="S - Service" class="w-full h-full object-contain">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================== -->
+  <!-- Slide 20: Danke für Ihr Vertrauen -->
+  <!-- ====================================== -->
+  <section class="slide hidden cursor-pointer content-container text-white" id="folie20" onclick="nextStep()">
+    
+    <!-- Grid Layout: Text links, Bild rechts -->
+    <div class="grid grid-cols-2 gap-16 w-full h-full p-16">
+      
+      <!-- Linke Spalte: Text ohne Animation - 50% größer -->
+      <div class="flex flex-col justify-center px-8">
+        
+        <!-- Überschrift - sofort sichtbar, 50% größer -->
+        <h1 class="text-9xl md:text-10xl font-bold text-white mb-18" id="danke-title" style="opacity: 1;">
+          Danke für Ihr Vertrauen
+        </h1>
+        
+        <!-- Haupttext - sofort sichtbar, 50% größer -->
+        <div class="mb-18" id="danke-text" style="opacity: 1;">
+          <p class="text-3xl text-gray-300 leading-relaxed mb-12">
+            Ihnen hat das Gespräch gefallen? Empfehlen Sie uns gerne weiter damit wir unsere Dienstleistung weiterhin kostenlos und ohne Werbung anbieten können.
+          </p>
+        </div>
+        
+        <!-- Footer - sofort sichtbar, 50% größer -->
+        <div id="danke-footer" style="opacity: 1;">
+          <p class="text-3xl text-blue-300 font-semibold">
+            Ihr SKT Finance Team
+          </p>
+        </div>
+        
+      </div>
+      
+      <!-- Rechte Spalte: Großes Bild - sofort sichtbar und doppelt so groß -->
+      <div class="flex items-center justify-center">
+        <div class="w-full h-192" id="recommendation-image" style="opacity: 1;">
+          <img src="AnalyseBilder/recommendation.svg" alt="Empfehlung" class="w-full h-full object-contain">
+        </div>
+      </div>
+      
+    </div>
+  </section>
+
 
 
   <!-- ====================================== -->
@@ -684,7 +1388,8 @@
   <!-- ====================================== -->
   <script>
     let currentSlide = 0;  // Starte bei 0 für Eingabefeld
-    const totalSlides = 11; // Jetzt 11 Slides total (0-10)
+    const totalSlides = 21; // Jetzt 21 Slides total (0-20)
+    let immobilienPath = null; // 'sell', 'buy', oder null
     
     // Berater-Name Eingabe und Start
     function startAnalyse() {
@@ -739,6 +1444,7 @@
     // Seitenwechsel
     function nextSlide(nr) {
       console.log('🔄 Wechsle zu Folie:', nr);
+      const oldSlideNr = currentSlide;
 
       // Verstecke alle Folien komplett
       document.querySelectorAll('.slide').forEach(s => {
@@ -798,6 +1504,11 @@
           setTimeout(() => {
             rotateInvestmentKreis();
           }, 500); // Kleine Verzögerung damit die Folie erst geladen ist
+        } else if (nr === 16) {
+          // Starte Kreis-Rotation für Steuern-Folie
+          setTimeout(() => {
+            rotateSteuernKreis();
+          }, 500); // Kleine Verzögerung damit die Folie erst geladen ist
         }
 
         // Reset Kreis bei Folienwechsel
@@ -807,6 +1518,8 @@
           resetBausparkassenKreis();
         } else if (oldSlideNr === 9) { // Von Folie 10 (index 9) kommend
           resetInvestmentKreis();
+        } else if (oldSlideNr === 10) { // Von Folie 11 (index 10) kommend
+          resetImmobilienKreis();
         }
       } else {
         console.error('❌ Folie nicht gefunden:', 'folie' + nr);
@@ -833,8 +1546,15 @@
       7: ['bankPunkt1', 'bankPunkt2', 'bankPunkt3'],
       8: ['versicherungPunkt1', 'versicherungPunkt2'],
       9: ['bausparkassenPunkt1', 'bausparkassenPunkt2', 'bausparkassenPunkt3', 'bausparkassenPunkt4'],
-      10: ['aktienTitle', 'aktienChart', 'aktienBuilding', 'aktienPercent', 'aktienPro', 'aktienCon', 'anleihenTitle', 'anleihenMoney', 'anleihenAmount', 'anleihenBills', 'anleihenPercent', 'anleihenCon', 'anleihenPro', 'fondsTitle', 'fondsPie', 'fondsManager', 'fondsPercent', 'fondsPro1', 'fondsPro2']
+      10: ['aktienTitle', 'aktienChart', 'aktienBuilding', 'aktienPercent', 'aktienPro', 'aktienCon', 'anleihenTitle', 'anleihenMoney', 'anleihenAmount', 'anleihenBills', 'anleihenPercent', 'anleihenCon', 'anleihenPro', 'fondsTitle', 'fondsPie', 'fondsManager', 'fondsPercent', 'fondsPro1', 'fondsPro2'],
+      15: ['finanzierungLinks', 'finanzierungRechts', 'finanzierungPfeil', 'finanzierungTabelle'],
+      16: ['staatSektion', 'steuerzahlerSektion'],
+      17: ['corner1', 'corner2', 'corner3', 'corner4'],
+      18: ['situation-box', 'pfeil-outline', 'schlangenlinie', 'risiko-unvorhergesehenes', 'risiko-unfall', 'risiko-ams', 'risiko-krankheit', 'ziele-box', 'ziel-ausbildung', 'ziel-auto', 'ziel-geld', 'ziel-immobilie', 'ziel-reisen', 'sparen-box', 'vorteil-sicherer', 'vorteil-schneller', 'vorteil-guenstiger'],
+      19: ['abs-a', 'abs-text-a', 'abs-img-a', 'abs-b', 'abs-text-b', 'abs-img-b', 'abs-s', 'abs-text-s', 'abs-img-s'],
+      20: []
       // Folie 6 hat keine Animationen mehr - springt direkt zur nächsten Folie
+      // Folien 11-14 (Immobilien) haben keine step-by-step Animationen
     };
     
     let animationIndex = 0;
@@ -856,10 +1576,41 @@
         animationIndex++;
       } else {
         // Animation abgeschlossen -> nächste Folie
-        if (currentSlide < totalSlides - 1) {
+        // Spezielle Behandlung für Immobilien-Seiten
+        if (currentSlide === 11) {
+          // Von Immobilien Hauptseite: Gehe immer zu Tippgeber (Folie 14)
+          nextSlide(14);
+        } else if (currentSlide === 12 || currentSlide === 13) {
+          // Von Verkaufen oder Kaufen Seite: Gehe zu Tippgeber
+          nextSlide(14);
+        } else if (currentSlide === 14) {
+          // Von Tippgeber Seite: Gehe zu Finanzierung
+          nextSlide(15);
+        } else if (currentSlide === 15) {
+          // Von Finanzierung: Gehe zu Steuern
+          nextSlide(16);
+        } else if (currentSlide === 16) {
+          // Von Steuern: Gehe zur Finanzmarkt-Übersicht
+          nextSlide(17);
+        } else if (currentSlide === 17) {
+          // Von Finanzmarkt-Übersicht: Gehe zu Finanzieller Lebensplan
+          nextSlide(18);
+        } else if (currentSlide === 18) {
+          // Von Finanzieller Lebensplan: Weiter zu ABS-Konzept
+          nextSlide(currentSlide + 1);
+        } else if (currentSlide === 19) {
+          // Von ABS-Konzept: Weiter zu Danke-Folie
+          nextSlide(currentSlide + 1);
+        } else if (currentSlide === 20) {
+          // Von Danke-Folie: Zurück zum Anfang
+          immobilienPath = null; // Reset da wir die Sektion verlassen
+          nextSlide(1);
+        } else if (currentSlide < 16) {
+          // Normale Navigation für andere Folien
           nextSlide(currentSlide + 1);
         } else {
           // Am Ende angekommen -> zurück zum Anfang
+          immobilienPath = null; // Reset Immobilien-Pfad
           nextSlide(1);
         }
         resetAnimationIndex();
@@ -1376,47 +2127,7 @@
         input.value = urlBerater;
         startAnalyse();
       }
-      
-      // 7. Geplante Aktualisierungen für Wettbewerbsdaten starten
-      startScheduledWettbewerbRefresh();
     });
-
-    // Geplante Aktualisierung der Wettbewerbsdaten zu festen Zeiten
-    function startScheduledWettbewerbRefresh() {
-      const refreshTimes = ['10:00', '12:00', '15:00', '18:00', '20:00', '22:00'];
-      let lastRefreshTime = null;
-      
-      console.log('[Wettbewerb] Geplante Aktualisierung eingerichtet für:', refreshTimes);
-      
-      // Prüfe jede Minute, ob es Zeit für eine Aktualisierung ist
-      setInterval(async () => {
-        const currentTime = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-        
-        if (refreshTimes.includes(currentTime) && lastRefreshTime !== currentTime) {
-          console.log(`[Wettbewerb] Geplante Aktualisierung um ${currentTime} wird ausgeführt.`);
-          lastRefreshTime = currentTime;
-          
-          try {
-            // SeaTable Access Token erneuern
-            await getSeaTableAccessToken();
-            
-            // Spalten-Maps neu laden
-            const columnMaps = await fetchColumnMaps();
-            console.log('[Wettbewerb] Daten erfolgreich aktualisiert');
-            
-            // Falls gerade eine Wettbewerbsseite angezeigt wird, Daten neu laden
-            if (typeof window.currentBeraterName !== 'undefined' && window.currentBeraterName) {
-              console.log('[Wettbewerb] Aktualisiere aktuelle Berater-Daten...');
-              // Hier könnten Sie spezifische Refresh-Funktionen aufrufen
-              // die die aktuell angezeigten Wettbewerbsdaten neu laden
-            }
-            
-          } catch (error) {
-            console.error('[Wettbewerb] Fehler bei geplanter Aktualisierung:', error);
-          }
-        }
-      }, 60 * 1000); // Prüfe jede Minute
-    }
 
     // Define morphTransitionToFolie7 function
     function morphTransitionToFolie7() {
@@ -1488,6 +2199,42 @@
       const kreis = document.querySelector('#investmentKreis img');
       if (kreis) {
         kreis.style.transform = 'rotate(-120deg)';
+      }
+    }
+
+    // Kreis-Rotation für Immobilien-Folie
+    function rotateImmobilienKreis() {
+      const kreis = document.querySelector('#immobilienKreis img');
+      if (kreis) {
+        // Starte von -180° und drehe zu -240°
+        kreis.style.transform = 'rotate(-240deg)';
+        console.log('🔄 Immobilien-Kreis wird gedreht');
+      }
+    }
+
+    // Reset Immobilien-Kreis Position bei Folienwechsel
+    function resetImmobilienKreis() {
+      const kreis = document.querySelector('#immobilienKreis img');
+      if (kreis) {
+        kreis.style.transform = 'rotate(-180deg)';
+      }
+    }
+
+    // Kreis-Rotation für Steuern-Folie
+    function rotateSteuernKreis() {
+      const kreis = document.querySelector('#steuernKreis img');
+      if (kreis) {
+        // Starte von -240° und drehe zu -300° (weitere 60° Drehung)
+        kreis.style.transform = 'rotate(-300deg)';
+        console.log('🔄 Steuern-Kreis wird gedreht');
+      }
+    }
+
+    // Reset Steuern-Kreis Position bei Folienwechsel
+    function resetSteuernKreis() {
+      const kreis = document.querySelector('#steuernKreis img');
+      if (kreis) {
+        kreis.style.transform = 'rotate(-240deg)';
       }
     }
 
