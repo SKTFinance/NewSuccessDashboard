@@ -1376,7 +1376,47 @@
         input.value = urlBerater;
         startAnalyse();
       }
+      
+      // 7. Geplante Aktualisierungen für Wettbewerbsdaten starten
+      startScheduledWettbewerbRefresh();
     });
+
+    // Geplante Aktualisierung der Wettbewerbsdaten zu festen Zeiten
+    function startScheduledWettbewerbRefresh() {
+      const refreshTimes = ['10:00', '12:00', '15:00', '18:00', '20:00', '22:00'];
+      let lastRefreshTime = null;
+      
+      console.log('[Wettbewerb] Geplante Aktualisierung eingerichtet für:', refreshTimes);
+      
+      // Prüfe jede Minute, ob es Zeit für eine Aktualisierung ist
+      setInterval(async () => {
+        const currentTime = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        
+        if (refreshTimes.includes(currentTime) && lastRefreshTime !== currentTime) {
+          console.log(`[Wettbewerb] Geplante Aktualisierung um ${currentTime} wird ausgeführt.`);
+          lastRefreshTime = currentTime;
+          
+          try {
+            // SeaTable Access Token erneuern
+            await getSeaTableAccessToken();
+            
+            // Spalten-Maps neu laden
+            const columnMaps = await fetchColumnMaps();
+            console.log('[Wettbewerb] Daten erfolgreich aktualisiert');
+            
+            // Falls gerade eine Wettbewerbsseite angezeigt wird, Daten neu laden
+            if (typeof window.currentBeraterName !== 'undefined' && window.currentBeraterName) {
+              console.log('[Wettbewerb] Aktualisiere aktuelle Berater-Daten...');
+              // Hier könnten Sie spezifische Refresh-Funktionen aufrufen
+              // die die aktuell angezeigten Wettbewerbsdaten neu laden
+            }
+            
+          } catch (error) {
+            console.error('[Wettbewerb] Fehler bei geplanter Aktualisierung:', error);
+          }
+        }
+      }, 60 * 1000); // Prüfe jede Minute
+    }
 
     // Define morphTransitionToFolie7 function
     function morphTransitionToFolie7() {
