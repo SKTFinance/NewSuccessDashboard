@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Finanzanalyse – Präsentation</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <style>
     /* === Standard Zoom auf 60% === */
@@ -1153,12 +1155,57 @@
       </svg>
     </button>
     
-    <!-- Calculator Button -->
-    <button class="control-btn" onclick="openCalculator()" title="Rechner">
-      <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zm-8-4H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zm-8-4H7V7h2v2zm4 0h-2V7h2v2zm4 0h-2V7h2v2z"/>
-      </svg>
-    </button>
+    <!-- Calculator Button mit Dropdown -->
+    <div class="relative">
+      <button class="control-btn" onclick="toggleCalculatorDropdown()" title="Rechner">
+        <svg width="24" height="24" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zm-8-4H7v-2h2v2zm4 0h-2v-2h2v2zm4 0h-2v-2h2v2zm-8-4H7V7h2v2zm4 0h-2V7h2v2zm4 0h-2V7h2v2z"/>
+        </svg>
+      </button>
+      
+      <!-- Dropdown-Menü -->
+      <div id="calculatorDropdown" class="absolute bottom-full right-0 mb-2 w-80 bg-blue-800 border border-blue-600 rounded-lg shadow-lg hidden z-50">
+        <div class="p-4">
+          <h3 class="text-white text-lg font-bold mb-3">Rechner auswählen</h3>
+          <div class="space-y-2">
+            <button onclick="openCalculatorModal('pensionsluecke')" class="w-full text-left p-3 text-white hover:bg-blue-700 rounded border-b border-blue-600">
+              Pensionslückenrechner
+            </button>
+            <button onclick="openCalculatorModal('vorsorge')" class="w-full text-left p-3 text-white hover:bg-blue-700 rounded border-b border-blue-600">
+              Vorsorgerechner
+            </button>
+            <button onclick="openCalculatorModal('bu-luecke')" class="w-full text-left p-3 text-white hover:bg-blue-700 rounded border-b border-blue-600">
+              BU-Lückenrechner
+            </button>
+            <button onclick="openCalculatorModal('erwerbspotential')" class="w-full text-left p-3 text-white hover:bg-blue-700 rounded border-b border-blue-600">
+              Erwerbspotentialrechner
+            </button>
+            <button onclick="openCalculatorModal('finanzierung')" class="w-full text-left p-3 text-white hover:bg-blue-700 rounded border-b border-blue-600">
+              Finanzierungsrechner
+            </button>
+            <button onclick="openCalculatorModal('leasing')" class="w-full text-left p-3 text-white hover:bg-blue-700 rounded border-b border-blue-600">
+              Leasingrechner
+            </button>
+            <button onclick="openCalculatorModal('steuervorteil')" class="w-full text-left p-3 text-white hover:bg-blue-700 rounded">
+              Steuervorteilrechner
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rechner Modals -->
+  <div id="calculatorModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="bg-sky-950 rounded-lg shadow-xl max-w-4xl w-full m-4 max-h-screen overflow-y-auto border border-sky-700">
+      <div class="flex justify-between items-center p-6 border-b border-sky-700">
+        <h2 id="calculatorTitle" class="text-2xl font-bold text-white">Rechner</h2>
+        <button onclick="closeCalculatorModal()" class="text-gray-300 hover:text-white text-2xl">×</button>
+      </div>
+      <div id="calculatorContent" class="p-6 text-white">
+        <!-- Rechner Inhalt wird hier dynamisch geladen -->
+      </div>
+    </div>
   </div>
 
   <!-- Folie 18: Finanzieller Lebensplan - Komplett neu -->
@@ -1347,9 +1394,103 @@
   </section>
 
   <!-- ====================================== -->
-  <!-- Slide 20: Danke für Ihr Vertrauen -->
+  <!-- Slide 20: Noch ein paar Fragen -->
   <!-- ====================================== -->
   <section class="slide hidden cursor-pointer content-container text-white" id="folie20" onclick="nextStep()">
+    
+    <!-- Grid Layout: Fragen links, Bild rechts -->
+    <div class="grid grid-cols-2 gap-16 w-full h-full p-16">
+      
+      <!-- Linke Spalte: Fragen und Eingabefelder -->
+      <div class="flex flex-col justify-center px-8">
+        
+        <!-- Überschrift -->
+        <h1 class="text-8xl font-bold text-white mb-12">
+          Noch ein paar Fragen
+        </h1>
+        
+        <!-- Eingabebereich -->
+        <div class="space-y-8">
+          
+          <!-- Frage 0: Kundenname -->
+          <div>
+            <label for="kundenname" class="block text-2xl font-semibold text-white mb-4">
+              Wie ist Ihr Name?
+            </label>
+            <input 
+              type="text" 
+              id="kundenname" 
+              placeholder="Vor- und Nachname"
+              onclick="event.stopPropagation()"
+              class="w-full px-6 py-4 text-xl bg-white border border-gray-300 text-black rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-gray-500"
+            >
+          </div>
+          
+          <!-- Frage 1: Beratungstermin -->
+          <div>
+            <label for="beratungstermin" class="block text-2xl font-semibold text-white mb-4">
+              Wann möchten Sie den Beratungstermin ansetzen?
+            </label>
+            <input 
+              type="datetime-local" 
+              id="beratungstermin" 
+              onclick="event.stopPropagation()"
+              class="w-full px-6 py-4 text-xl bg-white border border-gray-300 text-black rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+            >
+          </div>
+          
+          <!-- Frage 2: Wichtigste Punkte -->
+          <div>
+            <label for="wichtige-punkte" class="block text-2xl font-semibold text-white mb-4">
+              Was sind Ihre 3 wichtigsten Punkte für das Beratungsgespräch?
+            </label>
+            <textarea 
+              id="wichtige-punkte" 
+              rows="4" 
+              placeholder="Bitte beschreiben Sie die drei wichtigsten Themen..."
+              onclick="event.stopPropagation()"
+              class="w-full px-6 py-4 text-xl bg-white border border-gray-300 text-black rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 placeholder-gray-500 resize-none"
+            ></textarea>
+          </div>
+          
+          <!-- Frage 3: Unterlagen -->
+          <div>
+            <label for="unterlagen" class="block text-2xl font-semibold text-white mb-4">
+              Wie bekommen wir Ihre Unterlagen?
+            </label>
+            <select 
+              id="unterlagen" 
+              onclick="event.stopPropagation()"
+              class="w-full px-6 py-4 text-xl bg-white border border-gray-300 text-black rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+            >
+              <option value="">Bitte wählen Sie eine Option</option>
+              <option value="email">Per E-Mail</option>
+              <option value="post">Per Post</option>
+              <option value="termin">Bringe ich zum Termin mit</option>
+              <option value="online">An Berater übergeben</option>
+              <option value="abholung">Abholung vor Ort</option>
+            </select>
+          </div>
+          
+        </div>
+        
+      </div>
+      
+      <!-- Rechte Spalte: SVG-Bild -->
+      <div class="flex justify-center items-center">
+        <div class="w-full h-full max-w-2xl max-h-2xl flex items-center justify-center">
+          <img src="AnalyseBilder/Abschluss.svg" alt="Abschluss" class="w-full h-full object-contain">
+        </div>
+      </div>
+      
+    </div>
+    
+  </section>
+
+  <!-- ====================================== -->
+  <!-- Slide 21: Danke für Ihr Vertrauen -->
+  <!-- ====================================== -->
+  <section class="slide hidden cursor-pointer content-container text-white" id="folie21" onclick="nextStep()">
     
     <!-- Grid Layout: Text links, Bild rechts -->
     <div class="grid grid-cols-2 gap-16 w-full h-full p-16">
@@ -1395,7 +1536,7 @@
   <!-- ====================================== -->
   <script>
     let currentSlide = 0;  // Starte bei 0 für Eingabefeld
-    const totalSlides = 21; // Jetzt 21 Slides total (0-20)
+    const totalSlides = 22; // Jetzt 22 Slides total (0-21)
     let immobilienPath = null; // 'sell', 'buy', oder null
     
     // Berater-Name Eingabe und Start
@@ -1606,9 +1747,12 @@
           // Von Finanzieller Lebensplan: Weiter zu ABS-Konzept
           nextSlide(currentSlide + 1);
         } else if (currentSlide === 19) {
-          // Von ABS-Konzept: Weiter zu Danke-Folie
+          // Von ABS-Konzept: Weiter zu Fragen-Folie
           nextSlide(currentSlide + 1);
         } else if (currentSlide === 20) {
+          // Von Fragen-Folie: Weiter zu Danke-Folie
+          nextSlide(currentSlide + 1);
+        } else if (currentSlide === 21) {
           // Von Danke-Folie: Zurück zum Anfang
           immobilienPath = null; // Reset da wir die Sektion verlassen
           nextSlide(1);
@@ -1686,9 +1830,572 @@
       }
     }
     
-    // Calculator
-    function openCalculator() {
+    // Calculator Dropdown Functions
+    function toggleCalculatorDropdown() {
+      const dropdown = document.getElementById('calculatorDropdown');
+      dropdown.classList.toggle('hidden');
+    }
+
+    function openCalculatorModal(calculatorType) {
+      // Schließe Dropdown
+      document.getElementById('calculatorDropdown').classList.add('hidden');
       
+      // Setze Titel und Inhalt basierend auf Rechner-Typ
+      const modal = document.getElementById('calculatorModal');
+      const title = document.getElementById('calculatorTitle');
+      const content = document.getElementById('calculatorContent');
+      
+      switch(calculatorType) {
+        case 'pensionsluecke':
+          title.textContent = 'Pensionslückenrechner';
+          content.innerHTML = `
+            <div class="pensionsrechner-container">
+                <div id="pr-input-sections" class="pr-input-collapsible">
+                    <h3 class="text-xl font-bold text-white mb-3">1. Allgemeine Daten</h3>
+                    <div class="pensionsrechner-row">
+                        <div style="flex:1">
+                            <label class="block text-sm font-medium text-gray-300 mb-1">Geschlecht</label>
+                            <select id="pr-geschlecht" class="w-full px-3 py-2 bg-sky-800 border border-sky-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400"><option>Männlich</option><option>Weiblich</option></select>
+                        </div>
+                        <div style="flex:1">
+                            <label class="block text-sm font-medium text-gray-300 mb-1">Geburtsdatum</label>
+                            <input type="date" id="pr-geburtsdatum" value="1995-12-11" class="w-full px-3 py-2 bg-sky-800 border border-sky-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        </div>
+                    </div>
+                    <div class="pensionsrechner-row">
+                        <div style="flex:1">
+                            <label class="block text-sm font-medium text-gray-300 mb-1">Monatl. Einkommen (brutto)</label>
+                            <input type="number" id="pr-einkommen" value="2000" class="w-full px-3 py-2 bg-sky-800 border border-sky-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        </div>
+                        <div style="flex:1">
+                            <label class="block text-sm font-medium text-gray-300 mb-1">Karriereverlauf</label>
+                            <select id="pr-karriere" class="w-full px-3 py-2 bg-sky-800 border border-sky-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400"><option value="1">1 % p.a.</option><option value="2">2 % p.a.</option><option value="3">3 % p.a.</option><option value="4">4 % p.a.</option></select>
+                        </div>
+                        <div style="flex:1">
+                            <label class="block text-sm font-medium text-gray-300 mb-1">Pensionsantrittsalter</label>
+                            <input type="number" id="pr-pensionsalter" value="65" class="w-full px-3 py-2 bg-sky-800 border border-sky-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        </div>
+                    </div>
+
+                    <h3 class="text-xl font-bold text-white mt-6 mb-3">2. Analyse</h3>
+                    <div class="pensionsrechner-note p-4 bg-sky-800 border border-sky-600 rounded-md text-sm text-gray-300">
+                        Bei der Schnellanalyse greifen wir auf Durchschnittswerte zurück. Dadurch können wir zwar eine
+                        nähere Pensionslücke errechnen, diese beruht aber auf Schätzwerten. Bitte sieh die angezeigten Werte
+                        nur als Orientierungshilfe. Pensionen werden 14x pro Jahr ausbezahlt. Die Berechnung erfolgt in heutigem Geldwert.
+                    </div>
+                </div>
+
+                <button id="pr-berechnen-btn" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors mx-auto block mt-4">Berechnen</button>
+
+                <div id="pr-auswertung" class="pensionsrechner-result mt-6 p-6 bg-sky-800 rounded-lg border border-sky-600" style="display:none">
+                    <h3 class="text-xl font-bold text-white mb-4">Alterspension</h3>
+                    <div class="pensionsrechner-res-row flex justify-between py-2 border-b border-sky-600"><span class="text-gray-300">Pensionsantritt:</span><span id="pr-pAntritt" class="font-semibold text-white"></span></div>
+                    <div class="pensionsrechner-res-row flex justify-between py-2 border-b border-sky-600"><span class="text-gray-300">Antrittsalter:</span><span id="pr-pAlter" class="font-semibold text-white"></span></div>
+                    <div class="pensionsrechner-res-row flex justify-between py-2 border-b border-sky-600"><span class="text-gray-300">Karriereverlauf:</span><span id="pr-pKarriere" class="font-semibold text-white"></span></div>
+                    <div class="pensionsrechner-res-row flex justify-between py-2 border-b border-sky-600"><span class="text-gray-300">Nettoletzteinkommen:</span><span id="pr-pLetzte" class="font-semibold text-white"></span></div>
+                    <div class="pensionsrechner-res-row flex justify-between py-2 border-b border-sky-600"><span class="text-gray-300">Nettopension:</span><span class="font-semibold text-green-400" id="pr-pPension"></span></div>
+                    <div class="pensionsrechner-res-row flex justify-between py-2 border-b border-sky-600"><span class="text-gray-300">Lücke:</span><span class="font-semibold text-red-400" id="pr-pLuecke"></span></div>
+                    <div class="pensionsrechner-chart mt-6">
+                        <div class="pensionsrechner-bar h-8 bg-sky-700 rounded-full overflow-hidden relative"><div class="segment pension bg-green-500 h-full absolute left-0" id="pr-barPension"></div><div class="segment gap bg-red-500 h-full absolute" id="pr-barGap"></div></div>
+                        <div class="pensionsrechner-legend flex justify-center gap-6 mt-3">
+                            <div class="legend-item flex items-center gap-2"><div class="legend-dot pension w-4 h-4 bg-green-500 rounded-full"></div><span class="text-sm text-gray-300">Gesicherte Pension</span></div>
+                            <div class="legend-item flex items-center gap-2"><div class="legend-dot gap w-4 h-4 bg-red-500 rounded-full"></div><span class="text-sm text-gray-300">Pensionslücke</span></div>
+                        </div>
+                    </div>
+                    <div class="text-center mt-6">
+                        <button id="pr-reset-btn" class="bg-gray-600 text-white px-6 py-2 rounded-md hover:bg-gray-700 transition-colors"><i class="fas fa-redo mr-2"></i>Neu berechnen</button>
+                    </div>
+                </div>
+            </div>
+            <style>
+              .pensionsrechner-row {
+                display: flex;
+                gap: 1rem;
+                margin-bottom: 1rem;
+              }
+              .pr-input-collapsible.collapsed {
+                display: none;
+              }
+              #pr-barGap {
+                right: 0;
+              }
+            </style>
+          `;
+          // Initialisiere den Pensionslückenrechner nach dem DOM-Update
+          setTimeout(() => initPensionsrechner(), 100);
+          break;
+        case 'vorsorge':
+          title.textContent = 'Vorsorgerechner';
+          content.innerHTML = `
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Eingaben -->
+                <div class="lg:col-span-1 space-y-4">
+                    <div>
+                        <label for="vr-entnahme" class="block text-sm font-medium text-gray-300 mb-1">Entnahme pro Monat (€)</label>
+                        <input type="number" id="vr-entnahme" value="2000" class="w-full px-3 py-2 bg-sky-800 border border-sky-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    </div>
+                    <div>
+                        <label for="vr-dauer" class="block text-sm font-medium text-gray-300 mb-1">Entnahmezeitraum (Jahre)</label>
+                        <input type="number" id="vr-dauer" value="37" class="w-full px-3 py-2 bg-sky-800 border border-sky-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    </div>
+                    <div>
+                        <label for="vr-zinsEntnahme" class="block text-sm font-medium text-gray-300 mb-1">Zinssatz in Entnahmephase (% p.a.)</label>
+                        <input type="number" id="vr-zinsEntnahme" value="3" class="w-full px-3 py-2 bg-sky-800 border border-sky-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    </div>
+                    <div>
+                        <label for="vr-startKapital" class="block text-sm font-medium text-gray-300 mb-1">Anfangskapital (€)</label>
+                        <input type="number" id="vr-startKapital" value="0" class="w-full px-3 py-2 bg-sky-800 border border-sky-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    </div>
+                    <div>
+                        <label for="vr-zinsSparen" class="block text-sm font-medium text-gray-300 mb-1">Zinssatz in Sparphase (% p.a.)</label>
+                        <input type="number" id="vr-zinsSparen" value="9" class="w-full px-3 py-2 bg-sky-800 border border-sky-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    </div>
+                    <button id="vr-berechnen-btn" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors w-full">Berechnen</button>
+                </div>
+                <!-- Chart + Ergebnis -->
+                <div class="lg:col-span-2 flex flex-col">
+                    <div id="vr-chart-container" class="w-full flex-grow min-h-[300px]"></div>
+                    <div class="mt-6 pt-6 border-t border-sky-600 space-y-2 text-lg text-white">
+                        <div class="flex justify-between"><span class="text-gray-300">Benötigtes Kapital:</span> <span id="vr-kapital" class="font-bold text-white">0 €</span></div>
+                        <div class="flex justify-between"><span class="text-gray-300">Monatliche Entnahme:</span> <span id="vr-monatl" class="font-bold text-white">0 €</span></div>
+                        <div class="flex justify-between text-xl text-green-400 pt-2 border-t border-sky-600"><span>Benötigte Sparrate / Monat:</span> <span id="vr-sparrate" class="font-bold">0 €</span></div>
+                    </div>
+                </div>
+            </div>
+          `;
+          // Initialisiere den Vorsorgerechner nach dem DOM-Update
+          setTimeout(() => initVorsorgerechner(), 100);
+          break;
+        case 'bu-luecke':
+          title.textContent = 'BU-Lückenrechner';
+          content.innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Linke Spalte: Eingaben -->
+                <div class="space-y-4">
+                    <h3 class="text-xl font-semibold text-white border-b border-sky-600 pb-2">1. Allgemeine Daten</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="bu-birthdate" class="block text-sm font-medium text-gray-300 mb-1">Geburtstag</label>
+                            <input type="date" id="bu-birthdate" value="1995-12-11" class="w-full px-3 py-2 bg-sky-800 border border-sky-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        </div>
+                        <div>
+                            <label for="bu-job" class="block text-sm font-medium text-gray-300 mb-1">Berufsgruppe</label>
+                            <select id="bu-job" class="w-full px-3 py-2 bg-sky-800 border border-sky-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                                <option value="ang">Angestellte:r</option>
+                                <option value="arb">Arbeiter:in</option>
+                                <option value="selbst">Selbstständig</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="bu-income" class="block text-sm font-medium text-gray-300 mb-1">Monatl. Einkommen</label>
+                            <input type="number" id="bu-income" value="2000" min="0" step="100" class="w-full px-3 py-2 bg-sky-800 border border-sky-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        </div>
+                        <div>
+                            <label for="bu-income-type" class="block text-sm font-medium text-gray-300 mb-1">Art</label>
+                            <div id="bu-income-type-toggle" class="flex gap-2 bg-sky-800 p-1 rounded-lg border border-sky-600">
+                                <button type="button" data-v="net" class="bu-toggle-btn flex-1 px-3 py-1 text-sm rounded bg-blue-600 text-white active">Netto</button>
+                                <button type="button" data-v="gross" class="bu-toggle-btn flex-1 px-3 py-1 text-sm rounded text-gray-300 hover:bg-sky-700">Brutto</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="bu-ret-age" class="block text-sm font-medium text-gray-300 mb-1">Geplanter Pensionsantritt (Alter)</label>
+                        <select id="bu-ret-age" class="w-full px-3 py-2 bg-sky-800 border border-sky-600 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <option>60</option><option>61</option><option>62</option><option>63</option><option>64</option><option selected>65</option><option>66</option><option>67</option>
+                        </select>
+                    </div>
+                    
+                    <div class="pt-4 border-t border-sky-600">
+                        <h3 class="text-xl font-semibold text-white border-b border-sky-600 pb-2">2. Szenario BU</h3>
+                        <label for="bu-entry-age" class="block text-sm font-medium text-gray-300 mt-4">Eintritt Berufsunfähigkeit mit <span id="bu-age-now" class="font-bold text-white">29</span> Jahren</label>
+                        <input type="range" id="bu-entry-age" min="18" max="64" value="29" class="w-full mt-2 accent-blue-500">
+                        <p class="text-xs text-gray-400 mt-2">Schieberegler bewegen, um den Zeitpunkt eines BU-Ereignisses zu simulieren. Berechnung erfolgt in heutigem Geld (vereinfacht).</p>
+                    </div>
+                </div>
+
+                <!-- Rechte Spalte: Ergebnisse -->
+                <div class="space-y-4">
+                    <div class="bu-kpi bg-sky-800 p-4 rounded-lg border border-sky-600">
+                        <div class="text-sm text-gray-300 mb-1">Geschätzte BU-Staatspension / Monat</div>
+                        <div class="text-2xl font-bold text-white" id="bu-result-pension">–</div>
+                    </div>
+                    <div class="bu-kpi bg-red-900/30 p-4 rounded-lg border border-red-600">
+                        <div class="text-sm text-gray-300 mb-1">Monatliche Lücke</div>
+                        <div class="text-2xl font-bold text-red-400" id="bu-result-gap-month">–</div>
+                    </div>
+                    <div class="bu-kpi bg-sky-800 p-4 rounded-lg border border-sky-600">
+                        <div class="text-sm text-gray-300 mb-1">Gesamtlücke bis zur Pension</div>
+                        <div class="text-2xl font-bold text-white" id="bu-result-gap-total">–</div>
+                    </div>
+                    
+                    <!-- Container für das ApexCharts-Diagramm -->
+                    <div id="bu-chart-container" class="bg-sky-800 p-4 rounded-lg border border-sky-600"></div>
+                    
+                    <p class="text-xs text-gray-400 p-3 bg-sky-800 rounded-lg border border-sky-600">
+                        Hinweis: Dies ist ein stark vereinfachtes Rechenmodell. Die BU-Staatspension wird hier überschlägig aus dem Nettoeinkommen abgeleitet und je nach Berufsgruppe skaliert. Tatsächliche Ansprüche hängen von Beitragszeiten, Bemessungsgrundlagen, Gesetzeslage u.v.m. ab. Werte dienen als Orientierung, nicht als Beratung oder Angebot.
+                    </p>
+                </div>
+            </div>
+            <style>
+              .bu-toggle-btn.active {
+                background-color: rgb(37 99 235) !important;
+                color: white !important;
+              }
+              .bu-toggle-btn:not(.active) {
+                background-color: transparent;
+                color: rgb(156 163 175);
+              }
+              .bu-toggle-btn:not(.active):hover {
+                background-color: rgb(51 65 85);
+              }
+            </style>
+          `;
+          // Initialisiere den BU-Lückenrechner nach dem DOM-Update
+          setTimeout(() => initBuLueckenrechner(), 100);
+          break;
+        case 'erwerbspotential':
+          title.textContent = 'Erwerbspotentialrechner';
+          content.innerHTML = `
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Linke Spalte: Eingaben -->
+                <div class="space-y-4 bg-sky-800 p-6 rounded-lg border border-sky-600">
+                    <h3 class="text-xl font-semibold text-white border-b border-sky-600 pb-2">Deine Angaben</h3>
+                    <div>
+                        <label for="ep-birth" class="block text-sm font-medium text-gray-300 mb-1">Geburtsdatum:</label>
+                        <input type="date" id="ep-birth" value="1995-12-11" class="w-full px-3 py-2 bg-sky-700 border border-sky-500 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    </div>
+                    <div>
+                        <label for="ep-job" class="block text-sm font-medium text-gray-300 mb-1">Berufsgruppe:</label>
+                        <select id="ep-job" class="w-full px-3 py-2 bg-sky-700 border border-sky-500 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <option value="arb" selected>Arbeiter:in</option>
+                            <option value="ang">Angestellte:r</option>
+                            <option value="selbst">Selbstständig</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="ep-gross" class="block text-sm font-medium text-gray-300 mb-1">Bruttogehalt p.m.:</label>
+                            <input type="number" id="ep-gross" value="2709" min="0" step="1" class="w-full px-3 py-2 bg-sky-700 border border-sky-500 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        </div>
+                        <div>
+                            <label for="ep-net" class="block text-sm font-medium text-gray-300 mb-1">Nettogehalt p.m.:</label>
+                            <input type="number" id="ep-net" value="2000" min="0" step="1" class="w-full px-3 py-2 bg-sky-700 border border-sky-500 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="ep-growth" class="block text-sm font-medium text-gray-300 mb-1">Karriereverlauf:</label>
+                        <select id="ep-growth" class="w-full px-3 py-2 bg-sky-700 border border-sky-500 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <option value="0">0 % p.a.</option>
+                            <option value="0.02">2 % p.a.</option>
+                            <option value="0.03" selected>3 % p.a.</option>
+                            <option value="0.04">4 % p.a.</option>
+                            <option value="0.05">5 % p.a.</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Rechte Spalte: Chart & KPIs -->
+                <div class="flex flex-col bg-sky-800 rounded-lg overflow-hidden border border-sky-600">
+                    <div class="p-6 flex-grow">
+                        <h3 class="text-xl font-semibold text-white">Wert der Arbeitskraft</h3>
+                        <div id="ep-chart-container" class="mt-4"></div>
+                    </div>
+                    <div class="bg-sky-700 p-4 border-t border-sky-600">
+                        <div class="text-sm text-gray-300 mb-1">Summe deines erarbeiteten Nettoeinkommens bis zur Pension</div>
+                        <div class="text-2xl font-bold text-white" id="ep-sum">–</div>
+                    </div>
+                </div>
+            </div>
+          `;
+          // Initialisiere den Erwerbspotentialrechner nach dem DOM-Update
+          setTimeout(() => initErwerbspotentialRechner(), 100);
+          break;
+        case 'finanzierung':
+          title.textContent = 'Finanzierungsrechner';
+          content.innerHTML = `
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Linke Spalte: Eingaben -->
+                <div class="space-y-6 bg-sky-800 p-6 rounded-lg border border-sky-600">
+                    <h3 class="text-xl font-semibold text-white border-b border-sky-600 pb-2">Deine Angaben</h3>
+                    
+                    <!-- Kreditbetrag -->
+                    <div class="space-y-3">
+                        <label class="block text-sm font-medium text-gray-300">Kreditbetrag</label>
+                        <div class="space-y-2">
+                            <input type="range" id="kr-amountRange" min="50000" max="3000000" step="10000" value="400000" 
+                                   class="w-full h-2 bg-sky-600 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                            <div class="flex justify-between items-center">
+                                <button data-step="-50000" class="w-8 h-8 bg-sky-700 text-white rounded hover:bg-sky-600 flex items-center justify-center">−</button>
+                                <input type="text" id="kr-amountInput" value="400.000 €" 
+                                       class="flex-1 mx-2 px-3 py-2 bg-sky-700 border border-sky-500 text-white text-center rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                                <button data-step="50000" class="w-8 h-8 bg-sky-700 text-white rounded hover:bg-sky-600 flex items-center justify-center">+</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Laufzeit -->
+                    <div class="space-y-3">
+                        <label class="block text-sm font-medium text-gray-300">Laufzeit</label>
+                        <div class="space-y-2">
+                            <input type="range" id="kr-yearsRange" min="10" max="35" step="1" value="25" 
+                                   class="w-full h-2 bg-sky-600 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                            <div class="flex justify-between items-center">
+                                <button data-step="-1" class="w-8 h-8 bg-sky-700 text-white rounded hover:bg-sky-600 flex items-center justify-center">−</button>
+                                <input type="text" id="kr-yearsInput" value="25 Jahre" 
+                                       class="flex-1 mx-2 px-3 py-2 bg-sky-700 border border-sky-500 text-white text-center rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                                <button data-step="1" class="w-8 h-8 bg-sky-700 text-white rounded hover:bg-sky-600 flex items-center justify-center">+</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sollzinssatz -->
+                    <div>
+                        <label for="kr-ratePA" class="block text-sm font-medium text-gray-300 mb-1">Sollzinssatz, variabel</label>
+                        <input type="number" id="kr-ratePA" value="3.5" min="0" max="15" step="0.1" 
+                               class="w-full px-3 py-2 bg-sky-700 border border-sky-500 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    </div>
+
+                    <!-- Tilgungsart -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-2">Tilgungsart</label>
+                        <select id="kr-tilgung" class="w-full px-3 py-2 bg-sky-700 border border-sky-500 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                            <option value="ann" selected>Annuitätendarlehen</option>
+                            <option value="lin">Tilgungsdarlehen</option>
+                        </select>
+                    </div>
+
+                    <!-- Monatsrate Anzeige -->
+                    <div class="bg-sky-700 p-4 rounded-lg border border-sky-500">
+                        <h4 class="text-lg font-semibold text-white mb-2">Monatsrate</h4>
+                        <div class="text-2xl font-bold text-white" id="kr-kpiRate">–</div>
+                    </div>
+                </div>
+
+                <!-- Rechte Spalte: Ergebnis -->
+                <div class="bg-sky-800 p-6 rounded-lg border border-sky-600">
+                    <div id="kr-breakdown-container">
+                        <!-- Wird durch JavaScript gefüllt -->
+                    </div>
+                </div>
+            </div>
+          `;
+          // Initialisiere den Finanzierungsrechner nach dem DOM-Update
+          setTimeout(() => initKreditrechner(), 100);
+          break;
+        case 'leasing':
+          title.textContent = 'Leasingrechner';
+          content.innerHTML = `
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Linke Spalte: Eingaben -->
+                <div class="space-y-6 bg-sky-800 p-6 rounded-lg border border-sky-600">
+                    <h3 class="text-xl font-semibold text-white border-b border-sky-600 pb-2">Deine Angaben</h3>
+                    
+                    <!-- Kaufpreis -->
+                    <div>
+                        <label for="leasing-priceInput" class="block text-sm font-medium text-gray-300 mb-1">Kaufpreis *</label>
+                        <input id="leasing-priceInput" type="text" value="40.000,00 €" 
+                               class="w-full px-3 py-2 bg-sky-700 border border-sky-500 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        <div class="text-xs text-gray-400 mt-1">Kaufpreis inkl. USt. und NoVA</div>
+                    </div>
+
+                    <!-- Eigenmittel -->
+                    <div class="space-y-3">
+                        <label class="block text-sm font-medium text-gray-300">Eigenmittel *</label>
+                        <div class="space-y-2">
+                            <input type="range" id="leasing-downRange" min="0" max="40000" step="100" value="8000" 
+                                   class="w-full h-2 bg-sky-600 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                            <div class="flex justify-between items-center">
+                                <button data-step="-500" class="w-8 h-8 bg-sky-700 text-white rounded hover:bg-sky-600 flex items-center justify-center">−</button>
+                                <input id="leasing-downInput" type="text" value="8.000,00 €" 
+                                       class="flex-1 mx-2 px-3 py-2 bg-sky-700 border border-sky-500 text-white text-center rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                                <button data-step="500" class="w-8 h-8 bg-sky-700 text-white rounded hover:bg-sky-600 flex items-center justify-center">+</button>
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-400">
+                                <span id="leasing-downMinL">0,00 €</span>
+                                <span id="leasing-downMaxL">40.000,00 €</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Laufzeit -->
+                    <div class="space-y-3">
+                        <label class="block text-sm font-medium text-gray-300">Laufzeit *</label>
+                        <div class="space-y-2">
+                            <input type="range" id="leasing-termRange" min="24" max="60" step="1" value="36" 
+                                   class="w-full h-2 bg-sky-600 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                            <div class="flex justify-between items-center">
+                                <button data-step="-1" class="w-8 h-8 bg-sky-700 text-white rounded hover:bg-sky-600 flex items-center justify-center">−</button>
+                                <input id="leasing-termInput" type="text" value="36 Monate" 
+                                       class="flex-1 mx-2 px-3 py-2 bg-sky-700 border border-sky-500 text-white text-center rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                                <button data-step="1" class="w-8 h-8 bg-sky-700 text-white rounded hover:bg-sky-600 flex items-center justify-center">+</button>
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-400">
+                                <span>24</span>
+                                <span>60</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Restzahlung -->
+                    <div class="space-y-3">
+                        <label class="block text-sm font-medium text-gray-300">Restzahlung *</label>
+                        <div class="space-y-2">
+                            <input type="range" id="leasing-rvRange" min="0" max="22000" step="100" value="17225" 
+                                   class="w-full h-2 bg-sky-600 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                            <div class="flex justify-between items-center">
+                                <button data-step="-500" class="w-8 h-8 bg-sky-700 text-white rounded hover:bg-sky-600 flex items-center justify-center">−</button>
+                                <input id="leasing-rvInput" type="text" value="17.225,00 €" 
+                                       class="flex-1 mx-2 px-3 py-2 bg-sky-700 border border-sky-500 text-white text-center rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                                <button data-step="500" class="w-8 h-8 bg-sky-700 text-white rounded hover:bg-sky-600 flex items-center justify-center">+</button>
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-400">
+                                <span id="leasing-rvMinL">0,00 €</span>
+                                <span id="leasing-rvMaxL">22.000,00 €</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sollzinssatz -->
+                    <div>
+                        <label for="leasing-ratePA" class="block text-sm font-medium text-gray-300 mb-1">Sollzinssatz (p.a.)</label>
+                        <input id="leasing-ratePA" type="number" min="0" step="0.01" value="4.90" 
+                               class="w-full px-3 py-2 bg-sky-700 border border-sky-500 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        <div class="text-xs text-gray-400 mt-1">Nominal p.a., monatlich verrechnet.</div>
+                    </div>
+                </div>
+
+                <!-- Rechte Spalte: Ergebnis -->
+                <div class="bg-sky-800 p-6 rounded-lg border border-sky-600">
+                    <h3 class="text-xl font-bold text-white mb-4">Ergebnis</h3>
+                    
+                    <!-- KPI Tabelle -->
+                    <div class="space-y-4">
+                        <div class="bg-sky-700 p-4 rounded-lg border border-sky-500">
+                            <div class="flex justify-between items-center">
+                                <span class="text-lg font-semibold text-white">Maximale Leasingrate</span>
+                                <div class="text-right">
+                                    <span class="text-2xl font-bold text-white" id="leasing-kpiRate">–</span>
+                                    <span class="text-white ml-1">€</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-sky-700 p-3 rounded-lg border border-sky-500">
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-300">Gesamtbelastung</span>
+                                <div class="text-right">
+                                    <span class="font-semibold text-white" id="leasing-kpiTotal">–</span>
+                                    <span class="text-white ml-1">€</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-xs text-gray-400 mt-4">
+                        <strong>Hinweis:</strong> Gesamtbelastung = Eigenmittel + Summe aller Monatsraten + Restzahlung. 
+                        Keine Nebenkosten (Zulassung, Versicherung, Gebühren) berücksichtigt.
+                    </div>
+                </div>
+            </div>
+          `;
+          // Initialisiere den Leasingrechner nach dem DOM-Update
+          setTimeout(() => initLeasingrechner(), 100);
+          break;
+        case 'steuervorteil':
+          title.textContent = 'Steuervorteilrechner';
+          content.innerHTML = `
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Linke Spalte: Eingaben -->
+                <div class="bg-sky-800 p-6 rounded-lg border border-sky-600 space-y-6">
+                    <h3 class="text-xl font-bold text-center text-white border-b border-sky-600 pb-2">Deine Berechnung</h3>
+                    
+                    <div>
+                        <label for="steuer-startwert" class="block text-sm font-medium text-gray-300 mb-1">Startwert (€)</label>
+                        <input type="number" id="steuer-startwert" value="0" min="0" step="1000" 
+                               class="w-full px-3 py-2 bg-sky-700 border border-sky-500 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    </div>
+                    
+                    <div>
+                        <label for="steuer-sparrate" class="block text-sm font-medium text-gray-300 mb-1">Sparsumme / Monat (€)</label>
+                        <input type="number" id="steuer-sparrate" value="200" min="0" step="10" 
+                               class="w-full px-3 py-2 bg-sky-700 border border-sky-500 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    </div>
+                    
+                    <div>
+                        <label for="steuer-dauer" class="block text-sm font-medium text-gray-300 mb-1">Anlagedauer (Jahre)</label>
+                        <input type="number" id="steuer-dauer" value="35" min="1" max="50" step="1" 
+                               class="w-full px-3 py-2 bg-sky-700 border border-sky-500 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    </div>
+                    
+                    <div>
+                        <label for="steuer-rendite" class="block text-sm font-medium text-gray-300 mb-1">Rendite p.a. (%)</label>
+                        <input type="number" id="steuer-rendite" value="7" min="0" max="20" step="0.1" 
+                               class="w-full px-3 py-2 bg-sky-700 border border-sky-500 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    </div>
+                    
+                    <div class="flex items-center justify-between pt-4 border-t border-sky-600">
+                        <label for="steuer-kest" class="text-sm font-medium text-gray-300">KESt berücksichtigen?</label>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="steuer-kest" class="sr-only peer" checked>
+                            <div class="w-11 h-6 bg-sky-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+                        </label>
+                    </div>
+                    
+                    <!-- Ergebnisse -->
+                    <div class="pt-4 border-t border-sky-600 space-y-3 text-lg text-white">
+                        <div class="flex justify-between">
+                            <span>Einzahlung gesamt:</span> 
+                            <span id="steuer-output-einzahlung" class="font-bold">0 €</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Rendite gesamt:</span> 
+                            <span id="steuer-output-rendite" class="font-bold">0 €</span>
+                        </div>
+                        <div class="flex justify-between text-red-400">
+                            <span>KESt gesamt:</span> 
+                            <span id="steuer-output-kest" class="font-bold">0 €</span>
+                        </div>
+                        <div class="flex justify-between text-xl text-green-400 pt-2 border-t border-sky-600">
+                            <span>Endbetrag:</span> 
+                            <span id="steuer-output-endbetrag" class="font-bold">0 €</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rechte Spalte: Chart -->
+                <div class="bg-sky-800 p-6 rounded-lg border border-sky-600">
+                    <h3 class="text-xl font-bold text-white mb-4 text-center">Vermögensentwicklung</h3>
+                    <div id="steuer-chart-container" class="w-full h-96"></div>
+                </div>
+            </div>
+          `;
+          // Initialisiere den Steuervorteilrechner nach dem DOM-Update
+          setTimeout(() => initSteuervorteilrechner(), 100);
+          break;
+      }
+      
+      // Zeige Modal
+      modal.classList.remove('hidden');
+    }
+
+    function closeCalculatorModal() {
+      document.getElementById('calculatorModal').classList.add('hidden');
+    }
+
+    // Schließe Dropdown wenn außerhalb geklickt wird
+    document.addEventListener('click', function(event) {
+      const dropdown = document.getElementById('calculatorDropdown');
+      const button = event.target.closest('.control-btn');
+      
+      if (!button && !dropdown.contains(event.target)) {
+        dropdown.classList.add('hidden');
+      }
+    });
+
+    function openCalculator() {
+      // Alte Funktion - wird nicht mehr verwendet
     }
     
     // Jump to specific slide (dynamisch)
@@ -1751,6 +2458,10 @@
       mitarbeiter: [],
       gesellschaften: [], // Für Logos
     };
+    
+    // === ZEITDAUER-TRACKING ===
+    let presentationStartTime = null;
+    let presentationDuration = null;
 
     // SeaTable Access Token holen
     async function getSeaTableAccessToken() {
@@ -2243,6 +2954,1461 @@
       if (kreis) {
         kreis.style.transform = 'rotate(-240deg)';
       }
+    }
+
+    // Pensionslückenrechner-Funktion (kopiert aus beratung_standalone.js)
+    function initPensionsrechner() {
+        const berechnenBtn = document.getElementById('pr-berechnen-btn');
+        const resetBtn = document.getElementById('pr-reset-btn');
+        const inputSections = document.getElementById('pr-input-sections');
+        const auswertungSection = document.getElementById('pr-auswertung');
+
+        if (!berechnenBtn || !resetBtn || !inputSections || !auswertungSection) return;
+
+        // Remove old listener to prevent duplicates
+        const newBtn = berechnenBtn.cloneNode(true);
+        berechnenBtn.parentNode.replaceChild(newBtn, berechnenBtn);
+
+        const resetView = () => {
+            inputSections.classList.remove('collapsed');
+            auswertungSection.style.display = 'none';
+            newBtn.style.display = 'inline-flex';
+        };
+
+        resetBtn.addEventListener('click', resetView);
+
+        newBtn.addEventListener('click', () => {
+            const anfangsEinkommen = parseFloat(document.getElementById("pr-einkommen").value) || 0;
+            const karriereSteigerung = (parseInt(document.getElementById("pr-karriere").value) || 0) / 100;
+            const geburtsdatum = new Date(document.getElementById("pr-geburtsdatum").value);
+            const pensionsalter = parseInt(document.getElementById("pr-pensionsalter").value) || 65;
+            
+            // KORREKTUR: Dynamische Berechnung des letzten Einkommens
+            const heute = new Date();
+            const alter = heute.getFullYear() - geburtsdatum.getFullYear();
+            const verbleibendeJahre = pensionsalter - alter;
+            
+            // Zinseszinsformel für das Gehalt
+            const letztesBruttoEinkommen = anfangsEinkommen * Math.pow(1 + karriereSteigerung, verbleibendeJahre);
+
+            // einfache Annahmen
+            const nettoFaktor = 1.326; // Annäherung für Brutto -> Netto x14
+            const pensionsersatzrate = 0.74; // Annäherung für die Pensionshöhe
+            const nettoLetzteinkommen = letztesBruttoEinkommen * nettoFaktor;
+            const nettoPension = nettoLetzteinkommen * pensionsersatzrate;
+            const luecke = nettoLetzteinkommen - nettoPension;
+
+            document.getElementById("pr-pAntritt").innerText = "01.01.2061";
+            document.getElementById("pr-pAlter").innerText = `${pensionsalter} Jahre`;
+            document.getElementById("pr-pKarriere").innerText = (karriereSteigerung * 100) + " %";
+            document.getElementById("pr-pLetzte").innerText = nettoLetzteinkommen.toFixed(0) + " €";
+            document.getElementById("pr-pPension").innerText = nettoPension.toFixed(0) + " €";
+            document.getElementById("pr-pLuecke").innerText = luecke.toFixed(0) + " €";
+
+            // Balken-Diagramm
+            const total = nettoLetzteinkommen;
+            const pensionPct = (nettoPension / total) * 100;
+            const gapPct = (luecke / total) * 100;
+            document.getElementById("pr-barPension").style.width = pensionPct + "%";
+            document.getElementById("pr-barGap").style.width = gapPct + "%";
+            document.getElementById("pr-auswertung").style.display = "block";
+            newBtn.style.display = 'none'; // Hide the calculate button
+
+            // NEU: Klappe die Eingabefelder nach der Berechnung ein.
+            inputSections.classList.add('collapsed');
+        });
+    }
+
+    // Vorsorgerechner-Funktion (kopiert aus beratung_standalone.js)
+    function initVorsorgerechner() {
+        const berechnenBtn = document.getElementById('vr-berechnen-btn');
+        if (!berechnenBtn) return;
+
+        const berechnen = () => {
+            const entnahme = parseFloat(document.getElementById("vr-entnahme").value) || 0;
+            const dauer = parseInt(document.getElementById("vr-dauer").value) || 0;
+            const zinsEntnahme = (parseFloat(document.getElementById("vr-zinsEntnahme").value) || 0) / 100;
+            const zinsSparen = (parseFloat(document.getElementById("vr-zinsSparen").value) || 0) / 100;
+            const startKapital = parseFloat(document.getElementById("vr-startKapital").value) || 0;
+
+            // Kapitalbedarf berechnen
+            const monate = dauer * 12;
+            const i = zinsEntnahme / 12;
+            const kapitalBedarf = entnahme * (1 - Math.pow(1 + i, -monate)) / i;
+
+            // Sparrate berechnen (Annahme: 25 Jahre Sparphase)
+            const sparJahre = 25;
+            const m = sparJahre * 12;
+            const j = zinsSparen / 12;
+            const sparrate = (kapitalBedarf - startKapital) * j / (Math.pow(1 + j, m) - 1);
+
+            // Ausgabe
+            const formatCurrency = (val) => val.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+            document.getElementById("vr-kapital").innerText = formatCurrency(kapitalBedarf);
+            document.getElementById("vr-monatl").innerText = formatCurrency(entnahme);
+            document.getElementById("vr-sparrate").innerText = formatCurrency(sparrate);
+
+            // Chart-Daten generieren
+            const years = [...Array(sparJahre + dauer + 1).keys()];
+            let values = [];
+            let saldo = startKapital;
+            for (let y = 0; y <= sparJahre; y++) {
+                saldo = saldo * (1 + zinsSparen) + sparrate * 12;
+                values.push(saldo);
+            }
+            for (let y = 1; y <= dauer; y++) {
+                saldo = saldo * (1 + zinsEntnahme) - entnahme * 12;
+                values.push(Math.max(saldo, 0));
+            }
+
+            // ApexChart rendern
+            const chartContainer = document.getElementById('vr-chart-container');
+            chartContainer.innerHTML = '';
+            const options = {
+                series: [{ name: "Kapitalverlauf", data: values }],
+                chart: { type: 'area', height: 350, foreColor: '#e2e8f0', toolbar: { show: false }, zoom: { enabled: false } },
+                dataLabels: { enabled: false },
+                stroke: { curve: 'smooth', width: 2 },
+                fill: {
+                    type: 'gradient',
+                    gradient: {
+                        shadeIntensity: 1,
+                        opacityFrom: 0.7,
+                        opacityTo: 0.2,
+                        stops: [0, 100]
+                    }
+                },
+                // NEU: Farben für Anspar- und Entnahmephase
+                colors: ['#22c55e'], // Startet mit Grün
+                annotations: {
+                    xaxis: [{
+                        x: sparJahre,
+                        borderColor: '#FFD700',
+                        label: {
+                            borderColor: '#FFD700',
+                            style: { color: '#111', background: '#FFD700', },
+                            text: 'Pensionsantritt'
+                        }
+                    }]
+                },
+                xaxis: {
+                    categories: years,
+                    title: { text: 'Jahre', style: { color: '#9ca3af' } },
+                    labels: { formatter: (val) => (parseInt(val) % 5 === 0) ? val : '' }
+                },
+                yaxis: {
+                    title: { text: 'Kapital in €', style: { color: '#9ca3af' } },
+                    labels: { formatter: (val) => `${(val / 1000).toFixed(0)}k` }
+                },
+                tooltip: { theme: 'dark', y: { formatter: (val) => `${val.toLocaleString('de-DE')} €` } },
+                grid: { borderColor: '#4a5568', strokeDashArray: 4 }
+            };
+            const chart = new ApexCharts(chartContainer, options);
+            chart.render();
+        };
+
+        berechnenBtn.onclick = berechnen;
+        berechnen(); // Initial render
+    }
+
+    // BU-Lückenrechner-Funktion (kopiert aus beratung_standalone.js)
+    function initBuLueckenrechner() {
+        const fmt = (v) => new Intl.NumberFormat('de-AT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v || 0);
+
+        let chart = null; // Variable für die Chart-Instanz
+        const incomeTypeToggle = document.getElementById('bu-income-type-toggle');
+        const allInputs = ['#bu-birthdate', '#bu-job', '#bu-income', '#bu-ret-age', '#bu-entry-age'];
+
+        const calc = () => {
+            const type = incomeTypeToggle.querySelector('.active')?.dataset.v || 'net';
+            const birth = new Date(document.getElementById('bu-birthdate').value || '1990-01-01');
+            const job = document.getElementById('bu-job').value;
+            const incomeInput = parseFloat(document.getElementById('bu-income').value || 0);
+            const retAge = parseInt(document.getElementById('bu-ret-age').value, 10);
+            const growth = 0.02; // NEU: Festes jährliches Gehaltswachstum von 2%
+            const entryAge = parseInt(document.getElementById('bu-entry-age').value, 10);
+
+            // Alter heute
+            const now = new Date();
+            let age = now.getFullYear() - birth.getFullYear();
+            const m = now.getMonth() - birth.getMonth();
+            if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+
+            // Nettoeinkommen HEUTE berechnen
+            const netToday = type === 'net' ? incomeInput : (incomeInput * 0.70);
+
+            // Zukünftiges Nettoeinkommen mit 2% Wachstum p.a. berechnen
+            const yearsToBuEntry = Math.max(0, entryAge - age);
+            const netAtBuEntry = netToday * Math.pow(1 + growth, yearsToBuEntry);
+
+            // Einfaches BU-Pensionsmodell
+            const buPensionFactor = (job) => {
+                if (job === 'ang') return 0.60;
+                if (job === 'arb') return 0.55;
+                return 0.50;
+            };
+            const factor = buPensionFactor(job);
+            
+            // Staatliche Pension HEUTE berechnen
+            const buPensionToday = Math.max(0, netToday * factor);
+            // Zukünftige staatliche Pension mit 1% Wachstum p.a. berechnen
+            const buMonthly = buPensionToday * Math.pow(1 + 0.01, yearsToBuEntry);
+
+            // Monatliche Lücke
+            const gapMonthly = Math.max(0, netAtBuEntry - buMonthly);
+
+            // Jahre bis Pension vom Eintrittszeitpunkt
+            const yearsToRet = Math.max(0, retAge - entryAge);
+            const monthsToRet = yearsToRet * 12;
+
+            // Gesamtlücke (vereinfacht, ohne Abzinsung/Aufwertung)
+            const totalGap = gapMonthly * monthsToRet;
+
+            // KPIs befüllen
+            document.getElementById('bu-result-pension').textContent = fmt(buMonthly);
+            document.getElementById('bu-result-gap-month').textContent = fmt(gapMonthly);
+            document.getElementById('bu-result-gap-total').textContent = fmt(totalGap);
+
+            // NEU: ApexCharts-Balkendiagramm erstellen oder aktualisieren
+            const chartOptions = {
+                series: [{
+                    name: 'Geschätzte BU-Staatspension',
+                    data: [Math.round(buMonthly)]
+                }, {
+                    name: 'Monatliche Lücke',
+                    data: [Math.round(gapMonthly)]
+                }],
+                chart: {
+                    type: 'bar',
+                    height: 120,
+                    stacked: true,
+                    stackType: '100%',
+                    toolbar: { show: false },
+                    foreColor: '#e2e8f0'
+                },
+                plotOptions: {
+                    bar: {
+                        horizontal: true,
+                        borderRadius: 4, // NEU: Fügt abgerundete Ecken hinzu
+                    },
+                },
+                stroke: { width: 1, colors: ['#043C64'] },
+                xaxis: {
+                    categories: [''],
+                    labels: { show: false },
+                    axisBorder: { show: false },
+                    axisTicks: { show: false }
+                },
+                yaxis: { labels: { show: false } },
+                tooltip: {
+                    theme: 'dark',
+                    y: { formatter: (val) => fmt(val) }
+                },
+                grid: { show: false },
+                colors: ['#27ae60', '#FF6347'], // Grün für Pension, Rot für Lücke
+                legend: { show: false },
+                dataLabels: { enabled: false }, // KORREKTUR: Beschriftungen im Balken entfernt
+                title: {
+                    text: `Gesamteinkommen: ${fmt(netAtBuEntry)}`,
+                    align: 'center',
+                    style: { fontSize: '14px', fontWeight: 'bold', color: '#fff' }
+                }
+            };
+
+            if (!chart) {
+                chart = new ApexCharts(document.querySelector("#bu-chart-container"), chartOptions);
+                chart.render();
+            } else {
+                chart.updateOptions(chartOptions);
+            }
+        };
+
+        // Event Listeners
+        [...incomeTypeToggle.querySelectorAll('button')].forEach(b => {
+            b.addEventListener('click', () => {
+                b.parentElement.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+                b.classList.add('active');
+                calc();
+            });
+        });
+
+        allInputs.forEach(s => {
+            const el = document.querySelector(s);
+            if (el) {
+                el.addEventListener('input', () => {
+                    if (s === '#bu-entry-age') {
+                        document.getElementById('bu-age-now').textContent = el.value;
+                    }
+                    calc();
+                });
+            }
+        });
+
+        calc(); // Initial calculation
+    }
+
+    // Erwerbspotentialrechner-Funktion (kopiert aus beratung_standalone.js)
+    function initErwerbspotentialRechner() {
+        const fmt = (v) => new Intl.NumberFormat('de-AT', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v || 0);
+        
+        let chart = null;
+        const allInputs = ['#ep-birth', '#ep-job', '#ep-growth']; // KORREKTUR: Brutto/Netto werden separat behandelt
+        const grossInput = document.getElementById('ep-gross');
+        const netInput = document.getElementById('ep-net');
+
+        // NEU: Logik zur Kopplung von Brutto- und Netto-Eingabefeldern
+        const updateNetto = () => {
+            const grossValue = parseFloat(grossInput.value) || 0;
+            netInput.value = Math.round(grossValue * 0.70); // Einfache Brutto-Netto-Näherung
+            draw();
+        };
+        const updateBrutto = () => {
+            const netValue = parseFloat(netInput.value) || 0;
+            grossInput.value = Math.round(netValue / 0.70); // Einfache Netto-Brutto-Näherung
+            draw();
+        };
+
+        grossInput.addEventListener('input', _.debounce(updateNetto, 250));
+        netInput.addEventListener('input', _.debounce(updateBrutto, 250));
+
+        const draw = () => {
+            const birth = new Date(document.getElementById('ep-birth').value || '1995-12-11');
+            const net0 = parseFloat(netInput.value || 0);
+            const g = parseFloat(document.getElementById('ep-growth').value || 0);
+
+            // Jahre bis zur Rente berechnen
+            const now = new Date();
+            let age = now.getFullYear() - birth.getFullYear();
+            const m = now.getMonth() - birth.getMonth();
+            if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+            const years = Math.max(0, 65 - age);
+
+            // Datenreihen aufbauen
+            const buildSeries = (startNet, growth, numYears) => {
+                const pts = [];
+                let sum = 0;
+                for (let t = 0; t <= numYears; t++) {
+                    const netY = startNet * Math.pow(1 + growth, t) * 12;
+                    if (t > 0) sum += netY;
+                    pts.push({ t, sum });
+                }
+                return pts;
+            };
+
+            const s1 = buildSeries(net0, g, years); // mit Wachstum
+
+            const total = s1[s1.length - 1]?.sum || 0;
+            document.getElementById('ep-sum').textContent = fmt(total);
+
+            // Chart-Optionen
+            const chartOptions = {
+                series: [{ // KORREKTUR: Nur noch eine Serie anzeigen
+                    name: 'Mit Karriereverlauf',
+                    data: s1.map(p => Math.round(p.sum))
+                }],
+                chart: {
+                    type: 'area',
+                    height: 350,
+                    foreColor: '#e2e8f0',
+                    toolbar: { show: false },
+                    zoom: { enabled: false }
+                },
+                colors: ['#3b82f6'], // KORREKTUR: Nur noch eine Farbe
+                dataLabels: { enabled: false },
+                stroke: {
+                    curve: 'smooth',
+                    width: 3,
+                },
+                fill: {
+                    type: 'gradient',
+                    gradient: {
+                        shadeIntensity: 1,
+                        opacityFrom: 0.4,
+                        opacityTo: 0.1,
+                        stops: [0, 100]
+                    }
+                },
+                xaxis: {
+                    categories: s1.map(p => p.t),
+                    title: { text: 'Jahre ab heute', style: { color: '#9ca3af' } },
+                    labels: {
+                        formatter: (val) => (parseInt(val) % 5 === 0) ? val : ''
+                    }
+                },
+                yaxis: {
+                    title: { text: 'Gesamteinkommen', style: { color: '#9ca3af' } },
+                    labels: { formatter: (val) => `${(val / 1000).toFixed(0)}k €` }
+                },
+                tooltip: {
+                    theme: 'dark',
+                    x: { formatter: (val) => `Nach ${val} Jahren` },
+                    y: { formatter: (val) => fmt(val) }
+                },
+                legend: { show: false }, // KORREKTUR: Legende ausblenden, da nur eine Serie
+                grid: { borderColor: 'rgba(255,255,255,0.1)', strokeDashArray: 4 }
+            };
+
+            const chartContainer = document.getElementById('ep-chart-container');
+            if (!chart) {
+                chart = new ApexCharts(chartContainer, chartOptions);
+                chart.render();
+            } else {
+                chart.updateOptions(chartOptions);
+            }
+        };
+
+        allInputs.forEach(s => {
+            const el = document.querySelector(s);
+            if (el) el.addEventListener('input', _.debounce(draw, 250));
+        });
+
+        draw(); // Initialer Aufruf
+    }
+
+    // Finanzierungsrechner/Kreditrechner-Funktion (kopiert aus beratung_standalone.js)
+    function initKreditrechner() {
+        const qs = (s) => document.querySelector(s);
+        const eur = (v) => new Intl.NumberFormat('de-AT', { style: 'currency', currency: 'EUR' }).format(+v || 0);
+        const pct = (v, dp = 1) => (+v).toFixed(dp).replace('.', ',') + ' % p.a.';
+        const parseMoney = (s) => +String(s).replace(/[^0-9,.-]/g, '').replace(',', '.');
+        const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+        const amountRange = qs('#kr-amountRange');
+        const amountInput = qs('#kr-amountInput');
+        const yearsRange = qs('#kr-yearsRange');
+        const yearsInput = qs('#kr-yearsInput');
+
+        if (!amountRange || !amountInput || !yearsRange || !yearsInput) return;
+
+        const recalc = () => {
+            const P = +amountRange.value;
+            const years = +yearsRange.value;
+            const n = years * 12;
+            const i_m = (+qs('#kr-ratePA').value) / 100 / 12;
+            const tilg = qs('#kr-tilgung').value;
+
+            let M;
+            if (tilg === 'ann') {
+                M = (i_m <= 0) ? P / n : P * i_m / (1 - Math.pow(1 + i_m, -n));
+            } else {
+                M = (P / n) + (P * i_m); // First rate for linear
+            }
+
+            const payout = P;
+            let total;
+            if (tilg === 'ann') {
+                total = M * n;
+            } else {
+                let sum = 0, rest = P;
+                for (let m = 1; m <= n; m++) {
+                    const z = rest * i_m;
+                    const t = P / n;
+                    sum += z + t;
+                    rest -= t;
+                }
+                total = sum;
+                M = sum / n; // Average rate for display
+            }
+
+            const irrMonthly = (cashflows) => {
+                const npv = (r) => cashflows.reduce((acc, cf, t) => acc + cf / Math.pow(1 + r, t), 0);
+                let lo = 0, hi = 1, flo = npv(lo), fhi = npv(hi);
+                if (flo * fhi > 0) {
+                    for (let k = 0; k < 60 && fhi > 0; k++) { hi *= 1.5; fhi = npv(hi); }
+                    if (flo * fhi > 0) return NaN;
+                }
+                for (let it = 0; it < 200; it++) {
+                    const mid = (lo + hi) / 2, fmid = npv(mid);
+                    if (Math.abs(fmid) < 1e-6) return mid;
+                    if (flo * fmid > 0) { lo = mid; flo = fmid; } else { hi = mid; }
+                }
+                return (lo + hi) / 2;
+            };
+
+            const flows = Array(n + 1).fill(0);
+            flows[0] = payout;
+            for (let m = 1; m <= n; m++) flows[m] -= M;
+            const r_m = irrMonthly(flows);
+            const apr = isNaN(r_m) ? null : (Math.pow(1 + r_m, 12) - 1);
+
+            qs('#kr-kpiRate').textContent = eur(M);
+            const breakdownContainer = qs('#kr-breakdown-container');
+            breakdownContainer.innerHTML = `
+                <h3 class="text-xl font-bold text-white mb-4">Berechnungsbeispiel:</h3>
+                <div class="space-y-3 text-gray-300">
+                    <div class="flex justify-between"><span>Kreditbetrag:</span><span class="font-semibold text-white">${eur(P)}</span></div>
+                    <div class="flex justify-between"><span>Laufzeit:</span><span class="font-semibold text-white">${years} Jahre</span></div>
+                    <div class="flex justify-between"><span>Sollzinssatz, variabel:</span><span class="font-semibold text-white">${pct(+qs('#kr-ratePA').value, 3)}</span></div>
+                    <div class="flex justify-between"><span>Auszahlungsbetrag:</span><span class="font-semibold text-white">${eur(payout)}</span></div>
+                    <div class="flex justify-between"><span>Effektivzinssatz:</span><span class="font-semibold text-white">${(apr == null ? '–' : ((apr * 100).toFixed(1).replace('.', ',') + ' % p.a.'))}</span></div>
+                    <div class="flex justify-between text-lg"><span>Zu zahlender Gesamtbetrag:</span><span class="font-bold text-white">${eur(total)}</span></div>
+                </div>
+                <p class="text-xs text-gray-400 mt-6">Hinweis: Zusätzliche Kosten wie Schätzgebühren, Grundbuchseintragungen oder Kontoführungsgebühren sind hier <strong>nicht</strong> berücksichtigt, da diese von Bank zu Bank unterschiedlich ausfallen können.</p>
+            `;
+        };
+
+        const syncAmount = (from) => {
+            if (from === 'range') amountInput.value = eur(amountRange.value);
+            else { const v = clamp(parseMoney(amountInput.value), 50000, 3000000); amountRange.value = v; amountInput.value = eur(v); }
+            recalc();
+        };
+        const syncYears = (from) => {
+            if (from === 'range') yearsInput.value = yearsRange.value + ' Jahre';
+            else { const v = clamp(parseInt((yearsInput.value || '').replace(/\D/g, '')) || 25, 10, 35); yearsRange.value = v; yearsInput.value = v + ' Jahre'; }
+            recalc();
+        };
+
+        amountRange.oninput = () => syncAmount('range');
+        amountInput.onchange = () => syncAmount('input');
+        yearsRange.oninput = () => syncYears('range');
+        yearsInput.onchange = () => syncYears('input');
+        document.querySelectorAll('[data-step]').forEach(btn => {
+            btn.onclick = () => {
+                if (btn.closest('div').querySelector('#kr-amountInput')) {
+                    const v = clamp(+amountRange.value + (+btn.dataset.step), 50000, 3000000); amountRange.value = v; syncAmount('range');
+                } else {
+                    const v = clamp(+yearsRange.value + (+btn.dataset.step), 10, 35); yearsRange.value = v; syncYears('range');
+                }
+            };
+        });
+        ['#kr-ratePA', '#kr-tilgung'].forEach(id => qs(id).oninput = recalc);
+
+        syncAmount('range');
+        syncYears('range');
+    }
+
+    // Leasingrechner-Funktion (kopiert aus beratung_standalone.js)
+    function initLeasingrechner() {
+        const qs = (s) => document.querySelector(s);
+        const fmtEUR = (v) => new Intl.NumberFormat('de-AT', { style: 'currency', currency: 'EUR' }).format(+v || 0);
+        const fmtMoney = (v) => fmtEUR(v);
+
+        function parseMoney(str) {
+            const raw = String(str || '').trim();
+            if (!raw) return 0;
+            let keep = '';
+            for (let i = 0; i < raw.length; i++) {
+                const ch = raw[i];
+                if ((ch >= '0' && ch <= '9') || ch === '-' || ch === ',' || ch === '.') keep += ch;
+            }
+            keep = keep.split('.').join(''); // remove thousands
+            const lastComma = keep.lastIndexOf(',');
+            if (lastComma !== -1) keep = keep.slice(0, lastComma) + '.' + keep.slice(lastComma + 1);
+            const num = parseFloat(keep);
+            return Number.isFinite(num) ? num : 0;
+        }
+
+        function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+        // Elemente
+        const priceInput = qs('#leasing-priceInput');
+        const downRange = qs('#leasing-downRange');
+        const downInput = qs('#leasing-downInput');
+        const termRange = qs('#leasing-termRange');
+        const termInput = qs('#leasing-termInput');
+        const rvRange = qs('#leasing-rvRange');
+        const rvInput = qs('#leasing-rvInput');
+        const ratePA = qs('#leasing-ratePA');
+
+        const downMinL = qs('#leasing-downMinL');
+        const downMaxL = qs('#leasing-downMaxL');
+        const rvMinL = qs('#leasing-rvMinL');
+        const rvMaxL = qs('#leasing-rvMaxL');
+
+        function setPrice(v) {
+            const P = clamp(v, 1000, 1000000);
+            priceInput.value = fmtMoney(P);
+            const downMin = 0;
+            const downMax = Math.round(P);
+            downRange.min = downMin;
+            downRange.max = downMax;
+            downMinL.textContent = fmtMoney(downMin);
+            downMaxL.textContent = fmtMoney(downMax);
+
+            const rvMin = 0;
+            const rvMax = Math.round(P * 0.60);
+            rvRange.min = rvMin;
+            rvRange.max = rvMax;
+            rvMinL.textContent = fmtMoney(rvMin);
+            rvMaxL.textContent = fmtMoney(rvMax);
+
+            if (parseMoney(downInput.value) > downMax) downInput.value = fmtMoney(downMax);
+            if (parseMoney(rvInput.value) > rvMax) rvInput.value = fmtMoney(rvMax);
+
+            recalc();
+        }
+
+        function annuityBalloonRate(Principal, RV, i_m, n) {
+            if (n <= 0) return 0;
+            if (i_m <= 0) {
+                return (Principal - RV) / n;
+            }
+            const pvRV = RV / Math.pow(1 + i_m, n);
+            const base = (Principal - pvRV);
+            return base * (i_m / (1 - Math.pow(1 + i_m, -n)));
+        }
+
+        function recalc() {
+            const price = parseMoney(priceInput.value) || 0;
+            const down = clamp(parseMoney(downInput.value), +downRange.min, +downRange.max);
+            const term = clamp(parseInt(termInput.value) || 36, +termRange.min, +termRange.max);
+            const rv = clamp(parseMoney(rvInput.value), +rvRange.min, +rvRange.max);
+
+            downInput.value = fmtMoney(down);
+            downRange.value = down;
+            termInput.value = term + ' Monate';
+            termRange.value = term;
+            rvInput.value = fmtMoney(rv);
+            rvRange.value = rv;
+
+            const principal = Math.max(0, price - down);
+            const i_m = ((+ratePA.value) || 0) / 100 / 12;
+
+            let M = annuityBalloonRate(principal, rv, i_m, term);
+            if (!Number.isFinite(M)) M = 0;
+            const total = down + M * term + rv;
+
+            qs('#leasing-kpiRate').textContent = M.toFixed(2).replace('.', ',');
+            qs('#leasing-kpiTotal').textContent = total.toFixed(2).replace('.', ',');
+        }
+
+        // Event Listeners
+        priceInput.addEventListener('change', () => setPrice(parseMoney(priceInput.value)));
+
+        [downRange, rvRange, termRange].forEach(r => r.addEventListener('input', () => {
+            if (r === downRange) downInput.value = fmtMoney(+downRange.value);
+            if (r === rvRange) rvInput.value = fmtMoney(+rvRange.value);
+            if (r === termRange) termInput.value = (+termRange.value) + ' Monate';
+            recalc();
+        }));
+
+        [downInput, rvInput].forEach(inp => inp.addEventListener('change', recalc));
+        termInput.addEventListener('change', () => {
+            const v = parseInt(termInput.value) || 36;
+            termRange.value = clamp(v, +termRange.min, +termRange.max);
+            recalc();
+        });
+        ratePA.addEventListener('input', recalc);
+
+        document.querySelectorAll('[data-step]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const step = +btn.dataset.step;
+                const field = btn.parentElement.querySelector('input');
+                if (field === downInput) {
+                    const v = clamp(parseMoney(downInput.value) + step, +downRange.min, +downRange.max);
+                    downRange.value = v;
+                    downInput.value = fmtMoney(v);
+                } else if (field === rvInput) {
+                    const v = clamp(parseMoney(rvInput.value) + step, +rvRange.min, +rvRange.max);
+                    rvRange.value = v;
+                    rvInput.value = fmtMoney(v);
+                } else if (field === termInput) {
+                    const v = clamp((parseInt(termInput.value) || 36) + step, +termRange.min, +termRange.max);
+                    termRange.value = v;
+                    termInput.value = v + ' Monate';
+                }
+                recalc();
+            });
+        });
+
+        // Initialisierung mit Beispielwerten
+        setPrice(40000);
+        downRange.value = 8000;
+        downInput.value = fmtMoney(8000);
+        termRange.value = 36;
+        termInput.value = '36 Monate';
+        rvRange.value = 17225;
+        rvInput.value = fmtMoney(17225);
+        ratePA.value = 4.90;
+        recalc();
+    }
+
+    // Steuervorteilrechner-Funktion (kopiert aus beratung_standalone.js)
+    function initSteuervorteilrechner() {
+        const container = document.getElementById('steuer-chart-container');
+        const sparrateInput = document.getElementById('steuer-sparrate');
+        const dauerInput = document.getElementById('steuer-dauer');
+        const renditeInput = document.getElementById('steuer-rendite');
+        const kestToggle = document.getElementById('steuer-kest');
+        const startwertInput = document.getElementById('steuer-startwert');
+
+        if (!container || !sparrateInput || !dauerInput || !renditeInput || !kestToggle || !startwertInput) return;
+
+        const renderChart = () => {
+            const startwert = parseFloat(startwertInput.value) || 0;
+            const monthlySavings = parseFloat(sparrateInput.value) || 0;
+            const years = parseInt(dauerInput.value) || 0;
+            const annualReturn = (parseFloat(renditeInput.value) || 0) / 100;
+            const considerKest = kestToggle.checked;
+
+            const categories = Array.from({ length: years }, (_, i) => `Jahr ${i + 1}`);
+            const seriesData = { einzahlung: [], fondsdepot: [], flv: [] };
+
+            let totalEinzahlung = startwert;
+            let kapitalMitKest = startwert;
+            let totalKest = 0;
+            const annualSavings = monthlySavings * 12;
+            let flvKapital = startwert;
+
+            for (let i = 1; i <= years; i++) {
+                totalEinzahlung += annualSavings;
+                const prevKapitalMitKest = kapitalMitKest;
+                kapitalMitKest = (kapitalMitKest + annualSavings) * (1 + annualReturn);
+                const gain = kapitalMitKest - prevKapitalMitKest - annualSavings;
+                const kest = considerKest && gain > 0 ? gain * 0.275 : 0;
+                kapitalMitKest -= kest;
+                totalKest += kest;
+
+                const isInitialPhase = i <= 5;
+                const flvNetAnnualSavings = isInitialPhase ? annualSavings * 0.70 : annualSavings;
+                flvKapital = (flvKapital + flvNetAnnualSavings) * (1 + annualReturn);
+
+                seriesData.einzahlung.push(Math.round(totalEinzahlung));
+                seriesData.fondsdepot.push(Math.round(kapitalMitKest));
+                seriesData.flv.push(Math.round(flvKapital));
+            }
+
+            document.getElementById('steuer-output-einzahlung').textContent = `${totalEinzahlung.toLocaleString('de-DE')} €`;
+            const gesamtrendite = flvKapital - totalEinzahlung;
+            document.getElementById('steuer-output-rendite').textContent = `${gesamtrendite.toLocaleString('de-DE', {maximumFractionDigits: 0})} €`;
+            document.getElementById('steuer-output-kest').textContent = `-${totalKest.toLocaleString('de-DE', {maximumFractionDigits: 0})} €`;
+            document.getElementById('steuer-output-endbetrag').textContent = `${kapitalMitKest.toLocaleString('de-DE', {maximumFractionDigits: 0})} €`;
+
+            const options = {
+                series: [{
+                    name: 'Eingezahlt', 
+                    type: 'column', 
+                    data: seriesData.einzahlung
+                }, {
+                    name: 'Fondsdepot (nach KESt)', 
+                    type: 'column', 
+                    data: seriesData.fondsdepot
+                }, {
+                    name: 'FLV (KESt-frei)', 
+                    type: 'column', 
+                    data: seriesData.flv
+                }],
+                chart: { 
+                    height: 450, 
+                    type: 'line', 
+                    stacked: false, 
+                    foreColor: '#e2e8f0', 
+                    toolbar: { show: false } 
+                },
+                stroke: { 
+                    width: [0, 0, 3], 
+                    curve: 'smooth' 
+                },
+                plotOptions: { 
+                    bar: { columnWidth: '60%' } 
+                },
+                colors: ['#a0aec0', '#f1c40f', '#27ae60'],
+                xaxis: {
+                    categories: categories,
+                    title: { text: 'Jahre', style: { color: '#9ca3af' } },
+                    labels: {
+                        formatter: (val) => {
+                            if (typeof val !== 'string') return '';
+                            return (parseInt(val.replace('Jahr ', '')) % 5 === 0 || val === 'Jahr 1') ? val.replace('Jahr ', '') : '';
+                        }
+                    }
+                },
+                yaxis: { 
+                    title: { text: 'Vermögen in €', style: { color: '#9ca3af' } }, 
+                    labels: { formatter: (val) => `${(val / 1000).toFixed(0)}k` } 
+                },
+                dataLabels: { enabled: false },
+                tooltip: { 
+                    theme: 'dark', 
+                    shared: true, 
+                    intersect: false, 
+                    y: { formatter: (val) => `${val.toLocaleString('de-DE')} €` } 
+                },
+                legend: { 
+                    position: 'top', 
+                    horizontalAlign: 'center' 
+                },
+                grid: { 
+                    borderColor: 'rgba(255,255,255,0.1)',
+                    strokeDashArray: 4
+                }
+            };
+
+            container.innerHTML = '';
+            const chart = new ApexCharts(container, options);
+            chart.render();
+        };
+
+        renderChart();
+
+        const debouncedRender = _.debounce(renderChart, 300);
+        [startwertInput, sparrateInput, dauerInput, renditeInput, kestToggle].forEach(input => {
+            input.addEventListener('input', debouncedRender);
+        });
+    }
+
+    // Metadaten der Tabelle "Analysen" beim Laden der Seite ausgeben
+    async function getAnalysenMetadata() {
+        try {
+            console.log('🔍 Lade Metadaten der Tabelle "Analysen"...');
+            
+            // SeaTable Access Token holen falls nicht vorhanden
+            if (!seaTableAccessToken || !apiGatewayUrl) {
+                await getSeaTableAccessToken();
+            }
+            
+            // Metadaten abrufen
+            const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/metadata/`;
+            const response = await fetch(url, { 
+                headers: { Authorization: `Bearer ${seaTableAccessToken}` } 
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            // Tabelle "Analysen" finden
+            const analysenTable = data.metadata.tables.find(table => 
+                table.name.toLowerCase() === 'analysen'
+            );
+            
+            if (analysenTable) {
+                console.log('📊 Metadaten der Tabelle "Analysen":');
+                console.log('='.repeat(50));
+                console.log(`Tabellen-Name: ${analysenTable.name}`);
+                console.log(`Tabellen-ID: ${analysenTable._id}`);
+                console.log(`Anzahl Spalten: ${analysenTable.columns.length}`);
+                console.log('');
+                
+                console.log('📋 Spalten-Details:');
+                analysenTable.columns.forEach((column, index) => {
+                    console.log(`${index + 1}. ${column.name}`);
+                    console.log(`   - Typ: ${column.type}`);
+                    console.log(`   - Key: ${column.key}`);
+                    if (column.data) {
+                        console.log(`   - Optionen: ${JSON.stringify(column.data)}`);
+                    }
+                    console.log('');
+                });
+                
+                console.log('='.repeat(50));
+                
+                // Auch auf der Seite anzeigen (optional)
+                if (window.location.search.includes('debug=true')) {
+                    const debugDiv = document.createElement('div');
+                    debugDiv.style.cssText = `
+                        position: fixed; 
+                        top: 10px; 
+                        right: 10px; 
+                        background: rgba(0,0,0,0.8); 
+                        color: white; 
+                        padding: 10px; 
+                        border-radius: 5px; 
+                        max-width: 300px; 
+                        font-family: monospace; 
+                        font-size: 12px; 
+                        z-index: 9999;
+                        max-height: 400px;
+                        overflow-y: auto;
+                    `;
+                    debugDiv.innerHTML = `
+                        <strong>Analysen-Tabelle Metadaten:</strong><br>
+                        Spalten: ${analysenTable.columns.length}<br>
+                        ${analysenTable.columns.map(col => `• ${col.name} (${col.type})`).join('<br>')}
+                    `;
+                    document.body.appendChild(debugDiv);
+                }
+                
+            } else {
+                console.warn('⚠️ Tabelle "Analysen" nicht gefunden!');
+                console.log('Verfügbare Tabellen:');
+                data.metadata.tables.forEach(table => {
+                    console.log(`- ${table.name}`);
+                });
+            }
+            
+        } catch (error) {
+            console.error('❌ Fehler beim Laden der Analysen-Metadaten:', error);
+        }
+    }
+
+    // Metadaten beim Laden der Seite abrufen
+    window.addEventListener('load', () => {
+        console.log('🚀 Seite geladen - lade Analysen-Metadaten...');
+        
+        // Starte Zeitdauer-Messung
+        presentationStartTime = new Date();
+        console.log('⏱️ Präsentations-Timer gestartet um:', presentationStartTime.toLocaleTimeString());
+        
+        getAnalysenMetadata();
+        
+        // Auto-Save-Listener aktivieren
+        addAutoSaveListener();
+        console.log('💾 Auto-Save für Folie 20 aktiviert');
+    });
+
+    // === ZUSÄTZLICHE SEATABLE-SPEICHERFUNKTIONEN (aus main.js kopiert) ===
+    
+    // Link-Feld aktualisieren (spezifisch für Termine <-> Mitarbeiter)
+    async function seaTableUpdateLinkField(terminRowId, mitarbeiterRowId) {
+        if (!seaTableAccessToken || !apiGatewayUrl) return false;
+        try {
+            const termineTableMeta = METADATA.tables.find((t) => t.name === "Termine");
+            const mitarbeiterTableMeta = METADATA.tables.find((t) => t.name === "Mitarbeiter");
+            if (!termineTableMeta || !mitarbeiterTableMeta) throw new Error("Could not find 'Termine' or 'Mitarbeiter' table in metadata.");
+
+            const linkColumnMeta = termineTableMeta.columns.find((c) => c.name === "Mitarbeiter_ID");
+            if (!linkColumnMeta || !linkColumnMeta.data || !linkColumnMeta.data.link_id) throw new Error("Could not find 'link_id' for 'Mitarbeiter_ID' column.");
+
+            const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/links/`;
+            const body = {
+                table_id: termineTableMeta._id,
+                other_table_id: mitarbeiterTableMeta._id,
+                link_id: linkColumnMeta.data.link_id,
+                other_rows_ids_map: {
+                    [terminRowId]: mitarbeiterRowId ? [mitarbeiterRowId] : [],
+                },
+            };
+
+            console.log("[API-LINK-UPDATE] PUT /links Payload:", JSON.stringify(body, null, 2));
+
+            const response = await fetch(url, {
+                method: "PUT",
+                headers: {
+                    Authorization: `Bearer ${seaTableAccessToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(body),
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Link update failed: ${response.status} ${errorText}`);
+            }
+            console.log("[API-LINK-UPDATE] Link updated successfully.");
+            return true;
+        } catch (error) {
+            console.error("Error updating link field:", error);
+            return false;
+        }
+    }
+
+    // Zeile hinzufügen (Hauptfunktion für alle Tabellen)
+    async function seaTableAddRow(tableName, rowData) {
+        // Neuer, effizienter Ansatz basierend auf dem Skript des Benutzers:
+        // 1. Daten für die Verknüpfung (Mitarbeiter_ID) von den restlichen Daten trennen.
+        // 2. Spalten-Keys in Spalten-NAMEN umwandeln, da der /rows Endpunkt Namen erwartet.
+        // 3. Eine neue Zeile mit den umgewandelten Daten erstellen.
+        // 4. Die Verknüpfung in einem separaten Schritt über die Links-API setzen.
+        console.log("[ADD-ROW-NEW] Starting new add-row process.");
+
+        if (!seaTableAccessToken || !apiGatewayUrl) {
+            console.error("Cannot add row without access token and gateway URL.");
+            return false;
+        }
+
+        // --- SCHRITT 1: Daten vorbereiten (Link trennen, Keys in Namen umwandeln) ---
+        const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
+        if (!tableMap) {
+            console.error(`[ADD-ROW-NEW] Column map for table '${tableName}' not found.`);
+            return false;
+        }
+        const tableMeta = METADATA.tables.find(t => t.name.toLowerCase() === tableName.toLowerCase());
+        const linkColumns = tableMeta ? tableMeta.columns.filter(c => c.type === 'link') : [];
+
+        const linkData = {};
+        const rowDataForCreation = { ...rowData };
+
+        linkColumns.forEach(col => {
+            if (rowDataForCreation[col.key]) {
+                linkData[col.name] = rowDataForCreation[col.key][0]; // Store by name for updateSingleLink
+                delete rowDataForCreation[col.key];
+            }
+        });
+
+        // KORREKTUR: Der 'rows' Endpunkt erwartet Spalten-NAMEN, nicht Spalten-Keys.
+        // Wir müssen die Keys (z.B. '0000') in Namen (z.B. 'Terminpartner') umwandeln.
+        const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
+
+        const rowDataWithNames = {};
+        for (const key in rowDataForCreation) {
+            const name = reversedMap[key];
+            if (name) {
+                // API erwartet `null` für leere Felder, nicht `undefined`
+                const value = rowDataForCreation[key];
+                rowDataWithNames[name] = (value === undefined || value === '') ? null : value;
+            } else if (key !== '_id') {
+                console.warn(`[ADD-ROW-NEW] No column name found for key: ${key}`);
+            }
+        }
+
+        let newRowId = null;
+
+        // --- SCHRITT 2: Zeile mit den meisten Daten anlegen ---
+        try {
+            // Wir verwenden den "Append rows" (plural) Endpunkt, wie im Skript des Benutzers.
+            const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+            const body = { table_name: tableName, rows: [rowDataWithNames] }; // KORREKTUR: rowDataWithNames verwenden
+
+            console.log(`[ADD-ROW-NEW] Step 1: Creating row. POST to ${url}`);
+            console.log(`[ADD-ROW-NEW] Step 1 Body:`, JSON.parse(JSON.stringify(body)));
+
+            const response = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${seaTableAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+            const responseText = await response.text();
+            console.log(`[ADD-ROW-NEW] Step 1 Response Status: ${response.status}`);
+            console.log(`[ADD-ROW-NEW] Step 1 Response Body:`, responseText);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}, message: ${responseText}`);
+            }
+
+            const result = JSON.parse(responseText);
+            if (!result || !result.row_ids || result.row_ids.length === 0) {
+                // Falls die API einen 200 OK mit einer Fehlermeldung zurückgibt (z.B. bei falschem Spaltennamen)
+                const errorMessage = result.error_message || "API did not return a valid new row ID in 'row_ids' array.";
+                throw new Error(errorMessage);
+            }
+            // KORREKTUR: Die API gibt ein Array von Objekten zurück, wir brauchen die _id Eigenschaft daraus.
+            // Dein Skript hat dies korrekt gezeigt: `data.row_ids[0]._id`
+            newRowId = result.row_ids[0]?._id;
+            if (!newRowId) {
+                throw new Error("API response for new row is malformed, missing _id in row_ids[0].");
+            }
+            console.log(`[ADD-ROW-NEW] Step 1 Success: Created row with _id: ${newRowId}`);
+        } catch (error) {
+            console.error("[ADD-ROW-NEW] Step 1 FAILED: Could not create initial row.", error);
+            return false;
+        }
+
+        // --- SCHRITT 3: Verknüpfungen setzen ---
+        for (const colName in linkData) {
+            if (linkData[colName]) {
+                console.log(`[ADD-ROW-NEW] Step 2: Linking ${colName} ${linkData[colName]} to new row ${newRowId}.`);
+                const linkSuccess = await updateSingleLink(tableName, newRowId, colName, [linkData[colName]]);
+                if (!linkSuccess) {
+                    console.error(`[ADD-ROW-NEW] Step 2 FAILED: Could not link ${colName} to the new row.`);
+                    return false; // Fehler, wenn die Verknüpfung fehlschlägt.
+                }
+                console.log(`[ADD-ROW-NEW] Step 2 Success: ${colName} linked.`);
+            }
+        }
+
+        console.log(`[ADD-ROW-NEW] Process finished successfully. Returning new row ID: ${newRowId}`);
+        return newRowId;
+    }
+
+    // Zeile aktualisieren (für Textfelder und andere nicht-Link Felder)
+    async function seaTableUpdateRow(tableName, rowId, updateData) {
+        if (!seaTableAccessToken || !apiGatewayUrl) {
+            console.error("Cannot update row without access token and gateway URL.");
+            return false;
+        }
+
+        try {
+            console.log(`[UPDATE-ROW] Updating row ${rowId} in table ${tableName}`);
+            console.log(`[UPDATE-ROW] Update data:`, updateData);
+
+            // API erwartet Spalten-Namen, nicht Keys - aber updateData enthält bereits Keys
+            // Für diesen speziellen Fall (Analyst-Feld) verwenden wir direkt den Key
+            const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
+            if (!tableMap) {
+                console.error(`[UPDATE-ROW] Column map for table '${tableName}' not found.`);
+                return false;
+            }
+
+            // Keys in Namen umwandeln
+            const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
+            const updateDataWithNames = {};
+            
+            for (const key in updateData) {
+                const name = reversedMap[key];
+                if (name) {
+                    updateDataWithNames[name] = updateData[key];
+                } else {
+                    console.warn(`[UPDATE-ROW] No column name found for key: ${key}`);
+                }
+            }
+
+            const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+            const body = {
+                table_name: tableName,
+                row_id: rowId,
+                row: updateDataWithNames
+            };
+
+            const response = await fetch(url, {
+                method: "PUT",
+                headers: {
+                    Authorization: `Bearer ${seaTableAccessToken}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(body)
+            });
+
+            if (!response.ok) {
+                const responseText = await response.text();
+                throw new Error(`HTTP error! status: ${response.status}, message: ${responseText}`);
+            }
+
+            console.log(`[UPDATE-ROW] Successfully updated row ${rowId}`);
+            return true;
+
+        } catch (error) {
+            console.error("[UPDATE-ROW] Failed to update row:", error);
+            return false;
+        }
+    }
+
+    // Einzelne Link-Verbindung aktualisieren (generische Funktion)
+    async function updateSingleLink(baseTableName, baseRowId, linkColumnName, otherRowIds) {
+        if (!seaTableAccessToken || !apiGatewayUrl) return false;
+        try {
+            const baseTableMeta = METADATA.tables.find(t => t.name.toLowerCase() === baseTableName.toLowerCase());
+            if (!baseTableMeta) throw new Error(`Could not find metadata for table '${baseTableName}'`);
+
+            const linkColumnMeta = baseTableMeta.columns.find(c => c.name === linkColumnName);
+            if (!linkColumnMeta || !linkColumnMeta.data || !linkColumnMeta.data.link_id) throw new Error(`Could not find link metadata for column '${linkColumnName}' in table '${baseTableName}'`);
+
+            const otherTableId = linkColumnMeta.data.other_table_id;
+
+            const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/links/`;
+            const body = {
+                table_id: baseTableMeta._id,
+                other_table_id: otherTableId,
+                link_id: linkColumnMeta.data.link_id,
+                other_rows_ids_map: {
+                    [baseRowId]: Array.isArray(otherRowIds) ? otherRowIds.filter(Boolean) : (otherRowIds ? [otherRowIds] : [])
+                }
+            };
+            
+            console.log(`[API-LINK-UPDATE] Updating link for ${linkColumnName}. Payload:`, body);
+            const response = await fetch(url, { method: 'PUT', headers: { Authorization: `Bearer ${seaTableAccessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            if (!response.ok) {
+                throw new Error(`Link update for ${linkColumnName} failed: ${response.status} ${await response.text()}`);
+            }
+            return true;
+        } catch (error) {
+            console.error(`Error updating link for ${linkColumnName}:`, error);
+            return false;
+        }
+    }
+
+    // Hilfsfunktion: Spalten-Maps von SeaTable dynamisch laden
+    async function getColumnMaps() {
+        try {
+            // SeaTable Access Token holen falls nicht vorhanden
+            if (!seaTableAccessToken || !apiGatewayUrl) {
+                await getSeaTableAccessToken();
+            }
+            
+            // Metadaten abrufen
+            const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/metadata/`;
+            const response = await fetch(url, { 
+                headers: { Authorization: `Bearer ${seaTableAccessToken}` } 
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            const columnMaps = {};
+            
+            if (data && data.metadata && data.metadata.tables) {
+                data.metadata.tables.forEach((table) => {
+                    columnMaps[table.name.toLowerCase()] = {};
+                    table.columns.forEach((col) => { 
+                        columnMaps[table.name.toLowerCase()][col.name] = col.key; 
+                    });
+                });
+            }
+            
+            return columnMaps;
+        } catch (error) {
+            console.error('❌ Fehler beim Laden der Spalten-Maps:', error);
+            return {};
+        }
+    }
+
+    // Beispiel-Funktion zum Speichern von Analyse-Daten
+    async function saveAnalyseData(analyseData) {
+        try {
+            console.log('💾 Speichere Analyse-Daten in SeaTable...');
+            
+            // Spalten-Maps laden falls noch nicht vorhanden
+            if (!COLUMN_MAPS.analysen) {
+                COLUMN_MAPS = await getColumnMaps();
+            }
+            
+            // Daten an die Tabelle "Analysen" senden
+            const newRowId = await seaTableAddRow('Analysen', analyseData);
+            
+            if (newRowId) {
+                console.log('✅ Analyse-Daten erfolgreich gespeichert mit ID:', newRowId);
+                return newRowId;
+            } else {
+                console.error('❌ Fehler beim Speichern der Analyse-Daten');
+                return null;
+            }
+        } catch (error) {
+            console.error('❌ Fehler beim Speichern:', error);
+            return null;
+        }
+    }
+
+    // Funktion zum Berechnen der Präsentationsdauer im h:mm Format
+    function calculatePresentationDuration() {
+        if (!presentationStartTime) {
+            console.warn('⚠️ Präsentations-Startzeit nicht verfügbar');
+            return null;
+        }
+        
+        const endTime = new Date();
+        const durationMs = endTime.getTime() - presentationStartTime.getTime();
+        const durationMinutes = Math.floor(durationMs / (1000 * 60));
+        
+        const hours = Math.floor(durationMinutes / 60);
+        const minutes = durationMinutes % 60;
+        
+        // Format: h:mm (z.B. "1:30" für 1 Stunde 30 Minuten)
+        const formattedDuration = `${hours}:${minutes.toString().padStart(2, '0')}`;
+        
+        console.log(`⏱️ Präsentationsdauer: ${formattedDuration} (${durationMinutes} Minuten total)`);
+        
+        return formattedDuration;
+    }
+
+    // Funktion zum Setzen des Mitarbeiter-Links oder Analyst-Feldes
+    async function setMitarbeiterOrAnalyst(analyseRowId, analystName = null) {
+        try {
+            console.log('🔍 Suche Mitarbeiter-ID aus verschiedenen Quellen...');
+            
+            // Versuche Mitarbeiter-ID aus definierten Quellen zu ermitteln
+            let mitarbeiterId = null;
+            
+            // 1. Aus URL-Parameter (z.B. ?mitarbeiter=123)
+            const urlParams = new URLSearchParams(window.location.search);
+            mitarbeiterId = urlParams.get('mitarbeiter');
+            console.log('📋 URL-Parameter mitarbeiter:', mitarbeiterId);
+            
+            // 2. Aus LocalStorage (falls gesetzt)
+            if (!mitarbeiterId) {
+                mitarbeiterId = localStorage.getItem('currentMitarbeiterId');
+                console.log('💾 LocalStorage currentMitarbeiterId:', mitarbeiterId);
+            }
+            
+            // 3. Aus einem versteckten Input-Feld (falls vorhanden)
+            if (!mitarbeiterId) {
+                const hiddenInput = document.getElementById('mitarbeiter-id');
+                if (hiddenInput && hiddenInput.value) {
+                    mitarbeiterId = hiddenInput.value;
+                    console.log('🔒 Hidden Input mitarbeiter-id:', mitarbeiterId);
+                } else {
+                    console.log('🔒 Hidden Input mitarbeiter-id: nicht gefunden oder leer');
+                }
+            }
+            
+            // 4. Direkte SeaTable-Abfrage für den aktuellen Berater (falls currentBeraterName gesetzt ist)
+            if (!mitarbeiterId && window.currentBeraterName) {
+                console.log('👤 Suche Mitarbeiter-ID für aktuellen Berater via SeaTable-API:', window.currentBeraterName);
+                
+                try {
+                    // Direkte API-Abfrage an SeaTable um den Berater zu finden
+                    const mitarbeiterTableUrl = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/?table_name=Mitarbeiter`;
+                    const response = await fetch(mitarbeiterTableUrl, {
+                        method: 'GET',
+                        headers: {
+                            Authorization: `Bearer ${seaTableAccessToken}`,
+                            "Content-Type": "application/json"
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        console.log('✅ Mitarbeiter-Daten von SeaTable erhalten, Anzahl:', data.rows?.length || 0);
+                        
+                        // Suche den Berater anhand des Namens (Spalte "Name" mit Key "lA2R")
+                        const berater = data.rows?.find(row => row.lA2R === window.currentBeraterName);
+                        
+                        if (berater && berater._id) {
+                            mitarbeiterId = berater._id;
+                            console.log('✅ Mitarbeiter Row-ID gefunden:', mitarbeiterId);
+                            console.log('📝 Berater-Objekt:', berater);
+                        } else {
+                            console.log('❌ Berater nicht in SeaTable gefunden');
+                            console.log('🔍 Gesuchter Name:', window.currentBeraterName);
+                            console.log('🔍 Erste 3 Mitarbeiter-Namen als Beispiel:', 
+                                data.rows?.slice(0, 3).map(r => r.lA2R) || []);
+                        }
+                    } else {
+                        console.log('❌ Fehler beim Laden der Mitarbeiter-Daten:', response.status);
+                    }
+                } catch (error) {
+                    console.log('❌ Fehler bei SeaTable-Abfrage für Mitarbeiter:', error);
+                }
+            } else {
+                console.log('🔍 Debug - Schritt 4 übersprungen:');
+                console.log('  - mitarbeiterId bereits gesetzt:', !!mitarbeiterId);
+                console.log('  - window.currentBeraterName:', window.currentBeraterName);
+            }
+            
+            // Wenn Mitarbeiter-ID verfügbar ist, setze Mitarbeiter-Link
+            if (mitarbeiterId) {
+                console.log('🔗 Setze Mitarbeiter-Link mit ID:', mitarbeiterId);
+                
+                // Link in SeaTable setzen
+                const linkSuccess = await updateSingleLink('Analysen', analyseRowId, 'Mitarbeiter', [mitarbeiterId]);
+                
+                if (linkSuccess) {
+                    console.log('✅ Mitarbeiter-Link erfolgreich gesetzt');
+                } else {
+                    console.error('❌ Fehler beim Setzen des Mitarbeiter-Links');
+                }
+            } else {
+                console.log('ℹ️ Kein Mitarbeiter eingeloggt - nur Analyst-Feld wird gesetzt');
+            }
+            
+            // Analyst-Name IMMER setzen (unabhängig vom Mitarbeiter-Link)
+            if (analystName && analystName.trim()) {
+                console.log('📝 Setze Analyst-Name:', analystName);
+                
+                const analystSuccess = await seaTableUpdateRow('Analysen', analyseRowId, {
+                    '7JQf': analystName.trim()  // Analyst column key
+                });
+                
+                if (analystSuccess) {
+                    console.log('✅ Analyst-Name erfolgreich gesetzt');
+                } else {
+                    console.error('❌ Fehler beim Setzen des Analyst-Namens');
+                }
+            } else {
+                console.log('⚠️ Kein Analyst-Name verfügbar zum Speichern');
+                console.log('🔍 Debug - analystName:', analystName);
+            }
+            
+        } catch (error) {
+            console.error('❌ Fehler beim Setzen von Mitarbeiter/Analyst:', error);
+        }
+    }
+
+    // Funktion zum Speichern der Formulardaten von der "Noch ein paar Fragen"-Seite
+    async function saveFragenFormular() {
+        try {
+            console.log('💾 Speichere Formulardaten aus "Noch ein paar Fragen"...');
+            
+            // Eingabefelder auslesen
+            const kundenname = document.getElementById('kundenname')?.value?.trim() || '';
+            const beratungstermin = document.getElementById('beratungstermin')?.value || '';
+            const wichtigePunkte = document.getElementById('wichtige-punkte')?.value?.trim() || '';
+            const unterlagen = document.getElementById('unterlagen')?.value || '';
+            
+            // Präsentationsdauer berechnen
+            const dauer = calculatePresentationDuration();
+            
+            // Validierung
+            if (!kundenname) {
+                alert('Bitte geben Sie Ihren Namen ein.');
+                return false;
+            }
+            
+            if (!beratungstermin) {
+                alert('Bitte wählen Sie einen Beratungstermin aus.');
+                return false;
+            }
+            
+            // Datum formatieren (von datetime-local zu YYYY-MM-DD)
+            const btDatum = beratungstermin.split('T')[0]; // Extrahiert nur das Datum
+            
+            console.log('📝 Gesammelte Daten:', {
+                kundenname,
+                beratungstermin,
+                btDatum,
+                wichtigePunkte,
+                unterlagen,
+                dauer
+            });
+            
+            // Daten für SeaTable vorbereiten (mit korrekten Spalten-Keys basierend auf Metadaten)
+            const analyseData = {
+                'yUHT': kundenname,           // Spalte "Kunde" (Key: yUHT)
+                'mO8t': btDatum,              // Spalte "BTDatum" (Key: mO8t) 
+                'O1PL': wichtigePunkte,       // Spalte "Themen" (Key: O1PL)
+                'IEC0': unterlagen,           // Spalte "Unterlagen" (Key: IEC0)
+                'rlwA': dauer                 // Spalte "Dauer" (Key: rlwA) - Format h:mm
+                // Hinweis: Mitarbeiter-Link wird separat gesetzt (wenn verfügbar)
+            };
+            
+            // In SeaTable speichern
+            const newRowId = await seaTableAddRow('Analysen', analyseData);
+            
+            if (newRowId) {
+                console.log('✅ Formulardaten erfolgreich gespeichert mit ID:', newRowId);
+                console.log(`⏱️ Gespeicherte Dauer: ${dauer}`);
+                
+                // Mitarbeiter-Link oder Analyst-Name setzen
+                await setMitarbeiterOrAnalyst(newRowId, window.currentBeraterName);
+                
+                // Erfolgsmeldung anzeigen (OHNE Dauer)
+                showSuccessMessage('Ihre Angaben wurden erfolgreich gespeichert!');
+                
+                return newRowId;
+            } else {
+                throw new Error('Fehler beim Speichern in der Datenbank');
+            }
+            
+        } catch (error) {
+            console.error('❌ Fehler beim Speichern der Formulardaten:', error);
+            alert('Es gab einen Fehler beim Speichern Ihrer Angaben. Bitte versuchen Sie es erneut.');
+            return false;
+        }
+    }
+    
+    // Hilfsfunktion für Erfolgsmeldung
+    function showSuccessMessage(message) {
+        // Erstelle ein temporäres Erfolgs-Modal
+        const successDiv = document.createElement('div');
+        successDiv.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        successDiv.innerHTML = `
+            <div class="bg-white rounded-lg p-8 max-w-md mx-4 text-center">
+                <div class="text-green-600 text-6xl mb-4">✅</div>
+                <h3 class="text-xl font-bold text-gray-800 mb-2">Erfolgreich gespeichert!</h3>
+                <p class="text-gray-600 mb-6">${message}</p>
+                <button onclick="this.parentElement.parentElement.remove()" 
+                        class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    OK
+                </button>
+            </div>
+        `;
+        document.body.appendChild(successDiv);
+        
+        // Automatisch nach 3 Sekunden schließen
+        setTimeout(() => {
+            if (successDiv.parentElement) {
+                successDiv.remove();
+            }
+        }, 3000);
+    }
+    
+    // Event-Listener für automatisches Speichern beim Verlassen der Folie 20
+    function addAutoSaveListener() {
+        // Speichere beim Klick auf die Folie (nextStep wird aufgerufen)
+        const originalNextStep = window.nextStep;
+        window.nextStep = function() {
+            // Prüfe, ob wir gerade auf Folie 20 sind (Noch ein paar Fragen)
+            if (currentSlide === 20) {
+                console.log('🔄 Verlasse Folie 20 - speichere Formulardaten...');
+                saveFragenFormular().then(() => {
+                    // Nach erfolgreichem Speichern zur nächsten Folie wechseln
+                    originalNextStep.call(this);
+                }).catch(() => {
+                    // Bei Fehler trotzdem weiterblättern (Benutzer hat bereits eine Fehlermeldung gesehen)
+                    originalNextStep.call(this);
+                });
+            } else {
+                // Normale Navigation für andere Folien
+                originalNextStep.call(this);
+            }
+        };
     }
 
 
