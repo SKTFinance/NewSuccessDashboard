@@ -3,6 +3,7 @@ const SEATABLE_API_TOKEN = "b148f4c735d193f77841ce4e4ddb2bb8bc2e446b";
 const SEATABLE_APP_ACCESS_TOKEN_URL =
   "https://cloud.seatable.io/api/v2.1/dtable/app-access-token/";
 const SEATABLE_DTABLE_UUID = "5b374b51-789c-4aac-a12f-02574f8f4855";
+const SEATABLE_WORKSPACE_ID = "86704";
 // Cache-Konstanten: Ändere die Version, um alle Caches zu invalidieren.
 const CACHE_VERSION = "v1.1";
 const CACHE_PREFIX = `skt-dashboard-cache-${CACHE_VERSION}-`;
@@ -490,12 +491,16 @@ async function seaTableGetUploadLink() {
         }
 
         const baseUrl = new URL(apiGatewayUrl).origin;
-        const url = `${baseUrl}/api/v2.1/dtable/app-upload-link/?dtable_uuid=${SEATABLE_DTABLE_UUID}`;
+        const url = `${baseUrl}/api/v2.1/dtable/app-upload-link/`;
         log(`Sende GET-Anfrage an: ${url}`);
-        const response = await fetch(url, {
+        const options = {
             method: 'GET',
-            headers: { Authorization: `Token ${SEATABLE_API_TOKEN}` }
-        });
+            headers: {
+                accept: 'application/json',
+                authorization: `Bearer ${SEATABLE_API_TOKEN}`
+            }
+        };
+        const response = await fetch(url, options);
         log(`Antwort-Status: ${response.status}`);
         const responseText = await response.text();
         log('Antwort-Text vom Server:', responseText);
@@ -528,10 +533,19 @@ async function seaTableUploadFile(uploadLink, file, parentDir) {
         formData.append('file', file, file.name);
         log('FormData erstellt:', { parent_dir: parentDir, filename: file.name, size: file.size });
 
-        const response = await fetch(uploadLink, {
+        // Add ?ret-json=1 to get JSON response
+        const uploadUrl = `${uploadLink}?ret-json=1`;
+        
+        const options = {
             method: 'POST',
+            headers: {
+                accept: 'application/json',
+                authorization: `Bearer ${SEATABLE_API_TOKEN}`
+            },
             body: formData
-        });
+        };
+
+        const response = await fetch(uploadUrl, options);
         log(`Antwort-Status vom Upload-Server: ${response.status}`);
 
         if (!response.ok) {
@@ -540,8 +554,16 @@ async function seaTableUploadFile(uploadLink, file, parentDir) {
             throw new Error(`Datei-Upload fehlgeschlagen: ${response.status} ${errorText}`);
         }
 
+        const responseData = await response.json();
+        log('Upload-Antwort vom Server:', responseData);
+        
         log('Datei erfolgreich hochgeladen (Status 2xx).');
-        return true;
+        
+        // WICHTIG: Gib den echten Dateinamen zurück, den der Server verwendet hat
+        if (responseData && responseData[0] && responseData[0].name) {
+          return { success: true, actualFileName: responseData[0].name };
+        }
+        return { success: true, actualFileName: null };
     } catch (error) {
         log(`!!! KRITISCHER FEHLER beim Datei-Upload:`, error);
         console.error("Fehler beim Hochladen der Datei zu SeaTable:", error);
@@ -15504,22 +15526,35 @@ async function saveUserData() {
       // Konstruiere den vollständigen Pfad für das Bild
       const fileName = fileInput.files[0].name;
       const imgPath = `${uploadLinkData.parent_path}/${uploadLinkData.img_relative_path}/${fileName}`;
+      
+      // Konstruiere die korrekte URL mit workspace_id (laut SeaTable Dokumentation)
+      const baseUrl = new URL(apiGatewayUrl).origin;
+      const fullImageUrl = `${baseUrl}/workspace/${SEATABLE_WORKSPACE_ID}${imgPath}`;
+      console.log('Vollständige Bild-URL zum Testen:', fullImageUrl);
+      
+      // Konstruiere den relativen Pfad für die Datenbank (wie in der Dokumentation)
+      const relativeImagePath = `/workspace/${SEATABLE_WORKSPACE_ID}${imgPath}`;
+      console.log('Relativer Pfad für Datenbank:', relativeImagePath);
 
       // Schritt 2: Datei hochladen
-      const uploadSuccess = await seaTableUploadFile(uploadLinkData.upload_link, fileInput.files[0], uploadLinkData.parent_path);
+      const uploadResult = await seaTableUploadFile(uploadLinkData.upload_link, fileInput.files[0], uploadLinkData.parent_path);
       
-      if (uploadSuccess) {
+      if (uploadResult && uploadResult.success) {
+        // Verwende den echten Dateinamen, den der Server zurückgegeben hat
+        const actualFileName = uploadResult.actualFileName || fileName;
+        console.log('Echter Dateiname vom Server:', actualFileName);
+        
+        // Konstruiere Pfad mit dem echten Dateinamen
+        const actualRelativeImagePath = `/workspace/${SEATABLE_WORKSPACE_ID}${uploadLinkData.parent_path}/${uploadLinkData.img_relative_path}/${actualFileName}`;
+        console.log('Aktualisierter relativer Pfad mit echtem Dateinamen:', actualRelativeImagePath);
+        
         // Schritt 3: Datei-Info für Database vorbereiten
-        const fileInfo = {
-          url: imgPath,
-          name: fileInput.files[0].name,
-          size: fileInput.files[0].size,
-          type: fileInput.files[0].type
-        };
+        // WICHTIG: SeaTable-Datei-Felder erwarten nur den relativen Pfad (laut Dokumentation)
+        // Format: ["/workspace/ID/asset/..."] wie in der Dokumentation
         
         // Add the uploaded image to the data to update
-        dataToUpdate.Bild = [fileInfo];
-        console.log('Bild erfolgreich hochgeladen:', fileInfo);
+        dataToUpdate.Bild = [actualRelativeImagePath];  // Verwende den echten Dateinamen
+        console.log('Bild für Datenbank vorbereitet (mit echtem Dateinamen):', dataToUpdate.Bild);
       } else {
         console.error('Fehler beim Hochladen des Bildes');
         alert('Fehler beim Hochladen des Bildes. Bitte versuchen Sie es erneut.');
@@ -15591,24 +15626,46 @@ async function saveUserData() {
   let imageUpdateSuccess = false;
   if (dataToUpdate.Bild) {
     try {
+      console.log('=== BILD-DATENBANK-UPDATE STARTS ===');
       console.log('Aktualisiere Bild-Feld in der Datenbank...');
       console.log('Bild-Daten:', dataToUpdate.Bild);
       console.log('User ID:', user._id);
       console.log('API Gateway URL:', apiGatewayUrl);
       console.log('SeaTable UUID:', SEATABLE_DTABLE_UUID);
+      console.log('SeaTable Access Token verfügbar:', !!seaTableAccessToken);
       
-      // Use the /rows/ API for file field updates
+      // Use the correct /api/v2/dtables/rows/ endpoint for updating rows (like other functions)
       const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+
+      console.log('Update URL:', url);
+      
+      // WICHTIG: Verwende den echten Spaltennamen aus COLUMN_MAPS
+      const bildColumnKey = COLUMN_MAPS.mitarbeiter.Bild;
+      console.log('Bild-Spalten-Key aus COLUMN_MAPS:', bildColumnKey);
+      
+      // Finde den echten Spaltennamen in den Metadaten
+      const mitarbeiterTableMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'mitarbeiter');
+      console.log('Mitarbeiter Table Meta gefunden:', !!mitarbeiterTableMeta);
+      
+      const bildColumn = mitarbeiterTableMeta?.columns.find(c => c.key === bildColumnKey);
+      console.log('Bild Column gefunden:', bildColumn);
+      
+      const realColumnName = bildColumn ? bildColumn.name : 'Bild';
+      console.log('Echter Spaltenname in SeaTable:', realColumnName);
+      console.log('Spaltentyp:', bildColumn?.type);
+      
       const updatePayload = {
         table_name: 'Mitarbeiter',
         row_id: user._id,
         row: {
-          'Bild': dataToUpdate.Bild
+          [realColumnName]: dataToUpdate.Bild
         }
       };
       
+      console.log('=== UPDATE PAYLOAD ===');
       console.log('Update Payload:', JSON.stringify(updatePayload, null, 2));
       
+      console.log('=== SENDING REQUEST ===');
       const response = await fetch(url, {
         method: 'PUT',
         headers: {
@@ -15618,23 +15675,39 @@ async function saveUserData() {
         body: JSON.stringify(updatePayload)
       });
       
+      console.log('=== RESPONSE RECEIVED ===');
       console.log('Response Status:', response.status);
+      console.log('Response Status Text:', response.statusText);
       console.log('Response OK:', response.ok);
+      console.log('Response Headers:', Object.fromEntries(response.headers.entries()));
       
       if (response.ok) {
         const responseData = await response.json();
+        console.log('=== SUCCESS RESPONSE ===');
         console.log('Bild-Feld erfolgreich aktualisiert:', responseData);
+        console.log('Response Keys:', Object.keys(responseData));
         imageUpdateSuccess = true;
       } else {
+        console.log('=== ERROR RESPONSE ===');
         const errorText = await response.text();
-        console.error('Fehler beim Aktualisieren des Bild-Feldes:', errorText);
-        console.error('Response Status:', response.status);
+        console.error('Fehler beim Aktualisieren des Bild-Feldes (Status ' + response.status + '):', errorText);
+        console.error('Full Error Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
+          body: errorText
+        });
         alert('Das Bild wurde hochgeladen, aber es gab einen Fehler beim Speichern in der Datenbank.');
       }
     } catch (error) {
+      console.log('=== EXCEPTION CAUGHT ===');
       console.error('Fehler beim Aktualisieren des Bild-Feldes:', error);
+      console.error('Error Type:', error.constructor.name);
+      console.error('Error Message:', error.message);
+      console.error('Error Stack:', error.stack);
       alert('Das Bild wurde hochgeladen, aber es gab einen Fehler beim Speichern in der Datenbank.');
     }
+    console.log('=== BILD-DATENBANK-UPDATE ENDS ===');
   } else {
     console.log('Kein Bild zum Aktualisieren vorhanden.');
   }
