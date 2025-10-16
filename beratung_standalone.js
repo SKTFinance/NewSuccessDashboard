@@ -3276,18 +3276,25 @@ class BeratungView {
         
         beratungLog('✓ Beratung erfolgreich in DB gespeichert. Neue ID:', success);
         
-        // KORREKTUR: PDF-Report wird jetzt in einer Variable gehalten, um ihn hochladen zu können.
-        beratungLog('Generiere PDF-Report...');
-        const pdfBlob = await this._generatePdfReport(true); // true = return blob instead of downloading
+        // KORREKTUR: PDF-Report wird jetzt über das Template-System generiert
+        beratungLog('Generiere PDF-Report mit Template-System...');
+        let pdfBlob = await this._generateTemplateBasedPDF(); // NEU: Template-basierte PDF-Generierung
 
         if (!pdfBlob) {
-            beratungLog('!!! FEHLER: PDF konnte nicht generiert werden');
-            this._showErrorOnAbschlussSlide('Fehler beim Generieren des PDF-Reports.');
-            return;
+            beratungLog('!!! FEHLER: Template-PDF konnte nicht generiert werden, verwende Fallback');
+            // Fallback zur alten Methode falls Template-System nicht verfügbar
+            pdfBlob = await this._generatePdfReport(true);
+            if (!pdfBlob) {
+                beratungLog('!!! FEHLER: Auch Fallback-PDF konnte nicht generiert werden');
+                this._showErrorOnAbschlussSlide('Fehler beim Generieren des PDF-Reports.');
+                return;
+            }
         }
         
         beratungLog('✓ PDF erfolgreich generiert');
 
+        // TEMPORÄR DEAKTIVIERT: Automatischer Download des PDFs
+        /*
         // NEU: Automatischer Download des PDFs
         beratungLog('Starte automatischen PDF-Download...');
         const pdfUrl = URL.createObjectURL(pdfBlob);
@@ -3299,6 +3306,7 @@ class BeratungView {
         document.body.removeChild(downloadLink);
         URL.revokeObjectURL(pdfUrl);
         beratungLog('✓ PDF automatisch heruntergeladen');
+        */
 
         // NEU: Lade das PDF-Protokoll in die gerade erstellte Zeile hoch.
         beratungLog('Starte PDF-Upload zur Datenbank...');
@@ -3541,15 +3549,17 @@ class BeratungView {
             
             // --- DESIGN-KONSTANTEN ---
             const colors = {
-                primary: [0, 33, 71],      // SKT Blau
-                secondary: [4, 60, 100],   // SKT Blau-Light
-                accent: [212, 175, 55],    // Gold
-                success: [34, 197, 94],    // Grün
-                danger: [239, 68, 68],     // Rot
-                gray: [100, 100, 100],     // Grau
-                lightGray: [220, 220, 220], // Hellgrau
-                white: [255, 255, 255],    // Weiß
-                background: [248, 250, 252] // Sehr helles Grau
+                primary: [0, 102, 179],      // SKT Blau (heller und freundlicher)
+                primaryLight: [52, 144, 220], // Helleres SKT Blau
+                secondary: [4, 60, 100],     // SKT Blau-Dark
+                accent: [255, 193, 7],       // Modernes Gold
+                success: [34, 197, 94],      // Grün
+                danger: [239, 68, 68],       // Rot
+                gray: [71, 85, 105],         // Modernes Grau
+                lightGray: [226, 232, 240],  // Hellgrau
+                white: [255, 255, 255],      // Weiß
+                background: [248, 250, 252], // Sehr helles Grau
+                border: [203, 213, 225]      // Subtile Rahmen
             };
             
             let y = 20; // Startposition auf der Y-Achse
@@ -3597,22 +3607,30 @@ class BeratungView {
                 y = yPos + (splitText.length * 6);
             };
 
-            const addCard = (x, yPos, width, height, content, options = {}) => {
-                const { backgroundColor = colors.background, borderColor = colors.lightGray, shadow = true } = options;
+            const addCard = async (x, yPos, width, height, content, options = {}) => {
+                const { 
+                    backgroundColor = colors.white, 
+                    borderColor = colors.border, 
+                    borderWidth = 0.5, 
+                    shadow = true,
+                    radius = 6
+                } = options;
                 
-                // Schatten-Effekt
+                // Modernerer Schatten-Effekt (weicher und subtiler)
                 if (shadow) {
-                    doc.setFillColor(200, 200, 200);
-                    doc.roundedRect(x + 2, yPos + 2, width, height, 3, 3, 'F');
+                    doc.setFillColor(0, 0, 0, 0.08); // Transparenter Schatten
+                    doc.roundedRect(x + 1, yPos + 2, width, height, radius, radius, 'F');
                 }
                 
-                // Hauptkarte
+                // Hauptkarte mit modernerem Styling
                 doc.setFillColor(backgroundColor[0], backgroundColor[1], backgroundColor[2]);
                 doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2]);
-                doc.roundedRect(x, yPos, width, height, 3, 3, 'FD');
+                doc.setLineWidth(borderWidth);
+                doc.roundedRect(x, yPos, width, height, radius, radius, 'FD');
+                doc.setLineWidth(0.567); // Reset to default
                 
                 // Inhalt der Karte
-                if (content) content(x, yPos, width, height);
+                if (content) await content(x, yPos, width, height);
                 
                 return yPos + height + 10;
             };
@@ -3654,53 +3672,69 @@ class BeratungView {
             };
 
             // --- SEITE 1: MODERNE DECKSEITE ---
-            // Hintergrund-Gradient
+            // Subtiler Hintergrund-Gradient (weniger aufdringlich)
             addGradientHeader(0);
             
-            // Logo-Bereich (falls SKT-Logo verfügbar)
-            y = 60;
+            // Moderneres Logo-Design
+            y = 50;
+            // Größerer, eleganteren Logo-Bereich
             doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-            doc.circle(105, y, 25, 'F');
-            doc.setFontSize(20);
+            doc.roundedRect(85, y - 10, 40, 30, 8, 8, 'F');
+            doc.setFontSize(18);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(255, 255, 255);
             doc.text('SKT', 105, y + 5, { align: 'center' });
             
-            y = 120;
-            addTitle('Finanzkonzept & Beratungsprotokoll', y, 24);
-            y += 10;
-            addSubTitle(`für ${data.kundenname}`, y, 18, colors.accent);
+            y = 110;
+            // Modernere Titel-Gestaltung
+            doc.setFontSize(28);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+            doc.text('Finanzkonzept &', 105, y, { align: 'center' });
+            doc.text('Beratungsprotokoll', 105, y + 12, { align: 'center' });
             
-            y = 180;
-            // Moderne Info-Karten
-            const cardWidth = 80;
-            const cardHeight = 30;
-            const cardSpacing = 15;
+            y += 30;
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+            doc.text(`erstellt für`, 105, y, { align: 'center' });
+            
+            y += 8;
+            doc.setFontSize(20);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+            doc.text(`${data.kundenname}`, 105, y, { align: 'center' });
+            
+            y = 200;
+            // Elegantere Info-Karten mit besserem Spacing
+            const cardWidth = 75;
+            const cardHeight = 40;
+            const cardSpacing = 20;
             const startX = (210 - (2 * cardWidth + cardSpacing)) / 2;
             
-            // Datum-Karte
-            addCard(startX, y, cardWidth, cardHeight, (x, yPos) => {
-                doc.setFontSize(10);
+            // Datum-Karte mit modernerem Design
+            await addCard(startX, y, cardWidth, cardHeight, (x, yPos) => {
+                doc.setFontSize(9);
                 doc.setFont('helvetica', 'normal');
                 doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
-                doc.text('Beratungsdatum', x + cardWidth/2, yPos + 10, { align: 'center' });
+                doc.text('Beratungsdatum', x + cardWidth/2, yPos + 12, { align: 'center' });
                 doc.setFontSize(12);
                 doc.setFont('helvetica', 'bold');
                 doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-                doc.text(new Date().toLocaleDateString('de-DE'), x + cardWidth/2, yPos + 20, { align: 'center' });
-            });
+                doc.text(new Date().toLocaleDateString('de-DE'), x + cardWidth/2, yPos + 26, { align: 'center' });
+            }, { backgroundColor: colors.background, borderColor: colors.primaryLight });
             
-            // Berater-Karte
-            addCard(startX + cardWidth + cardSpacing, y, cardWidth, cardHeight, (x, yPos) => {
-                doc.setFontSize(10);
+            // Berater-Karte mit modernerem Design
+            await addCard(startX + cardWidth + cardSpacing, y, cardWidth, cardHeight, (x, yPos) => {
+                doc.setFontSize(9);
                 doc.setFont('helvetica', 'normal');
                 doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
-                doc.text('Ihr Berater', x + cardWidth/2, yPos + 10, { align: 'center' });
+                doc.text('Ihr Berater', x + cardWidth/2, yPos + 12, { align: 'center' });
                 doc.setFontSize(12);
                 doc.setFont('helvetica', 'bold');
                 doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-                doc.text(data.mitarbeitername, x + cardWidth/2, yPos + 20, { align: 'center' });
-            });
+                doc.text(data.mitarbeitername, x + cardWidth/2, yPos + 26, { align: 'center' });
+            }, { backgroundColor: colors.background, borderColor: colors.accent });
             
             y = 250;
             addText('Dieses Dokument enthält eine Zusammenfassung Ihrer persönlichen Finanzberatung.', 20, y, { 
@@ -3719,81 +3753,108 @@ class BeratungView {
             
             const berater = db.mitarbeiter.find(m => m._id === data.mitarbeiterId);
             if (berater) {
-                // Berater-Karte
-                const beraterCardHeight = 120;
-                addCard(20, y, 170, beraterCardHeight, async (x, yPos) => {
-                    // Berater-Bild (rund)
-                    const bildUrlRaw = berater[COLUMN_MAPS.mitarbeiter.Bild]?.[0];
-                    const beraterBildBase64 = await loadImageAsBase64(bildUrlRaw);
-                    if (beraterBildBase64) {
-                        // Erstelle einen runden Bildausschnitt
-                        doc.setFillColor(255, 255, 255);
-                        doc.circle(x + 30, yPos + 30, 20, 'F');
-                        doc.addImage(beraterBildBase64, 'PNG', x + 10, yPos + 10, 40, 40, '', 'FAST');
-                    } else {
-                        // Platzhalter für Bild
-                        doc.setFillColor(colors.lightGray[0], colors.lightGray[1], colors.lightGray[2]);
-                        doc.circle(x + 30, yPos + 30, 20, 'F');
-                        doc.setFontSize(24);
-                        doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-                        doc.text('👤', x + 25, yPos + 35);
-                    }
+                // Berater-Karte im EXAKTEN Präsentationsdesign (2-Spalten Layout)
+                const beraterCardHeight = 140;
+                await addCard(20, y, 170, beraterCardHeight, async (x, yPos) => {
+                    // LINKE SPALTE - Text und Informationen (wie in der Präsentation)
+                    const leftColumnWidth = 100;
+                    const rightColumnX = x + leftColumnWidth + 10;
                     
-                    // Berater-Informationen
+                    // Name (links oben, prominent wie in Präsentation)
                     const nameKey = COLUMN_MAPS.mitarbeiter?.Name;
-                    doc.setFontSize(16);
+                    doc.setFontSize(18);
                     doc.setFont('helvetica', 'bold');
-                    doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-                    doc.text(berater[nameKey], x + 60, yPos + 20);
+                    doc.setTextColor(0, 51, 102); // Dunkles Blau
+                    doc.text(berater[nameKey], x + 15, yPos + 30);
                     
+                    // Karrierestufe (links, unter dem Namen, in Gold)
                     const karrierestufe = berater[COLUMN_MAPS.mitarbeiter.Karrierestufe]?.[0]?.display_value || 'Berater';
+                    doc.setFontSize(14);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(255, 193, 7); // Gold wie in Präsentation
+                    doc.text(karrierestufe, x + 15, yPos + 45);
+                    
+                    // Büro-Standort (links, unter Karrierestufe)
+                    const buero = berater[COLUMN_MAPS.mitarbeiter.Buero]?.[0]?.display_value || '';
                     doc.setFontSize(12);
                     doc.setFont('helvetica', 'normal');
-                    doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2]);
-                    doc.text(karrierestufe, x + 60, yPos + 30);
+                    doc.setTextColor(71, 85, 105); // Grau für Zusatzinfo
+                    doc.text(`📍 ${buero}`, x + 15, yPos + 60);
                     
-                    const buero = berater[COLUMN_MAPS.mitarbeiter.Buero]?.[0]?.display_value || '';
-                    doc.setFontSize(10);
-                    doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
-                    doc.text(`📍 ${buero}`, x + 60, yPos + 40);
+                    // Qualifikationen (links, als Liste wie in Präsentation)
+                    doc.setFontSize(12);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(0, 51, 102);
+                    doc.text('Qualifikationen:', x + 15, yPos + 80);
                     
-                    // Qualifikationen
                     const hatVA = berater[COLUMN_MAPS.mitarbeiter.VA] === true;
                     const hatVB = berater[COLUMN_MAPS.mitarbeiter.VB] === true;
                     const hatImmo = berater[COLUMN_MAPS.mitarbeiter.Immobilienexperte] === true;
                     
-                    let qualY = yPos + 55;
-                    doc.setFontSize(10);
-                    doc.setFont('helvetica', 'bold');
-                    doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-                    doc.text('Qualifikationen:', x + 60, qualY);
-                    qualY += 8;
-                    
+                    let qualY = yPos + 95;
+                    doc.setFontSize(11);
                     doc.setFont('helvetica', 'normal');
-                    doc.setFontSize(9);
+                    doc.setTextColor(34, 197, 94); // Grün für Qualifikationen
+                    
                     if (hatVA) {
-                        doc.setTextColor(colors.success[0], colors.success[1], colors.success[2]);
-                        doc.text('✓ Versicherungsagent', x + 60, qualY);
-                        qualY += 7;
+                        doc.text('• Versicherungsagent', x + 15, qualY);
+                        qualY += 12;
                     }
                     if (hatVB) {
-                        doc.setTextColor(colors.success[0], colors.success[1], colors.success[2]);
-                        doc.text('✓ Vermögensberater', x + 60, qualY);
-                        qualY += 7;
+                        doc.text('• Vermögensberater', x + 15, qualY);
+                        qualY += 12;
                     }
                     if (hatImmo) {
-                        doc.setTextColor(colors.success[0], colors.success[1], colors.success[2]);
-                        doc.text('✓ Immobilienexperte', x + 60, qualY);
-                        qualY += 7;
+                        doc.text('• Immobilienexperte', x + 15, qualY);
                     }
-                }, { backgroundColor: colors.white });
+                    
+                    // RECHTE SPALTE - Rundes Profilbild (wie in der Präsentation)
+                    const bildUrlRaw = berater[COLUMN_MAPS.mitarbeiter.Bild]?.[0];
+                    const beraterBildBase64 = await loadImageAsBase64(bildUrlRaw);
+                    
+                    const imageSize = 60; // Größer für bessere Sichtbarkeit
+                    const imageX = rightColumnX;
+                    const imageY = yPos + 25;
+                    
+                    if (beraterBildBase64) {
+                        // Weißer Hintergrund-Kreis für das Bild
+                        doc.setFillColor(255, 255, 255);
+                        doc.circle(imageX + imageSize/2, imageY + imageSize/2, imageSize/2 + 2, 'F');
+                        
+                        // Dünner Rahmen um das Bild
+                        doc.setDrawColor(226, 232, 240);
+                        doc.setLineWidth(1);
+                        doc.circle(imageX + imageSize/2, imageY + imageSize/2, imageSize/2 + 2, 'D');
+                        
+                        // Das runde Profilbild selbst
+                        doc.addImage(beraterBildBase64, 'PNG', imageX, imageY, imageSize, imageSize, '', 'FAST');
+                    } else {
+                        // Eleganter Platzhalter falls kein Bild vorhanden
+                        doc.setFillColor(248, 250, 252);
+                        doc.circle(imageX + imageSize/2, imageY + imageSize/2, imageSize/2, 'F');
+                        
+                        doc.setDrawColor(203, 213, 225);
+                        doc.setLineWidth(1);
+                        doc.circle(imageX + imageSize/2, imageY + imageSize/2, imageSize/2, 'D');
+                        
+                        doc.setFontSize(24);
+                        doc.setTextColor(156, 163, 175);
+                        doc.text('👤', imageX + imageSize/2 - 8, imageY + imageSize/2 + 8);
+                    }
+                    
+                }, { 
+                    backgroundColor: colors.white, // Weißer Hintergrund für Protokoll
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                    shadow: true
+                });
                 
                 y += beraterCardHeight + 20;
                 
                 // Persönlicher Text
                 const textZuMir = berater[COLUMN_MAPS.mitarbeiter.TextZuMir] || '';
                 if (textZuMir) {
-                    addCard(20, y, 170, 60, (x, yPos) => {
+                    await addCard(20, y, 170, 60, (x, yPos) => {
                         doc.setFontSize(11);
                         doc.setFont('helvetica', 'normal');
                         doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
@@ -3803,164 +3864,352 @@ class BeratungView {
                 }
             }
 
-            // --- DETAILSEITEN PRO AGENDAPUNKT ---
+            // --- PRODUKTSEITEN: EINE SEITE PRO AUSGEWÄHLTEM PRODUKT ---
+            const ausgewaehlteProdukte = [];
+            
+            // Sammle alle ausgewählten Produkte
             for (const agendaPunkt of data.agenda) {
                 const punktData = data.beratungspunkte[agendaPunkt];
-                if (!punktData || !punktData.empfehlungen) continue;
-
-                doc.addPage();
-                y = 30;
+                if (!punktData || !punktData.ausgewaehltesProdukt) continue;
                 
-                // Titel mit Icon
-                addTitle(`${agendaPunkt}`, y);
-                y += 15;
-                
-                // Gewählte Eigenschaften
-                if (punktData.besonderheiten && punktData.besonderheiten.length > 0) {
-                    addCard(20, y, 170, 40, (x, yPos) => {
-                        doc.setFontSize(12);
-                        doc.setFont('helvetica', 'bold');
-                        doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-                        doc.text('Ihre Prioritäten:', x + 10, yPos + 15);
-                        
-                        doc.setFontSize(10);
-                        doc.setFont('helvetica', 'normal');
-                        doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
-                        doc.text(punktData.besonderheiten.join(' • '), x + 10, yPos + 25);
-                    }, { backgroundColor: colors.background });
-                    y += 50;
+                const chosenProduct = punktData.empfehlungen?.find(p => p.name === punktData.ausgewaehltesProdukt);
+                if (chosenProduct) {
+                    ausgewaehlteProdukte.push({
+                        kategorie: agendaPunkt,
+                        punktData: punktData,
+                        product: chosenProduct
+                    });
                 }
-
-                // Top 3 Produktempfehlungen
-                const topProducts = punktData.empfehlungen.slice(0, 3);
-                const chosenProduct = punktData.empfehlungen.find(p => p.name === punktData.ausgewaehltesProdukt);
-                
-                topProducts.forEach((product, index) => {
-                    const isChosen = product.name === punktData.ausgewaehltesProdukt;
-                    const cardHeight = 85;
-                    
-                    checkPageBreak(cardHeight + 10);
-                    
-                    const borderColor = isChosen ? colors.success : (index === 0 ? colors.accent : colors.lightGray);
-                    const bgColor = isChosen ? [240, 253, 244] : colors.white;
-                    
-                    addCard(20, y, 170, cardHeight, async (x, yPos) => {
-                        // Rang-Badge
-                        const badgeColor = index === 0 ? colors.accent : (index === 1 ? [156, 163, 175] : [180, 155, 132]);
-                        doc.setFillColor(badgeColor[0], badgeColor[1], badgeColor[2]);
-                        doc.circle(x + 15, yPos + 15, 8, 'F');
-                        doc.setFontSize(12);
-                        doc.setFont('helvetica', 'bold');
-                        doc.setTextColor(255, 255, 255);
-                        doc.text((index + 1).toString(), x + 15, yPos + 18, { align: 'center' });
-                        
-                        // Gewählt-Badge
-                        if (isChosen) {
-                            doc.setFillColor(colors.success[0], colors.success[1], colors.success[2]);
-                            doc.roundedRect(x + 130, yPos + 8, 35, 12, 2, 2, 'F');
-                            doc.setFontSize(8);
-                            doc.setFont('helvetica', 'bold');
-                            doc.setTextColor(255, 255, 255);
-                            doc.text('GEWÄHLT', x + 147.5, yPos + 17, { align: 'center' });
-                        }
-                        
-                        // Logo
-                        const logoBase64 = await loadImageAsBase64(product.logoUrl);
-                        if (logoBase64) {
-                            doc.addImage(logoBase64, 'PNG', x + 30, yPos + 8, 30, 15, '', 'FAST');
-                        }
-                        
-                        // Produktname & Gesellschaft
-                        doc.setFontSize(14);
-                        doc.setFont('helvetica', 'bold');
-                        doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-                        doc.text(product.name, x + 10, yPos + 35);
-                        
-                        doc.setFontSize(10);
-                        doc.setFont('helvetica', 'normal');
-                        doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
-                        doc.text(product.gesellschaft, x + 10, yPos + 45);
-                        
-                        // Score
-                        doc.setFontSize(20);
-                        doc.setFont('helvetica', 'bold');
-                        doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2]);
-                        doc.text(`${product.score.toFixed(0)}%`, x + 130, yPos + 40);
-                        doc.setFontSize(8);
-                        doc.setFont('helvetica', 'normal');
-                        doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
-                        doc.text('Übereinstimmung', x + 130, yPos + 50);
-                        
-                        // Features mit Häkchen/X
-                        let featureX = x + 10;
-                        let featureY = yPos + 60;
-                        let featuresPerRow = 0;
-                        
-                        punktData.besonderheiten.forEach(feature => {
-                            if (featuresPerRow >= 3) {
-                                featureX = x + 10;
-                                featureY += 10;
-                                featuresPerRow = 0;
-                            }
-                            
-                            const hasFeature = product.availableFeatures.includes(feature);
-                            doc.setFontSize(8);
-                            
-                            // Icon
-                            doc.setTextColor(hasFeature ? colors.success[0] : colors.danger[0], 
-                                           hasFeature ? colors.success[1] : colors.danger[1], 
-                                           hasFeature ? colors.success[2] : colors.danger[2]);
-                            doc.text(hasFeature ? '✓' : '✗', featureX, featureY);
-                            
-                            // Text
-                            doc.setTextColor(hasFeature ? colors.gray[0] : 150, 
-                                           hasFeature ? colors.gray[1] : 150, 
-                                           hasFeature ? colors.gray[2] : 150);
-                            const maxFeatureLength = 12;
-                            const shortFeature = feature.length > maxFeatureLength ? 
-                                feature.substring(0, maxFeatureLength) + '...' : feature;
-                            doc.text(shortFeature, featureX + 5, featureY);
-                            
-                            featureX += 52;
-                            featuresPerRow++;
-                        });
-                        
-                    }, { backgroundColor: bgColor, borderColor: borderColor });
-                    
-                    y += cardHeight + 10;
-                });
             }
 
-            // --- ABSCHLUSSSEITE ---
-            doc.addPage();
-            y = 60;
-            
-            // Großer Dank-Bereich
-            addCard(20, y, 170, 80, (x, yPos) => {
-                doc.setFontSize(24);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-                doc.text('Vielen Dank', x + 85, yPos + 25, { align: 'center' });
+            // Erstelle eine Seite pro ausgewähltem Produkt
+            for (const { kategorie, punktData, product } of ausgewaehlteProdukte) {
+                doc.addPage();
+                y = 40;
                 
+                // PRODUKTNAME ALS ÜBERSCHRIFT
+                addTitle(product.name, y, 32, colors.primary);
+                y += 10;
+                
+                // Gesellschaft als Untertitel
                 doc.setFontSize(16);
                 doc.setFont('helvetica', 'normal');
                 doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
-                doc.text('für Ihr Vertrauen!', x + 85, yPos + 40, { align: 'center' });
+                doc.text(product.gesellschaft, 105, y, { align: 'center' });
+                y += 25;
                 
-                doc.setFontSize(11);
-                doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
-                doc.text('Wir freuen uns darauf, Sie bei der Umsetzung', x + 85, yPos + 55, { align: 'center' });
-                doc.text('Ihrer finanziellen Ziele zu begleiten.', x + 85, yPos + 65, { align: 'center' });
-            }, { backgroundColor: colors.background });
+                // HINWEIS AUS PRODUKTTABELLE (dynamische Höhe)
+                if (product.hinweis) {
+                    const cardStartY = y;
+                    
+                    // Berechne die benötigte Höhe für den Hinweistext
+                    doc.setFontSize(10);
+                    const hinweisText = doc.splitTextToSize(product.hinweis, 150);
+                    const textHeight = hinweisText.length * 5;
+                    const cardHeight = 24 + textHeight + 10; // Header + Text + Padding
+                    
+                    await addCard(20, cardStartY, 170, cardHeight, (x, yPos) => {
+                        doc.setFontSize(12);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+                        doc.text('Produktinformation:', x + 10, yPos + 12);
+                        
+                        doc.setFontSize(10);
+                        doc.setFont('helvetica', 'normal');
+                        doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                        doc.text(hinweisText, x + 10, yPos + 24);
+                    }, { backgroundColor: [255, 252, 240], borderColor: colors.accent });
+                    
+                    y = cardStartY + cardHeight + 15;
+                }
+                
+                // KUNDENANFORDERUNGEN
+                if (punktData.besonderheiten && punktData.besonderheiten.length > 0) {
+                    await addCard(20, y, 170, 50, (x, yPos) => {
+                        doc.setFontSize(12);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+                        doc.text('Ihre Anforderungen:', x + 10, yPos + 15);
+                        
+                        doc.setFontSize(11);
+                        doc.setFont('helvetica', 'normal');
+                        doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                        doc.text(punktData.besonderheiten.join(' • '), x + 10, yPos + 28);
+                        
+                        doc.setFontSize(10);
+                        doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
+                        doc.text(`Kategorie: ${kategorie}`, x + 10, yPos + 40);
+                    }, { backgroundColor: colors.background });
+                    y += 60;
+                }
+                
+                // PRODUKTEMPFEHLUNG IM PRÄSENTATIONSDESIGN - MODERNISIERT
+                const cardHeight = 140;
+                await addCard(20, y, 170, cardHeight, async (x, yPos) => {
+                    // Modernerer Header mit Gradient-Effekt
+                    doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+                    doc.roundedRect(x, yPos, 170, 35, 6, 6, 'F');
+                    
+                    // Subtiler Akzent am oberen Rand
+                    doc.setFillColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+                    doc.roundedRect(x, yPos, 170, 4, 6, 6, 'F');
+                    
+                    doc.setFontSize(13);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(255, 255, 255);
+                    doc.text('UNSERE EMPFEHLUNG FÜR SIE', x + 85, yPos + 22, { align: 'center' });
+                    
+                    // Produktbereich mit besserem Layout
+                    const logoBase64 = await loadImageAsBase64(product.logoUrl);
+                    if (logoBase64) {
+                        // Logo mit moderneren Abständen
+                        doc.addImage(logoBase64, 'PNG', x + 15, yPos + 45, 35, 18, '', 'FAST');
+                    }
+                    
+                    // Produktname und Gesellschaft mit besserem Spacing
+                    doc.setFontSize(15);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+                    doc.text(product.name, x + 60, yPos + 50);
+                    
+                    doc.setFontSize(11);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                    doc.text(product.gesellschaft, x + 60, yPos + 62);
+                    
+                    // Modernerer Score-Bereich
+                    doc.setFillColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+                    doc.roundedRect(x + 125, yPos + 40, 35, 25, 8, 8, 'F');
+                    
+                    doc.setFontSize(14);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(255, 255, 255);
+                    doc.text(`${product.score.toFixed(0)}%`, x + 142, yPos + 55, { align: 'center' });
+                    
+                    doc.setFontSize(8);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text('Match', x + 142, yPos + 62, { align: 'center' });
+                    
+                    doc.setFontSize(7);
+                    doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                    doc.text('Übereinstimmung', x + 145, yPos + 67, { align: 'center' });
+                    
+                    // Feature-Badges horizontal (wie in der Präsentation)
+                    let featureX = x + 15;
+                    let featureY = yPos + 80;
+                    let featuresShown = 0;
+                    
+                    punktData.besonderheiten.forEach(feature => {
+                        if (featuresShown >= 4) return; // Maximal 4 Features pro Zeile
+                        
+                        const hasFeature = product.availableFeatures.includes(feature);
+                        const badgeWidth = 35;
+                        
+                        // Feature-Badge
+                        doc.setFillColor(hasFeature ? colors.success[0] : 220, 
+                                        hasFeature ? colors.success[1] : 220, 
+                                        hasFeature ? colors.success[2] : 220);
+                        doc.roundedRect(featureX, featureY - 6, badgeWidth, 10, 2, 2, 'F');
+                        
+                        // Text im Badge
+                        doc.setFontSize(7);
+                        doc.setTextColor(hasFeature ? 255 : 120, hasFeature ? 255 : 120, hasFeature ? 255 : 120);
+                        const icon = hasFeature ? '✓' : '✗';
+                        const shortFeature = feature.length > 5 ? feature.substring(0, 5) + '..' : feature;
+                        doc.text(`${icon} ${shortFeature}`, featureX + badgeWidth/2, featureY - 2, { align: 'center' });
+                        
+                        featureX += badgeWidth + 3;
+                        featuresShown++;
+                    });
+                    
+                    // Zweite Zeile für weitere Features falls nötig
+                    if (punktData.besonderheiten.length > 4) {
+                        featureX = x + 15;
+                        featureY = yPos + 95;
+                        featuresShown = 0;
+                        
+                        punktData.besonderheiten.slice(4).forEach(feature => {
+                            if (featuresShown >= 4) return;
+                            
+                            const hasFeature = product.availableFeatures.includes(feature);
+                            const badgeWidth = 35;
+                            
+                            doc.setFillColor(hasFeature ? colors.success[0] : 220, 
+                                            hasFeature ? colors.success[1] : 220, 
+                                            hasFeature ? colors.success[2] : 220);
+                            doc.roundedRect(featureX, featureY - 6, badgeWidth, 10, 2, 2, 'F');
+                            
+                            doc.setFontSize(7);
+                            doc.setTextColor(hasFeature ? 255 : 120, hasFeature ? 255 : 120, hasFeature ? 255 : 120);
+                            const icon = hasFeature ? '✓' : '✗';
+                            const shortFeature = feature.length > 5 ? feature.substring(0, 5) + '..' : feature;
+                            doc.text(`${icon} ${shortFeature}`, featureX + badgeWidth/2, featureY - 2, { align: 'center' });
+                            
+                            featureX += badgeWidth + 3;
+                            featuresShown++;
+                        });
+                    }
+                    
+                }, { 
+                    backgroundColor: [248, 250, 252], 
+                    borderColor: colors.primary,
+                    borderWidth: 2
+                });
+                
+                y += cardHeight + 20;
+                
+                // Link-Button falls vorhanden
+                if (product.link) {
+                    await addCard(20, y, 170, 30, (x, yPos) => {
+                        doc.setFillColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
+                        doc.roundedRect(x + 50, yPos + 8, 70, 14, 3, 3, 'F');
+                        
+                        doc.setFontSize(10);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(255, 255, 255);
+                        doc.text('Mehr Informationen online', x + 85, yPos + 17, { align: 'center' });
+                        
+                        doc.setFontSize(8);
+                        doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                        doc.text(product.link, x + 85, yPos + 6, { align: 'center' });
+                    });
+                }
+            }
+
+            // --- ANHANG MIT FACTSHEETS ---
+            let hasFactsheets = false;
             
-            y += 100;
+            // Sammle alle Factsheets der ausgewählten Produkte
+            const factsheets = [];
+            for (const { product } of ausgewaehlteProdukte) {
+                // Finde das entsprechende Produkt in der Produkte-Tabelle
+                const produktInDB = db.produkte.find(p => 
+                    p[COLUMN_MAPS.produkte['Produkt']] === product.name
+                );
+                
+                if (produktInDB && produktInDB[COLUMN_MAPS.produkte['Factsheet']]) {
+                    const factsheetUrl = produktInDB[COLUMN_MAPS.produkte['Factsheet']];
+                    factsheets.push({
+                        produktName: product.name,
+                        gesellschaft: product.gesellschaft,
+                        factsheetUrl: factsheetUrl
+                    });
+                    hasFactsheets = true;
+                }
+            }
             
-            // Nächste Schritte
-            addCard(20, y, 170, 60, (x, yPos) => {
-                doc.setFontSize(14);
+            // Nur Anhang erstellen, wenn Factsheets vorhanden sind
+            if (hasFactsheets) {
+                doc.addPage();
+                y = 40;
+                
+                // Anhang-Titel
+                addTitle('Anhang - Produktinformationen', y, 28, colors.primary);
+                y += 20;
+                
+                addText('In diesem Anhang finden Sie detaillierte Factsheets zu den empfohlenen Produkten. ' +
+                       'Diese können Sie für weitere Informationen und zur Vorbereitung Ihrer Entscheidung nutzen.', 
+                       20, y, { color: colors.gray, size: 11, maxWidth: 170 });
+                y += 30;
+                
+                // Modernere Factsheet-Übersicht
+                for (const [index, factsheet] of factsheets.entries()) {
+                    await addCard(20, y, 170, 45, (x, yPos) => {
+                        // Moderner Factsheet-Header
+                        doc.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+                        doc.roundedRect(x + 5, yPos + 5, 160, 35, 4, 4, 'F');
+                        
+                        // Nummer-Badge
+                        doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+                        doc.roundedRect(x + 10, yPos + 10, 20, 15, 3, 3, 'F');
+                        doc.setFontSize(10);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(255, 255, 255);
+                        doc.text(`${index + 1}`, x + 20, yPos + 20, { align: 'center' });
+                        
+                        // Produktname
+                        doc.setFontSize(12);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+                        doc.text(factsheet.produktName, x + 35, yPos + 18);
+                        
+                        // Gesellschaft
+                        doc.setFontSize(10);
+                        doc.setFont('helvetica', 'normal');
+                        doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                        doc.text(factsheet.gesellschaft, x + 35, yPos + 28);
+                        
+                        // Hinweis mit Icon
+                        doc.setFontSize(9);
+                        doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+                        doc.text('📄 Factsheet verfügbar', x + 35, yPos + 38);
+                    }, { 
+                        backgroundColor: colors.white, 
+                        borderColor: colors.primaryLight,
+                        borderWidth: 1
+                    });
+                    
+                    y += 50;
+                }
+                
+                // Hinweis für Zugang zu Factsheets
+                await addCard(20, y, 170, 60, (x, yPos) => {
+                    doc.setFontSize(10);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+                    doc.text('Zugang zu den Factsheets:', x + 10, yPos + 15);
+                    
+                    doc.setFontSize(9);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                    const hinweisText = 'Die vollständigen Produktinformationsblätter können Sie von Ihrem Berater erhalten oder ' +
+                                       'über die digitale Plattform abrufen. Diese enthalten alle relevanten Details zu ' +
+                                       'Konditionen, Leistungen und rechtlichen Hinweisen.';
+                    const splitHinweis = doc.splitTextToSize(hinweisText, 150);
+                    doc.text(splitHinweis, x + 10, yPos + 28);
+                }, { backgroundColor: [255, 252, 240], borderColor: colors.accent });
+            }
+
+            // --- MODERNE ABSCHLUSSSEITE ---
+            doc.addPage();
+            y = 50;
+            
+            // Eleganter Dank-Bereich mit Gradient-Hintergrund
+            await addCard(20, y, 170, 100, (x, yPos) => {
+                // Subtiler Hintergrund-Gradient
+                doc.setFillColor(colors.primaryLight[0], colors.primaryLight[1], colors.primaryLight[2]);
+                doc.roundedRect(x + 5, yPos + 5, 160, 90, 8, 8, 'F');
+                
+                // Haupttext
+                doc.setFontSize(26);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(255, 255, 255);
+                doc.text('Vielen Dank', x + 85, yPos + 35, { align: 'center' });
+                
+                doc.setFontSize(18);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(255, 255, 255);
+                doc.text('für Ihr Vertrauen!', x + 85, yPos + 55, { align: 'center' });
+                
+                // Kleiner Akzent
+                doc.setFontSize(12);
+                doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+                doc.text('Ihre Finanzplanung in guten Händen', x + 85, yPos + 75, { align: 'center' });
+            }, { 
+                backgroundColor: colors.primary, 
+                borderColor: colors.accent,
+                borderWidth: 2,
+                shadow: true
+            });
+            
+            y += 120;
+            
+            // Moderne Nächste Schritte Karte
+            await addCard(20, y, 170, 70, (x, yPos) => {
+                doc.setFontSize(16);
                 doc.setFont('helvetica', 'bold');
                 doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-                doc.text('Ihre nächsten Schritte:', x + 10, yPos + 15);
+                doc.text('Ihre nächsten Schritte:', x + 10, yPos + 20);
                 
                 const nextSteps = [
                     '• Prüfung der Unterlagen',
@@ -3968,32 +4217,39 @@ class BeratungView {
                     '• Terminvereinbarung für Vertragsübergabe'
                 ];
                 
-                doc.setFontSize(10);
+                doc.setFontSize(11);
                 doc.setFont('helvetica', 'normal');
                 doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
-                let stepY = yPos + 25;
-                nextSteps.forEach(step => {
-                    doc.text(step, x + 10, stepY);
-                    stepY += 8;
+                nextSteps.forEach((step, i) => {
+                    doc.text(step, x + 10, yPos + 35 + (i * 8));
                 });
-            }, { backgroundColor: colors.white });
+            }, { 
+                backgroundColor: colors.background, 
+                borderColor: colors.primary,
+                borderWidth: 1
+            });
             
             y += 80;
             
-            // Disclaimer
-            addCard(20, y, 170, 50, (x, yPos) => {
-                doc.setFontSize(8);
+            // Modernerer Disclaimer
+            await addCard(20, y, 170, 55, (x, yPos) => {
+                doc.setFontSize(9);
                 doc.setFont('helvetica', 'bold');
-                doc.setTextColor(colors.danger[0], colors.danger[1], colors.danger[2]);
-                doc.text('Wichtiger Hinweis:', x + 10, yPos + 12);
+                doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                doc.text('Wichtiger Hinweis:', x + 10, yPos + 15);
                 
                 doc.setFont('helvetica', 'normal');
+                doc.setFontSize(8);
                 doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
                 const disclaimerText = 'Diese Beratung dient zur groben Orientierung und ersetzt keine vollständige Finanzberatung. ' +
                                      'Vor Produktabschluss sind individuelle Analysen erforderlich. Software erstellt von Samuel Königslehner.';
                 const splitDisclaimer = doc.splitTextToSize(disclaimerText, 150);
-                doc.text(splitDisclaimer, x + 10, yPos + 20);
-            }, { backgroundColor: [255, 249, 249], borderColor: colors.danger });
+                doc.text(splitDisclaimer, x + 10, yPos + 28);
+            }, { 
+                backgroundColor: colors.background, 
+                borderColor: colors.lightGray,
+                borderWidth: 0.5
+            });
 
             // --- PDF SPEICHERN oder als BLOB zurückgeben ---
             if (returnBlob) {
@@ -4009,6 +4265,118 @@ class BeratungView {
             console.error('Fehler bei PDF-Generierung:', error);
             return null;
         }
+    }
+
+    // NEU: Template-basierte PDF-Generierung
+    async _generateTemplateBasedPDF() {
+        try {
+            beratungLog('Template-System Check:', {
+                hasWindow: !!window.pdfTemplateManager,
+                hasTemplateSystem: !!(window.pdfTemplateManager && window.pdfTemplateManager.templateSystem),
+                hasTemplate: !!(window.pdfTemplateManager && window.pdfTemplateManager.templateSystem && window.pdfTemplateManager.templateSystem.templatePdfBytes)
+            });
+
+            // Prüfe ob Template-Manager verfügbar ist
+            if (!window.pdfTemplateManager || !window.pdfTemplateManager.templateSystem || !window.pdfTemplateManager.templateSystem.templatePdfBytes) {
+                beratungLog('Template-System nicht verfügbar oder kein Template geladen');
+                return null;
+            }
+
+            const data = this.beratungData;
+            const berater = db.mitarbeiter.find(m => m._id === data.mitarbeiterId);
+            
+            // Sammle alle empfohlenen Produkte für Produktseiten
+            const empfohleneProdukte = data.empfohleneProdukte || [];
+            beratungLog('Empfohlene Produkte für Template:', empfohleneProdukte.length);
+            
+            // Erstelle Berater-Beschreibung
+            const beraterBeschreibung = this._createBeraterBeschreibung(berater);
+            
+            // Setze Platzhalter basierend auf Beratungsdaten
+            const placeholders = {
+                // SEITE 1 - Deckblatt
+                '***TELEFONNUMMER DES BERATERS***': this._getBeraterTelefon(berater),
+                '***KUNDENNAME***': data.kundenname || 'Kunde',
+                '***DATUM***': new Date().toLocaleDateString('de-DE'),
+                
+                // SEITE 2 - Berater-Info
+                '***NAME DES BERATERS***': data.mitarbeitername || 'Berater',
+                '***BESCHREIBUNG DES BERATERS***': beraterBeschreibung,
+                
+                // Produktarray für Seitenduplikation
+                '***PRODUKTE_ARRAY***': empfohleneProdukte,
+            };
+            
+            beratungLog('Template-Platzhalter gesetzt:', placeholders);
+            window.pdfTemplateManager.templateSystem.setPlaceholders(placeholders);
+
+            // Generiere PDF
+            beratungLog('Starte Template-PDF-Generierung...');
+            const pdfBytes = await window.pdfTemplateManager.templateSystem.generatePDF();
+            
+            // Konvertiere zu Blob
+            const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+            
+            beratungLog('✓ Template-PDF erfolgreich generiert, Größe:', pdfBlob.size, 'bytes');
+            return pdfBlob;
+            
+        } catch (error) {
+            beratungLog('!!! FEHLER bei Template-PDF-Generierung:', error);
+            console.error('Fehler bei Template-PDF-Generierung:', error);
+            return null;
+        }
+    }
+
+    // Hilfsmethode: Berater-Telefonnummer ermitteln
+    _getBeraterTelefon(berater) {
+        if (!berater) return '';
+        
+        // Prüfe verschiedene Telefon-Felder
+        const telefonFelder = ['Telefon', 'Handy', 'Mobil', 'Phone'];
+        for (const feld of telefonFelder) {
+            const columnKey = COLUMN_MAPS.mitarbeiter[feld];
+            if (columnKey && berater[columnKey]) {
+                return berater[columnKey];
+            }
+        }
+        return '';
+    }
+
+    // Hilfsmethode: Berater-Beschreibung erstellen
+    _createBeraterBeschreibung(berater) {
+        if (!berater) return 'Ihr persönlicher Finanzberater';
+        
+        const teile = [];
+        
+        // Karrierestufe
+        const karrierestufe = berater[COLUMN_MAPS.mitarbeiter.Karrierestufe]?.[0]?.display_value;
+        if (karrierestufe) {
+            teile.push(`${karrierestufe} bei SKT`);
+        }
+        
+        // Büro-Standort
+        const buero = berater[COLUMN_MAPS.mitarbeiter.Buero]?.[0]?.display_value;
+        if (buero) {
+            teile.push(`Standort: ${buero}`);
+        }
+        
+        // Qualifikationen
+        const qualifikationen = [];
+        if (berater[COLUMN_MAPS.mitarbeiter.VA] === true) qualifikationen.push('Versicherungsagent');
+        if (berater[COLUMN_MAPS.mitarbeiter.VB] === true) qualifikationen.push('Vermögensberater');
+        if (berater[COLUMN_MAPS.mitarbeiter.Immobilienexperte] === true) qualifikationen.push('Immobilienexperte');
+        
+        if (qualifikationen.length > 0) {
+            teile.push(`Qualifikationen: ${qualifikationen.join(', ')}`);
+        }
+        
+        // Persönlicher Text
+        const textZuMir = berater[COLUMN_MAPS.mitarbeiter.TextZuMir];
+        if (textZuMir) {
+            teile.push(`\n${textZuMir}`);
+        }
+        
+        return teile.join('\n') || 'Ihr persönlicher Finanzberater bei SKT';
     }
 }
 // KORREKTUR: Die `prose`-Klassen von Tailwind benötigen eine Basiskonfiguration.
@@ -4109,9 +4477,232 @@ async function initialize() {
     rootEl.innerHTML = content;
 
     const beratungView = new BeratungView();
+    
+    // NEU: Template-Manager initialisieren
+    pdfTemplateManager = new PDFTemplateManager(beratungView);
+    
+    // NEU: Template-Manager global verfügbar machen
+    window.pdfTemplateManager = pdfTemplateManager;
+    
     // Da es keinen Login gibt, übergeben wir null als currentUser.
     // Die View muss damit umgehen können (z.B. Mitarbeiter-Auswahl anbieten).
     await beratungView.init(null); // KORREKTUR: init() muss aufgerufen werden
 }
 
+// NEU: PDF Template System Integration
+class PDFTemplateManager {
+    constructor(beratungView) {
+        this.beratungView = beratungView;
+        this.templateSystem = null;
+        this.setupTemplateSystem();
+    }
+
+    setupTemplateSystem() {
+        // Prüfe ob PDF-lib verfügbar ist
+        if (typeof window.PDFLib !== 'undefined') {
+            this.templateSystem = new window.PDFTemplateSystem();
+            console.log('PDF Template System bereit');
+            
+            // Versuche automatisch Vorlage.pdf zu laden
+            setTimeout(() => {
+                this.autoLoadTemplate();
+            }, 1000);
+        } else {
+            console.warn('PDF-lib nicht verfügbar');
+        }
+    }
+
+    // Lade PDF-Template aus File-Input oder URL
+    async loadTemplate(source) {
+        if (!this.templateSystem) return false;
+        
+        try {
+            await this.templateSystem.loadTemplate(source);
+            console.log('PDF Template erfolgreich geladen');
+            return true;
+        } catch (error) {
+            console.error('Fehler beim Laden des PDF Templates:', error);
+            return false;
+        }
+    }
+
+    // Generiere PDF basierend auf Beratungsdaten
+    async generateFromTemplate() {
+        if (!this.templateSystem) {
+            alert('PDF Template System nicht verfügbar');
+            return;
+        }
+
+        const data = this.beratungView.beratungData;
+        const berater = db.mitarbeiter.find(m => m._id === data.mitarbeiterId);
+        
+        // Sammle alle empfohlenen Produkte für Produktseiten
+        const empfohleneProdukte = data.empfohleneProdukte || [];
+        
+        // Erstelle Berater-Beschreibung
+        const beraterBeschreibung = this.createBeraterBeschreibung(berater);
+        
+        // Setze Platzhalter basierend auf deinen spezifischen Anforderungen
+        this.templateSystem.setPlaceholders({
+            // SEITE 1 - Deckblatt
+            '***TELEFONNUMMER DES BERATERS***': berater ? (berater[COLUMN_MAPS.mitarbeiter.Telefon] || berater[COLUMN_MAPS.mitarbeiter.Handy] || '') : '',
+            '***KUNDENNAME***': data.kundenname || 'Kunde',
+            '***DATUM***': new Date().toLocaleDateString('de-DE'),
+            
+            // SEITE 2 - Berater-Info
+            '***NAME DES BERATERS***': data.mitarbeitername || 'Berater',
+            '***BESCHREIBUNG DES BERATERS***': beraterBeschreibung,
+            
+            // Produktarray für Seitenduplikation
+            '***PRODUKTE_ARRAY***': empfohleneProdukte,
+        });
+
+        try {
+            // Generiere PDF
+            const pdfBytes = await this.templateSystem.generatePDF();
+            this.templateSystem.downloadPDF(pdfBytes, `beratungsprotokoll_${data.kundenname}_vorlage.pdf`);
+        } catch (error) {
+            console.error('Fehler bei PDF-Generierung:', error);
+            alert('Fehler bei der PDF-Generierung: ' + error.message);
+        }
+    }
+
+    // Erstelle detaillierte Berater-Beschreibung
+    createBeraterBeschreibung(berater) {
+        if (!berater) return 'Ihr persönlicher Finanzberater';
+        
+        const teile = [];
+        
+        // Karrierestufe
+        const karrierestufe = berater[COLUMN_MAPS.mitarbeiter.Karrierestufe]?.[0]?.display_value;
+        if (karrierestufe) {
+            teile.push(`${karrierestufe} bei SKT`);
+        }
+        
+        // Büro-Standort
+        const buero = berater[COLUMN_MAPS.mitarbeiter.Buero]?.[0]?.display_value;
+        if (buero) {
+            teile.push(`Standort: ${buero}`);
+        }
+        
+        // Qualifikationen
+        const qualifikationen = [];
+        if (berater[COLUMN_MAPS.mitarbeiter.VA] === true) qualifikationen.push('Versicherungsagent');
+        if (berater[COLUMN_MAPS.mitarbeiter.VB] === true) qualifikationen.push('Vermögensberater');
+        if (berater[COLUMN_MAPS.mitarbeiter.Immobilienexperte] === true) qualifikationen.push('Immobilienexperte');
+        
+        if (qualifikationen.length > 0) {
+            teile.push(`Qualifikationen: ${qualifikationen.join(', ')}`);
+        }
+        
+        // Persönlicher Text
+        const textZuMir = berater[COLUMN_MAPS.mitarbeiter.TextZuMir];
+        if (textZuMir) {
+            teile.push(`\n${textZuMir}`);
+        }
+        
+        return teile.join('\n') || 'Ihr persönlicher Finanzberater bei SKT';
+    }
+
+    // Automatisch Vorlage.pdf laden wenn verfügbar
+    async autoLoadTemplate() {
+        try {
+            const success = await this.loadTemplate('./Vorlage.pdf');
+            if (success) {
+                console.log('Vorlage.pdf automatisch geladen');
+                return true;
+            }
+        } catch (error) {
+            console.log('Vorlage.pdf nicht gefunden, verwende manuellen Upload');
+        }
+        return false;
+    }
+
+    // Erstelle File-Input für Template-Upload
+    createTemplateUpload() {
+        const uploadDiv = document.createElement('div');
+        uploadDiv.className = 'pdf-template-upload hidden fixed top-4 right-4 bg-white p-4 rounded-lg shadow-lg z-50 max-w-sm';
+        uploadDiv.innerHTML = `
+            <h3 class="text-lg font-bold mb-2 text-gray-800">PDF Template System</h3>
+            <div class="mb-3">
+                <button id="use-vorlage-btn" class="bg-blue-500 text-white px-3 py-1 rounded w-full mb-2">Vorlage.pdf verwenden</button>
+                <p class="text-xs text-gray-500 mb-2">oder eigenes Template hochladen:</p>
+                <input type="file" id="pdf-template-input" accept=".pdf" class="mb-2 text-sm">
+                <button id="load-template-btn" class="bg-gray-500 text-white px-3 py-1 rounded">Eigenes Template laden</button>
+            </div>
+            <div class="border-t pt-2 mt-2">
+                <button id="generate-template-pdf" class="bg-green-500 text-white px-3 py-1 rounded w-full mb-2">PDF aus Template erstellen</button>
+                <div class="text-xs text-gray-600 mb-2">
+                    <strong>Verfügbare Platzhalter:</strong><br>
+                    ***KUNDENNAME***, ***DATUM***<br>
+                    ***NAME DES BERATERS***<br>
+                    ***TELEFONNUMMER DES BERATERS***<br>
+                    ***BESCHREIBUNG DES BERATERS***<br>
+                    ***PRODUKT***, ***PRODUKTBESCHREIBUNG***<br>
+                    ***VORTEILE***
+                </div>
+            </div>
+            <button id="close-template-upload" class="bg-gray-500 text-white px-2 py-1 rounded float-right">×</button>
+        `;
+
+        document.body.appendChild(uploadDiv);
+
+        // Event Listeners
+        document.getElementById('use-vorlage-btn').addEventListener('click', async () => {
+            const success = await this.autoLoadTemplate();
+            if (success) {
+                alert('Vorlage.pdf erfolgreich geladen!');
+            } else {
+                alert('Vorlage.pdf nicht gefunden. Bitte eigenes Template hochladen.');
+            }
+        });
+
+        document.getElementById('load-template-btn').addEventListener('click', async () => {
+            const fileInput = document.getElementById('pdf-template-input');
+            if (fileInput.files.length > 0) {
+                const success = await this.loadTemplate(fileInput.files[0]);
+                if (success) {
+                    alert('Template erfolgreich geladen!');
+                } else {
+                    alert('Fehler beim Laden des Templates');
+                }
+            } else {
+                alert('Bitte wählen Sie zuerst eine PDF-Datei aus.');
+            }
+        });
+
+        document.getElementById('generate-template-pdf').addEventListener('click', () => {
+            this.generateFromTemplate();
+        });
+
+        document.getElementById('close-template-upload').addEventListener('click', () => {
+            uploadDiv.classList.add('hidden');
+        });
+
+        return uploadDiv;
+    }
+
+    // Zeige Template-Upload an
+    showTemplateUpload() {
+        let uploadDiv = document.querySelector('.pdf-template-upload');
+        if (!uploadDiv) {
+            uploadDiv = this.createTemplateUpload();
+        }
+        uploadDiv.classList.remove('hidden');
+    }
+}
+
+// Globale Template-Manager Instanz
+let pdfTemplateManager = null;
+
 document.addEventListener("DOMContentLoaded", initialize);
+
+// NEU: Tastenkürzel für Template-Upload (Strg+T)
+document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 't') {
+        e.preventDefault();
+        if (pdfTemplateManager) {
+            pdfTemplateManager.showTemplateUpload();
+        }
+    }
+});
