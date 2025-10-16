@@ -15656,10 +15656,14 @@ async function saveUserData() {
       
       const updatePayload = {
         table_name: 'Mitarbeiter',
-        row_id: user._id,
-        row: {
-          [realColumnName]: dataToUpdate.Bild
-        }
+        updates: [
+          {
+            row_id: user._id,
+            row: {
+              [realColumnName]: dataToUpdate.Bild
+            }
+          }
+        ]
       };
       
       console.log('=== UPDATE PAYLOAD ===');
