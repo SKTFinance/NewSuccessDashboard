@@ -15553,7 +15553,12 @@ async function saveUserData() {
         // Format: ["/workspace/ID/asset/..."] wie in der Dokumentation
         
         // Add the uploaded image to the data to update
-        dataToUpdate.Bild = [actualRelativeImagePath];  // Verwende den echten Dateinamen
+        // WICHTIG: Für Image-Spalten in SeaTable wird ein Array von Objekten erwartet
+        dataToUpdate.Bild = [{
+          name: actualFileName,
+          url: actualRelativeImagePath,
+          type: file.type || 'image/jpeg'
+        }];
         console.log('Bild für Datenbank vorbereitet (mit echtem Dateinamen):', dataToUpdate.Bild);
       } else {
         console.error('Fehler beim Hochladen des Bildes');

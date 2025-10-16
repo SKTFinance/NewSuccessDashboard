@@ -9,11 +9,7 @@
   <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
   <style>
-    /* === Standard Zoom auf 60% === */
-    body {
-      zoom: 0.6;
-      transform-origin: 0 0;
-    }
+    
     
     /* === Transition Styles === */
     .slide {
@@ -677,10 +673,10 @@
     </div>
     
     <div class="relative w-full h-full flex items-center justify-center pt-32">
-      <!-- Kreis mit rechter Hälfte im Bild - wird animiert gedreht -->
+      <!-- Kreis mit rechter Hälfte im Bild -->
       <div class="flex-shrink-0 relative" style="width: 30vw; height: 100vh;">
-        <div class="absolute left-[-68%] top-1/2 transform -translate-y-1/2" id="immobilienKreis">
-          <img src="AnalyseBilder/Kreis.png" alt="Kreis" class="w-[70vh] h-[70vh] object-contain" style="transform: rotate(-180deg); transition: transform 3s ease-in-out;" />
+        <div class="absolute left-[-68%] top-1/2 transform -translate-y-1/2">
+          <img src="AnalyseBilder/Kreis.png" alt="Kreis" class="w-[70vh] h-[70vh] object-contain" style="transform: rotate(-240deg);" />
         </div>
       </div>
 
@@ -4411,8 +4407,22 @@
         };
     }
 
+    // Navigation functions for Immobilien buttons
+    function navigateToSell() {
+        console.log('🏠 Navigiere zu "Immobilie verkaufen" (Folie 12)');
+        immobilienPath = 'sell';
+        event.stopPropagation(); // Verhindere, dass der Click-Handler der Folie ausgelöst wird
+        nextSlide(12);
+    }
 
-  </script>
+    function navigateToBuy() {
+        console.log('🏠 Navigiere zu "Immobilie kaufen" (Folie 13)');
+        immobilienPath = 'buy';
+        event.stopPropagation(); // Verhindere, dass der Click-Handler der Folie ausgelöst wird
+        nextSlide(13);
+    }
+
+
   </script>
 </body>
 </html>
