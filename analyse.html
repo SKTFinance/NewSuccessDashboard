@@ -550,7 +550,7 @@
     </div>
     
     <!-- Kreis ganz links -->
-    <div class="flex-shrink-0 relative" style="width: 30vw; height: 100vh;">
+    <div class="flex-shrink-0 relative" style="width: 30vw; height: 100vh; transform: translate(-60px, 70px);">
       <div class="absolute left-[-68%] top-1/2 transform -translate-y-1/2" id="investmentKreis">
         <img src="AnalyseBilder/Kreis.png" alt="Kreis" class="w-[70vh] h-[70vh] object-contain" style="transform: rotate(-120deg); transition: transform 3s ease-in-out;" />
       </div>
@@ -675,8 +675,8 @@
     <div class="relative w-full h-full flex items-center justify-center pt-32">
       <!-- Kreis mit rechter Hälfte im Bild -->
       <div class="flex-shrink-0 relative" style="width: 30vw; height: 100vh;">
-        <div class="absolute left-[-68%] top-1/2 transform -translate-y-1/2">
-          <img src="AnalyseBilder/Kreis.png" alt="Kreis" class="w-[70vh] h-[70vh] object-contain" style="transform: rotate(-240deg);" />
+        <div class="absolute left-[-68%] top-1/2 transform -translate-y-1/2" id="immobilienKreis">
+          <img src="AnalyseBilder/Kreis.png" alt="Kreis" class="w-[70vh] h-[70vh] object-contain" style="transform: rotate(-240deg); transition: transform 3s ease-in-out;" />
         </div>
       </div>
 
@@ -1647,6 +1647,11 @@
           // Starte Kreis-Rotation für Investment-Folie
           setTimeout(() => {
             rotateInvestmentKreis();
+          }, 500); // Kleine Verzögerung damit die Folie erst geladen ist
+        } else if (nr === 11) {
+          // Starte Kreis-Rotation für Immobilien-Folie
+          setTimeout(() => {
+            rotateImmobilienKreis();
           }, 500); // Kleine Verzögerung damit die Folie erst geladen ist
         } else if (nr === 16) {
           // Starte Kreis-Rotation für Steuern-Folie
