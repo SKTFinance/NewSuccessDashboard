@@ -308,9 +308,22 @@ async function seaTableGetUploadLink() {
         
         const data = JSON.parse(responseText);
         log('Erfolgreiche Antwort erhalten:', data);
-        // Erwartet: { upload_link, parent_path, img_relative_path, file_relative_path }
-        // HINWEIS: "path" wird nicht direkt geliefert, sondern aus parent_path + file_relative_path konstruiert
-        return data;
+        
+        // Laut SeaTable API Dokumentation werden zurückgegeben:
+        // { upload_link, parent_path, img_relative_path, file_relative_path }
+        if (!data.upload_link || !data.parent_path) {
+            log('!!! FEHLER: Unvollständige Upload-Link Antwort:', data);
+            throw new Error('Upload-Link oder parent_path fehlt in Server-Antwort');
+        }
+        
+        // Verwende file_relative_path für PDFs, img_relative_path für Bilder
+        const relativePath = data.file_relative_path || data.img_relative_path;
+        log('Verwendeter relativer Pfad:', relativePath);
+        
+        return {
+            ...data,
+            relative_path: relativePath  // Einheitlicher Schlüssel für später
+        };
     } catch (error) {
         console.log(`!!! KRITISCHER FEHLER beim Abrufen des Upload-Links:`, error);
         console.error("Error getting SeaTable upload link:", error);
@@ -318,22 +331,37 @@ async function seaTableGetUploadLink() {
     }
 }
 
-async function seaTableUploadFile(uploadLink, file, parentDir) {
+async function seaTableUploadFile(uploadLink, file, parentDir, relativePath) {
     const log = (message, ...data) => console.log(`[API-UploadFile] ${message}`, ...data);
     log(`Starte Upload für Datei: ${file.name} in Verzeichnis: ${parentDir}`);
+    log(`Relativer Pfad: ${relativePath}`);
     try {
         const formData = new FormData();
         formData.append('parent_dir', parentDir);
         formData.append('file', file, file.name);
-        log('FormData erstellt:', { parent_dir: parentDir, filename: file.name, size: file.size });
+        
+        // KRITISCH: Laut SeaTable API Dokumentation wird 'relative_path' benötigt
+        if (relativePath) {
+            formData.append('relative_path', relativePath);
+        }
+        
+        log('FormData erstellt:', { 
+            parent_dir: parentDir, 
+            filename: file.name, 
+            size: file.size,
+            relative_path: relativePath 
+        });
 
         // KORREKTUR: Hinzufügen des ret-json=1 Parameters für korrekte Antwort
         const uploadUrl = `${uploadLink}?ret-json=1`;
         log(`Sende Upload-Request an: ${uploadUrl}`);
 
+        // KRITISCH: Laut SeaTable Dokumentation sollte der Upload-Request 
+        // KEINE Authorization Header haben - die Authentifizierung erfolgt über die URL
         const response = await fetch(uploadUrl, {
             method: 'POST',
             body: formData
+            // ENTFERNT: authorization header - wird nicht benötigt für Upload-URL
         });
         log(`Antwort-Status vom Upload-Server: ${response.status}`);
 
@@ -3325,7 +3353,7 @@ class BeratungView {
         
         beratungLog('✓ Upload-Link erhalten:', uploadLinkData);
         
-        const uploadResult = await seaTableUploadFile(uploadLinkData.upload_link, pdfFile, uploadLinkData.parent_path);
+        const uploadResult = await seaTableUploadFile(uploadLinkData.upload_link, pdfFile, uploadLinkData.parent_path, uploadLinkData.relative_path);
         if (!uploadResult) {
             beratungLog('!!! FEHLER: PDF-Upload fehlgeschlagen');
             this._showErrorOnAbschlussSlide('Fehler beim Hochladen des PDFs.');
@@ -3349,9 +3377,9 @@ class BeratungView {
         // KORREKTUR BASIEREND AUF SEATABLE-DOKUMENTATION:
         // Datei-Spalten erwarten: [{name, size, type, url}]
         
-        // Konstruiere die korrekte URL-Struktur für SeaTable-Dateien
+        // Konstruiere die korrekte URL-Struktur für SeaTable-Dateien laut Dokumentation
         const workspaceId = "86704"; // Aus den Browser-URLs ersichtlich
-        const fileUrl = `/workspace/${workspaceId}${uploadLinkData.parent_path}/${uploadLinkData.file_relative_path}/${actualFileName}`;
+        const fileUrl = `/workspace/${workspaceId}${uploadLinkData.parent_path}/${uploadLinkData.relative_path}/${actualFileName}`;
         beratungLog('Konstruierte Datei-URL für SeaTable:', fileUrl);
         
         // NUR DOKUMENTATIONS-KONFORME VERSION - KEINE ALTERNATIVEN!
