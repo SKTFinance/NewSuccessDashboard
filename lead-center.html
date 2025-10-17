@@ -1,48 +1,54 @@
 <!-- Ansicht für das Lead-Center -->
-<div id="lead-center-module-root" class="bg-white rounded-2xl p-6 md:p-8 shadow-lg flex flex-col">
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <h2 class="text-3xl font-bold text-skt-blue">Lead-Center</h2>
+<div id="lead-center-module-root" class="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 lg:p-8 shadow-lg flex flex-col">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 md:mb-6 gap-3">
+        <h2 class="text-2xl md:text-3xl font-bold text-skt-blue">Lead-Center</h2>
     </div>
 
-    <!-- Reiter-Navigation -->
-    <div class="border-b border-gray-200 mb-6">
-        <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-            <button id="lead-center-tab-kanban" class="lead-center-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-skt-blue text-skt-blue">
-                Kanban-Board
+    <!-- Reiter-Navigation - Mobile optimiert -->
+    <div class="border-b border-gray-200 mb-4 md:mb-6 overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+        <nav class="-mb-px flex space-x-4 md:space-x-8 min-w-max md:min-w-0" aria-label="Tabs">
+            <button id="lead-center-tab-kanban" class="lead-center-tab whitespace-nowrap py-3 md:py-4 px-2 md:px-1 border-b-2 font-medium text-base md:text-lg border-skt-blue text-skt-blue flex items-center gap-2">
+                <i class="fas fa-th-large md:hidden"></i>
+                <span>Kanban</span>
             </button>
-            <button id="lead-center-tab-analytics" class="lead-center-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
-                Auswertung
+            <button id="lead-center-tab-analytics" class="lead-center-tab whitespace-nowrap py-3 md:py-4 px-2 md:px-1 border-b-2 font-medium text-base md:text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 flex items-center gap-2">
+                <i class="fas fa-chart-bar md:hidden"></i>
+                <span>Auswertung</span>
             </button>
-            <button id="lead-center-tab-video-analyse" class="lead-center-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">Video-Analyse</button>
+            <button id="lead-center-tab-video-analyse" class="lead-center-tab whitespace-nowrap py-3 md:py-4 px-2 md:px-1 border-b-2 font-medium text-base md:text-lg border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 flex items-center gap-2">
+                <i class="fas fa-video md:hidden"></i>
+                <span>Video-Analyse</span>
+            </button>
         </nav>
     </div>
 
-    <!-- Filter-Leiste -->
-    <div id="lead-center-filter-bar" class="bg-skt-grey-light p-4 rounded-xl mb-6 border border-gray-200">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-            <div>
-                <label for="lead-center-search-filter" class="block text-sm font-medium text-gray-700 mb-1">Suchen</label>
-                <input type="text" id="lead-center-search-filter" placeholder="Lead oder Mitarbeiter suchen..." class="modern-input">
+    <!-- Filter-Leiste - Mobile optimiert -->
+    <div id="lead-center-filter-bar" class="bg-skt-grey-light p-3 md:p-4 rounded-lg md:rounded-xl mb-4 md:mb-6 border border-gray-200">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+            <div class="sm:col-span-2 lg:col-span-1">
+                <label for="lead-center-search-filter" class="block text-xs md:text-sm font-medium text-gray-700 mb-1">Suchen</label>
+                <input type="text" id="lead-center-search-filter" placeholder="Lead suchen..." class="modern-input text-sm">
             </div>
             <div>
-                <label for="lead-center-campaign-filter" class="block text-sm font-medium text-gray-700 mb-1">Kampagne</label>
-                <select id="lead-center-campaign-filter" class="modern-select">
-                    <option value="all">Alle Kampagnen</option>
+                <label for="lead-center-campaign-filter" class="block text-xs md:text-sm font-medium text-gray-700 mb-1">Kampagne</label>
+                <select id="lead-center-campaign-filter" class="modern-select text-sm">
+                    <option value="all">Alle</option>
                 </select>
             </div>
             <div>
-                <label for="lead-center-scope-filter" class="block text-sm font-medium text-gray-700 mb-1">Anzeigen für</label>
-                <select id="lead-center-scope-filter" class="modern-select">
-                    <option value="personal">Meine Leads</option>
-                    <option value="group">Meine Gruppe</option>
-                    <option value="structure">Meine Struktur</option>
+                <label for="lead-center-scope-filter" class="block text-xs md:text-sm font-medium text-gray-700 mb-1">Anzeigen für</label>
+                <select id="lead-center-scope-filter" class="modern-select text-sm">
+                    <option value="personal">Meine</option>
+                    <option value="group">Gruppe</option>
+                    <option value="structure">Struktur</option>
                 </select>
             </div>
-            <!-- NEU: Aktualisieren-Button -->
+            <!-- Aktualisieren-Button - Mobile optimiert -->
             <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">&nbsp;</label> <!-- Platzhalter für Ausrichtung -->
-                <button id="lead-center-refresh-btn" class="bg-skt-blue text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-light transition-colors flex items-center justify-center w-full" style="height: 42px;">
-                    <span id="lead-refresh-btn-text"><i class="fas fa-sync-alt mr-2"></i>Aktualisieren</span><div class="loader-small hidden"></div>
+                <label class="block text-xs md:text-sm font-medium text-gray-700 mb-1">&nbsp;</label>
+                <button id="lead-center-refresh-btn" class="bg-skt-blue text-white font-semibold py-2 px-3 md:px-4 rounded-lg shadow-md hover:bg-skt-blue-light transition-colors flex items-center justify-center w-full text-sm md:text-base" style="height: 42px;">
+                    <span id="lead-refresh-btn-text"><i class="fas fa-sync-alt mr-1 md:mr-2"></i><span class="hidden sm:inline">Aktualisieren</span><span class="sm:hidden">Update</span></span>
+                    <div class="loader-small hidden"></div>
                 </button>
             </div>
         </div>
@@ -55,44 +61,137 @@
         </div>
     </div>
 
-    <!-- Inhalt für Auswertung -->
+    <!-- Inhalt für Auswertung - Mobile optimiert -->
     <div id="lead-center-content-analytics" class="hidden">
-        <!-- KPI Cards -->
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-            <div class="lead-kpi-card">
-                <p class="lead-kpi-label">Leads Gesamt</p>
-                <p id="lead-kpi-total" class="lead-kpi-value">-</p>
-            </div>
-            <div class="lead-kpi-card">
-                <p class="lead-kpi-label">Abschlussquote</p>
-                <p id="lead-kpi-closing-rate" class="lead-kpi-value">-</p>
-            </div>
-            <div class="lead-kpi-card">
-                <p class="lead-kpi-label">Umsatz Gesamt</p>
-                <p id="lead-kpi-total-revenue" class="lead-kpi-value">-</p>
-            </div>
-            <div class="lead-kpi-card">
-                <p class="lead-kpi-label">Terminquote</p>
-                <p id="lead-kpi-appointment-rate" class="lead-kpi-value">-</p>
-            </div>
-            <div class="lead-kpi-card">
-                <p class="lead-kpi-label">Ø Zeit bis Bearbeitung</p>
-                <p id="lead-kpi-avg-handle-time" class="lead-kpi-value">-</p>
+        <!-- NEU: Zeitlicher Verlauf ganz oben - Mobile optimiert -->
+        <div class="mb-6 md:mb-8">
+            <div class="bg-white p-4 md:p-6 lg:p-8 rounded-xl md:rounded-2xl border border-gray-200 shadow-lg hover:shadow-2xl transition-shadow duration-300">
+                <div class="flex flex-col gap-3 mb-4 md:mb-6">
+                    <div class="flex items-center gap-2 md:gap-3">
+                        <div class="p-1.5 md:p-2 bg-indigo-500 bg-opacity-10 rounded-lg">
+                            <i class="fas fa-chart-area text-indigo-600 text-lg md:text-xl"></i>
+                        </div>
+                        <h3 class="text-lg md:text-xl font-bold text-skt-blue">Lead-Verlauf</h3>
+                    </div>
+                    <div class="flex gap-1.5 md:gap-2 flex-wrap">
+                        <button id="lead-timeline-7d" class="lead-timeline-filter-btn text-xs md:text-sm px-2 md:px-3 py-1 rounded-lg font-medium transition-all">7T</button>
+                        <button id="lead-timeline-30d" class="lead-timeline-filter-btn active text-xs md:text-sm px-2 md:px-3 py-1 rounded-lg font-medium transition-all">30T</button>
+                        <button id="lead-timeline-90d" class="lead-timeline-filter-btn text-xs md:text-sm px-2 md:px-3 py-1 rounded-lg font-medium transition-all">90T</button>
+                        <button id="lead-timeline-all" class="lead-timeline-filter-btn text-xs md:text-sm px-2 md:px-3 py-1 rounded-lg font-medium transition-all">Alle</button>
+                    </div>
+                </div>
+                <div id="lead-timeline-chart-container" style="height: 250px;" class="md:h-[300px]"></div>
             </div>
         </div>
 
-        <!-- Charts -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div class="bg-skt-grey-light p-6 rounded-xl border border-gray-200">
-                <h3 class="text-lg font-bold text-skt-blue mb-4">Status Verteilung</h3>
-                <div class="flex flex-col md:flex-row items-center gap-4">
+        <!-- KPI Cards - Mobile optimiert mit 2 Spalten -->
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4 lg:gap-6 mb-6 md:mb-8 lg:mb-10">
+            <!-- Leads Gesamt -->
+            <div class="group relative bg-gradient-to-br from-blue-50 to-white p-3 md:p-4 lg:p-6 rounded-xl md:rounded-2xl border-2 border-blue-100 hover:border-skt-blue hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                <div class="flex items-start justify-between mb-2 md:mb-3">
+                    <div class="p-2 md:p-3 bg-skt-blue bg-opacity-10 rounded-lg md:rounded-xl group-hover:bg-opacity-20 transition-all">
+                        <i class="fas fa-users text-lg md:text-xl lg:text-2xl text-skt-blue"></i>
+                    </div>
+                    <div class="hidden md:block opacity-0 group-hover:opacity-100 transition-opacity">
+                        <i class="fas fa-arrow-trend-up text-skt-blue text-sm"></i>
+                    </div>
+                </div>
+                <p class="text-xs md:text-sm font-medium text-gray-600 mb-0.5 md:mb-1">Leads</p>
+                <p id="lead-kpi-total" class="text-xl md:text-2xl lg:text-3xl font-bold text-skt-blue">-</p>
+            </div>
+
+            <!-- Abschlussquote -->
+            <div class="group relative bg-gradient-to-br from-green-50 to-white p-3 md:p-4 lg:p-6 rounded-xl md:rounded-2xl border-2 border-green-100 hover:border-skt-green-accent hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                <div class="flex items-start justify-between mb-2 md:mb-3">
+                    <div class="p-2 md:p-3 bg-skt-green-accent bg-opacity-10 rounded-lg md:rounded-xl group-hover:bg-opacity-20 transition-all">
+                        <i class="fas fa-chart-line text-lg md:text-xl lg:text-2xl text-skt-green-accent"></i>
+                    </div>
+                    <div class="hidden md:block opacity-0 group-hover:opacity-100 transition-opacity">
+                        <i class="fas fa-percentage text-skt-green-accent text-sm"></i>
+                    </div>
+                </div>
+                <p class="text-xs md:text-sm font-medium text-gray-600 mb-0.5 md:mb-1">Quote</p>
+                <p id="lead-kpi-closing-rate" class="text-xl md:text-2xl lg:text-3xl font-bold text-skt-green-accent">-</p>
+            </div>
+
+            <!-- Umsatz Gesamt -->
+            <div class="group relative bg-gradient-to-br from-yellow-50 to-white p-3 md:p-4 lg:p-6 rounded-xl md:rounded-2xl border-2 border-yellow-100 hover:border-yellow-500 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                <div class="flex items-start justify-between mb-2 md:mb-3">
+                    <div class="p-2 md:p-3 bg-yellow-500 bg-opacity-10 rounded-lg md:rounded-xl group-hover:bg-opacity-20 transition-all">
+                        <i class="fas fa-euro-sign text-lg md:text-xl lg:text-2xl text-yellow-600"></i>
+                    </div>
+                    <div class="hidden md:block opacity-0 group-hover:opacity-100 transition-opacity">
+                        <i class="fas fa-coins text-yellow-600 text-sm"></i>
+                    </div>
+                </div>
+                <p class="text-xs md:text-sm font-medium text-gray-600 mb-0.5 md:mb-1">Umsatz</p>
+                <p id="lead-kpi-total-revenue" class="text-xl md:text-2xl lg:text-3xl font-bold text-yellow-600">-</p>
+            </div>
+
+            <!-- Terminquote -->
+            <div class="group relative bg-gradient-to-br from-purple-50 to-white p-3 md:p-4 lg:p-6 rounded-xl md:rounded-2xl border-2 border-purple-100 hover:border-purple-500 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+                <div class="flex items-start justify-between mb-2 md:mb-3">
+                    <div class="p-2 md:p-3 bg-purple-500 bg-opacity-10 rounded-lg md:rounded-xl group-hover:bg-opacity-20 transition-all">
+                        <i class="fas fa-calendar-check text-lg md:text-xl lg:text-2xl text-purple-600"></i>
+                    </div>
+                    <div class="hidden md:block opacity-0 group-hover:opacity-100 transition-opacity">
+                        <i class="fas fa-handshake text-purple-600 text-sm"></i>
+                    </div>
+                </div>
+                <p class="text-xs md:text-sm font-medium text-gray-600 mb-0.5 md:mb-1">Termine</p>
+                <p id="lead-kpi-appointment-rate" class="text-xl md:text-2xl lg:text-3xl font-bold text-purple-600">-</p>
+            </div>
+
+            <!-- Durchschnittliche Bearbeitungszeit -->
+            <div class="group relative bg-gradient-to-br from-orange-50 to-white p-3 md:p-4 lg:p-6 rounded-xl md:rounded-2xl border-2 border-orange-100 hover:border-orange-500 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 col-span-2 lg:col-span-1">
+                <div class="flex items-start justify-between mb-2 md:mb-3">
+                    <div class="p-2 md:p-3 bg-orange-500 bg-opacity-10 rounded-lg md:rounded-xl group-hover:bg-opacity-20 transition-all">
+                        <i class="fas fa-clock text-lg md:text-xl lg:text-2xl text-orange-600"></i>
+                    </div>
+                    <div class="hidden md:block opacity-0 group-hover:opacity-100 transition-opacity">
+                        <i class="fas fa-stopwatch text-orange-600 text-sm"></i>
+                    </div>
+                </div>
+                <p class="text-xs md:text-sm font-medium text-gray-600 mb-0.5 md:mb-1">Ø Zeit</p>
+                <p id="lead-kpi-avg-handle-time" class="text-xl md:text-2xl lg:text-3xl font-bold text-orange-600">-</p>
+            </div>
+        </div>
+
+        <!-- Charts - Mobile optimiert -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 lg:gap-8">
+            <!-- Status Verteilung -->
+            <div class="bg-white p-4 md:p-6 lg:p-8 rounded-xl md:rounded-2xl border border-gray-200 shadow-lg hover:shadow-2xl transition-shadow duration-300">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 md:mb-6 gap-3">
+                    <div class="flex items-center gap-2 md:gap-3">
+                        <div class="p-1.5 md:p-2 bg-skt-blue bg-opacity-10 rounded-lg">
+                            <i class="fas fa-chart-pie text-skt-blue text-base md:text-lg lg:text-xl"></i>
+                        </div>
+                        <h3 class="text-base md:text-lg lg:text-xl font-bold text-skt-blue">Status</h3>
+                    </div>
+                    <div class="text-xs md:text-sm text-gray-500 bg-gray-100 px-2 md:px-3 py-1 rounded-full">
+                        <i class="fas fa-info-circle mr-1"></i>Aktuell
+                    </div>
+                </div>
+                <div class="flex flex-col md:flex-row items-center gap-4 md:gap-6">
                     <div id="lead-status-pie-chart-container" class="w-full md:w-1/2 flex justify-center items-center shrink-0"></div>
                     <div id="lead-status-pie-chart-legend" class="w-full md:w-1/2 self-start"></div>
                 </div>
             </div>
-            <div class="bg-skt-grey-light p-6 rounded-xl border border-gray-200">
-                <h3 class="text-lg font-bold text-skt-blue mb-4">Leads nach Kampagne</h3>
-                <div class="flex flex-col md:flex-row items-center gap-4">
+
+            <!-- Leads nach Kampagne -->
+            <div class="bg-white p-4 md:p-6 lg:p-8 rounded-xl md:rounded-2xl border border-gray-200 shadow-lg hover:shadow-2xl transition-shadow duration-300">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 md:mb-6 gap-3">
+                    <div class="flex items-center gap-2 md:gap-3">
+                        <div class="p-1.5 md:p-2 bg-skt-green-accent bg-opacity-10 rounded-lg">
+                            <i class="fas fa-bullhorn text-skt-green-accent text-base md:text-lg lg:text-xl"></i>
+                        </div>
+                        <h3 class="text-base md:text-lg lg:text-xl font-bold text-skt-blue">Kampagne</h3>
+                    </div>
+                    <div class="text-xs md:text-sm text-gray-500 bg-gray-100 px-2 md:px-3 py-1 rounded-full">
+                        <i class="fas fa-filter mr-1"></i>Gefiltert
+                    </div>
+                </div>
+                <div class="flex flex-col md:flex-row items-center gap-4 md:gap-6">
                     <div id="lead-campaign-pie-chart-container" class="w-full md:w-1/2 flex justify-center items-center shrink-0"></div>
                     <div id="lead-campaign-pie-chart-legend" class="w-full md:w-1/2 self-start"></div>
                 </div>
@@ -107,42 +206,43 @@
 
 </div>
 
-<!-- NEU: Modal zum Bearbeiten eines Leads -->
+<!-- NEU: Modal zum Bearbeiten eines Leads - Mobile optimiert -->
 <div id="lead-details-modal" class="modal-overlay">
-    <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-2xl w-full relative max-h-[90vh] overflow-y-auto">
-        <button id="close-lead-details-modal-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
-        <h3 id="lead-details-modal-title" class="text-2xl font-bold text-skt-blue mb-6">Lead-Details</h3>
-        <form id="lead-details-form" class="space-y-4">
+    <div class="modal-box bg-white rounded-lg md:rounded-xl shadow-xl p-4 md:p-6 lg:p-8 m-2 md:m-4 max-w-2xl w-full relative max-h-[90vh] overflow-y-auto">
+        <button id="close-lead-details-modal-btn" class="absolute top-1 right-2 md:top-2 md:right-3 text-2xl md:text-3xl text-gray-500 hover:text-skt-blue z-10">&times;</button>
+        <h3 id="lead-details-modal-title" class="text-xl md:text-2xl font-bold text-skt-blue mb-4 md:mb-6 pr-8">Lead-Details</h3>
+        <form id="lead-details-form" class="space-y-3 md:space-y-4">
             <input type="hidden" id="lead-details-id">
             
-            <!-- Read-only fields -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                <div><p class="font-semibold text-skt-blue-light">Kampagne</p><p id="lead-details-campaign" class="text-gray-800"></p></div>                
-                <div><p class="font-semibold text-skt-blue-light">Telefon</p><p id="lead-details-phone" class="text-gray-800"></p></div>
-                <div><p class="font-semibold text-skt-blue-light">Email</p><p id="lead-details-email" class="text-gray-800"></p></div>
+            <!-- Read-only fields - Mobile optimiert -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 text-sm">
+                <div><p class="font-semibold text-skt-blue-light text-xs md:text-sm">Kampagne</p><p id="lead-details-campaign" class="text-gray-800 text-sm md:text-base"></p></div>                
+                <div><p class="font-semibold text-skt-blue-light text-xs md:text-sm">Telefon</p><a id="lead-details-phone" href="" class="text-skt-blue hover:text-skt-blue-light hover:underline text-sm md:text-base font-medium"></a></div>
+                <div class="sm:col-span-2"><p class="font-semibold text-skt-blue-light text-xs md:text-sm">Email</p><a id="lead-details-email" href="" class="text-skt-blue hover:text-skt-blue-light hover:underline text-sm md:text-base break-all font-medium"></a></div>
             </div>
-            <div class="prose prose-sm max-w-none bg-gray-50 p-3 rounded-md border">
-                <p class="font-semibold text-skt-blue-light">Info</p>
-                <div id="lead-details-info"></div>
+            <div class="bg-gray-50 p-2 md:p-3 rounded-md border">
+                <p class="font-semibold text-skt-blue-light text-xs md:text-sm mb-1">Info</p>
+                <div id="lead-details-info" class="text-xs md:text-sm text-gray-800 break-words overflow-hidden"></div>
             </div>
 
-            <!-- Editable fields -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">                
-                <div>
-                    <label for="lead-details-mitarbeiter-select" class="block text-sm font-medium text-gray-700">Zuständiger Mitarbeiter</label>
-                    <select id="lead-details-mitarbeiter-select" class="modern-select"></select>
+            <!-- Editable fields - Mobile optimiert -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 pt-3 md:pt-4 border-t">                
+                <div class="sm:col-span-2">
+                    <label for="lead-details-mitarbeiter-select" class="block text-xs md:text-sm font-medium text-gray-700">Zuständiger Mitarbeiter</label>
+                    <select id="lead-details-mitarbeiter-select" class="modern-select text-sm md:text-base"></select>
                 </div>
-                <div><label for="lead-details-status" class="block text-sm font-medium text-gray-700">Status</label><select id="lead-details-status" class="modern-select"></select></div>
-                <div><label for="lead-details-umsatz" class="block text-sm font-medium text-gray-700">Umsatz (EH)</label><input type="number" step="0.01" id="lead-details-umsatz" class="modern-input"></div>
+                <div><label for="lead-details-status" class="block text-xs md:text-sm font-medium text-gray-700">Status</label><select id="lead-details-status" class="modern-select text-sm md:text-base"></select></div>
+                <div><label for="lead-details-umsatz" class="block text-xs md:text-sm font-medium text-gray-700">Umsatz (EH)</label><input type="number" step="0.01" id="lead-details-umsatz" class="modern-input text-sm md:text-base"></div>
             </div>
-            <div><label for="lead-details-hinweis" class="block text-sm font-medium text-gray-700">Hinweis</label><textarea id="lead-details-hinweis" rows="3" class="modern-input"></textarea></div>
+            <div><label for="lead-details-hinweis" class="block text-xs md:text-sm font-medium text-gray-700">Hinweis</label><textarea id="lead-details-hinweis" rows="3" class="modern-input text-sm md:text-base"></textarea></div>
             
-            <div class="pt-4 flex justify-between items-center">
-                <button type="button" id="lead-schedule-appointment-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors flex items-center justify-center">
-                    <i class="fas fa-calendar-check mr-2"></i>Termin vereinbaren
+            <!-- Buttons - Mobile optimiert -->
+            <div class="pt-3 md:pt-4 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+                <button type="button" id="lead-schedule-appointment-btn" class="bg-skt-blue text-white font-semibold py-2 px-4 md:px-5 rounded-lg hover:bg-skt-blue-light transition-colors flex items-center justify-center text-sm md:text-base">
+                    <i class="fas fa-calendar-check mr-2"></i><span class="hidden sm:inline">Termin vereinbaren</span><span class="sm:hidden">Termin</span>
                 </button>
-                <div class="flex space-x-3">
-                    <button type="submit" id="save-lead-details-btn" class="bg-skt-green-accent text-white font-semibold py-2 px-5 rounded-lg hover:bg-green-700 transition-colors">Speichern</button>
+                <div class="flex gap-2 md:gap-3">
+                    <button type="submit" id="save-lead-details-btn" class="flex-1 sm:flex-none bg-skt-green-accent text-white font-semibold py-2 px-4 md:px-5 rounded-lg hover:bg-green-700 transition-colors text-sm md:text-base">Speichern</button>
                 </div>
             </div>
         </form>

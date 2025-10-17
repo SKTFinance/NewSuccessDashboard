@@ -676,7 +676,7 @@ async function seaTableUpdateLinkField(terminRowId, mitarbeiterRowId) {
 
     const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/links/`;
     const body = {
-      table_id: termineTableMeta._id,
+        table_id: termineTableMeta._id,
       other_table_id: mitarbeiterTableMeta._id,
       link_id: linkColumnMeta.data.link_id,
       other_rows_ids_map: {
@@ -706,6 +706,10 @@ async function seaTableUpdateLinkField(terminRowId, mitarbeiterRowId) {
   }
 }
 
+
+
+
+
 export async function seaTableAddRow(tableName, rowData) {
   // Neuer, effizienter Ansatz basierend auf dem Skript des Benutzers:
   // 1. Daten für die Verknüpfung (Mitarbeiter_ID) von den restlichen Daten trennen.
@@ -720,15 +724,15 @@ export async function seaTableAddRow(tableName, rowData) {
   }
 
   // --- SCHRITT 1: Daten vorbereiten (Link trennen, Keys in Namen umwandeln) ---
-  const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
+    const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
   if (!tableMap) {
       console.error(`[ADD-ROW-NEW] Column map for table '${tableName}' not found.`);
       return false;
   }
   const tableMeta = METADATA.tables.find(t => t.name.toLowerCase() === tableName.toLowerCase());
   const linkColumns = tableMeta ? tableMeta.columns.filter(c => c.type === 'link') : [];
-
-  const linkData = {};
+    
+    const linkData = {};
   const rowDataForCreation = { ...rowData };
 
   linkColumns.forEach(col => {
@@ -740,7 +744,7 @@ export async function seaTableAddRow(tableName, rowData) {
 
   // KORREKTUR: Der 'rows' Endpunkt erwartet Spalten-NAMEN, nicht Spalten-Keys.
   // Wir müssen die Keys (z.B. '0000') in Namen (z.B. 'Terminpartner') umwandeln.
-  const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
+    const reversedMap = Object.fromEntries(Object.entries(tableMap).map(([name, key]) => [key, name]));
 
   const rowDataWithNames = {};
   for (const key in rowDataForCreation) {
@@ -774,6 +778,10 @@ export async function seaTableAddRow(tableName, rowData) {
     }
 
     const result = JSON.parse(responseText);
+    console.log('[ADD-ROW-NEW] Step 1 Parsed Result:', result);
+    console.log('[ADD-ROW-NEW] Step 1 result.row_ids:', result.row_ids);
+    console.log('[ADD-ROW-NEW] Step 1 result.row_ids type:', typeof result.row_ids);
+    
     if (!result || !result.row_ids || result.row_ids.length === 0) {
       // Falls die API einen 200 OK mit einer Fehlermeldung zurückgibt (z.B. bei falschem Spaltennamen)
       const errorMessage = result.error_message || "API did not return a valid new row ID in 'row_ids' array.";
@@ -781,7 +789,9 @@ export async function seaTableAddRow(tableName, rowData) {
     }
     // KORREKTUR: Die API gibt ein Array von Objekten zurück, wir brauchen die _id Eigenschaft daraus.
     // Dein Skript hat dies korrekt gezeigt: `data.row_ids[0]._id`
-    newRowId = result.row_ids[0]?._id;
+    console.log('[ADD-ROW-NEW] Step 1 result.row_ids[0]:', result.row_ids[0]);
+    
+    newRowId = result.row_ids[0]?._id || result.row_ids[0]; // Fallback: manchmal ist es direkt die ID
     if (!newRowId) {
       throw new Error("API response for new row is malformed, missing _id in row_ids[0].");
     }
@@ -804,7 +814,10 @@ export async function seaTableAddRow(tableName, rowData) {
     }
   }
 
-  console.log(`[ADD-ROW-NEW] Process finished successfully. Returning new row ID: ${newRowId}`);
+
+
+
+    console.log(`[ADD-ROW-NEW] Process finished successfully. Returning new row ID: ${newRowId}`);
   return newRowId;
 }
 
@@ -1048,7 +1061,6 @@ async function seaTableUpdateTermin(rowId, rowData) {
 async function seaTableAddTermin(rowData) {
     const tableName = 'Termine';
     const terminLog = (message, ...data) => console.log(`%c[AddTermin] %c${message}`, 'color: #4f46e5; font-weight: bold;', 'color: black;', ...data);
-    terminLog('Starte Anlegen eines neuen Termins.');
 
     const tableMap = COLUMN_MAPS.termine;
     if (!tableMap) {
@@ -1078,12 +1090,16 @@ async function seaTableAddTermin(rowData) {
         }
     }
     terminLog('Getrennte Daten:', { rowDataForCreation, linkUpdates });
-
     // 2. Zeile mit den meisten Daten anlegen
     let newRowId = null;
     try {
         const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
-        const body = { table_name: tableName, rows: [rowDataForCreation] };
+
+
+        const body = {
+            table_name: tableName,
+            rows: [rowDataForCreation]
+        };
         terminLog('Schritt 1: Erstelle Zeile mit Body:', body);
         terminLog('Schritt 1: Erstelle Zeile mit Body:', body);
         const response = await fetch(url, { method: "POST", headers: { Authorization: `Bearer ${seaTableAccessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -1092,11 +1108,14 @@ async function seaTableAddTermin(rowData) {
             throw new Error(`Create failed: ${result.error_message || 'No row ID returned'}`);
         }
         newRowId = result.row_ids[0]?._id;
-        if (!newRowId) throw new Error("Could not get new row ID");
+
+        if (!newRowId) {
+            throw new Error("API response for new row is malformed, missing _id in row_ids[0].");
+        }
         terminLog(`Schritt 1 erfolgreich: Neue Zeile mit ID ${newRowId} erstellt.`);
     } catch (error) {
         terminLog('!!! FEHLER: Schritt 1 (Zeile erstellen) fehlgeschlagen.', error);
-        return false;
+            return false;
     }
 
     // 3. Aktualisiere Link-Daten separat am Ende
@@ -1131,6 +1150,7 @@ export async function genericSeaTableAddRow(tableName, rowDataWithNames) {
         const newRowId = result.row_ids[0]?._id;
         if (!newRowId) throw new Error("Could not get new row ID");
         return newRowId;
+
     } catch (error) {
         console.error(`[GENERIC-ADD-ROW] Failed to add row to ${tableName}:`, error);
         return null;
@@ -1207,6 +1227,11 @@ function normalizeAllData() {
 
 function mapSqlResults(results, tableName) {
   const tableNameLower = tableName.toLowerCase();
+  // KORREKTUR: Wenn die SQL-Abfrage fehlschlägt, gibt sie `null` zurück.
+  // Dies fängt den Fehler ab und verhindert einen nachfolgenden `TypeError`.
+  if (!results) {
+    return [];
+  }
   if (!COLUMN_MAPS[tableNameLower]) return results;
   // KORREKTUR: tableMeta muss hier im Scope definiert werden, um auf die Metadaten zugreifen zu können.
   const tableMeta = METADATA.tables.find(
@@ -1243,6 +1268,10 @@ function mapSqlResults(results, tableName) {
 
 export async function loadAllData() {
   HIERARCHY_CACHE = null; // Hierarchie-Cache bei jedem Neuladen invalidieren
+  
+  // OPTIMIERUNG: Räume alte Cache-Einträge beim Start auf, um Quota-Probleme zu vermeiden (v.a. Safari)
+  clearOldCacheEntries();
+  
   setStatus("Lade Datenbank-Zugang...");
   await getSeaTableAccessToken();
   if (!seaTableAccessToken) return false;
@@ -1386,9 +1415,69 @@ function saveToCache(key, data) {
       timestamp: new Date().getTime(),
       data: data,
     };
-    localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(item));
+    const serialized = JSON.stringify(item);
+    
+    // Prüfe Größe (Safari hat oft nur 5-10 MB localStorage Limit)
+    const sizeInMB = new Blob([serialized]).size / (1024 * 1024);
+    if (sizeInMB > 2) {
+      console.warn(`[CACHE] ${key} ist zu groß (${sizeInMB.toFixed(2)} MB). Überspringe Caching.`);
+      return;
+    }
+    
+    localStorage.setItem(CACHE_PREFIX + key, serialized);
   } catch (e) {
-    console.error("Fehler beim Speichern im Cache", e);
+    if (e.name === 'QuotaExceededError') {
+      console.warn(`[CACHE] Quota exceeded. Räume alten Cache auf und versuche erneut...`);
+      // Lösche alte Cache-Einträge
+      clearOldCacheEntries();
+      // Versuche erneut
+      try {
+        const item = {
+          timestamp: new Date().getTime(),
+          data: data,
+        };
+        localStorage.setItem(CACHE_PREFIX + key, JSON.stringify(item));
+      } catch (retryError) {
+        console.warn(`[CACHE] Konnte ${key} auch nach Aufräumen nicht cachen. Fahre ohne Cache fort.`);
+      }
+    } else {
+      console.error("Fehler beim Speichern im Cache", e);
+    }
+  }
+}
+
+function clearOldCacheEntries() {
+  try {
+    const keysToRemove = [];
+    const now = new Date().getTime();
+    const maxAge = 24 * 60 * 60 * 1000; // 24 Stunden
+    
+    // Finde alle alten Cache-Einträge
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(CACHE_PREFIX)) {
+        try {
+          const itemStr = localStorage.getItem(key);
+          const item = JSON.parse(itemStr);
+          if (now - item.timestamp > maxAge) {
+            keysToRemove.push(key);
+          }
+        } catch (e) {
+          // Ungültiger Cache-Eintrag, kann gelöscht werden
+          keysToRemove.push(key);
+        }
+      }
+    }
+    
+    // Lösche die gefundenen alten Einträge
+    keysToRemove.forEach(key => {
+      localStorage.removeItem(key);
+      console.log(`[CACHE] Entfernt: ${key}`);
+    });
+    
+    console.log(`[CACHE] ${keysToRemove.length} alte Cache-Einträge entfernt.`);
+  } catch (e) {
+    console.error('[CACHE] Fehler beim Aufräumen:', e);
   }
 }
 
@@ -1512,6 +1601,8 @@ function getAncestors(userId, levels = 99) { // KORREKTUR: Unbegrenzte Level, um
     let currentLevel = 0;
     while (nextManagerId && currentLevel < levels) {
         const manager = findRowById('mitarbeiter', nextManagerId);
+
+
         // Füge den Manager nur hinzu, wenn er existiert und nicht ausgeschieden ist.
         if (manager && manager.Status !== 'Ausgeschieden') {
             ancestors.push(manager);
@@ -2008,6 +2099,7 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
         const isAnalysisAppointment = t.Kategorie === "AT" || (t.Kategorie === "ST" && t.Umsatzprognose > 1);
 
         if (isAnalysisAppointment) {
+
           // Ein stornierter Termin zählt nicht als "gehalten".
           if (AT_STATUS_GEHALTEN.includes(t.Status) && t.Status !== 'Storno' && t.Absage !== true) {
               atIst++;
@@ -2079,56 +2171,66 @@ async function fetchDashboardDataWithSql(mitarbeiterId) {
 function isUserLeader(user) {
   if (!user || !user.Karrierestufe) return false;
 
+
   const stage = db.karriereplan.find(p => p.Stufe === user.Karrierestufe);
   
+
   // Wenn die Stufe nicht im Karriereplan gefunden wird oder keine Hierarchie hat, ist es keine Führungskraft.
   if (!stage || typeof stage.Hierarchie !== 'number') {
       return false;
   }
 
+
   // Eine Führungskraft ist jeder mit Hierarchie-Level von JGST (Level 3) oder höher.
+
   // Trainees, GAs und T-Stufen haben niedrigere Level und werden hier korrekt ausgeschlossen.
+
   const JUNIOR_GST_HIERARCHIE_LEVEL = 3; 
+
+
+
   return stage.Hierarchie >= JUNIOR_GST_HIERARCHIE_LEVEL;
 }
 
+
 function buildHierarchy() {
-  if (HIERARCHY_CACHE) return HIERARCHY_CACHE;
+    if (HIERARCHY_CACHE) return HIERARCHY_CACHE;
 
-  const hierarchy = {};
-  const nameToIdMap = {};
-  const allUsers = db.mitarbeiter;
+    const hierarchy = {};
+    const nameToIdMap = {};
+    const allUsers = db.mitarbeiter;
 
-  allUsers.forEach((u) => {
-    if (u._id) {
-      hierarchy[u._id] = { user: u, children: [] };
-      if (u.Name) nameToIdMap[u.Name] = u._id;
-    }
-  });
+    allUsers.forEach((u) => {
+        if (u._id) {
+            hierarchy[u._id] = { user: u, children: [] };
+            if (u.Name) nameToIdMap[u.Name] = u._id;
+        }
+    });
 
-  allUsers.forEach((u) => {
-    const userName = u.Name || "Unbekannt";
-    const werberValue = u.Werber; // Benutze die normalisierte 'Werber' Eigenschaft
+    const findActiveManager = (userId) => {
+        let currentUser = findRowById('mitarbeiter', userId);
+        while (currentUser) {
+            if (currentUser.Status !== 'Ausgeschieden') {
+                return currentUser._id;
+            }
+            currentUser = findRowById('mitarbeiter', currentUser.Werber);
+        }
+        return null; // Kein aktiver Manager in der Kette gefunden
+    };
 
-    if (!werberValue) return; // Mitarbeiter hat keinen Werber
+    allUsers.forEach((u) => {
+        const werberValue = u.Werber;
+        if (!werberValue) return;
 
-    let managerId = null;
+        const managerId = findActiveManager(werberValue);
 
-    if (hierarchy[werberValue]) {
-      // Fall 1: Werber ist eine gültige _id
-      managerId = werberValue;
-    } else if (nameToIdMap[werberValue]) {
-      // Fall 2: Werber ist ein Name (als Fallback)
-      managerId = nameToIdMap[werberValue];
-    }
+        if (managerId && hierarchy[managerId] && u._id !== managerId) {
+            hierarchy[managerId].children.push(u._id);
+        }
+    });
 
-    if (managerId && hierarchy[managerId]) {
-      hierarchy[managerId].children.push(u._id);
-    }
-  });
-
-  HIERARCHY_CACHE = hierarchy;
-  return hierarchy;
+    HIERARCHY_CACHE = hierarchy;
+    return hierarchy;
 }
 
 function getSubordinates(leaderId, type) {
@@ -2795,7 +2897,7 @@ function updateEmployeeCareerView() {
       const isRaceFinished = timeTravelDate && timeTravelDate > targetDate;
 
       const formattedTargetDate = targetDate.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      dom.nextMilestone.innerHTML = `Chancenseminar am <span class="text-skt-blue font-semibold">${formattedTargetDate}</span>`;
+      // nextMilestone Element existiert nicht mehr - entfernt
       const ehNeeded = 4000; // Festes Ziel für GST
       progressEh = isRaceFinished 
         ? 100 
@@ -2805,68 +2907,111 @@ function updateEmployeeCareerView() {
       updateCircleProgress(dom.fortschrittKreisKarriere, 40, progressEh);
       const maNeeded = 3;
       dom.nextCareerGoalLabel.textContent = 'Nächstes Karriereziel GST';
-      dom.employeeCountDisplay.textContent = `${recruitedEmployees} / ${maNeeded} MA`; // KORREKTUR: Formatiertes Datum verwenden
+      
+      // NEU: Hole alle Mitarbeiter (direkt + indirekt) und prüfe Aktivität
+      const direkteMitarbeiter = db.mitarbeiter.filter(m => 
+          m.Werber === user._id && 
+          m.Status !== 'Ausgeschieden'
+      );
+      
+      const allSubordinateIds = getAllSubordinatesRecursive(user._id);
+      const indirekteMitarbeiter = allSubordinateIds
+          .map(id => db.mitarbeiter.find(m => m._id === id))
+          .filter(m => m && m.Status !== 'Ausgeschieden');
+      
+      // Kombiniere beide Listen (ohne Duplikate)
+      const alleMitarbeiterMap = new Map();
+      [...direkteMitarbeiter, ...indirekteMitarbeiter].forEach(m => {
+          if (m) alleMitarbeiterMap.set(m._id, m);
+      });
+      const allEmployees = Array.from(alleMitarbeiterMap.values());
+      
+      // Zähle aktive und inaktive MA
+      const activeEmployees = allEmployees.filter(m => m.isActive).length;
+      const inactiveEmployees = allEmployees.filter(m => !m.isActive).length;
+      const missingEmployees = Math.max(0, maNeeded - allEmployees.length);
+      
+      // Rendere die Fortschritts-Punkte
+      clearChildren(dom.employeeSlotsContainer);
+      const dots = [];
+      
+      // Aktive Mitarbeiter (grüne Punkte mit Haken)
+      for (let i = 0; i < activeEmployees; i++) {
+          dots.push('<div class="w-8 h-8 rounded-full bg-green-500 border-2 border-white shadow-md flex items-center justify-center"><i class="fas fa-check text-white text-xs"></i></div>');
+      }
+      
+      // Inaktive Mitarbeiter (orange Punkte mit Sanduhr)
+      for (let i = 0; i < inactiveEmployees; i++) {
+          dots.push('<div class="w-8 h-8 rounded-full bg-orange-400 border-2 border-white shadow-md flex items-center justify-center"><i class="fas fa-hourglass-half text-white text-xs"></i></div>');
+      }
+      
+      // Fehlende Mitarbeiter (graue Punkte)
+      for (let i = 0; i < missingEmployees; i++) {
+          dots.push('<div class="w-8 h-8 rounded-full bg-gray-300 border-2 border-white shadow-md flex items-center justify-center"><i class="fas fa-user-plus text-white text-xs"></i></div>');
+      }
+      
+      dom.employeeSlotsContainer.innerHTML = `<div class="flex items-center gap-2 justify-center">${dots.join('')}</div>`;
+      dom.employeeSlotsContainer.classList.remove('hidden');
+      
+      // Text unter den Punkten
+      dom.employeeCountDisplay.textContent = `${activeEmployees} / ${maNeeded} MA`;
       dom.employeeGoalStatus.textContent = `Zeit bis: ${formattedTargetDate}`;
       dom.employeeCountDisplay.classList.remove('hidden');
-      dom.employeeSlotsContainer.classList.remove('hidden');
       dom.employeeGoalStatus.classList.remove('text-skt-red-accent', 'font-bold');
       dom.employeeGoalStatus.classList.add('text-skt-blue-light');
-      clearChildren(dom.employeeSlotsContainer);
-      for (let i = 0; i < maNeeded; i++) {
-          const slot = document.createElement("div");
-          slot.className = `employee-slot ${i < recruitedEmployees ? "filled" : ""}`;
-          dom.employeeSlotsContainer.appendChild(slot);
-      }
 
-      // NEU: Zusätzliche Berechnungen und Anzeige
+      // NEU: Zusätzliche Berechnungen
       const today = getCurrentDate();
       let infoabendeCount = 0;
-      let currentDate = new Date(today);
-      while (currentDate <= targetDate) {
-          if (isDateValidInfoabend(currentDate)) {
-              infoabendeCount++;
-          }
-          currentDate.setDate(currentDate.getDate() + 1);
+      let currentInfoDate = findNextInfoDateAfter(today);
+      
+      while (currentInfoDate <= targetDate) {
+          infoabendeCount++;
+          currentInfoDate = new Date(currentInfoDate.getTime() + (21 * 24 * 60 * 60 * 1000));
       }
 
-      const missingEmployees = Math.max(0, maNeeded - recruitedEmployees);
       const totalEtsNeeded = missingEmployees * 10;
       const etsPerInfoabend = infoabendeCount > 0 ? (totalEtsNeeded / infoabendeCount).toFixed(0) : totalEtsNeeded;
       
       const weeksRemaining = (targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24 * 7);
       const etsPerWeek = weeksRemaining > 0 ? Math.ceil(totalEtsNeeded / weeksRemaining) : totalEtsNeeded;
 
-      // NEU: ETs für den nächsten Infoabend
-      const nextInfoDate = findNextInfoDateAfter(today);
-    const nextInfoDateString = toLocalISOString(nextInfoDate);
-      const etsForNextInfoabend = db.termine.filter(t =>
-          t.Mitarbeiter_ID === user._id && t.Kategorie === 'ET' &&
-          t.Infoabend && t.Infoabend.startsWith(nextInfoDateString)
-      ).length;
-
-      // ETs diese Woche
-      const { startDate: weekStart, endDate: weekEnd } = getWeeklyCycleDates();
-      const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Info Eingeladen", "Weiterer ET", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter", "Verschoben"];
-      const etsThisWeek = db.termine.filter(t => 
-          t.Mitarbeiter_ID === user._id &&
-          t.Kategorie === 'ET' &&
-          t.Datum && new Date(t.Datum) >= weekStart && new Date(t.Datum) <= weekEnd &&
-          ET_STATUS_AUSGEMACHT.includes(t.Status)
-      ).length;
-
+      // NEU: Zusätzliche Info-Box als Button zur Planung
       const additionalInfoContainer = document.getElementById('employee-additional-info-container');
       additionalInfoContainer.classList.remove('hidden');
+      additionalInfoContainer.style.cursor = 'pointer';
       additionalInfoContainer.innerHTML = `
-          <p class="text-xs text-gray-500">1 fehlender MA = 10 ETs</p>
-          <div class="mt-2 text-sm space-y-1 font-semibold">
-              <p><strong>Offene ETs:</strong> ${totalEtsNeeded}</p>
-              <p><strong>Infoabende bis Ziel:</strong> ${infoabendeCount}</p>
-              <p><strong>Benötigt pro Infoabend:</strong> Ø ${etsPerInfoabend} ETs</p>
-              <p><strong>Benötigt pro Woche:</strong> Ø ${etsPerWeek} ETs</p>
-              <p class="mt-2 pt-2 border-t border-gray-300"><strong>Nächstes Info:</strong> ${etsForNextInfoabend} / ${etsPerInfoabend} ETs</p>
-              <p class="mt-2 pt-2 border-t border-gray-300"><strong>Diese Woche:</strong> ${etsThisWeek} / ${etsPerWeek} ETs</p>
+          <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                  <div class="text-left space-y-1">
+                      <p class="text-sm font-semibold text-gray-700"><i class="fas fa-crosshairs mr-2 text-amber-600"></i>Offene ETs: <span class="text-lg text-amber-600">${totalEtsNeeded}</span></p>
+                      <p class="text-sm font-semibold text-gray-700"><i class="fas fa-calendar-alt mr-2 text-amber-600"></i>Infoabende bis Ziel: <span class="text-lg text-amber-600">${infoabendeCount}</span></p>
+                      <p class="text-sm font-semibold text-gray-700"><i class="fas fa-chart-line mr-2 text-amber-600"></i>Benötigt pro Infoabend: <span class="text-lg text-amber-600">Ø ${etsPerInfoabend} ETs</span></p>
+                  </div>
+                  <div class="flex flex-col items-center justify-center ml-4">
+                      <i class="fas fa-arrow-right text-3xl text-amber-600"></i>
+                      <p class="text-xs text-amber-600 font-semibold mt-1">Planung</p>
+                  </div>
+              </div>
+              <p class="text-xs text-gray-500 italic text-center">Klicken für Details in Planung & Vision</p>
           </div>
       `;
+      
+      // Event Listener für den Klick - öffne Planung des aktuell angezeigten Users
+      additionalInfoContainer.onclick = async () => {
+          switchView('planung');
+          // Warte kurz, bis die View gewechselt hat, dann initialisiere mit dem richtigen User
+          setTimeout(async () => {
+              if (planungViewInstance && currentlyViewedUserData._id) {
+                  // Setze den Scope auf 'group' für die persönliche Ansicht des MA
+                  planungViewInstance.currentScope = 'group';
+                  planungViewInstance.currentScopeId = currentlyViewedUserData._id;
+                  planungViewInstance._updateScopeButtons();
+                  planungViewInstance._populateMemberFilter();
+                  await planungViewInstance.updateView();
+              }
+          }, 100);
+      };
 
   } 
   // Sonderlogik für GST-Rennen zum BL
@@ -2903,8 +3048,6 @@ function updateEmployeeCareerView() {
       if (!currentStage) { console.error("Aktuelle Karrierestufe nicht im Karriereplan gefunden:", position); return; }
       const nextStage = db.karriereplan.filter((k) => k.Hierarchie > currentStage.Hierarchie).sort((a, b) => a.Hierarchie - b.Hierarchie)[0];
       if (nextStage) {
-          let milestoneText = `Nächster Meilenstein: <span class="text-skt-blue font-semibold">${nextStage.Stufe}</span>`;
-          dom.nextMilestone.innerHTML = milestoneText;
           const ehNeeded = nextStage.Kriterium_EH || 0;
           progressEh = ehNeeded > 0 ? (totalCurrentEh / ehNeeded) * 100 : 0;
           dom.careerProgressPercentage.textContent = `${Math.min(progressEh, 100).toFixed(1)}%`;
@@ -2932,6 +3075,38 @@ function updateEmployeeCareerView() {
               dom.employeeCountDisplay.classList.add('hidden');
               dom.employeeSlotsContainer.classList.add('hidden');
               clearChildren(dom.employeeSlotsContainer);
+              
+              // NEU: Auch ohne Karriereziel den Button zur Planung anzeigen
+              const additionalInfoContainer = document.getElementById('employee-additional-info-container');
+              additionalInfoContainer.classList.remove('hidden');
+              additionalInfoContainer.style.cursor = 'pointer';
+              additionalInfoContainer.innerHTML = `
+                  <div class="space-y-2">
+                      <div class="flex items-center justify-center">
+                          <div class="flex flex-col items-center justify-center">
+                              <i class="fas fa-clipboard-list text-4xl text-amber-600 mb-2"></i>
+                              <p class="text-sm font-semibold text-gray-700">Planung & Vision öffnen</p>
+                          </div>
+                      </div>
+                      <p class="text-xs text-gray-500 italic text-center">Klicken für Details</p>
+                  </div>
+              `;
+              
+              // Event Listener für den Klick - öffne Planung des aktuell angezeigten Users
+              additionalInfoContainer.onclick = async () => {
+                  switchView('planung');
+                  // Warte kurz, bis die View gewechselt hat, dann initialisiere mit dem richtigen User
+                  setTimeout(async () => {
+                      if (planungViewInstance && currentlyViewedUserData._id) {
+                          // Setze den Scope auf 'group' für die persönliche Ansicht des MA
+                          planungViewInstance.currentScope = 'group';
+                          planungViewInstance.currentScopeId = currentlyViewedUserData._id;
+                          planungViewInstance._updateScopeButtons();
+                          planungViewInstance._populateMemberFilter();
+                          await planungViewInstance.updateView();
+                      }
+                  }, 100);
+              };
           }
       } else {
           dom.nextMilestone.innerHTML = "Höchste Stufe erreicht!";
@@ -3493,11 +3668,11 @@ function createMemberCardList(member, totalDaysInCycle, daysPassedInCycle) {
 }
 
 function findNextInfoDateAfter(startDate) {
-    // Referenzpunkt ist ein Mittwoch, der ein Infotag ist.
-    const referenceDate = new Date('2025-09-17T12:00:00Z');
+    // Referenzpunkt ist der letzte Infoabend: 08.10.2025
+    const referenceDate = new Date('2025-10-08T12:00:00Z');
     const calculationStartDate = new Date(startDate);
     calculationStartDate.setUTCHours(0, 0, 0, 0);
-
+    
     const msPerDay = 24 * 60 * 60 * 1000;
     const cycleLengthDays = 21; // 3 Wochen
 
@@ -3508,7 +3683,7 @@ function findNextInfoDateAfter(startDate) {
     // Berechnen, wie viele Tage es bis zum nächsten Infotag im Zyklus sind.
     const daysIntoCycle = ((diffInDays % cycleLengthDays) + cycleLengthDays) % cycleLengthDays;
     const daysUntilNext = (cycleLengthDays - daysIntoCycle) % cycleLengthDays;
-
+    
     const nextInfoDate = new Date(calculationStartDate.getTime() + daysUntilNext * msPerDay);
     return nextInfoDate;
 }
@@ -3580,8 +3755,8 @@ async function handleHelpFormSubmit() {
 async function saveHelpRequestToDb(subject, body) {
     const tableName = 'Hilfe';
     const tableMap = COLUMN_MAPS[tableName.toLowerCase()];
-    if (!tableMap) {
-        console.error(`[Hilfe] Column map for table '${tableName}' not found.`);
+
+    if (!tab1eMap) { 
         alert('Fehler: Die Konfiguration für das Hilfe-Modul ist unvollständig. Bitte kontaktiere den Support.');
         return false;
     }
@@ -3591,7 +3766,7 @@ async function saveHelpRequestToDb(subject, body) {
         [tableMap.Text]: body,
     };
 
-    // Using genericAddRowWithLinks as it's robust. No links to set.
+    // Using genericAddRowWithLinks as it's robust. No links to set. 
     const success = await genericAddRowWithLinks(tableName, rowData, []);
     return success;
 }
@@ -3622,6 +3797,7 @@ async function fetchAndRenderDashboard(mitarbeiterId) {
   const allRelevantIds = [mitarbeiterId, ...allDownline.map((u) => u._id)];
 
   // 2. Führe EINEN gebündelten Datenabruf für alle relevanten Mitarbeiter aus
+
   const { startDate, endDate } = getMonthlyCycleDates();
   const [fullDataStore, earningsMap] = await Promise.all([
     fetchBulkDashboardData(allRelevantIds),
@@ -4739,6 +4915,15 @@ class AppointmentsView {
         this.toggleDetailsCheckbox = null;
         this.calendarWeekStartDate = null;
         this.showPastToggle = null;
+        // NEU: Termin-Flow-Analyse Elemente
+        this.flowTypeFilter = null;
+        this.flowSankeyContainer = null;
+        this.flowSankeyDescription = null;
+        this.flowDetailsSection = null;
+        this.flowDetailsTitle = null;
+        this.flowDetailsTableBody = null;
+        this.flowDetailsCloseBtn = null;
+        this.activeSankeyNode = null;
         this.initialized = false;
         this.currentUserId = null;
         this.allAppointments = []; // All appointments fetched for the 3-month range
@@ -4751,6 +4936,7 @@ class AppointmentsView {
         this.filterText = '';
         this.weekCalendarSlotHeight = 40; // Default slot height in pixels
         this.showCancelled = false;
+        this.timelineScrollPreserved = false; // Flag um Scroll-Position in Timeline zu erhalten
         // NEU: Sortierkonfiguration für die Infoabend-Tabelle
         this.infoabendSortConfig = {
             column: 'Terminpartner', direction: 'asc'
@@ -4800,15 +4986,6 @@ class AppointmentsView {
         });
         this.form.addEventListener('submit', (e) => this.handleFormSubmit(e));
 
-        // Event Listener für den Absage-Toggle im Modal, um das Grund-Feld sofort anzuzeigen/auszublenden.
-        const cancellationToggle = this.form.querySelector('#appointment-cancellation');
-        const cancellationReasonContainer = this.form.querySelector('#appointment-cancellation-reason-container');
-        if (cancellationToggle && cancellationReasonContainer) {
-            cancellationToggle.addEventListener('change', () => {
-                cancellationReasonContainer.classList.toggle('hidden', !cancellationToggle.checked);
-            });
-        }
-
         // NEU: Event-Listener, der auf Änderungen der Kategorie reagiert.
         const categorySelect = this.form.querySelector('#appointment-category');
         if (categorySelect) {
@@ -4818,6 +4995,16 @@ class AppointmentsView {
         // NEU: Listener für das BT-Folge-Formular
         if (this.btFollowUpForm) {
             this.btFollowUpForm.addEventListener('submit', (e) => this._handleBtFollowUpSubmit(e));
+        }
+
+        // NEU: Listener für das Storno-Modal
+        this.stornoModal = document.getElementById('storno-modal');
+        this.stornoForm = document.getElementById('storno-form');
+        if (this.stornoModal && this.stornoForm) {
+            document.getElementById('close-storno-modal-btn').addEventListener('click', () => this.stornoModal.classList.remove('visible'));
+            document.getElementById('cancel-storno-btn').addEventListener('click', () => this.stornoModal.classList.remove('visible'));
+            this.stornoModal.addEventListener('click', (e) => { if (e.target === this.stornoModal) this.stornoModal.classList.remove('visible'); });
+            this.stornoForm.addEventListener('submit', (e) => this._handleStornoSubmit(e));
         }
     }
     // Hilfsmethode, um DOM-Elemente zu holen, wird von init() aufgerufen.
@@ -4861,7 +5048,6 @@ class AppointmentsView {
         this.statsTableView = document.getElementById('stats-table-view');
         this.naechstesInfoView = document.getElementById('naechstes-info-view'); // NEU
         this.infoabendDateSelect = document.getElementById('infoabend-date-select');
-        this.infoabendShowCancelled = document.getElementById('infoabend-show-cancelled');
         this.infoabendListContainer = document.getElementById('infoabend-list-container');
         this.funnelChartContainer = document.getElementById('funnel-chart-container');
         this.mainFilterContainer = document.getElementById('appointments-main-filter-container');
@@ -4881,11 +5067,19 @@ class AppointmentsView {
         this.statsTab = document.getElementById('analysis-stats-tab');
         this.heatmapTab = document.getElementById('analysis-heatmap-tab');
         this.heatmapGrid = document.getElementById('heatmap-grid');
+        // NEU: Termin-Flow-Analyse Elemente
+        this.flowTypeFilter = document.getElementById('appointments-flow-type-filter');
+        this.flowSankeyContainer = document.getElementById('appointments-sankey-container');
+        this.flowSankeyDescription = document.getElementById('appointments-sankey-description');
+        this.flowDetailsSection = document.getElementById('appointments-flow-termine-details-section');
+        this.flowDetailsTitle = document.getElementById('appointments-flow-termine-status-title');
+        this.flowDetailsTableBody = document.getElementById('appointments-flow-termine-table-body');
+        this.flowDetailsCloseBtn = document.getElementById('appointments-flow-close-termine-details');
         // KORREKTUR: Prüfung für den neuen Zeit-Label-Container hinzugefügt.
         // KORREKTUR: Die Prüfung auf `mobileDayViewContainer` wurde entfernt, da dieses Element
         // nur auf kleinen Bildschirmen relevant ist und die Initialisierung nicht blockieren sollte.
         // Die anderen Elemente sind für die Grundfunktionalität auf allen Geräten notwendig.
-        return this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.searchInput && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.statsTab && this.heatmapTab && this.heatmapGrid && this.statsScopeFilter && this.statsCategoryFilterBtn && this.statsCategoryFilterPanel && this.statsMonthTimeline && this.statsPeriodDisplay && this.statsNavPrevBtn && this.statsNavNextBtn && this.outstandingAppointmentsSection && this.outstandingAppointmentsList && this.statsViewTimelineBtn && this.statsViewTableBtn && this.statsTimelineView && this.statsTableView && this.statsViewInfoBtn && this.naechstesInfoView && this.groupFilterContainer && this.mainFilterContainer && this.analysisContainer && this.statsViewWeekBtn && this.statsWeekView && this.weekCalendarContainer && this.weekPeriodDisplay && this.weekCalendarScrollContainer;
+        return this.statsPieChartContainer && this.prognosisDetailsContainer && this.startDateInput && this.endDateInput && this.searchInput && this.toggleAnalysisBtn && this.analysisContent && this.statsViewPane && this.heatmapViewPane && this.statsTab && this.heatmapTab && this.heatmapGrid && this.statsScopeFilter && this.statsCategoryFilterBtn && this.statsCategoryFilterPanel && this.statsMonthTimeline && this.statsPeriodDisplay && this.statsNavPrevBtn && this.statsNavNextBtn && this.outstandingAppointmentsSection && this.outstandingAppointmentsList && this.statsViewTimelineBtn && this.statsViewTableBtn && this.statsTimelineView && this.statsTableView && this.statsViewInfoBtn && this.naechstesInfoView && this.groupFilterContainer && this.mainFilterContainer && this.analysisContainer && this.statsViewWeekBtn && this.statsWeekView && this.weekCalendarContainer && this.weekPeriodDisplay && this.weekCalendarScrollContainer && this.flowTypeFilter && this.flowSankeyContainer && this.flowDetailsSection;
     }
 
     async init(userId) {
@@ -4989,7 +5183,22 @@ class AppointmentsView {
 
         // KORREKTUR: Der Listener für den "Neuen Termin"-Button muss bei jeder Initialisierung neu gesetzt werden,
         // da das HTML neu geladen wird. Er wird aus setupEventListeners() hierher verschoben.
-        document.getElementById('add-appointment-btn-stats').addEventListener('click', () => this.openModal());
+        // OPTIMIERUNG: Verwende das aktuell in der Timeline sichtbare/eingerastete Datum als Standard-Datum für neue Termine
+        document.getElementById('add-appointment-btn-stats').addEventListener('click', () => {
+            // Ermittle das aktuell sichtbare Datum in der Timeline
+            const visibleDate = this._getCurrentVisibleDateInTimeline();
+            
+            if (visibleDate) {
+                // Verwende das sichtbare Datum mit 12:00 Uhr als Standardzeit
+                const defaultDate = visibleDate + 'T12:00';
+                this.openModal({ Datum: defaultDate, Dauer: 3600, Kategorie: 'AT' });
+            } else {
+                // Fallback: Verwende den Beginn des Monatszyklus
+                const { startDate: cycleStartDate } = getMonthlyCycleDatesForDate(this.statsCurrentDate);
+                const defaultDate = cycleStartDate.toISOString().split('T')[0] + 'T12:00';
+                this.openModal({ Datum: defaultDate, Dauer: 3600, Kategorie: 'AT' });
+            }
+        });
 
         const user = SKT_APP.findRowById('mitarbeiter', this.currentUserId);
         if (user) {
@@ -5124,6 +5333,7 @@ class AppointmentsView {
         this._renderPrognosisDetails();
         this._setupCategoryFilterButtons(); // NEU: Stellt sicher, dass die Buttons im Filter-Panel vorhanden sind.
         this._renderHeatmap();
+        this._renderFlowAnalysis(); // NEU: Termin-Flow-Analyse rendern
         // NEU: Wenn die Info-Ansicht aktiv ist, muss sie ebenfalls neu gerendert werden,
         // da sie vom Haupt-Scope-Filter abhängt.
         if (this.naechstesInfoView && !this.naechstesInfoView.classList.contains('hidden')) {
@@ -5192,11 +5402,38 @@ class AppointmentsView {
         this.heatmapTab.addEventListener('click', () => this._switchAnalysisTab('heatmap'));
 
         // KORREKTUR: Event-Listener für die "Nächstes Info"-Ansicht nur hinzufügen, wenn die Elemente existieren.
-        if (this.infoabendDateSelect && this.infoabendShowCancelled) {
+        if (this.infoabendDateSelect) {
             this.infoabendDateSelect.addEventListener('change', () => this.renderNaechstesInfo());
-            this.infoabendShowCancelled.addEventListener('change', () => this.renderNaechstesInfo());
         }
         
+        // NEU: Event-Listener für Termin-Flow-Analyse
+        if (this.flowTypeFilter) {
+            this.flowTypeFilter.addEventListener('change', () => {
+                this._renderFlowAnalysis();
+            });
+        }
+        if (this.flowDetailsCloseBtn) {
+            this.flowDetailsCloseBtn.addEventListener('click', () => {
+                this.flowDetailsSection.classList.add('hidden');
+            });
+        }
+        
+        // Event-Listener für Customer Timeline Modal
+        const customerTimelineCloseBtn = document.getElementById('close-customer-timeline-modal-btn');
+        const customerTimelineModal = document.getElementById('customer-timeline-modal');
+        if (customerTimelineCloseBtn && customerTimelineModal) {
+            customerTimelineCloseBtn.addEventListener('click', () => {
+                customerTimelineModal.classList.remove('visible');
+                document.body.classList.remove('modal-open');
+            });
+            // Schließen beim Klick außerhalb des Modals
+            customerTimelineModal.addEventListener('click', (e) => {
+                if (e.target === customerTimelineModal) {
+                    customerTimelineModal.classList.remove('visible');
+                    document.body.classList.remove('modal-open');
+                }
+            });
+        }
     }
 
     _setupFilterToggle() {
@@ -5646,8 +5883,11 @@ class AppointmentsView {
         }
 
         setTimeout(() => {
-            // KORREKTUR: Scrolle nach dem Rendern immer zum heutigen Tag.
-            this._scrollToTodayInTimeline('auto');
+            // Nur beim initialen Laden zu "heute" scrollen, nicht nach Termin-Erstellung
+            if (!this.timelineScrollPreserved) {
+                this._scrollToTodayInTimeline('auto');
+            }
+            this.timelineScrollPreserved = false; // Reset für nächstes Mal
             this._updateCardScales();
         }, 150);
     }
@@ -5726,14 +5966,17 @@ class AppointmentsView {
         this.weekCalendarScrollContainer.style.paddingLeft = '60px'; // Breite der Zeitleiste
         this._renderDayColumns(this.calendarStartDate, this.calendarEndDate, false, this.searchFilteredAppointments);
 
-        // Scrolle zum heutigen Tag und zur gewünschten Uhrzeit (8:00 Uhr)
-        setTimeout(() => {
-            const scrollLeft = this._getScrollLeftForToday();
-            const eightAmPosition = 8 * this.weekCalendarSlotHeight * 2;
-            if (this.weekCalendarScrollContainer) {
-                this.weekCalendarScrollContainer.scrollTo({ top: eightAmPosition, left: scrollLeft, behavior: 'auto' });
-            }
-        }, 100);
+        // OPTIMIERUNG: Scrolle nur beim ersten Mal zur Standardposition (8:00 heute)
+        // Bei Updates (z.B. nach Drag & Drop) wird die Position beibehalten
+        if (!this.weekCalendarInitialScrollDone) {
+            setTimeout(() => {
+                const scrollLeft = this._getScrollLeftForToday();
+                const eightAmPosition = 8 * this.weekCalendarSlotHeight * 2;
+                if (this.weekCalendarScrollContainer) {
+                    this.weekCalendarScrollContainer.scrollTo({ top: eightAmPosition, left: scrollLeft, behavior: 'auto' });
+                }
+            }, 100);
+        }
 
         // KORREKTUR: Die manuelle Synchronisation wird durch die neue CSS-Struktur überflüssig.
         // Die Event-Listener werden entfernt, um Fehler zu vermeiden.
@@ -5741,6 +5984,9 @@ class AppointmentsView {
             document.getElementById('week-calendar-header-container').scrollLeft = this.weekCalendarScrollContainer.scrollLeft;
             document.getElementById('week-calendar-time-labels-container').scrollTop = this.weekCalendarScrollContainer.scrollTop;
         });
+        
+        // WICHTIG: Flag setzen, dass der initiale Scroll durchgeführt wurde
+        this.weekCalendarInitialScrollDone = true;
     }
 
     // NEU: Überarbeitete Funktion für die mobile Tagesansicht im iOS-Stil
@@ -5905,7 +6151,18 @@ class AppointmentsView {
         const dayCol = document.createElement('div');
         const isToday = day.toDateString() === new Date().toDateString();
         dayCol.className = `week-calendar-day-col ${isToday ? 'today-col' : ''}`;
-        dayCol.dataset.date = day.toISOString().split('T')[0];
+        
+        // KORREKTUR: Verwende lokales Datum statt UTC (toISOString gibt UTC zurück)
+        const year = day.getFullYear();
+        const month = (day.getMonth() + 1).toString().padStart(2, '0');
+        const dayOfMonth = day.getDate().toString().padStart(2, '0');
+        dayCol.dataset.date = `${year}-${month}-${dayOfMonth}`;
+        
+        console.log('[DAY-COL-DEBUG] Creating day column:', { 
+            day: day.toDateString(), 
+            datasetDate: dayCol.dataset.date 
+        });
+        
         // NEU: "Heute"-Indikator hinzufügen, wenn es der heutige Tag ist.
         if (isToday) {
             const todayIndicator = document.createElement('div');
@@ -5925,8 +6182,22 @@ class AppointmentsView {
             }
         }
 
-        // Termine für diesen Tag platzieren
-        const dayAppointments = appointments.filter(t => t.Datum && new Date(t.Datum).toDateString() === day.toDateString());
+        // Termine für diesen Tag platzieren - mit Filter für stornierte Termine
+        const showCancelledToggle = document.getElementById('appointments-show-cancelled');
+        const showCancelled = showCancelledToggle ? showCancelledToggle.checked : false;
+        
+        const dayAppointments = appointments.filter(t => {
+            // Tag-Filter
+            if (!t.Datum || new Date(t.Datum).toDateString() !== day.toDateString()) {
+                return false;
+            }
+            // Storno-Filter (wie in der Timeline/Tabellen-Ansicht)
+            if (!showCancelled && (t.Absage === true || t.Status === 'Storno')) {
+                return false;
+            }
+            return true;
+        });
+        
         const layout = this._calculateOverlaps(dayAppointments);
 
         layout.forEach(({ termin, column, totalColumns }) => {
@@ -5955,46 +6226,97 @@ class AppointmentsView {
             e.preventDefault();
 
             isDragging = true;
-            startY = e.offsetY;
-            startX = e.offsetX;
-            // KORREKTUR: `new Date('YYYY-MM-DD')` erzeugt ein UTC-Datum um Mitternacht, was zu Zeitzonenfehlern führen kann.
-            // Wir erstellen das Datum manuell mit der lokalen Zeitzone, um sicherzustellen, dass immer der korrekte Tag ausgewählt wird.
+            
+            // KORREKTUR: Berechne die Y-Position relativ zum dayColumn selbst (nicht zum Container)
+            // Dies gibt uns die Position innerhalb des 24-Stunden-Grids (0 = 00:00 Uhr, nicht viewport-top)
+            const rect = dayColumn.getBoundingClientRect();
+            const containerRect = this.weekCalendarScrollContainer.getBoundingClientRect();
+            
+            // Position innerhalb des dayColumn-Elements
+            startY = e.clientY - rect.top;
+            startX = e.clientX - rect.left;
+            
+            console.log('[POSITION-DEBUG] Mouse down:', { 
+                'e.clientY': e.clientY,
+                'rect.top': rect.top,
+                'startY (inside dayColumn)': startY,
+                'Expected for 10:00': '800px (with slotHeight=40)',
+                date: dayColumn.dataset.date 
+            });
+            
+            // KORREKTUR: Erstelle das Datum im lokalen Format ohne UTC-Probleme
             const [year, month, day] = dayColumn.dataset.date.split('-').map(Number);
-            const { hours, minutes } = this._getTimeFromY(startY, true); // FINALE KORREKTUR: Erstelle das Datum als lokales Datum, um Zeitzonenverschiebungen vollständig zu vermeiden.
-            // FINALE KORREKTUR: Erstelle das Datum als lokales Datum, um Zeitzonenverschiebungen vollständig zu vermeiden.
-            const clickedDate = new Date(year, month - 1, day, hours, minutes);
-
+            const { hours, minutes } = this._getTimeFromY(startY, true);
+            
+            // OPTIMIERUNG: Konvertiere direkt in das datetime-local Format (YYYY-MM-DDTHH:mm)
+            const dateString = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}T${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+            
+            console.log('[CALENDAR-DEBUG] Klick auf:', { dateString, hours, minutes, startY, date: dayColumn.dataset.date });
 
             // Platzhalter erstellen
             placeholder = document.createElement('div');
             placeholder.className = 'week-calendar-appointment-placeholder';
+            placeholder.style.position = 'absolute';
             placeholder.style.top = `${this._getYFromTime(hours, minutes)}px`;
-            placeholder.style.height = `${this.weekCalendarSlotHeight / 2}px`; // Standardhöhe (15 Min)
+            placeholder.style.left = '4px';
+            placeholder.style.right = '4px';
+            placeholder.style.height = `${this.weekCalendarSlotHeight}px`; // Standardhöhe (30 Min = 1 Slot)
+            placeholder.style.zIndex = '15';
             dayColumn.appendChild(placeholder);
+            
+            console.log('[PLACEHOLDER-DEBUG] Created:', { 
+                top: placeholder.style.top, 
+                height: placeholder.style.height,
+                parent: dayColumn.dataset.date 
+            });
 
             const onMouseMove = (moveEvent) => {
-                const currentY = moveEvent.offsetY;
-                const height = Math.max(this.weekCalendarSlotHeight / 2, currentY - startY);
+                if (!isDragging) return;
+                
+                // KORREKTUR: Gleiche Logik wie beim mousedown - Position innerhalb dayColumn
+                const currentRect = dayColumn.getBoundingClientRect();
+                const currentY = moveEvent.clientY - currentRect.top;
+                
+                // Berechne Höhe basierend auf Start und aktueller Position
+                const height = Math.max(this.weekCalendarSlotHeight, currentY - startY);
                 placeholder.style.height = `${height}px`;
+                
+                console.log('[DRAG-DEBUG] Moving:', { currentY, startY, height });
             };
 
             const onMouseUp = (upEvent) => {
                 isDragging = false;
                 dayColumn.removeEventListener('mousemove', onMouseMove);
                 dayColumn.removeEventListener('mouseup', onMouseUp);
-                dayColumn.removeEventListener('mouseleave', onMouseUp); // Auch bei Verlassen des Bereichs beenden
+                dayColumn.removeEventListener('mouseleave', onMouseUp);
 
-                const endY = upEvent.offsetY;
-                const endX = upEvent.offsetX;
+                // KORREKTUR: Gleiche Logik wie beim mousedown - Position innerhalb dayColumn
+                const endRect = dayColumn.getBoundingClientRect();
+                const endY = upEvent.clientY - endRect.top;
+                const endX = upEvent.clientX - endRect.left;
+                
+                const dragDistance = endY - startY;
+                
+                console.log('[DRAG-DEBUG] Mouse up:', { startY, endY, dragDistance });
 
-                // KORREKTUR: Wenn kaum Bewegung stattgefunden hat (weniger als 5px), als Klick behandeln.
-                if (Math.abs(endY - startY) < 5 && Math.abs(endX - startX) < 5) {
-                    // KORREKTUR: Verwende das korrigierte `clickedDate` für das Modal.
-                    this.openModal({ Datum: clickedDate, Dauer: 3600, Kategorie: 'AT' }); // Standarddauer 1h, Kategorie AT
+                // KORREKTUR: Wenn kaum Bewegung stattgefunden hat (weniger als 10px), als Klick behandeln.
+                if (Math.abs(dragDistance) < 10 && Math.abs(endX - startX) < 10) {
+                    // KORREKTUR: Verwende den datetime-local String statt Date-Objekt
+                    console.log('[CALENDAR-DEBUG] Click detected, opening modal with:', { Datum: dateString, Dauer: 3600 });
+                    this.openModal({ Datum: dateString, Dauer: 3600, Kategorie: 'AT' });
                 } else {
-                    // Bestehende Logik für Drag-to-Create beibehalten
-                    const durationInMinutes = Math.round(((Math.max(this.weekCalendarSlotHeight / 2, endY - startY)) / this.weekCalendarSlotHeight) * 30 / 15) * 15;
-                    this.openModal({ Datum: clickedDate, Dauer: durationInMinutes * 60, Kategorie: 'AT' });
+                    // Drag-to-Create: Berechne Dauer basierend auf gezogener Höhe
+                    // 1 Slot = weekCalendarSlotHeight px = 30 Minuten
+                    const heightInPixels = Math.max(this.weekCalendarSlotHeight, dragDistance);
+                    const durationInMinutes = Math.round((heightInPixels / this.weekCalendarSlotHeight) * 30 / 15) * 15; // Auf 15 Min runden
+                    
+                    console.log('[CALENDAR-DEBUG] Drag detected:', { 
+                        heightInPixels, 
+                        durationInMinutes, 
+                        durationInSeconds: durationInMinutes * 60 
+                    });
+                    
+                    this.openModal({ Datum: dateString, Dauer: durationInMinutes * 60, Kategorie: 'AT' });
                 }
 
                 if (placeholder) {
@@ -6192,8 +6514,8 @@ class AppointmentsView {
                         // um Zeitzonenfehler zu vermeiden. `new Date(YYYY, MM, DD)` ist zeitzonensicher.
                         const targetDateString = targetColumn.dataset.date;
                         const [year, month, day] = targetDateString.split('-').map(Number);
-                        const targetDay = new Date(year, month - 1, day + 1, 20);
-
+                        // KORREKTUR: Kein +1 beim Tag! Das dataset.date ist bereits korrekt
+                        const targetDay = new Date(year, month - 1, day);
 
                         // Berechne die neue Uhrzeit basierend auf der Y-Position innerhalb der Zielspalte.
                         const colRect = targetColumn.getBoundingClientRect();
@@ -6217,14 +6539,38 @@ class AppointmentsView {
                     [COLUMN_MAPS.termine.Dauer]: newDurationInSeconds,
                 });
 
-                if (success) { // KORREKTUR: Die Logik zum Neuladen der Daten nach einem Update war fehlerhaft und führte zum Verschwinden des Termins.
-                    // Die korrekte Vorgehensweise ist, den Cache zu leeren, die Daten neu zu laden,
-                    // zu normalisieren und dann die Ansicht neu zu rendern.
-                    // Dies stellt sicher, dass der verschobene Termin sofort an der richtigen Stelle erscheint.
+                if (success) {
+                    // OPTIMIERUNG: Scroll-Position speichern, damit der Benutzer nicht zur Ausgangsposition zurückgezwungen wird
+                    const scrollContainer = this.weekCalendarScrollContainer;
+                    const savedScrollLeft = scrollContainer ? scrollContainer.scrollLeft : 0;
+                    const savedScrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+                    
+                    console.log('[DRAG-UPDATE] Scroll positions saved:', { savedScrollLeft, savedScrollTop });
+                    
+                    // Cache leeren und Daten neu laden
                     localStorage.removeItem(`${CACHE_PREFIX}termine`);
-                    db.termine = await seaTableQuery('Termine'); // Lädt die Termine sofort neu.
-                    normalizeAllData(); // Normalisiert die neu geladenen Daten.
-                    await this.fetchAndRender(); // Rendert die Ansicht mit den frischen Daten.
+                    db.termine = await seaTableQuery('Termine');
+                    normalizeAllData();
+                    
+                    // Daten neu laden (aber ohne die Ansicht zu rendern)
+                    await this.fetchAndRender();
+                    
+                    // WICHTIG: Wochenansicht manuell aktualisieren, wenn sie aktiv ist
+                    if (!this.statsWeekView.classList.contains('hidden')) {
+                        // Wochenkalender neu rendern (setzt weekCalendarInitialScrollDone=true, falls noch nicht)
+                        const hadInitialScroll = this.weekCalendarInitialScrollDone;
+                        this.weekCalendarInitialScrollDone = true; // Verhindert Auto-Scroll zur Standardposition
+                        this._renderWeekCalendar();
+                        
+                        // Scroll-Position wiederherstellen - mit längerem Timeout für sicheres Rendering
+                        setTimeout(() => {
+                            if (scrollContainer) {
+                                scrollContainer.scrollLeft = savedScrollLeft;
+                                scrollContainer.scrollTop = savedScrollTop;
+                                console.log('[DRAG-UPDATE] Scroll positions restored:', { savedScrollLeft, savedScrollTop });
+                            }
+                        }, 150);
+                    }
                 } else {
                     alert('Fehler beim Aktualisieren des Termins.');
                 }
@@ -6434,7 +6780,7 @@ class AppointmentsView {
         if (window.innerWidth < 768) { // Annahme: Mobile-Breakpoint ist 768px
             totalMinutes = y; // In der mobilen Ansicht entspricht 1px = 1 Minute
         } else {
-            totalMinutes = (y / (this.weekCalendarSlotHeight * 2)) * 60;
+            totalMinutes = (y / this.weekCalendarSlotHeight) * 30; // KORREKTUR: Jeder Slot ist 30 Minuten
         }
         let finalMinutes = totalMinutes;
         if (snapToGrid) {
@@ -6442,6 +6788,9 @@ class AppointmentsView {
         }
         const hours = Math.floor(finalMinutes / 60);
         const minutes = Math.round(finalMinutes % 60);
+        
+        console.log('[TIME-DEBUG] _getTimeFromY:', { y, totalMinutes, finalMinutes, hours, minutes, slotHeight: this.weekCalendarSlotHeight });
+        
         return { hours, minutes };
     }
 
@@ -6846,13 +7195,93 @@ class AppointmentsView {
         const today = new Date(getCurrentDate()); // KORREKTUR: Kopie erstellen, um Seiteneffekte zu vermeiden.
         today.setHours(0, 0, 0, 0);
 
+        // KORREKTUR: Die Funktion `addOutstandingET` wird hier definiert, damit sie im gesamten Gültigkeitsbereich verfügbar ist.
+        const addOutstandingET = (termin, reason) => {
+            const item = document.createElement('div');
+            item.className = 'bg-yellow-200 p-2 rounded-md flex justify-between items-center cursor-pointer hover:bg-yellow-300';
+            item.dataset.id = termin._id;
+            const mitarbeiterName = findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
+            item.innerHTML = `<p class="text-sm"><span class="font-bold">${termin.Terminpartner}</span> bei ${mitarbeiterName} - <span class="font-normal italic">${reason}</span></p><i class="fas fa-edit ml-2"></i>`;
+            item.addEventListener('click', () => this.openModal(termin));
+            this.outstandingAppointmentsList.appendChild(item);
+            outstanding.push(termin); // Füge es zur Liste hinzu, damit die Sektion angezeigt wird
+        };
+
         // KORREKTUR: Filtere von `searchFilteredAppointments`, um die Datumsfilter zu ignorieren und Diskrepanzen zu beheben.
         const outstanding = this.searchFilteredAppointments.filter(t => {
-            if (!t.Datum || t.Status !== 'Ausgemacht' || t.Absage === true) return false; // NEU: Stornierte Termine ausschließen
+            // KORREKTUR: Termine mit Status "Ausgemacht" ODER "Verschoben" in der Vergangenheit anzeigen.
+            if (!t.Datum || !['Ausgemacht', 'Verschoben'].includes(t.Status) || t.Absage === true) return false;
             if (t.Kategorie === 'Sonstiges') return false; // NEU: "Sonstiges" ignorieren
+
             const terminDate = new Date(t.Datum);
             return terminDate < today;
         });
+
+        // KORREKTUR: Überarbeitete Logik für Termine mit Status "Offen".
+        // Ein "Offen"-Termin erscheint dauerhaft in der Liste, beginnend mit dem ersten Freitag nach seinem Datum.
+        const openAppointments = this.searchFilteredAppointments.filter(t => t.Status === 'Offen' && t.Datum);
+
+        openAppointments.forEach(termin => {
+            const terminDate = new Date(termin.Datum);
+            terminDate.setHours(0, 0, 0, 0);
+
+            // Finde den ersten Freitag *nach* dem Termindatum.
+            const firstFridayAfterTermin = new Date(terminDate);
+            const day = terminDate.getDay(); // So=0, Fr=5
+            const daysUntilFriday = (5 - day + 7) % 7;
+            firstFridayAfterTermin.setDate(terminDate.getDate() + (daysUntilFriday === 0 ? 7 : daysUntilFriday));
+
+            // Wenn heute auf oder nach diesem Freitag ist, zeige den Termin an.
+            if (today >= firstFridayAfterTermin) {
+                const reason = 'Status "Offen" prüfen: Verschieben oder Stornieren?';
+                // Füge den Termin zur Liste hinzu, wenn er nicht schon wegen eines anderen Grundes drin ist.
+                if (!outstanding.some(o => o._id === termin._id)) {
+                    addOutstandingET(termin, reason);
+                }
+            }
+        });
+
+        // NEU: Logik für ausstehende ET-Statusänderungen
+        const infoabendFilter = document.getElementById('infoabend-date-select');
+        if (infoabendFilter && infoabendFilter.value) {
+            const infoDate = new Date(infoabendFilter.value);
+            infoDate.setHours(12, 0, 0, 0); // Zeit auf Mittag setzen, um Zeitzonenprobleme zu vermeiden
+            const todayForEtCheck = new Date();
+            todayForEtCheck.setHours(12, 0, 0, 0);
+
+            const twoDaysBefore = new Date(infoDate.getTime() - 2 * 24 * 60 * 60 * 1000);
+            const oneDayAfter = new Date(infoDate.getTime() + 1 * 24 * 60 * 60 * 1000);
+            const threeDaysAfter = new Date(infoDate.getTime() + 3 * 24 * 60 * 60 * 1000);
+
+            const allETsForInfoabend = this.allAppointments.filter(t =>
+                t.Kategorie === 'ET' &&
+                t.Infoabend && t.Infoabend.startsWith(infoabendFilter.value) &&
+                t.Status !== 'Storno' && t.Absage !== true
+            );
+
+            const addOutstandingET = (termin, reason) => {
+                const item = document.createElement('div');
+                item.className = 'bg-yellow-200 p-2 rounded-md flex justify-between items-center cursor-pointer hover:bg-yellow-300';
+                item.dataset.id = termin._id;
+                const mitarbeiterName = findRowById('mitarbeiter', termin.Mitarbeiter_ID)?.Name || 'N/A';
+                item.innerHTML = `<p class="text-sm"><span class="font-bold">${termin.Terminpartner}</span> bei ${mitarbeiterName} - <span class="font-normal italic">${reason}</span></p><i class="fas fa-edit ml-2"></i>`;
+                item.addEventListener('click', () => this.openModal(termin));
+                this.outstandingAppointmentsList.appendChild(item);
+                outstanding.push(termin); // Füge es zur Liste hinzu, damit die Sektion angezeigt wird
+            };
+
+            allETsForInfoabend.forEach(et => {
+                if (todayForEtCheck >= twoDaysBefore && todayForEtCheck < infoDate && et.Status === 'Ausgemacht') {
+                    addOutstandingET(et, 'Status auf "Gehalten" prüfen');
+                } else if (todayForEtCheck.getTime() === infoDate.getTime() && et.Status !== 'Info Bestätigt') {
+                    addOutstandingET(et, 'Status auf "Info Bestätigt" prüfen');
+                } else if (todayForEtCheck.getTime() === oneDayAfter.getTime() && et.Status !== 'Info Anwesend') {
+                    addOutstandingET(et, 'Status auf "Info Anwesend" prüfen');
+                } else if (todayForEtCheck >= threeDaysAfter && et.Status !== 'Wird Mitarbeiter') {
+                    addOutstandingET(et, 'Status auf "Wird Mitarbeiter" prüfen');
+                }
+            });
+        }
 
         if (outstanding.length === 0) {
             this.outstandingAppointmentsSection.classList.add('hidden');
@@ -6875,7 +7304,11 @@ class AppointmentsView {
         });
     }
 
-
+  _addOutstandingEntry(termin, reason, listElement) {
+        // Diese Funktion wurde in die vorherige Logik integriert und ist hier nicht mehr separat nötig.
+        // Die neue Funktion `addOutstandingET` übernimmt diese Aufgabe.
+    }
+    
     _handleSort(columnKey) {
         if (this.sortColumn === columnKey) {
             this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
@@ -6959,13 +7392,8 @@ class AppointmentsView {
             return userMatch && dateMatch;
         });
 
-        const showCancelled = this.infoabendShowCancelled.checked;
-        let filteredTermineForDisplay = allTermineForInfoabend.filter(t => {
-            return showCancelled || (t.Status !== 'Storno' && !t.Absage);
-        });
-
-        this.renderInfoabendTable(filteredTermineForDisplay);
-        // NEU: Übergebe die komplette Liste an die Trichter-Funktion für die Quotenberechnung
+        // NEU: Alle Termine werden angezeigt, Filter für abgesagte Termine entfernt
+        this.renderInfoabendTable(allTermineForInfoabend);
         this.renderFunnelChart(allTermineForInfoabend);
     }
 
@@ -7046,26 +7474,80 @@ class AppointmentsView {
         const quotasContainer = document.getElementById('funnel-quotas-container');
         if (quotasContainer) quotasContainer.innerHTML = '';
 
-        // Filter out cancelled appointments for the funnel display
-        const displayTermine = termine.filter(t => t.Status !== 'Storno' && !t.Absage);
+        // NEU: Alle Termine werden angezeigt, inkl. abgesagte
+        const displayTermine = termine;
 
-        const stats = {
-            'Ausgemacht': displayTermine.length,
-            'Gehalten': displayTermine.filter(t => t.Status === 'Gehalten').length,
-            'Eingeladen': displayTermine.filter(t => t.Status === 'Info Eingeladen').length,
-            'Bestätigt': displayTermine.filter(t => t.Status === 'Info Bestätigt').length,
-            'Anwesend': displayTermine.filter(t => t.Status === 'Info Anwesend').length,
-            'Wird Mitarbeiter': displayTermine.filter(t => t.Status === 'Wird Mitarbeiter').length,
+        // NEU: Überarbeitete Trichter-Logik mit zusammengefassten ET-Stufen und Konversionsraten
+        const statusMap = {
+            'Wird Mitarbeiter': ['Wird Mitarbeiter'],
+            'Info Anwesend': ['Info Anwesend', 'Wird Mitarbeiter'],
+            'Info Bestätigt': ['Info Bestätigt', 'Info Anwesend', 'Wird Mitarbeiter'],
+            'Info Eingeladen': ['Info Eingeladen', 'Info Bestätigt', 'Info Anwesend', 'Wird Mitarbeiter'],
+            'ET': ['Ausgemacht', 'Gehalten', 'Weiterer ET', 'Info Eingeladen', 'Info Bestätigt', 'Info Anwesend', 'Wird Mitarbeiter']
         };
 
+        // NEU: Hilfsfunktion zum Zählen von Terminen nach Status
+        const getFunnelCount = (targetLevel) => {
+            return displayTermine.filter(termin => 
+                statusMap[targetLevel].includes(termin.Status)
+            ).length;
+        };
+
+        // NEU: Hilfsfunktion zum Zählen von Terminen mit exaktem Status
+        const getExactStatusCount = (status) => {
+            return displayTermine.filter(termin => termin.Status === status).length;
+        };
+
+        // NEU: Berechne die Statistiken und Konversionsraten
+        const stats = {
+            'ET': displayTermine.length,
+            'ET_Gehalten': getExactStatusCount('Gehalten') + getExactStatusCount('Weiterer ET'),
+            'Eingeladen': getFunnelCount('Info Eingeladen'),
+            'Bestätigt': getFunnelCount('Info Bestätigt'),
+            'Anwesend': getFunnelCount('Info Anwesend'),
+            'Wird_Mitarbeiter': getFunnelCount('Wird Mitarbeiter')
+        };
+
+        // NEU: Berechne die Konversionsraten
+        const getConversionRate = (numerator, denominator) => {
+            return denominator > 0 ? (numerator / denominator) * 100 : 0;
+        };
+
+        const conversions = {
+            'ET_to_MA': getConversionRate(stats.Wird_Mitarbeiter, stats.ET),
+            'Gehalten_to_MA': getConversionRate(stats.Wird_Mitarbeiter, stats.ET_Gehalten),
+            'Anwesend_to_MA': getConversionRate(stats.Wird_Mitarbeiter, stats.Anwesend)
+        };
+
+        // NEU: Definiere die Trichter-Stufen mit aktualisierten Werten und Konversionsraten
         const funnelSteps = [
-            { label: 'ET Ausgemacht', value: stats.Ausgemacht, color: '#043C64', textColor: 'white' },
-            { label: 'ET Gehalten', value: stats.Gehalten, color: '#0a5a8e', textColor: 'white' },
-            { label: 'Info Eingeladen', value: stats.Eingeladen, color: '#1c75b5', textColor: 'white' },
-            { label: 'Info Bestätigt', value: stats.Bestätigt, color: '#38bdf8', textColor: 'white' },
-            { label: 'Info Anwesend', value: stats.Anwesend, color: '#7dd3fc', textColor: 'var(--color-skt-blue)' },
-            { label: 'Wird Mitarbeiter', value: stats['Wird Mitarbeiter'], color: '#e0f2fe', textColor: 'var(--color-skt-blue)' }
+            { 
+                label: 'ET', 
+                value: stats.ET, 
+                color: '#043C64'
+            },
+            { 
+                label: 'Info Eingeladen', 
+                value: stats.Eingeladen, 
+                color: '#38bdf8'
+            },
+            { 
+                label: 'Info Bestätigt', 
+                value: stats.Bestätigt, 
+                color: '#7dd3fc'
+            },
+            { 
+                label: 'Info Anwesend', 
+                value: stats.Anwesend, 
+                color: '#e0f2fe'
+            },
+            { 
+                label: 'Wird Mitarbeiter', 
+                value: stats.Wird_Mitarbeiter, 
+                color: '#dcfce7'
+            }
         ];
+
 
         const funnelContainer = document.createElement('div');
         funnelContainer.className = 'funnel-container-animated';
@@ -7073,38 +7555,74 @@ class AppointmentsView {
 
         funnelSteps.forEach(step => {
             const percentage = maxValue > 0 ? (step.value / maxValue) * 100 : 0;
+
+            // Create the step wrapper to contain both the step and its label
+            const stepWrapper = document.createElement('div');
+            stepWrapper.className = 'funnel-step-wrapper';
+            
+            // Create the label first
+            const labelEl = document.createElement('span');
+            labelEl.className = 'funnel-label';
+            labelEl.textContent = step.label;
+            stepWrapper.appendChild(labelEl);
+
+            // Create the funnel step
             const stepEl = document.createElement('div');
             stepEl.className = 'funnel-step-animated';
             stepEl.style.backgroundColor = step.color;
-            if (step.textColor) stepEl.style.color = step.textColor;
-            setTimeout(() => { stepEl.style.width = `${Math.max(20, percentage)}%`; }, 100);
-            stepEl.innerHTML = `<span class="funnel-label">${step.label}</span><span class="funnel-value">${step.value}</span>`;
-            funnelContainer.appendChild(stepEl);
+            stepEl.innerHTML = `<div class="funnel-value">${step.value}</div>`;
+
+            // Add the step to the wrapper
+            stepWrapper.appendChild(stepEl);
+
+            // Animation für die Breite
+            setTimeout(() => { 
+                stepEl.style.width = `${Math.max(20, percentage)}%`; 
+            }, 100);
+
+            funnelContainer.appendChild(stepWrapper);
         });
         this.funnelChartContainer.appendChild(funnelContainer);
 
-        // --- NEU: Quotenberechnung ---
+        // --- NEU: Präzise Quotenberechnung für den Recruiting-Trichter ---
         if (quotasContainer) {
-            const totalAusgemacht = termine.length; // Use the full list for total
-            const totalGehalten = termine.filter(t => t.Status === 'Gehalten').length;
+            // Basis-Zählungen
             const totalWirdMitarbeiter = termine.filter(t => t.Status === 'Wird Mitarbeiter').length;
-            const totalStorniert = termine.filter(t => t.Status === 'Storno' || t.Absage === true).length;
+            const totalAusgemacht = termine.length; // Alle ETs
+            
+            // "Gehalten" umfasst alle Termine, die über "Ausgemacht" hinausgekommen sind
+            const totalGehalten = termine.filter(t => 
+                t.Status === 'Gehalten' || 
+                t.Status === 'Weiterer ET' || 
+                t.Status === 'Info Eingeladen' || 
+                t.Status === 'Info Bestätigt' || 
+                t.Status === 'Info Anwesend' || 
+                t.Status === 'Wird Mitarbeiter'
+            ).length;
+            
+            // "Info Anwesend" umfasst alle, die beim Info waren oder Mitarbeiter werden
+            const totalInfoAnwesend = termine.filter(t => 
+                t.Status === 'Info Anwesend' || 
+                t.Status === 'Wird Mitarbeiter'
+            ).length;
 
-            const quoteGehaltenZuWM = totalGehalten > 0 ? (totalWirdMitarbeiter / totalGehalten) * 100 : 0;
+            // Konversionsraten-Berechnung
             const quoteAusgemachtZuWM = totalAusgemacht > 0 ? (totalWirdMitarbeiter / totalAusgemacht) * 100 : 0;
-            const quoteStorno = totalAusgemacht > 0 ? (totalStorniert / totalAusgemacht) * 100 : 0;
+            const quoteGehaltenZuWM = totalGehalten > 0 ? (totalWirdMitarbeiter / totalGehalten) * 100 : 0;
+            const quoteAnwesendZuWM = totalInfoAnwesend > 0 ? (totalWirdMitarbeiter / totalInfoAnwesend) * 100 : 0;
 
-            const createQuotaCard = (title, value) => `
+            const createQuotaCard = (title, value, subtitle) => `
                 <div class="bg-gray-100 p-3 rounded-lg shadow-inner">
                     <p class="text-sm font-semibold text-skt-blue-light">${title}</p>
-                    <p class="text-2xl font-bold text-skt-blue mt-1">${value.toFixed(0)}%</p>
+                    <p class="text-2xl font-bold text-skt-blue mt-1">${value.toFixed(1)}%</p>
+                    <p class="text-xs text-gray-500 mt-1">${subtitle}</p>
                 </div>
             `;
 
             quotasContainer.innerHTML = 
-                createQuotaCard('ET Gehalten -> WM', quoteGehaltenZuWM) +
-                createQuotaCard('ET Ausgemacht -> WM', quoteAusgemachtZuWM) +
-                createQuotaCard('Stornoquote', quoteStorno);
+                createQuotaCard('ET Ausgemacht → MA', quoteAusgemachtZuWM, `${totalWirdMitarbeiter} von ${totalAusgemacht}`) +
+                createQuotaCard('Gehalten → MA', quoteGehaltenZuWM, `${totalWirdMitarbeiter} von ${totalGehalten}`) +
+                createQuotaCard('Anwesend → MA', quoteAnwesendZuWM, `${totalWirdMitarbeiter} von ${totalInfoAnwesend}`);
         }
     }
 
@@ -7309,39 +7827,21 @@ class AppointmentsView {
     }
 
     _updateModalLayoutForCategory(category) {
-        const recurrenceContainer = this.form.querySelector('#appointment-recurrence-container');
         const recurrenceWrapper = this.form.querySelector('#appointment-recurrence-wrapper');
         const locationWrapper = this.form.querySelector('#appointment-location-wrapper'); // Ist jetzt immer full-width
         const firstGrid = this.form.querySelector('#appointment-grid-1');
         const secondGrid = this.form.querySelector('#appointment-grid-2');
         const infoabendContainer = this.form.querySelector('#appointment-infoabend-container');
         const partnerContainer = this.form.querySelector('#appointment-partner-container');
-        const defaultRecurrenceParent = secondGrid; // Recurrence belongs in the second grid by default.
-        
-        // Reset positions first
-        locationWrapper.classList.remove('hidden');
-        infoabendContainer.classList.remove('sm:col-span-2');
-
-        // KORREKTUR V2: Ersetze .after() durch eine robustere Methode, um Elemente neu anzuordnen.
-        // Wir hängen die Wrapper-Elemente an einen festen Ankerpunkt (das zweite Grid) an,
-        // um sicherzustellen, dass die Reihenfolge immer korrekt ist.
-        const anchor = secondGrid;
-        anchor.before(recurrenceWrapper);
-        anchor.before(locationWrapper);
 
         secondGrid.appendChild(infoabendContainer); // Infoabend gehört standardmäßig in das zweite Grid
-        if (recurrenceContainer.parentElement !== defaultRecurrenceParent) {
-            secondGrid.appendChild(recurrenceContainer);
-        }
-        recurrenceContainer.classList.remove('sm:col-span-2');
-        recurrenceContainer.classList.add('sm:col-span-1');
 
         // NEU: Vereinheitlichte Logik für PG und Sonstiges.
         // Die Wiederholung wird nach dem ersten Grid platziert und füllt die ganze Zeile.
         if (['PG', 'Sonstiges'].includes(category)) {
             firstGrid.after(recurrenceWrapper);
-            recurrenceContainer.classList.remove('sm:col-span-1');
-            recurrenceContainer.classList.add('sm:col-span-2');
+            recurrenceWrapper.querySelector('#appointment-recurrence-container').classList.remove('sm:col-span-1');
+            recurrenceWrapper.querySelector('#appointment-recurrence-container').classList.add('sm:col-span-2');
         }
 
         if (category === 'ET') {
@@ -7377,6 +7877,34 @@ class AppointmentsView {
         this._updateModalLayoutForCategory(category);
     }
 
+    // NEU: Ermittelt das aktuell in der Timeline sichtbare/eingerastete Datum
+    _getCurrentVisibleDateInTimeline() {
+        if (!this.statsMonthTimeline) return null;
+        
+        const scrollLeft = this.statsMonthTimeline.scrollLeft;
+        const containerWidth = this.statsMonthTimeline.offsetWidth;
+        const centerPosition = scrollLeft + (containerWidth / 2);
+        
+        // Finde alle day-cards
+        const dayCards = this.statsMonthTimeline.querySelectorAll('.day-card');
+        let closestCard = null;
+        let minDistance = Infinity;
+        
+        dayCards.forEach(card => {
+            const cardLeft = card.offsetLeft;
+            const cardWidth = card.offsetWidth;
+            const cardCenter = cardLeft + (cardWidth / 2);
+            const distance = Math.abs(cardCenter - centerPosition);
+            
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestCard = card;
+            }
+        });
+        
+        return closestCard ? closestCard.dataset.date : null;
+    }
+
     openModal(termin = null) {
         appointmentsLog('--- START: openModal ---', termin ? `Editing term ID: ${termin?._id}` : 'Creating new term');
         const hintsContainer = this.modal.querySelector('#appointment-modal-hints');
@@ -7403,7 +7931,6 @@ class AppointmentsView {
             const userSelect = this.modal.querySelector('#appointment-user');
             const inviteeSelect = this.modal.querySelector('#appointment-invitee');
             const categorySelect = this.modal.querySelector('#appointment-category');
-            appointmentsLog('Modal elements found.');
 
             // NEU: Logik für Dropdowns überarbeitet, um 3 Ebenen Vorgesetzte einzuschließen
             const currentUserForDropdowns = SKT_APP.currentlyViewedUserData;
@@ -7451,14 +7978,15 @@ class AppointmentsView {
             categories.forEach(cat => categorySelect.add(new Option(cat, cat)));
             appointmentsLog('Category dropdown populated.');
 
-            if (termin) { // Edit mode
+            if (termin && termin._id) { // Edit mode - nur wenn _id vorhanden ist
                 appointmentsLog('Entering edit mode for termin:', termin);
                 // NEU: Logik für Hinweise im Modal
                 this._renderModalHints(termin, hintsContainer);
-                // KORREKTUR: Titel anpassen, je nachdem ob ein neuer oder bestehender Termin bearbeitet wird.
-                title.textContent = termin._id ? 'Termin bearbeiten' : 'Neuen Termin anlegen';
-                // KORREKTUR: Löschen-Button bei bestehenden Terminen ausblenden, wie gewünscht.
-                this.form.querySelector('#delete-appointment-btn').classList.add('hidden');
+                title.textContent = 'Termin bearbeiten';
+                // NEU: Storno-Button nur bei bestehenden Terminen anzeigen
+                const stornoBtn = this.form.querySelector('#cancel-appointment-storno-btn');
+                stornoBtn.classList.remove('hidden');
+                stornoBtn.onclick = () => this._openStornoModal(termin);
                 idInput.value = termin._id || '';
                 const mitarbeiterId = Array.isArray(termin.Mitarbeiter_ID) ? termin.Mitarbeiter_ID?.[0]?.row_id : termin.Mitarbeiter_ID;
                 if (mitarbeiterId) {
@@ -7512,8 +8040,6 @@ class AppointmentsView {
                 this.form.querySelector('#appointment-referrals-paired').value = termin.Empfehlungen || '';
 
                 this.form.querySelector('#appointment-note').value = termin.Hinweis || '';
-                this.form.querySelector('#appointment-cancellation').checked = termin.Absage || false;
-                this.form.querySelector('#appointment-cancellation-reason').value = termin.Absagegrund || '';
                 // NEU: Wiederholungs-Dropdown befüllen
                 this.form.querySelector('#appointment-recurrence').value = termin.Wiederholung || '';
                 this.form.querySelector('#appointment-infoabend-date').value = termin.Infoabend ? termin.Infoabend.split('T')[0] : '';
@@ -7521,38 +8047,51 @@ class AppointmentsView {
                 this._updateStatusDropdown(termin.Kategorie, termin.Status);
                 this._updateConditionalFields(termin.Kategorie);
 
-            } else { // Add mode
+            } else { // Add mode - neuer Termin (mit oder ohne vordefinierte Werte)
                 appointmentsLog('Entering add mode.');
+                console.log('[MODAL-DEBUG] Add mode - termin object:', termin);
                 title.textContent = 'Termin anlegen';
                 idInput.value = '';
-                userSelect.value = this.currentUserId;
                 // NEU: Standardmäßig den eingeloggten Benutzer als Mitarbeiter auswählen.
-                userSelect.value = authenticatedUserData._id; // KORREKTUR: Die Konvertierung in einen lokalen ISO-String war fehlerhaft und hat den Zeitzonen-Offset falsch angewendet.
-                // Die neue Logik erstellt den String manuell, um sicherzustellen, dass die lokale Zeit exakt übernommen wird.
-                const now = new Date(); // KORREKTUR: Die Konvertierung in einen lokalen ISO-String war fehlerhaft und hat den Zeitzonen-Offset falsch angewendet.
-                // Die neue Logik erstellt den String manuell, um sicherzustellen, dass die lokale Zeit exakt übernommen wird.
-                const localNowString = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}T${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-                this.form.querySelector('#appointment-date').value = localNowString;
-
-                // NEU: Neue Felder leeren
-                this.form.querySelector('#appointment-location').value = '';
-                this.form.querySelector('#appointment-duration').value = '';
-                inviteeSelect.value = '';
-
-                // KORREKTUR: Veraltete `currentTab`-Logik entfernt.
-                // Die Logik wird jetzt durch den neuen Event-Listener in `_handleCategoryChange` gesteuert.
-                // Wir rufen die Funktion hier einmal auf, um den initialen Zustand zu setzen.
-                // KORREKTUR: Löschen-Button bei neuen Terminen ausblenden.
-                this.form.querySelector('#delete-appointment-btn').classList.add('hidden');
+                userSelect.value = authenticatedUserData._id;
+                
+                // OPTIMIERUNG: Kategorie zuerst setzen (um Standardwerte zu initialisieren)
+                if (termin && termin.Kategorie) {
+                    categorySelect.value = termin.Kategorie;
+                }
+                
+                // WICHTIG: _handleCategoryChange ZUERST aufrufen, damit Standardwerte gesetzt werden
                 this._handleCategoryChange(categorySelect.value);
-            }
+                
+                // DANACH: Spezifische Werte aus termin-Objekt überschreiben
+                // Datum vorausfüllen wenn übergeben
+                if (termin && termin.Datum) {
+                    // Datum ist bereits im korrekten Format (YYYY-MM-DDTHH:mm) aus dem Kalender
+                    console.log('[MODAL-DEBUG] Setting date from termin.Datum:', termin.Datum);
+                    this.form.querySelector('#appointment-date').value = termin.Datum;
+                    console.log('[MODAL-DEBUG] Date field value after setting:', this.form.querySelector('#appointment-date').value);
+                } else {
+                    // Fallback: Aktuelles Datum/Zeit verwenden
+                    const now = new Date();
+                    const localNowString = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}T${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+                    console.log('[MODAL-DEBUG] Using current time:', localNowString);
+                    this.form.querySelector('#appointment-date').value = localNowString;
+                }
+                
+                // Dauer vorausfüllen wenn übergeben (von Sekunden in Minuten) - ÜBERSCHREIBT Standard
+                if (termin && termin.Dauer) {
+                    console.log('[MODAL-DEBUG] Setting duration (overriding default):', termin.Dauer, 'seconds =', Math.round(termin.Dauer / 60), 'minutes');
+                    this.form.querySelector('#appointment-duration').value = Math.round(termin.Dauer / 60);
+                }
 
-            this.form.querySelector('#appointment-cancellation-reason-container').classList.toggle('hidden', !this.form.querySelector('#appointment-cancellation').checked);
-            
+                // KORREKTUR: Der Storno-Button existiert nur im Bearbeiten-Modus.
+                const stornoBtn = this.form.querySelector('#cancel-appointment-storno-btn');
+                if (stornoBtn) stornoBtn.classList.add('hidden');
+            }
             this.modal.classList.add('visible');
             document.body.classList.add('modal-open');
             appointmentsLog('Modal is now visible.');
-
+            
         } catch (error) {
             appointmentsLog('!!! ERROR in openModal !!!', error);
             // KORREKTUR: Ersetze alert() durch eine Fehlermeldung im Modal, um Sandbox-Fehler zu vermeiden.
@@ -7563,15 +8102,145 @@ class AppointmentsView {
         appointmentsLog('--- END: openModal ---');
     }
 
+    _openStornoModal(termin) {
+        if (!this.stornoModal) return;
+        this.stornoForm.reset();
+        this.stornoForm.querySelector('#storno-appointment-id').value = termin._id;
+        this.stornoModal.classList.add('visible');
+    }
+
+    async _handleStornoSubmit(e) {
+        e.preventDefault();
+        const saveBtn = this.stornoForm.querySelector('#save-storno-btn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Speichern...';
+
+        const rowId = this.stornoForm.querySelector('#storno-appointment-id').value;
+        const reason = this.stornoForm.querySelector('#storno-reason').value;
+        const moveToPotential = this.stornoForm.querySelector('#storno-move-to-potential').checked;
+
+        // NEU: Duplikatsprüfung, wenn zu Potenzialen verschoben wird
+        if (moveToPotential) {
+            const originalTermin = this.allAppointments.find(t => t._id === rowId);
+            const partnerName = originalTermin?.Terminpartner;
+
+            if (partnerName) {
+                const existingPotential = db.termine.find(t => 
+                    t.Datum === null && 
+                    t.Terminpartner && 
+                    t.Terminpartner.toLowerCase() === partnerName.toLowerCase()
+                );
+
+                if (existingPotential) {
+                    const confirmed = await showConfirmationModal(
+                        `Ein Kontakt mit dem Namen "${partnerName}" existiert bereits in der Potenzialliste. Möchten Sie diesen Termin trotzdem verschieben und damit möglicherweise ein Duplikat erzeugen?`,
+                        'Duplikat gefunden', 'Ja, trotzdem verschieben'
+                    );
+                    if (!confirmed) {
+                        saveBtn.disabled = false; saveBtn.textContent = 'Absage speichern'; return;
+                    }
+                }
+            }
+        }
+
+        if (!reason.trim()) {
+            alert('Bitte geben Sie einen Absagegrund an.');
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Absage speichern';
+            return;
+        }
+
+        let success = false;
+        if (moveToPotential) {
+            // KORREKTUR: Erstelle einen NEUEN Eintrag für das Potenzial und aktualisiere den ALTEN Termin auf "Storno".
+
+            // Das ist sauberer und erhält die Historie.
+            const originalTermin = this.allAppointments.find(t => t._id === rowId);
+            if (!originalTermin) {
+                alert('Fehler: Der ursprüngliche Termin konnte nicht gefunden werden.');
+                saveBtn.disabled = false; saveBtn.textContent = 'Absage speichern'; return;
+            }
+
+            // 1. Daten für das neue Potenzial vorbereiten (ohne Datum, mit Verknüpfungen)
+            const newPotentialData = {
+                ...originalTermin, // Übernehme alle Daten wie Partner, Mitarbeiter etc.
+                [COLUMN_MAPS.termine.Datum]: null,
+              [COLUMN_MAPS.termine.Kategorie]: null,
+              [COLUMN_MAPS.termine.Eingeladener]: originalTermin.Eingeladener,
+              [COLUMN_MAPS.termine.Mitarbeiter_ID]:originalTermin.Mitarbeiter_ID,
+              [COLUMN_MAPS.termine.Terminpartner]:originalTermin.Terminpartner,
+              [COLUMN_MAPS.termine.Umsatzprognose]: originalTermin.Umsatzprognose,
+              [COLUMN_MAPS.termine.Hinweis]:originalTermin.Hinweis,
+                [COLUMN_MAPS.termine.Status]: null,
+                [COLUMN_MAPS.termine.Absagegrund]: null,
+                [COLUMN_MAPS.termine.Absage]: false,
+            };
+            delete newPotentialData._id; // Wichtig: ID entfernen, damit eine neue Zeile erstellt wird.
+
+            // 2. Neuen Potenzialeintrag erstellen
+            const newPotentialId = await SKT_APP.seaTableAddTermin(newPotentialData);
+
+            // 3. Alten Termin auf "Storno" setzen
+            const updateOldTerminData = { [COLUMN_MAPS.termine.Status]: 'Storno', [COLUMN_MAPS.termine.Absagegrund]: reason, [COLUMN_MAPS.termine.Absage]: true };
+            const updateSuccess = await SKT_APP.seaTableUpdateTermin(rowId, updateOldTerminData);
+
+            success = newPotentialId && updateSuccess;
+        } else {
+            // Bestehende Logik: Nur den Status des aktuellen Termins auf "Storno" setzen.
+            const rowData = { [COLUMN_MAPS.termine.Status]: 'Storno', [COLUMN_MAPS.termine.Absagegrund]: reason, [COLUMN_MAPS.termine.Absage]: true };
+            success = await SKT_APP.seaTableUpdateTermin(rowId, rowData);
+        }
+
+        if (success) {
+            // OPTIMIERUNG: Scroll-Position speichern, falls Wochenansicht aktiv ist
+            const scrollContainer = this.weekCalendarScrollContainer;
+            const isWeekViewActive = !this.statsWeekView.classList.contains('hidden');
+            const savedScrollLeft = (isWeekViewActive && scrollContainer) ? scrollContainer.scrollLeft : 0;
+            const savedScrollTop = (isWeekViewActive && scrollContainer) ? scrollContainer.scrollTop : 0;
+            
+            this.stornoModal.classList.remove('visible');
+            this.closeModal();
+            
+            // OPTIMIERUNG: Nur Daten neu laden, NICHT die gesamte View neu initialisieren
+            localStorage.removeItem(CACHE_PREFIX + 'termine');
+            db.termine = await seaTableQuery('Termine');
+            normalizeAllData();
+            await this.fetchAndRender(); // Lädt Daten und ruft render() auf (filtert und aktualisiert Stats)
+            
+            // WICHTIG: Wochenansicht aktualisieren und Scroll-Position wiederherstellen
+            if (isWeekViewActive) {
+                this.weekCalendarInitialScrollDone = true; // Verhindert Auto-Scroll zur Standardposition
+                
+                // WICHTIG: Wir müssen einen kurzen Moment warten, damit render() die Daten filtert
+                setTimeout(() => {
+                    this._renderWeekCalendar(); // Rendert mit den aktualisierten/gefilterten Daten
+                    
+                    // Scroll-Position wiederherstellen - mit zusätzlichem Delay
+                    setTimeout(() => {
+                        if (scrollContainer) {
+                            scrollContainer.scrollLeft = savedScrollLeft;
+                            scrollContainer.scrollTop = savedScrollTop;
+                            console.log('[STORNO-UPDATE] Scroll positions restored:', { savedScrollLeft, savedScrollTop });
+                        }
+                    }, 100);
+                }, 50);
+            }
+        } else {
+            alert('Fehler beim Speichern der Absage.');
+        }
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Absage speichern';
+    }
+
     async _renderModalHints(termin, container) {
         const hintLog = (message, ...data) => console.log(`%c[ModalHint] %c${message}`, 'color: #9b59b6; font-weight: bold;', 'color: black;', ...data);
         let hintsFound = false;
         container.innerHTML = '';
 
-        // Hinweis für zugeordnete Umsätze bei BT-Terminen
-        if (termin.Kategorie === 'BT' && termin.Terminpartner) {
+        // NEU: Hinweis für zugeordnete Umsätze bei ALLEN gehaltenen Terminen (nicht nur BT)
+        if (termin.Status === 'Gehalten' && termin.Terminpartner) {
             const partnerName = termin.Terminpartner;
-            hintLog(`Prüfe auf Umsatz für BT mit Partner: '${partnerName}'`);
+            hintLog(`Prüfe auf Umsatz für gehaltenen ${termin.Kategorie}-Termin mit Partner: '${partnerName}'`);
             
             // KORREKTUR: Verwende eine direkte SQL-Abfrage, um zuverlässig die Umsätze zu finden.
             // Dies umgeht Probleme mit der globalen `db.umsatz`-Tabelle.
@@ -7590,7 +8259,12 @@ class AppointmentsView {
 
             if (relatedSales.length > 0) {
                 hintsFound = true;
-                let salesHtml = '<strong>Zugeordneter Umsatz:</strong><ul class="list-disc list-inside pl-2 mt-1 text-sm">';
+                const totalEH = relatedSales.reduce((sum, sale) => sum + (sale.EH || 0), 0);
+                let salesHtml = `<div class="flex items-center justify-between mb-2">
+                    <strong class="text-lg">Zugeordneter Umsatz:</strong>
+                    <span class="text-xl font-bold text-green-700">${totalEH.toFixed(2)} EH</span>
+                </div>
+                <ul class="list-disc list-inside pl-2 mt-1 text-sm">`;
                 relatedSales.forEach(sale => { // KORREKTUR: Produktnamen über die ID aus db.produkte nachschlagen.
                     // KORREKTUR: Produktnamen über die ID aus db.produkte nachschlagen.
                     const produkt = db.produkte.find(p => p._id === sale.Produkt_ID);
@@ -7645,6 +8319,10 @@ class AppointmentsView {
     closeModal() {
         this.modal.classList.remove('visible');
         document.body.classList.remove('modal-open');
+        // NEU: Stelle sicher, dass das Lade-Overlay immer ausgeblendet wird.
+        const loaderOverlay = this.modal.querySelector('#appointment-modal-loader');
+        if (loaderOverlay) loaderOverlay.classList.add('hidden');
+        if (loaderOverlay) loaderOverlay.classList.remove('flex');
 
         // Setzt den Speicher-Button zuverlässig in den Standardzustand zurück, wenn das Modal geschlossen wird.
         const saveBtn = document.getElementById('save-appointment-btn');
@@ -7672,7 +8350,6 @@ class AppointmentsView {
         try {
             const rowId = this.form.querySelector('#appointment-id').value;
             const isNewAppointment = !rowId;
-            const isCancellation = this.form.querySelector('#appointment-cancellation').checked;
 
             // NEU: Prüfen, ob ein AT auf "Gehalten" gesetzt wird
             const newStatus = this.form.querySelector('#appointment-status').value;
@@ -7701,30 +8378,9 @@ class AppointmentsView {
                 ? this.form.querySelector('#appointment-referrals-paired').value
                 : this.form.querySelector('#appointment-referrals-single').value;
             const hinweis = this.form.querySelector('#appointment-note').value;
-            const absagegrund = this.form.querySelector('#appointment-cancellation-reason').value;
             const infoabend = this.form.querySelector('#appointment-infoabend-date').value;
             const wiederholung = this.form.querySelector('#appointment-recurrence').value;
 
-            // NEU: Validierung für Dauer
-            if (!duration || parseInt(duration) <= 0) {
-                alert('Bitte geben Sie eine gültige Dauer für den Termin an (größer als 0 Minuten).');
-                saveBtn.disabled = false;
-                saveBtnText.classList.remove('hidden');
-                saveBtnLoader.classList.add('hidden');
-                this.form.querySelector('#appointment-duration').focus();
-                return;
-            }
-
-            // NEU: Validierung für Absagegrund
-            if (isCancellation && !absagegrund.trim()) {
-                alert('Bitte geben Sie einen Absagegrund an.');
-                saveBtn.disabled = false;
-                saveBtnText.classList.remove('hidden');
-                saveBtnLoader.classList.add('hidden');
-                this.form.querySelector('#appointment-cancellation-reason').focus();
-                return;
-            }
-            
             // NEU: Validierung für Infoabend-Datum
             if (kategorie === 'ET' && infoabend) {
                 const infoabendDate = new Date(infoabend);
@@ -7768,18 +8424,20 @@ class AppointmentsView {
                 }
             }
             
+            // KORREKTUR: Konvertiere das datetime-local Format (YYYY-MM-DDTHH:mm) in das SeaTable Format (YYYY-MM-DD HH:mm)
+            const datumForSeaTable = datum ? datum.replace('T', ' ') : null;
+            console.log('[FORM-DEBUG] Datum conversion:', { original: datum, forSeaTable: datumForSeaTable });
+            
             const terminMap = SKT_APP.COLUMN_MAPS.termine;
             const rowData = {
                 [terminMap.Mitarbeiter_ID]: [mitarbeiterId],
-                [terminMap.Datum]: datum,
+                [terminMap.Datum]: datumForSeaTable,
                 [terminMap.Kategorie]: kategorie,
                 [terminMap.Status]: status,
                 [terminMap.Terminpartner]: terminpartner,
                 [terminMap.Umsatzprognose]: parseFloat(prognoseRaw) || null,
                 [terminMap.Empfehlungen]: parseInt(empfehlungenRaw) || null,
                 [terminMap.Hinweis]: hinweis,
-                [terminMap.Absage]: isCancellation,
-                [terminMap.Absagegrund]: isCancellation ? absagegrund : '',
                 [terminMap.Infoabend]: kategorie === 'ET' ? infoabend : null,
                 [terminMap.Wiederholung]: wiederholung || null,
             };
@@ -7809,11 +8467,30 @@ class AppointmentsView {
             if (terminId) {
                 appointmentsLog('API call successful. Showing success message and refreshing.');
                 
+                // OPTIMIERUNG: Scroll-Position speichern, falls Timeline-Ansicht aktiv ist
+                const timelineContainer = this.statsMonthTimeline;
+                const isTimelineViewActive = !this.statsTimelineView.classList.contains('hidden');
+                const savedTimelineScrollLeft = (isTimelineViewActive && timelineContainer) ? timelineContainer.scrollLeft : 0;
+                
+                // OPTIMIERUNG: Scroll-Position speichern, falls Wochenansicht aktiv ist
+                const scrollContainer = this.weekCalendarScrollContainer;
+                const isWeekViewActive = !this.statsWeekView.classList.contains('hidden');
+                const savedScrollLeft = (isWeekViewActive && scrollContainer) ? scrollContainer.scrollLeft : 0;
+                const savedScrollTop = (isWeekViewActive && scrollContainer) ? scrollContainer.scrollTop : 0;
+                
                 // KORREKTUR: Cache für Termine invalidieren und neu laden, damit neue Termine sofort sichtbar sind.
                 localStorage.removeItem(CACHE_PREFIX + 'termine');
                 db.termine = await seaTableQuery('Termine');
                 normalizeAllData(); // Wichtig, um die neuen Daten zu normalisieren
                 appointmentsLog('Termin-Cache invalidiert und Daten neu geladen.');
+                
+                // WICHTIG: Flags VOR fetchAndRender setzen
+                if (isTimelineViewActive && savedTimelineScrollLeft > 0) {
+                    this.timelineScrollPreserved = true;
+                }
+                if (isWeekViewActive) {
+                    this.weekCalendarInitialScrollDone = true;
+                }
                 
                 // NEU: iCal-Download-Logik
                 const downloadIcalCheckbox = this.form.querySelector('#appointment-download-ical');
@@ -7824,6 +8501,27 @@ class AppointmentsView {
                 } else {
                     // Wenn kein Download, einfach nur neu laden.
                     await this.fetchAndRender();
+                }
+                
+                // WICHTIG: Timeline-Scroll-Position wiederherstellen
+                if (isTimelineViewActive && savedTimelineScrollLeft > 0) {
+                    setTimeout(() => {
+                        if (timelineContainer) {
+                            timelineContainer.scrollLeft = savedTimelineScrollLeft;
+                            console.log('[FORM-UPDATE] Timeline scroll position restored:', savedTimelineScrollLeft);
+                        }
+                    }, 150);
+                }
+                
+                // WICHTIG: Wochenansicht-Scroll-Position wiederherstellen
+                if (isWeekViewActive) {
+                    setTimeout(() => {
+                        if (scrollContainer) {
+                            scrollContainer.scrollLeft = savedScrollLeft;
+                            scrollContainer.scrollTop = savedScrollTop;
+                            console.log('[FORM-UPDATE] Week scroll positions restored:', { savedScrollLeft, savedScrollTop });
+                        }
+                    }, 150);
                 }
 
                 saveBtnText.textContent = 'Gespeichert!';
@@ -7871,10 +8569,31 @@ class AppointmentsView {
         );
 
         if (confirmed) {
+            // OPTIMIERUNG: Scroll-Position speichern, falls Timeline-Ansicht aktiv ist
+            const timelineContainer = this.statsMonthTimeline;
+            const isTimelineViewActive = !this.statsTimelineView.classList.contains('hidden');
+            const savedTimelineScrollLeft = (isTimelineViewActive && timelineContainer) ? timelineContainer.scrollLeft : 0;
+            
             const success = await seaTableDeleteRow('Termine', rowId);
             if (success) {
                 this.closeModal();
+                
+                // WICHTIG: Flag VOR fetchAndRender setzen
+                if (isTimelineViewActive && savedTimelineScrollLeft > 0) {
+                    this.timelineScrollPreserved = true;
+                }
+                
                 await this.fetchAndRender();
+                
+                // WICHTIG: Timeline-Scroll-Position wiederherstellen
+                if (isTimelineViewActive && savedTimelineScrollLeft > 0) {
+                    setTimeout(() => {
+                        if (timelineContainer) {
+                            timelineContainer.scrollLeft = savedTimelineScrollLeft;
+                            console.log('[DELETE] Timeline scroll position restored:', savedTimelineScrollLeft);
+                        }
+                    }, 150);
+                }
             } else {
                 alert('Fehler beim Löschen des Termins.');
             }
@@ -8025,7 +8744,8 @@ class AppointmentsView {
         if (newCategory === 'ET') {
             this.form.querySelector('#appointment-infoabend-date').value = findNextInfoDateAfter(getCurrentDate()).toISOString().split('T')[0];
         } // KORREKTUR: toLocalISOString verwenden
-        // NEU: Setze die Standard-Dauer basierend auf der Kategorie, aber nur, wenn es ein neuer Termin ist.
+        // NEU: Setze die Standard-Dauer basierend auf der Kategorie, aber nur, wenn es ein neuer Termin ist
+        // UND die Dauer noch nicht gesetzt wurde (leer oder undefined).
         const isNewAppointment = !this.form.querySelector('#appointment-id').value;
         if (isNewAppointment) {
             const durationInput = this.form.querySelector('#appointment-duration');
@@ -8039,7 +8759,8 @@ class AppointmentsView {
                 'ET': 45,
                 'BT': 90
             };
-            if (durationInput && defaultDurations[newCategory]) {
+            // OPTIMIERUNG: Nur den Standardwert setzen, wenn die Dauer noch nicht ausgefüllt wurde
+            if (durationInput && defaultDurations[newCategory] && (!durationInput.value || durationInput.value === '')) {
                 durationInput.value = defaultDurations[newCategory];
             }
         }
@@ -8183,6 +8904,477 @@ class AppointmentsView {
         document.body.classList.add('modal-open');
         document.documentElement.classList.add('modal-open');
     }
+
+    // NEU: Termin-Flow-Analyse Methoden (von Planung hierher verschoben, mit eigenen Filtern)
+    _renderFlowAnalysis() {
+        if (!this.flowSankeyContainer) return;
+        
+        this.flowSankeyContainer.innerHTML = '<div class="loader mx-auto"></div>';
+        this.flowDetailsSection.classList.add('hidden');
+        
+        const flowType = this.flowTypeFilter.value;
+        const scope = this.statsScopeFilter.value;
+        
+        // Verwende die bereits gefilterten Termine aus der Hauptansicht
+        const allTermine = this.dateAndSearchFilteredAppointments;
+        
+        // Filter nur nach Termin-Kategorie für die Flow-Analyse
+        const flowAppointments = allTermine.filter(t => t.Kategorie === flowType);
+        
+        // Beschreibung anpassen
+        if (flowType === 'ET') {
+            this.flowSankeyDescription.textContent = 'Dieses Diagramm visualisiert den Weg von Einstellungsterminen (ET) zu neu eingestellten Mitarbeitern.';
+        } else if (flowType === 'AT') {
+            this.flowSankeyDescription.textContent = 'Dieses Diagramm visualisiert den Weg von Analyseterminen (AT) zu nachfolgenden Beratungsterminen (BT).';
+        } else {
+            this.flowSankeyDescription.textContent = 'Dieses Diagramm visualisiert den Weg von Beratungsterminen (BT) zu daraus resultierenden Abschlüssen (Umsätzen).';
+        }
+        
+        // Berechne Flow-Daten
+        const totalFlow = flowAppointments.length;
+        
+        let gehalten, verschoben, ausfall, offen;
+        
+        if (flowType === 'ET') {
+            // ET hat eine andere Logik: "Im Prozess" statt "Gehalten"
+            gehalten = flowAppointments.filter(t => !['Offen', 'Verschoben', 'Storno'].includes(t.Status) && t.Absage !== true).length;
+            verschoben = flowAppointments.filter(t => t.Status === 'Verschoben').length;
+            ausfall = flowAppointments.filter(t => t.Status === 'Storno' || t.Absage === true).length;
+            offen = flowAppointments.filter(t => t.Status === 'Offen').length;
+        } else {
+            // AT und BT verwenden Standard-Status
+            gehalten = flowAppointments.filter(t => t.Status === 'Gehalten').length;
+            verschoben = flowAppointments.filter(t => t.Status === 'Verschoben').length;
+            ausfall = flowAppointments.filter(t => t.Status === 'Storno' || t.Absage === true).length;
+            offen = flowAppointments.filter(t => !['Gehalten', 'Verschoben', 'Storno'].includes(t.Status) && t.Absage !== true).length;
+        }
+        
+        let outcome1 = 0, outcome2 = 0;
+        
+        if (flowType === 'AT') {
+            // AT → BT Conversion
+            const heldATs = flowAppointments.filter(t => t.Status === 'Gehalten');
+            const atPartners = new Set(heldATs.map(t => t.Terminpartner ? t.Terminpartner.trim().toLowerCase() : null).filter(Boolean));
+            const resultingBTs = allTermine.filter(t => t.Kategorie === 'BT' && t.Terminpartner && atPartners.has(t.Terminpartner.trim().toLowerCase()));
+            this.appointmentsForOutcomes = { resultingBTs, heldATsWithoutBT: [] };
+            outcome1 = resultingBTs.length;
+            const partnersWithBT = new Set(resultingBTs.map(t => t.Terminpartner.trim().toLowerCase()));
+            const heldATsWithoutBT = heldATs.filter(t => t.Terminpartner && !partnersWithBT.has(t.Terminpartner.trim().toLowerCase()));
+            this.appointmentsForOutcomes.heldATsWithoutBT = heldATsWithoutBT;
+            outcome2 = heldATsWithoutBT.length;
+        } else if (flowType === 'BT') {
+            // BT → Umsatz Conversion
+            const heldBTs = flowAppointments.filter(t => t.Status === 'Gehalten');
+            const btPartners = new Set(heldBTs.map(t => t.Terminpartner ? t.Terminpartner.trim().toLowerCase() : null).filter(Boolean));
+            const resultingSales = db.umsatz.filter(u => u.Kunde && btPartners.has(u.Kunde.trim().toLowerCase()));
+            this.appointmentsForOutcomes = { resultingSales, heldBTsWithoutSale: [] };
+            outcome1 = resultingSales.length;
+            const partnersWithSale = new Set(resultingSales.map(s => s.Kunde.trim().toLowerCase()));
+            const heldBTsWithoutSale = heldBTs.filter(t => t.Terminpartner && !partnersWithSale.has(t.Terminpartner.trim().toLowerCase()));
+            this.appointmentsForOutcomes.heldBTsWithoutSale = heldBTsWithoutSale;
+            outcome2 = heldBTsWithoutSale.length;
+        } else if (flowType === 'ET') {
+            // ET → Neuer Mitarbeiter
+            const etsInProcess = flowAppointments.filter(t => !['Offen', 'Verschoben', 'Storno'].includes(t.Status) && t.Absage !== true);
+            const newMitarbeiter = etsInProcess.filter(t => t.Status === 'Wird Mitarbeiter');
+            const keinMitarbeiter = etsInProcess.filter(t => t.Status !== 'Wird Mitarbeiter');
+            this.appointmentsForOutcomes = { newMitarbeiter, keinMitarbeiter };
+            outcome1 = newMitarbeiter.length;
+            outcome2 = keinMitarbeiter.length;
+        }
+        
+        const sankeyData = {
+            total: totalFlow,
+            gehalten,
+            verschoben,
+            ausfall,
+            offen,
+            outcome1,
+            outcome2,
+            appointments: flowAppointments
+        };
+        
+        this._renderFlowSankey(sankeyData, flowType);
+    }
+
+    _renderFlowSankey(data, flowType) {
+        // Mobile vs Desktop Rendering
+        if (window.innerWidth < 768) {
+            this._renderFlowSankeyMobile(data, flowType);
+        } else {
+            this._renderFlowSankeyDesktop(data, flowType);
+        }
+    }
+
+    _renderFlowSankeyMobile(data, flowType) {
+        const outcome1Label = flowType === 'AT' ? 'Beratungstermin' : flowType === 'ET' ? 'Neuer Mitarbeiter' : 'Abschluss';
+        const outcome2Label = flowType === 'AT' ? 'Kein BT' : flowType === 'ET' ? 'Kein Mitarbeiter' : 'Kein Abschluss';
+        
+        this.flowSankeyContainer.style.height = 'auto';
+        
+        const createNode = (title, value, colorClass, icon, level = 1) => {
+            if (value === 0) return '';
+            return `
+                <div class="sankey-mobile-node-wrapper" style="padding-left: ${level * 1.5}rem;">
+                    <a href="#" data-status="${title}" class="sankey-mobile-node ${colorClass}">
+                        <div class="sankey-mobile-node-icon"><i class="fas ${icon} fa-lg"></i></div>
+                        <div class="sankey-mobile-node-content">
+                            <div class="sankey-mobile-node-title">${title}</div>
+                            <div class="sankey-mobile-node-value">${value}</div>
+                        </div>
+                        <i class="fas fa-chevron-right sankey-mobile-node-chevron"></i>
+                    </a>
+                </div>
+            `;
+        };
+        
+        this.flowSankeyContainer.innerHTML = `
+            <div class="flex flex-col items-center gap-y-4">
+                <div class="sankey-mobile-source-node">
+                    <div class="sankey-mobile-source-title">${flowType === 'AT' ? 'Analysetermine' : flowType === 'ET' ? 'Einstellungstermine' : 'Beratungstermine'}</div>
+                    <div class="sankey-mobile-source-value">${data.total}</div>
+                </div>
+                <div class="sankey-mobile-connector"></div>
+                <div class="sankey-mobile-level">
+                    <div class="sankey-mobile-level-line"></div>
+                    <div class="sankey-mobile-node-container">
+                        ${createNode('Gehalten', data.gehalten, 'bg-green-100 text-green-800', 'fa-check-circle')}
+                        ${createNode('Verschoben', data.verschoben, 'bg-orange-100 text-orange-800', 'fa-clock')}
+                        ${createNode('Ausfall', data.ausfall, 'bg-red-100 text-red-800', 'fa-times-circle')}
+                        ${createNode('Offen', data.offen, 'bg-gray-100 text-gray-800', 'fa-question-circle')}
+                    </div>
+                </div>
+                ${data.gehalten > 0 ? `
+                    <div class="sankey-mobile-connector"></div>
+                    <div class="sankey-mobile-level">
+                        <div class="sankey-mobile-level-line"></div>
+                        <div class="sankey-mobile-node-container">
+                            ${createNode(outcome1Label, data.outcome1, 'bg-emerald-100 text-emerald-800', 'fa-handshake', 2)}
+                            ${createNode(outcome2Label, data.outcome2, 'bg-yellow-100 text-yellow-800', 'fa-thumbs-down', 2)}
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+        this._setupFlowSankeyEventListeners(data.appointments, flowType);
+    }
+
+    _renderFlowSankeyDesktop(data, flowType) {
+        let gehaltenLabel, ausfallLabel, outcome1Label, outcome2Label;
+        if (flowType === 'AT') {
+            gehaltenLabel = 'Gehalten';
+            ausfallLabel = 'Ausfall';
+            outcome1Label = 'Beratungstermin';
+            outcome2Label = 'Kein BT';
+        } else if (flowType === 'BT') {
+            gehaltenLabel = 'Gehalten';
+            ausfallLabel = 'Ausfall';
+            outcome1Label = 'Abschluss';
+            outcome2Label = 'Kein Abschluss';
+        } else {
+            gehaltenLabel = 'Im Prozess';
+            outcome1Label = 'Neuer Mitarbeiter';
+            outcome2Label = 'Kein Mitarbeiter';
+            ausfallLabel = 'Ausfall';
+        }
+        
+        const sourceNodeLabels = { 'AT': 'Analysetermine', 'BT': 'Beratungstermine', 'ET': 'Einstellungstermine' };
+        
+        this.flowSankeyContainer.style.height = '350px';
+        
+        this.flowSankeyContainer.innerHTML = `
+            <svg id="appointments-sankey-svg" class="absolute top-0 left-0 w-full h-full" preserveAspectRatio="none">
+                <path id="flow-path-gehalten" stroke-width="${data.gehalten}" fill="none" stroke-opacity="0.5" class="stroke-green-400"></path>
+                <path id="flow-path-verschoben" stroke-width="${data.verschoben}" fill="none" stroke-opacity="0.5" class="stroke-orange-400"></path>
+                <path id="flow-path-ausfall" stroke-width="${data.ausfall}" fill="none" stroke-opacity="0.5" class="stroke-red-400"></path>
+                <path id="flow-path-offen" stroke-width="${data.offen}" fill="none" stroke-opacity="0.5" class="stroke-gray-400"></path>
+                <path id="flow-path-outcome1" stroke-width="${data.outcome1}" fill="none" stroke-opacity="0.5" class="stroke-emerald-500"></path>
+                <path id="flow-path-outcome2" stroke-width="${data.outcome2}" fill="none" stroke-opacity="0.5" class="stroke-yellow-400"></path>
+            </svg>
+            <div class="relative w-full h-full flex justify-between items-center z-10">
+                <div class="w-1/4 flex justify-start">
+                    <div id="flow-source-node" class="p-4 bg-gray-600 text-white rounded-lg shadow-lg text-center">
+                        <span class="font-semibold">${sourceNodeLabels[flowType] || 'Termine'}</span>
+                        <span class="block text-2xl font-bold">${data.total}</span>
+                    </div>
+                </div>
+                <div class="w-1/2 flex flex-col justify-around items-center h-full py-4">
+                    <a href="#" data-status="Gehalten" id="flow-status-gehalten" class="p-3 bg-green-100 border-l-4 border-green-500 rounded-md shadow-md hover:shadow-xl hover:bg-green-200 transition w-48 text-center sankey-status-node">
+                        <span class="font-semibold text-green-800">${gehaltenLabel}</span><span class="block text-xl font-bold text-green-900">${data.gehalten}</span>
+                    </a>
+                    <a href="#" data-status="Verschoben" id="flow-status-verschoben" class="p-3 bg-orange-100 border-l-4 border-orange-500 rounded-md shadow-md hover:shadow-xl hover:bg-orange-200 transition w-48 text-center sankey-status-node">
+                        <span class="font-semibold text-orange-800">Verschoben</span><span class="block text-xl font-bold text-orange-900">${data.verschoben}</span>
+                    </a>
+                    ${flowType !== 'ET' ? `
+                        <a href="#" data-status="Ausfall" id="flow-status-ausfall" class="p-3 bg-red-100 border-l-4 border-red-500 rounded-md shadow-md hover:shadow-xl hover:bg-red-200 transition w-48 text-center sankey-status-node">
+                            <span class="font-semibold text-red-800">${ausfallLabel}</span><span class="block text-xl font-bold text-red-900">${data.ausfall}</span>
+                        </a>
+                    ` : ''}
+                    <a href="#" data-status="Offen" id="flow-status-offen" class="p-3 bg-gray-100 border-l-4 border-gray-500 rounded-md shadow-md hover:shadow-xl hover:bg-gray-200 transition w-48 text-center sankey-status-node">
+                        <span class="font-semibold text-gray-800">Offen</span><span class="block text-xl font-bold text-gray-900">${data.offen}</span>
+                    </a>
+                </div>
+                <div class="w-1/4 flex flex-col justify-evenly items-end h-full py-10 gap-4">
+                    <a href="#" data-status="outcome1" id="flow-outcome1-node" class="p-4 bg-emerald-600 text-white rounded-lg shadow-lg text-center w-48 hover:shadow-xl hover:bg-emerald-700 transition sankey-status-node">
+                        <span class="font-semibold">${outcome1Label}</span><span class="block text-2xl font-bold">${data.outcome1}</span>
+                    </a>
+                    <a href="#" data-status="outcome2" id="flow-outcome2-node" class="p-4 ${flowType === 'ET' ? 'bg-red-600 hover:bg-red-700' : 'bg-yellow-500 hover:bg-yellow-600'} text-white rounded-lg shadow-lg text-center w-48 transition sankey-status-node">
+                        <span class="font-semibold">${outcome2Label}</span><span class="block text-2xl font-bold">${data.outcome2}</span>
+                    </a>
+                </div>
+            </div>
+        `;
+        requestAnimationFrame(() => this._drawFlowSankeyLinks());
+        this._setupFlowSankeyEventListeners(data.appointments, flowType);
+    }
+
+    _drawFlowSankeyLinks() {
+        const svg = document.getElementById('appointments-sankey-svg');
+        if (!svg) return;
+        const containerRect = svg.getBoundingClientRect();
+        
+        const connections = [
+            ['flow-source-node', 'flow-status-gehalten', 'flow-path-gehalten'],
+            ['flow-source-node', 'flow-status-verschoben', 'flow-path-verschoben'],
+            ['flow-source-node', 'flow-status-ausfall', 'flow-path-ausfall'],
+            ['flow-source-node', 'flow-status-offen', 'flow-path-offen'],
+            ['flow-status-gehalten', 'flow-outcome1-node', 'flow-path-outcome1'],
+            ['flow-status-gehalten', 'flow-outcome2-node', 'flow-path-outcome2']
+        ];
+        
+        connections.forEach(([startId, endId, pathId]) => {
+            const startNode = document.getElementById(startId);
+            const endNode = document.getElementById(endId);
+            const path = document.getElementById(pathId);
+            if (!startNode || !endNode || !path) return;
+            
+            const strokeWidth = parseFloat(path.getAttribute('stroke-width')) || 0;
+            if (strokeWidth === 0) {
+                path.style.display = 'none';
+                return;
+            }
+            path.style.display = '';
+            
+            const startRect = startNode.getBoundingClientRect();
+            const endRect = endNode.getBoundingClientRect();
+            const startX = startRect.right - containerRect.left;
+            const startY = startRect.top - containerRect.top + startRect.height / 2;
+            const endX = endRect.left - containerRect.left;
+            const endY = endRect.top - containerRect.top + endRect.height / 2;
+            const controlX1 = startX + (endX - startX) / 2;
+            const controlX2 = endX - (endX - startX) / 2;
+            path.setAttribute('d', `M ${startX} ${startY} C ${controlX1} ${startY}, ${controlX2} ${endY}, ${endX} ${endY}`);
+        });
+    }
+
+    _setupFlowSankeyEventListeners(appointments, flowType) {
+        this.flowSankeyContainer.querySelectorAll('.sankey-status-node').forEach(node => {
+            node.addEventListener('click', (e) => {
+                e.preventDefault();
+                const status = node.dataset.status;
+                
+                if (this.activeSankeyNode === node) {
+                    this.flowDetailsSection.classList.add('hidden');
+                    node.classList.remove('active');
+                    this.activeSankeyNode = null;
+                    return;
+                }
+                
+                if (this.activeSankeyNode) this.activeSankeyNode.classList.remove('active');
+                node.classList.add('active');
+                this.activeSankeyNode = node;
+                
+                let filteredAppointments = [];
+                if (flowType === 'ET') {
+                    if (status === 'Gehalten') filteredAppointments = appointments.filter(t => !['Offen', 'Verschoben', 'Storno'].includes(t.Status) && t.Absage !== true);
+                    else if (status === 'Verschoben') filteredAppointments = appointments.filter(t => t.Status === 'Verschoben');
+                    else if (status === 'Ausfall') filteredAppointments = appointments.filter(t => t.Status === 'Storno' || t.Absage === true);
+                    else if (status === 'Offen') filteredAppointments = appointments.filter(t => t.Status === 'Offen');
+                    else if (status === 'outcome1') filteredAppointments = this.appointmentsForOutcomes.newMitarbeiter;
+                    else if (status === 'outcome2') filteredAppointments = this.appointmentsForOutcomes.keinMitarbeiter;
+                } else {
+                    if (status === 'Gehalten') filteredAppointments = appointments.filter(t => t.Status === 'Gehalten');
+                    else if (status === 'Verschoben') filteredAppointments = appointments.filter(t => t.Status === 'Verschoben');
+                    else if (status === 'Ausfall') filteredAppointments = appointments.filter(t => t.Status === 'Storno' || t.Absage === true);
+                    else if (status === 'Offen') filteredAppointments = appointments.filter(t => !['Gehalten', 'Verschoben', 'Storno'].includes(t.Status) && t.Absage !== true);
+                }
+                
+                if (status === 'outcome1') {
+                    if (flowType === 'AT') {
+                        filteredAppointments = this.appointmentsForOutcomes.resultingBTs;
+                    } else if (flowType === 'BT') {
+                        const partnersWithSale = new Set(this.appointmentsForOutcomes.resultingSales.map(s => s.Kunde.trim().toLowerCase()));
+                        filteredAppointments = appointments.filter(t => t.Kategorie === 'BT' && t.Status === 'Gehalten' && t.Terminpartner && partnersWithSale.has(t.Terminpartner.trim().toLowerCase()));
+                    }
+                } else if (status === 'outcome2' && flowType !== 'ET') {
+                    filteredAppointments = flowType === 'AT' ? this.appointmentsForOutcomes.heldATsWithoutBT : this.appointmentsForOutcomes.heldBTsWithoutSale;
+                }
+                
+                this._renderFlowDetailsTable(status, filteredAppointments, flowType);
+            });
+        });
+    }
+
+    _renderFlowDetailsTable(status, appointments, flowType) {
+        const titleMap = {
+            'Gehalten': flowType === 'ET' ? 'Termine im Prozess' : 'Gehaltene Termine',
+            'Verschoben': 'Verschobene Termine',
+            'Ausfall': 'Ausgefallene Termine',
+            'Offen': 'Offene Termine',
+            'outcome1': flowType === 'AT' ? 'Resultierende Beratungstermine' : flowType === 'ET' ? 'Neue Mitarbeiter' : 'Beratungstermine mit Abschluss',
+            'outcome2': flowType === 'AT' ? 'Gehaltene ATs ohne BT' : flowType === 'ET' ? 'Wird kein Mitarbeiter' : 'Gehaltene BTs ohne Abschluss',
+        };
+        
+        this.flowDetailsTitle.textContent = titleMap[status] || status;
+        this.flowDetailsTableBody.innerHTML = '';
+        
+        if (appointments.length === 0) {
+            this.flowDetailsTableBody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-gray-500">Keine Termine für diesen Status gefunden.</td></tr>';
+        } else {
+            const tableRowsHtml = appointments.map(termin => {
+                const mitarbeiter = findRowById('mitarbeiter', termin.Mitarbeiter_ID);
+                const partnerName = termin.Terminpartner || termin.Kunde || '-';
+                const hinweis = termin.Hinweis || '-';
+                
+                return `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${termin.Datum ? new Date(termin.Datum).toLocaleDateString('de-DE') : '-'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <span class="text-skt-blue hover:underline cursor-pointer customer-timeline-link" data-customer-name="${_escapeHtml(partnerName)}" title="Zeige alle Termine für diesen Kunden">
+                                ${partnerName}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${mitarbeiter?.Name || '-'}</td>
+                        <td class="px-6 py-4 text-sm text-gray-500">${hinweis}</td>
+                    </tr>
+                `;
+            }).join('');
+            this.flowDetailsTableBody.innerHTML = tableRowsHtml;
+            
+            // Event-Listener für Kundennamen hinzufügen
+            this.flowDetailsTableBody.querySelectorAll('.customer-timeline-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    this._showCustomerTimeline(e.currentTarget.dataset.customerName);
+                });
+            });
+        }
+        
+        this.flowDetailsSection.classList.remove('hidden');
+    }
+
+    _showCustomerTimeline(customerName) {
+        const modal = document.getElementById('customer-timeline-modal');
+        const titleEl = document.getElementById('customer-timeline-modal-title');
+        const contentEl = document.getElementById('customer-timeline-modal-content');
+        const closeBtn = document.getElementById('close-customer-timeline-modal-btn');
+    
+        if (!modal || !titleEl || !contentEl || !closeBtn) {
+            console.error('Customer timeline modal elements not found.');
+            return;
+        }
+    
+        titleEl.textContent = `Termin-Historie für: ${customerName}`;
+        contentEl.innerHTML = '<div class="loader mx-auto"></div>';
+    
+        const customerAppointments = db.termine.filter(t => t.Terminpartner && t.Terminpartner.toLowerCase() === customerName.toLowerCase())
+            .sort((a, b) => new Date(a.Datum) - new Date(b.Datum));
+    
+        if (customerAppointments.length === 0) {
+            contentEl.innerHTML = '<p class="text-center text-gray-500">Keine Termine für diesen Kunden gefunden.</p>';
+        } else {
+            let timelineHtml = '<div class="customer-timeline">';
+            customerAppointments.forEach((termin, index) => {
+                // Zwischenschritt: Zeitdifferenz zum vorherigen Termin
+                if (index > 0) {
+                    const prevTermin = customerAppointments[index - 1];
+                    const diffMs = new Date(termin.Datum) - new Date(prevTermin.Datum);
+                    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+                    let diffText = '';
+                    if (diffDays === 0) {
+                        diffText = 'Am selben Tag';
+                    } else if (diffDays === 1) {
+                        diffText = '1 Tag später';
+                    } else {
+                        diffText = `${diffDays} Tage später`;
+                    }
+                    timelineHtml += `<div class="timeline-gap"><span>${diffText}</span></div>`;
+                }
+    
+                // Termin-Eintrag
+                const mitarbeiter = findRowById('mitarbeiter', termin.Mitarbeiter_ID);
+                const { border: statusColorClass } = this._getAppointmentColorClasses(termin);
+                
+                const categoryColors = {
+                    'AT': 'bg-skt-green-accent', 'BT': 'bg-skt-blue-accent', 'ST': 'bg-skt-red-accent',
+                    'ET': 'bg-accent-gold', 'Immo': 'bg-accent-immo', 'NT': 'bg-accent-purple', 'default': 'bg-skt-grey-medium'
+                };
+                const categoryPillColor = categoryColors[termin.Kategorie] || categoryColors['default'];
+    
+                timelineHtml += `
+                    <div class="timeline-entry">
+                        <div class="timeline-dot ${statusColorClass.replace('border-', 'bg-')}"></div>
+                        <div class="p-4 bg-skt-grey-light rounded-lg shadow-sm">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <span class="inline-block px-3 py-1 text-xs font-semibold text-white ${categoryPillColor} rounded-full">${termin.Kategorie}</span>
+                                    <p class="font-bold text-lg text-skt-blue mt-1">${termin.Terminpartner}</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button class="goto-calendar-btn p-2 text-skt-blue hover:text-skt-blue-light hover:bg-white rounded-lg transition-colors" 
+                                            data-appointment-id="${termin._id}" 
+                                            data-appointment-date="${termin.Datum}"
+                                            title="Im Kalender anzeigen">
+                                        <i class="fas fa-calendar-alt text-lg"></i>
+                                    </button>
+                                    <p class="text-sm text-gray-500 font-medium">${new Date(termin.Datum).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} Uhr</p>
+                                </div>
+                            </div>
+                            <div class="mt-3 pt-3 border-t border-gray-200 text-sm text-gray-600 space-y-1">
+                                <p><strong>Status:</strong> <span class="font-semibold ${statusColorClass.replace('border-', 'text-')}">${termin.Status || '-'}</span></p>
+                                <p><strong>Mitarbeiter:</strong> ${mitarbeiter?.Name || 'Unbekannt'}</p>
+                                ${termin.Hinweis ? `<p><strong>Hinweis:</strong> ${_escapeHtml(termin.Hinweis)}</p>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            timelineHtml += '</div>';
+            contentEl.innerHTML = timelineHtml;
+            
+            // Event-Listener für "Im Kalender anzeigen"-Buttons
+            const self = this;
+            contentEl.querySelectorAll('.goto-calendar-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const appointmentId = btn.dataset.appointmentId;
+                    const appointmentDate = btn.dataset.appointmentDate;
+                    
+                    console.log('[CALENDAR-NAV] Navigiere zu Termin:', appointmentId, appointmentDate);
+                    
+                    // Modal schließen
+                    modal.classList.remove('visible');
+                    document.body.classList.remove('modal-open');
+                    
+                    // Zur Terminübersicht navigieren und Termin anzeigen
+                    self._navigateToAppointmentInCalendar(appointmentId, appointmentDate);
+                });
+            });
+        }
+    
+        modal.classList.add('visible');
+        document.body.classList.add('modal-open');
+    }
+
+    _navigateToAppointmentInCalendar(appointmentId, appointmentDate) {
+        // Diese Methode navigiert zum Termin im Kalender
+        // Sie kann leer bleiben oder eine spezifische Logik für Termine haben
+        console.log('[CALENDAR-NAV] Termin im Kalender anzeigen:', appointmentId, appointmentDate);
+        // Optional: Öffne den Termin direkt im Modal
+        const appointment = this.allAppointments.find(t => t._id === appointmentId);
+        if (appointment) {
+            this.openModal(appointment);
+        }
+    }
 }
 
 async function loadAndInitAppointmentsView() {
@@ -8191,10 +9383,10 @@ async function loadAndInitAppointmentsView() {
 
   try {
     // Schritt 1: Lade IMMER das HTML neu, um sicherzustellen, dass es aktuell ist und Caching-Probleme vermieden werden.
-    console.log('%c[Loader] %cFetching ./appointments.html...', 'color: orange; font-weight: bold;', 'color: black;');
     const response = await fetch("./appointments.html");
     if (!response.ok) throw new Error(`Die Datei 'appointments.html' konnte nicht gefunden werden (HTTP-Status: ${response.status}).`);
     const html = await response.text();
+
     if (!html.includes('id="appointments-module-root"')) {
         throw new Error("Falscher Inhalt für die Termin-Seite geladen.");
     }
@@ -8208,7 +9400,7 @@ async function loadAndInitAppointmentsView() {
     }
     
     console.log('%c[Loader] %cInitializing appointments view instance...', 'color: orange; font-weight: bold;', 'color: black;');
-    await appointmentsViewInstance.init(currentlyViewedUserData._id);
+    await appointmentsViewInstance.init(authenticatedUserData._id);
   } catch (error) {
     console.error("Fehler beim Laden der Termin-Ansicht:", error);
     container.innerHTML = `<div class="text-center p-8 bg-red-50 rounded-lg border border-red-200"><i class="fas fa-exclamation-triangle fa-3x text-red-400 mb-4"></i><h3 class="text-xl font-bold text-skt-blue">Fehler beim Laden</h3><p class="text-red-600 mt-2">${error.message}</p><p class="text-gray-500 mt-4">Bitte stelle sicher, dass die Datei 'appointments.html' im selben Verzeichnis wie 'index.html' liegt.</p></div>`;
@@ -9265,6 +10457,12 @@ class AuswertungView {
         // Handle special, combined groups first
         if (groupName === 'Trainee & GA') return 0; // Lowest hierarchy, always at the bottom
 
+        // Sicherheitscheck: Stelle sicher, dass db.karriereplan existiert
+        if (!db || !db.karriereplan || !Array.isArray(db.karriereplan)) {
+            console.warn('[RANGLISTE] db.karriereplan nicht verfügbar für Gruppe:', groupName);
+            return -1;
+        }
+
         // Find the corresponding career plan entry.
         // This is robust against trailing spaces.
         const trimmedGroupName = groupName.trim();
@@ -9606,6 +10804,8 @@ class AuswertungView {
             console.error("Fehler beim Erstellen des KI-Reports:", error);
             reportContainer.innerHTML = `<p class="text-red-500 text-center">Ein Fehler ist aufgetreten: ${error.message}</p>`;
         } finally {
+
+
             btn.disabled = false;
             btn.classList.remove('opacity-50', 'cursor-not-allowed');
         }
@@ -9905,49 +11105,65 @@ class AuswertungView {
      
     async renderRangliste() {
         const container = this.ranglisteListContainer;
+        if (!container) {
+            console.error('[RANGLISTE] Container nicht gefunden!');
+            return;
+        }
         container.innerHTML = '<div class="loader mx-auto"></div>';
     
         const { startDate, endDate } = this.currentRanglisteTimespan === 'woche'
             ? getWeeklyCycleDates()
             : getMonthlyCycleDates();
     
-        const startDateIso = toLocalISOString(startDate);
-        const endDateIso = toLocalISOString(endDate);
-    
         const ranglisteLog = (message, ...data) => console.log(`%c[RANGLISTE_DEBUG] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
-    
-        const capitalbank = db.gesellschaften.find(g => g.Gesellschaft === 'Capitalbank');
-        const capitalbankId = capitalbank ? capitalbank._id : null;
+        
+        ranglisteLog('Starte Rangliste Render', { zeitraum: this.currentRanglisteTimespan, startDate, endDate });
     
         // 1. Alle aktiven Mitarbeiter holen
         const allActiveUsers = db.mitarbeiter.filter(m => m.Status !== 'Ausgeschieden');
-    
-        // 2. Alle relevanten Umsätze für den Zeitraum holen
+
+        // 2. Hole Umsatzdaten per SQL-Query (genau wie fetchBulkDashboardData)
+        const startDateIso = toLocalISOString(startDate);
+        const endDateIso = toLocalISOString(endDate);
+        
+        // NEU: Capitalbank-Filter wie im Dashboard
+        const capitalbank = db.gesellschaften.find(g => g.Gesellschaft === 'Capitalbank');
+        const capitalbankId = capitalbank ? capitalbank._id : null;
         let capitalbankFilter = '';
         if (capitalbankId) {
             capitalbankFilter = ` AND NOT (\`Gesellschaft_ID\` IS NOT NULL AND \`Gesellschaft_ID\` LIKE '%${capitalbankId}%')`;
         }
+        
         const ehQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`totalEH\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}'${capitalbankFilter} GROUP BY \`Mitarbeiter_ID\``;
+        ranglisteLog('SQL Query:', ehQuery);
+        
         const ehResultRaw = await seaTableSqlQuery(ehQuery, true);
         const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
+        
+        ranglisteLog('EH Results von SQL:', ehResults.length, ehResults.slice(0, 3));
     
-        // 3. Eine Map der Umsätze pro Mitarbeiter-ID erstellen
-        const ehByMitarbeiterId = _.keyBy(
-            ehResults.map(e => ({ id: e.Mitarbeiter_ID?.[0]?.row_id, totalEH: e.totalEH })),
-            'id'
-        );
+        ranglisteLog('EH Results von SQL:', ehResults.length, ehResults.slice(0, 3));
+    
+        // 3. Eine Map der Umsätze pro Mitarbeiter-ID erstellen (wie im Dashboard)
+        const ehByMitarbeiterId = {};
+        ehResults.forEach(e => {
+            const mitarbeiterId = e.Mitarbeiter_ID?.[0]?.row_id;
+            if (mitarbeiterId) {
+                ehByMitarbeiterId[mitarbeiterId] = { totalEH: e.totalEH || 0 };
+            }
+        });
+
+        ranglisteLog('EH by Mitarbeiter ID (erste 3):', Object.entries(ehByMitarbeiterId).slice(0, 3));
     
         // 4. Alle aktiven Mitarbeiter mit ihren Umsätzen anreichern
         const enrichedUsers = allActiveUsers.map(mitarbeiter => {
             const totalEH = ehByMitarbeiterId[mitarbeiter._id]?.totalEH || 0;
-            // Mitarbeiter nur anzeigen, wenn sie im Zeitraum Umsatz gemacht haben ODER einen Plan haben
-            // (Diese Logik wurde entfernt, um ALLE aktiven Mitarbeiter anzuzeigen)
             return {
                 name: mitarbeiter?.Name || 'Unbekannt',
                 rang: mitarbeiter?.Karrierestufe || 'N/A',
                 eh: totalEH,
             };
-        }).filter(user => user && user.eh > 0); // Entfernt alle null-Einträge und Benutzer ohne Umsatz
+        }).filter(user => user && user.eh > 0); // Zeigt nur Mitarbeiter mit Umsatz
 
         // ANPASSUNG: Logik zur Gruppierung von Trainee/GA Rängen
         const getRankGroup = (rank) => {
@@ -9960,6 +11176,9 @@ class AuswertungView {
         };
 
         const groupedByRank = _.groupBy(enrichedUsers, user => getRankGroup(user.rang || 'N/A'));
+
+        ranglisteLog('Enriched Users:', enrichedUsers.length);
+        ranglisteLog('Grouped by Rank:', groupedByRank);
 
         const allGroupNames = Object.keys(groupedByRank);
         // NEUE SORTIERUNG basierend auf Hierarchie
@@ -10047,22 +11266,22 @@ class AuswertungView {
         const startDateIso = toLocalISOString(startDate);
         const endDateIso = toLocalISOString(endDate);
 
-        // KORREKTUR: Verwende die vorgeladenen und vollständigen Termindaten aus `db.termine`,
-        // um das 10k-Zeilen-Limit von SQL-Abfragen zu umgehen und Datenkonsistenz sicherzustellen.
+        // OPTIMIERUNG: Keine neuen SQL-Abfragen. Verwende die gecachten Daten.
         let termineData = db.termine.filter(t => {
             if (!t.Datum) return false;
             const terminDate = new Date(t.Datum);
             return terminDate >= startDate && terminDate <= endDate;
         });
-        // KORREKTUR: Verwende die exakt gleiche Zähl-Logik wie auf dem Dashboard für Konsistenz.
+
         const AT_STATUS_GEHALTEN = ["Gehalten"];
         const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
         const ET_STATUS_GEHALTEN = ["Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
         const ET_STATUS_AUSGEMACHT = ["Ausgemacht", ...ET_STATUS_GEHALTEN];
 
-        const { startDate: monthStartDate } = getMonthlyCycleDates();
-        const currentMonthName = monthStartDate.toLocaleString("de-DE", { month: "long" });
-        const currentYear = monthStartDate.getFullYear();
+        // KORREKTUR: Verwende die korrekten Daten für den Planungszeitraum
+        const { startDate: planStartDate } = getMonthlyCycleDatesForDate(startDate);
+        const currentMonthName = planStartDate.toLocaleString("de-DE", { month: "long" });
+        const currentYear = planStartDate.getFullYear();
         const planResults = db.monatsplanung.filter(p => p.Monat === currentMonthName && p.Jahr === currentYear);
 
         const statsByMitarbeiter = {};
@@ -10085,14 +11304,15 @@ class AuswertungView {
             }
         });
 
-        // NEU: EH-Daten für den Zeitraum laden
+        // OPTIMIERUNG: EH-Daten aus dem Cache verwenden
         const capitalbank = db.gesellschaften.find(g => g.Gesellschaft === 'Capitalbank');
         const capitalbankId = capitalbank ? capitalbank._id : null;
-        const umsatzQuery = `SELECT Mitarbeiter_ID, Gesellschaft_ID, EH FROM Umsatz WHERE Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
-        const allUmsatzRowsRaw = await seaTableSqlQuery(umsatzQuery, true);
-        const allUmsatzRows = mapSqlResults(allUmsatzRowsRaw || [], 'Umsatz');
+        const umsatzImZeitraum = db.umsatz.filter(u => {
+            const umsatzDatum = new Date(u.Datum);
+            return umsatzDatum >= startDate && umsatzDatum <= endDate;
+        });
 
-        const filteredUmsatzRows = allUmsatzRows.filter(row => {
+        const filteredUmsatzRows = umsatzImZeitraum.filter(row => {
             if (!capitalbankId) return true;
             const gesellschaftLinks = row.Gesellschaft_ID;
             if (!gesellschaftLinks || !Array.isArray(gesellschaftLinks) || gesellschaftLinks.length === 0) return true;
@@ -10254,20 +11474,29 @@ class AuswertungView {
             capitalbankFilter = ` AND NOT (\`Gesellschaft_ID\` IS NOT NULL AND \`Gesellschaft_ID\` LIKE '%${capitalbankId}%')`;
         }
         const ehQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`ehIst\` FROM \`Umsatz\` WHERE \`Datum\` >= '${startDateIso}' AND \`Datum\` <= '${endDateIso}'${capitalbankFilter} GROUP BY \`Mitarbeiter_ID\``;
-        const ehResultRaw = await seaTableSqlQuery(ehQuery, true); // KORREKTUR: convert_link_id auf true setzen, um konsistente Datenobjekte zu erhalten.
-        const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
+        // OPTIMIERUNG: Keine neue SQL-Abfrage. Verwende die gecachten Umsatzdaten.
+        const umsatzImZeitraum = db.umsatz.filter(u => {
+            const umsatzDatum = new Date(u.Datum);
+            return umsatzDatum >= startDate && umsatzDatum <= endDate;
+        });
+        const filteredUmsatz = umsatzImZeitraum.filter(u => {
+            if (!capitalbankId) return true;
+            const gesellschaftLinks = u.Gesellschaft_ID;
+            if (!gesellschaftLinks || !Array.isArray(gesellschaftLinks) || gesellschaftLinks.length === 0) return true;
+            return !gesellschaftLinks.some(link => link.row_id === capitalbankId);
+        });
+        const ehResults = _.map(_.groupBy(filteredUmsatz, 'Mitarbeiter_ID'), (group, mitarbeiterId) => ({
+            Mitarbeiter_ID: [{ row_id: mitarbeiterId }],
+            ehIst: _.sumBy(group, 'EH')
+        }));
 
-        // 2. Lade alle relevanten Termindaten für den Zeitraum
-        // KORREKTUR: Verwende die vorgeladenen und vollständigen Termindaten aus `db.termine`,
-        // um das 10k-Zeilen-Limit von SQL-Abfragen zu umgehen und Datenkonsistenz sicherzustellen.
+        // OPTIMIERUNG: Keine neue SQL-Abfrage. Verwende die gecachten Termindaten.
         let termineResults = db.termine.filter(t => {
             if (!t.Datum) return false;
             const terminDate = new Date(t.Datum);
             return terminDate >= startDate && terminDate <= endDate;
         });
-        // KORREKTUR: Abgesagte/stornierte Termine aus der Zählung ausschließen.
         termineResults = termineResults.filter(t => t.Absage !== true && t.Status !== 'Storno');
-        // KORREKTUR: Verwende die exakt gleiche Zähl-Logik wie auf dem Dashboard für Konsistenz.
         const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
         const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Info Eingeladen", "Weiterer ET", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
 
@@ -10361,13 +11590,10 @@ class AuswertungView {
     }
 
     async logPQQCalculationForUser(userId, forMonth, forYear) {
-        const pqqLog = (message, ...data) => console.log(`%c[PQQ_Drilldown] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
         const user = findRowById('mitarbeiter', userId);
         if (!user) {
-            pqqLog(`User with ID ${userId} not found.`);
             return;
         }
-        pqqLog(`--- PQQ-Berechnung für: ${user.Name} (für ${forMonth + 1}/${forYear}) ---`);
 
         // 1. Get previous month's dates
         const { startDate, endDate } = getPreviousMonthlyCycleDatesForDate(new Date(forYear, forMonth, 15));
@@ -10375,7 +11601,6 @@ class AuswertungView {
         const prevYear = startDate.getFullYear();
         const prevStartDateIso = toLocalISOString(startDate);
         const prevEndDateIso = toLocalISOString(endDate);
-        pqqLog(`Berechnungszeitraum (Vormonat): ${prevStartDateIso} bis ${prevEndDateIso}`);
 
         // 2. Get planning data from cache
         const plan = db.monatsplanung.find(p => p.Mitarbeiter_ID === userId && p.Monat === prevMonthName && p.Jahr === prevYear);
@@ -10383,21 +11608,16 @@ class AuswertungView {
 
         const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
         const ursprungszielET = infoPlan?.Ursprungsziel_ET || 0;
-        pqqLog(`Plandaten (Ursprungsziel):`, { EH: ursprungszielEH, ET: ursprungszielET });
 
         // 3. Get actual data for previous month
         const totalEH = db.umsatz.filter(u => u.Mitarbeiter_ID === userId && new Date(u.Datum) >= startDate && new Date(u.Datum) <= endDate).reduce((sum, u) => sum + (u.EH || 0), 0);
         const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter", "Verschoben"];
         const totalETAusgemacht = db.termine.filter(t => t.Mitarbeiter_ID === userId && t.Kategorie === 'ET' && t.Datum && new Date(t.Datum) >= startDate && new Date(t.Datum) <= endDate && ET_STATUS_AUSGEMACHT.includes(t.Status)).length;
-        pqqLog(`Ist-Werte (Vormonat):`, { EH: totalEH, ET_Ausgemacht: totalETAusgemacht });
 
         const ehQuote = (ursprungszielEH > 0) ? (totalEH / ursprungszielEH) : (ursprungszielEH === 0 ? 1 : 0);
-        pqqLog(`EH-Quote Berechnung: ${totalEH} (Ist) / ${ursprungszielEH} (Ziel) = ${ehQuote.toFixed(4)}`);
         const etQuote = (ursprungszielET > 0) ? (totalETAusgemacht / ursprungszielET) : (ursprungszielET === 0 ? 1 : 0);
-        pqqLog(`ET-Quote Berechnung: ${totalETAusgemacht} (Ist) / ${ursprungszielET} (Ziel) = ${etQuote.toFixed(4)}`);
         const pqq = ((ehQuote + etQuote) / 2) * 100;
-        pqqLog(`Gesamt-PQQ: ((${ehQuote.toFixed(4)} + ${etQuote.toFixed(4)}) / 2) * 100 = ${pqq.toFixed(2)}%`);
-        alert(`PQQ-Berechnung für ${user.Name}:\n\nEH-Quote: ${(ehQuote * 100).toFixed(0)}% (${totalEH} Ist / ${ursprungszielEH} Ziel)\nET-Quote: ${(etQuote * 100).toFixed(0)}% (${totalETAusgemacht} Ist / ${ursprungszielET} Ziel)\n\nGesamt-PQQ: ${pqq.toFixed(0)}%\n\n(Details in der Entwicklerkonsole)`);
+        alert(`PQQ-Berechnung für ${user.Name}:\n\nEH-Quote: ${(ehQuote * 100).toFixed(0)}% (${totalEH} Ist / ${ursprungszielEH} Ziel)\nET-Quote: ${(etQuote * 100).toFixed(0)}% (${totalETAusgemacht} Ist / ${ursprungszielET} Ziel)\n\nGesamt-PQQ: ${pqq.toFixed(0)}%`);
     }
 
     async renderPlanungen() {
@@ -10457,7 +11677,7 @@ class AuswertungView {
         const plansForMonth = db.monatsplanung.filter(p => p.Monat === selectedMonthName && p.Jahr === selectedYear);
         const plansByUserId = _.keyBy(plansForMonth, 'Mitarbeiter_ID');
 
-        const pqqDataMap = await this.calculatePQQForUserList(allActiveUsers.map(u => u._id), selectedMonth, selectedYear, infoPlansByUserId);
+        const pqqDataMap = await calculatePQQForUserList(allActiveUsers.map(u => u._id), selectedMonth, selectedYear);
 
         // KORREKTUR: Die PQQ-Daten werden jetzt korrekt aus dem Objekt extrahiert.
         const combinedData = allActiveUsers.map(user => {
@@ -10664,80 +11884,6 @@ class AuswertungView {
         });
     }
 
-    async calculatePQQForUserList(userIds, forMonth, forYear, preloadedInfoPlans = null) {
-        const pqqLog = (message, ...data) => console.log(`%c[PQQ_List_Calc] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
-        const pqqDataMap = {};
-        if (!userIds || userIds.length === 0) return pqqDataMap;
-
-        const prevMonthDate = new Date(forYear, forMonth, 1);
-        prevMonthDate.setDate(0);
-        const prevMonthName = prevMonthDate.toLocaleString("de-DE", { month: "long" });
-        const prevYear = prevMonthDate.getFullYear();
-        const prevMonthStartDate = new Date(prevYear, prevMonthDate.getMonth(), 1);
-        const prevMonthEndDate = new Date(prevYear, prevMonthDate.getMonth() + 1, 0);
-        const prevStartDateIso = prevMonthStartDate.toISOString().split('T')[0];
-        const prevEndDateIso = prevMonthEndDate.toISOString().split('T')[0];
-        
-        // KORREKTUR: Verwende die übergebenen Infoplan-Daten
-        const relevantPlans = db.monatsplanung.filter(p => userIds.includes(p.Mitarbeiter_ID) && p.Monat === prevMonthName && p.Jahr === prevYear);
-        const relevantInfoPlans = db.infoplanung.filter(p => userIds.includes(p.Mitarbeiter_ID) && new Date(p.Informationsabend).getFullYear() === prevYear && new Date(p.Informationsabend).getMonth() === prevMonthDate.getMonth());
-        
-        const plansByUserId = _.keyBy(relevantPlans, 'Mitarbeiter_ID');
-        const infoPlansByUserId = _.keyBy(relevantInfoPlans, 'Mitarbeiter_ID');
-
-        const mitarbeiterNames = userIds.map(id => findRowById('mitarbeiter', id)?.Name).filter(Boolean);
-        if (mitarbeiterNames.length === 0) return pqqDataMap;
-        const mitarbeiterNamesSql = mitarbeiterNames.map(name => `'${escapeSql(name)}'`).join(',');
-
-        // NEU: Lade Ist-EH und Prognose für den ausgewählten Monat
-        const selectedStartDate = new Date(forYear, forMonth, 1).toISOString().split('T')[0];
-        const selectedEndDate = new Date(forYear, forMonth + 1, 0).toISOString().split('T')[0];
-        // KORREKTUR: Prognose-Berechnung an die Logik der Termin-Ansicht angepasst (alle zukünftigen Termine).
-        const todayIso = new Date().toISOString().split('T')[0];
-        const istEhQuery = `SELECT Mitarbeiter_ID, SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID IN (${mitarbeiterNamesSql}) AND Datum >= '${selectedStartDate}' AND Datum <= '${selectedEndDate}' GROUP BY Mitarbeiter_ID`;
-        const prognoseQuery = `SELECT Mitarbeiter_ID, SUM(Umsatzprognose) as totalPrognose FROM Termine WHERE Mitarbeiter_ID IN (${mitarbeiterNamesSql}) AND Datum >= '${todayIso}' AND Kategorie IN ('BT', 'ST') AND Status IN ('Ausgemacht', 'Weiterer BT', 'Verschoben', 'Offen') AND (Absage IS NULL OR Absage = false) GROUP BY Mitarbeiter_ID`;
-
-        const ehQuery = `SELECT Mitarbeiter_ID, SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID IN (${mitarbeiterNamesSql}) AND Datum >= '${prevStartDateIso}' AND Datum <= '${prevEndDateIso}' GROUP BY Mitarbeiter_ID`;
-        const etQuery = `SELECT Mitarbeiter_ID, Status FROM Termine WHERE Mitarbeiter_ID IN (${mitarbeiterNamesSql}) AND Kategorie = 'ET' AND Datum >= '${prevStartDateIso}' AND Datum <= '${prevEndDateIso}'`;
-
-        const [ehResultsRaw, etResultsRaw, istEhResultsRaw, prognoseResultsRaw] = await Promise.all([
-            seaTableSqlQuery(ehQuery, true), 
-            seaTableSqlQuery(etQuery, true),
-            seaTableSqlQuery(istEhQuery, true),
-            seaTableSqlQuery(prognoseQuery, true)
-        ]);
-
-        const ehByMitarbeiterId = _.keyBy(mapSqlResults(ehResultsRaw, 'Umsatz').map(r => ({ id: r.Mitarbeiter_ID[0].row_id, totalEH: r.totalEH })), 'id');
-        const etByMitarbeiterId = _.groupBy(mapSqlResults(etResultsRaw, 'Termine'), r => r.Mitarbeiter_ID[0].row_id);
-        const istEhByMitarbeiterId = _.keyBy(mapSqlResults(istEhResultsRaw, 'Umsatz').map(r => ({ id: r.Mitarbeiter_ID[0].row_id, totalEH: r.totalEH })), 'id');
-        const prognoseByMitarbeiterId = _.keyBy(mapSqlResults(prognoseResultsRaw, 'Termine').map(r => ({ id: r.Mitarbeiter_ID[0].row_id, totalPrognose: r.totalPrognose })), 'id');
-
-        const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
-        userIds.forEach(userId => {
-            const plan = plansByUserId[userId];
-            const infoPlan = infoPlansByUserId[userId];
-            const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
-            const ursprungszielET = infoPlan?.Ursprungsziel_ET || 0;
-            const totalEH = ehByMitarbeiterId[userId]?.totalEH || 0;
-            const userEts = etByMitarbeiterId[userId] || [];
-            const totalETAusgemacht = userEts.filter(t => ET_STATUS_AUSGEMACHT.includes(t.Status)).length;
-
-            // KORREKTUR: Formel ist Ist / Ziel
-            const ehQuote = (ursprungszielEH > 0) ? (totalEH / ursprungszielEH) : (ursprungszielEH === 0 ? 1 : 0);
-
-            // KORREKTUR: Formel ist Ist / Ziel
-            const etQuote = (ursprungszielET > 0) ? (totalETAusgemacht / ursprungszielET) : (ursprungszielET === 0 ? 1 : 0);
-            pqqDataMap[userId] = {
-                pqq: ((ehQuote + etQuote) / 2) * 100,
-                etIst: totalETAusgemacht, // NEU: ET-Ist-Wert hinzufügen
-                ehIst: istEhByMitarbeiterId[userId]?.totalEH || 0,
-                prognose: prognoseByMitarbeiterId[userId]?.totalPrognose || 0
-            };
-        });
-
-        return pqqDataMap;
-    }
-
     async _renderEmployeeKpiList() {
         const container = document.getElementById('auswertung-kpi-employee-list');
         if (!container) return;
@@ -10799,13 +11945,7 @@ class AuswertungView {
 
         container.innerHTML = finalHtml || '<p class="text-center text-gray-500">Keine Mitarbeiter zum Anzeigen gefunden.</p>';
     }
-    async calculatePQQForUserList(userIds, forMonth, forYear) {
-        const pqqDataMap = {};
-        for (const userId of userIds) {
-            pqqDataMap[userId] = await getSingleUserPQQ(userId, forMonth, forYear);
-        }
-        return pqqDataMap;
-    }
+
 }
 
 // KORREKTUR: Eigene Speicherfunktion für das Planungsmodal, wenn es aus der Auswertungs-Ansicht aufgerufen wird.
@@ -10898,19 +12038,24 @@ class PlanungView {
         this.scopeToggle = document.getElementById('planung-scope-toggle');
         this.strukturBtn = document.getElementById('planung-struktur-btn');
         this.groupBtn = document.getElementById('planung-group-btn');
-        this.personalBtn = document.getElementById('planung-personal-btn');
         this.memberFilter = document.getElementById('planung-member-filter');
         this.timespanFilter = document.getElementById('planung-timespan-filter');
         this.kpiContainer = document.getElementById('planung-kpi-container');
-        this.flowTypeFilter = document.getElementById('planung-flow-type-filter');
-        this.sankeyContainer = document.getElementById('planung-sankey-container');
-        this.sankeyDescription = document.getElementById('planung-sankey-description');
-        this.detailsSection = document.getElementById('planung-termine-details-section');
-        this.detailsTitle = document.getElementById('planung-termine-status-title');
-        this.detailsTableBody = document.getElementById('planung-termine-table-body');
-        this.detailsCloseBtn = document.getElementById('planung-close-termine-details');
+        this.networkFullscreenBtn = document.getElementById('network-fullscreen-btn');
+        
+        // Vision Elements
+        this.editVisionBtn = document.getElementById('edit-vision-btn');
+        this.visionModal = document.getElementById('vision-modal');
+        this.closeVisionModalBtn = document.getElementById('close-vision-modal-btn');
+        this.cancelVisionBtn = document.getElementById('cancel-vision-btn');
+        this.visionForm = document.getElementById('vision-form');
 
-        return this.scopeToggle && this.memberFilter && this.timespanFilter && this.kpiContainer && this.sankeyContainer && this.detailsSection;
+        return this.scopeToggle && this.memberFilter && this.timespanFilter && this.kpiContainer;
+    }
+
+    _getHierarchyForGroup(groupName) {
+        const plan = db.karriereplan.find(p => p.Stufe === groupName.trim());
+        return plan?.Hierarchie ?? -1;
     }
 
     async init(userId) {
@@ -10937,12 +12082,68 @@ class PlanungView {
 
         this.strukturBtn.addEventListener('click', () => { this.currentScope = 'structure'; this._onScopeChange(); });
         this.groupBtn.addEventListener('click', () => { this.currentScope = 'group'; this._onScopeChange(); });
-        this.personalBtn.addEventListener('click', () => { this.currentScope = 'personal'; this._onScopeChange(); });
 
-        this.memberFilter.addEventListener('change', debouncedUpdate);
+        this.memberFilter.addEventListener('change', () => {
+            saveUiSetting('planungMemberFilter', this.memberFilter.value);
+            debouncedUpdate();
+        });
         this.timespanFilter.addEventListener('change', debouncedUpdate);
-        this.flowTypeFilter.addEventListener('change', debouncedUpdate);
-        this.detailsCloseBtn.addEventListener('click', () => this.detailsSection.classList.add('hidden'));
+        
+        // Vision Toggle Event Listeners
+        const visionToggle = document.getElementById('vision-toggle');
+        const visionTimeframe = document.getElementById('vision-timeframe');
+        if (visionToggle) {
+            visionToggle.addEventListener('change', (e) => {
+                const isVisionMode = e.target.checked;
+                if (visionTimeframe) {
+                    visionTimeframe.classList.toggle('hidden', !isVisionMode);
+                }
+                this._renderGroupView(this.lastMemberKpis || []);
+            });
+        }
+        if (visionTimeframe) {
+            visionTimeframe.addEventListener('change', () => {
+                if (visionToggle && visionToggle.checked) {
+                    this._renderGroupView(this.lastMemberKpis || []);
+                }
+            });
+        }
+        
+        // Vision Modal Event Listeners
+        if (this.editVisionBtn) {
+            this.editVisionBtn.addEventListener('click', () => this._openVisionModal());
+        }
+        if (this.closeVisionModalBtn) {
+            this.closeVisionModalBtn.addEventListener('click', () => this._closeVisionModal());
+        }
+        if (this.cancelVisionBtn) {
+            this.cancelVisionBtn.addEventListener('click', () => this._closeVisionModal());
+        }
+        if (this.visionForm) {
+            this.visionForm.addEventListener('submit', (e) => this._saveVision(e));
+        }
+        
+        // Add Todo Button
+        const addTodoBtn = document.getElementById('add-todo-btn');
+        if (addTodoBtn) {
+            addTodoBtn.addEventListener('click', () => this._addTodoItem());
+        }
+        
+        // Toggle Steps Detail Button
+        const toggleStepsBtn = document.getElementById('toggle-steps-detail-btn');
+        if (toggleStepsBtn) {
+            toggleStepsBtn.addEventListener('click', () => this._toggleStepsDetail());
+        }
+        
+        // NEU: Event-Listener für den Vollbild-Button
+        if (this.networkFullscreenBtn) {
+            this.networkFullscreenBtn.addEventListener('click', () => this._toggleNetworkFullscreen());
+        }
+        // NEU: Event-Listener für Änderungen am Vollbildmodus
+        document.addEventListener('fullscreenchange', () => this._onFullscreenChange());
+        document.addEventListener('webkitfullscreenchange', () => this._onFullscreenChange());
+        document.addEventListener('mozfullscreenchange', () => this._onFullscreenChange());
+        document.addEventListener('MSFullscreenChange', () => this._onFullscreenChange());
     }
 
     _onScopeChange() {
@@ -10955,7 +12156,6 @@ class PlanungView {
     _updateScopeButtons() {
         this.strukturBtn.classList.toggle('active', this.currentScope === 'structure');
         this.groupBtn.classList.toggle('active', this.currentScope === 'group');
-        this.personalBtn.classList.toggle('active', this.currentScope === 'personal');
     }
 
     _populateMemberFilter() {
@@ -10974,13 +12174,22 @@ class PlanungView {
         });
 
         this.memberFilter.classList.remove('hidden');
+        
+        // Lade gespeicherten Filter-Wert oder setze Standardwert
+        const savedMemberFilter = loadUiSetting('planungMemberFilter', 'all');
+        if (savedMemberFilter && Array.from(this.memberFilter.options).some(opt => opt.value === savedMemberFilter)) {
+            this.memberFilter.value = savedMemberFilter;
+        } else {
+            this.memberFilter.value = 'all';
+        }
     }
 
     async updateView() {
     planungLog('Aktualisiere Ansicht...');
     this.kpiContainer.innerHTML = '<div class="kpi-card p-5 flex items-center justify-center col-span-full"><div class="loader"></div></div>';
-    this.sankeyContainer.innerHTML = '<div class="loader mx-auto"></div>';
-    this.detailsSection.classList.add('hidden');
+    
+    // Vision Daten laden
+    await this._loadVisionData();
 
     // NEU: Wenn in der Strukturansicht eine Person ausgewählt wird, wechsle zur Gruppenansicht dieser Person.
     if (this.currentScope === 'structure' && this.memberFilter.value !== 'all') {
@@ -10995,73 +12204,87 @@ class PlanungView {
     // 1. Filter-Werte auslesen
     const selectedMemberId = this.memberFilter.value;
     this.timespan = parseInt(this.timespanFilter.value, 10);
-    this.flowType = this.flowTypeFilter.value;
 
     // 2. Relevante Benutzer ermitteln
     let usersInScopeRaw = [];
     this.allUsersInScope = [];
-    if (this.currentScope === 'personal') {
-        usersInScopeRaw = [authenticatedUserData];
-    } else if (this.currentScope === 'group') {
-        const leaderId = selectedMemberId === 'all' ? authenticatedUserData._id : selectedMemberId;
-        this.currentScopeId = leaderId; // Wichtig für die _renderGroupView
-        usersInScopeRaw = [findRowById('mitarbeiter', leaderId), ...getSubordinates(leaderId, 'gruppe')].filter(Boolean);
-    } else if (this.currentScope === 'structure') {
-        const leaderId = selectedMemberId === 'all' ? authenticatedUserData._id : selectedMemberId;
-        this.currentScopeId = leaderId; // Wichtig für die _renderGroupView
-        
-        // KORREKTUR: Verwende die gleiche Logik wie im Haupt-Dashboard, um ALLE unterstellten Führungskräfte anzuzeigen,
-        // nicht nur die direkten. getSubordinates('struktur') durchläuft die gesamte Downline.
-        const leader = findRowById('mitarbeiter', leaderId);
-        const subordinateLeaders = getSubordinates(leaderId, 'struktur');
-        usersInScopeRaw = [leader, ...subordinateLeaders].filter(Boolean);
-    }
+    const leaderId = selectedMemberId === 'all' ? authenticatedUserData._id : selectedMemberId;
+    this.currentScopeId = leaderId; // Wichtig für die _renderGroupView
 
-    // NEU: Filtere Benutzer heraus, die keine Ziele für den aktuellen Zyklus haben.
-    const { startDate: cycleStartDate } = getMonthlyCycleDates();
-    const currentMonthName = cycleStartDate.toLocaleString('de-DE', { month: 'long' });
-    const currentYear = cycleStartDate.getFullYear();
-    const nextInfoDateString = toLocalISOString(findNextInfoDateAfter(new Date()));
-    this.allUsersInScope = usersInScopeRaw.filter(user => {
-        const hasEhGoal = db.monatsplanung.some(p => p.Mitarbeiter_ID === user._id && p.Monat === currentMonthName && p.Jahr === currentYear && p.EH_Ziel > 0);
-        const hasEtGoal = db.infoplanung.some(p => p.Mitarbeiter_ID === user._id && p.Informationsabend?.startsWith(nextInfoDateString) && p.ET_Ziel > 0);
-        return hasEhGoal || hasEtGoal;
-    });
+    if (this.currentScope === 'personal') {
+        this.allUsersInScope = [findRowById('mitarbeiter', leaderId)].filter(Boolean);
+    } else if (this.currentScope === 'group') {
+        this.allUsersInScope = [findRowById('mitarbeiter', leaderId), ...getSubordinates(leaderId, 'gruppe')].filter(Boolean);
+    } else if (this.currentScope === 'structure') {
+        // KORREKTUR: Verwende `getAllSubordinatesRecursive`, um die gesamte Downline (inkl. Nicht-Führungskräften) zu laden.
+        const leader = findRowById('mitarbeiter', leaderId);
+        this.allUsersInScope = [leader, ...getAllSubordinatesRecursive(leaderId)].filter(Boolean);
+    }
 
     planungLog(`Scope gesetzt: ${this.allUsersInScope.length} Benutzer`);
 
     // 3. Daten abrufen und rendern
-    // KORREKTUR: Das Ergebnis von _fetchData wird jetzt korrekt destrukturiert.
-    const { kpiData, sankeyData, memberKpis } = await this._fetchData();
+    const { kpiData, memberKpis } = await this._fetchData();
     this._renderKPIs({ kpiData, memberKpis }); // _renderKPIs erwartet ein Objekt mit diesen Eigenschaften
-    this._renderSankey(sankeyData); // sankeyData ist jetzt eine definierte Variable
     }
 
     async _fetchData() {
-        const userIds = this.allUsersInScope.map(u => u._id).filter(Boolean);
+        const userIds = new Set(this.allUsersInScope.map(u => u._id).filter(Boolean));
+        if (userIds.size === 0) {
+            return { kpiData: {}, sankeyData: {}, memberKpis: [] };
+        }
+
         const endDate = new Date();
         const startDate = new Date();
         startDate.setDate(endDate.getDate() - this.timespan);
+        const startDateIso = toLocalISOString(startDate);
+        const endDateIso = toLocalISOString(endDate);
 
-        // Alle Termine und Umsätze für den Zeitraum und die Benutzer laden
-        const appointments = db.termine.filter(t => 
-            userIds.includes(t.Mitarbeiter_ID) && 
-            t.Datum && new Date(t.Datum) >= startDate && new Date(t.Datum) <= endDate
-        );
-        const sales = db.umsatz.filter(s => 
-            // KORREKTUR: Nach der Normalisierung ist `Mitarbeiter_ID` nur noch die ID (ein String).
-            userIds.includes(s.Mitarbeiter_ID) &&
-            s.Datum && new Date(s.Datum) >= startDate && new Date(s.Datum) <= endDate
-        );
+        const userNamesForSql = this.allUsersInScope.map(u => `'${escapeSql(u.Name)}'`).join(',');
+
+        // KORREKTUR: Die Abfrage muss alle Termine laden, die für die Flow-Analyse relevant sind,
+        // auch wenn sie storniert sind oder der Status "Wird Mitarbeiter" ist.
+        // Die Filterung nach Status erfolgt später in der JavaScript-Logik.
+        const appointmentsQuery = `SELECT Mitarbeiter_ID, Kategorie, Status, Terminpartner, Umsatzprognose, Datum, Absage, Infoabend FROM Termine WHERE Mitarbeiter_ID IN (${userNamesForSql}) AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+        const salesQuery = `SELECT Mitarbeiter_ID, EH, Kunde FROM Umsatz WHERE Mitarbeiter_ID IN (${userNamesForSql}) AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
+
+        planungLog(`Lade Daten für Zeitraum: ${startDateIso} bis ${endDateIso}`);
+
+        const [appointmentsRaw, salesRaw] = await Promise.all([
+            seaTableSqlQuery(appointmentsQuery, true),
+            seaTableSqlQuery(salesQuery, true)
+        ]);
+
+        const appointments = mapSqlResults(appointmentsRaw || [], 'Termine').map(t => ({
+            ...t,
+            Mitarbeiter_ID: t.Mitarbeiter_ID?.[0]?.row_id
+        }));
+        const sales = mapSqlResults(salesRaw || [], 'Umsatz').map(s => ({
+            ...s,
+            Mitarbeiter_ID: s.Mitarbeiter_ID?.[0]?.row_id
+        }));
+
+        planungLog(`Daten geladen: ${appointments.length} Termine, ${sales.length} Umsätze.`);
 
         // --- KPI-Daten berechnen ---
         const totalEH = sales.reduce((sum, s) => sum + (s.EH || 0), 0);
-        
-        const pqqUsers = this.currentScope === 'group' ? getSubordinates(this.currentScopeId, 'gruppe') : this.allUsersInScope;
-        const pqqPromises = pqqUsers.map(u => getSingleUserPQQ(u._id));
-        const pqqResults = await Promise.all(pqqPromises);
-        const validPqqs = pqqResults.filter(p => p && p.pqq > 0);
+
+        // OPTIMIERUNG: PQQ-Werte für alle relevanten Benutzer mit einer einzigen Funktion abrufen.
+        // KORREKTUR: Verwende immer this.allUsersInScope für die PQQ-Berechnung, damit alle Mitarbeiter (inkl. FK) erfasst werden
+        const pqqUserIds = this.allUsersInScope.map(u => u._id);
+        const today = new Date();
+        const pqqDataMapForView = await calculatePQQForUserList(pqqUserIds, today.getMonth(), today.getFullYear());
+
+        // KORREKTUR: Die FK soll in beiden Ansichten (group und structure) in den Durchschnitt eingerechnet werden
+        const pqqUsersForAverage = this.allUsersInScope;
+        const pqqResultsForAverage = pqqUsersForAverage.map(u => pqqDataMapForView[u._id] || { pqq: 0 });
+        planungLog(`PQQ-Durchschnitt Berechnung (Scope: ${this.currentScope}):`, {
+            usersForAverage: pqqUsersForAverage.map(u => u.Name),
+            pqqValues: pqqResultsForAverage.map((p, i) => ({ name: pqqUsersForAverage[i].Name, pqq: p.pqq, ehQuote: p.ehQuote, etQuote: p.etQuote }))
+        });
+        const validPqqs = pqqResultsForAverage.filter(p => p && p.pqq > 0);
         const avgPqq = validPqqs.length > 0 ? _.meanBy(validPqqs, 'pqq') : 0;
+        planungLog(`Durchschnitts-PQQ: ${avgPqq.toFixed(1)}% (aus ${validPqqs.length} gültigen Werten)`);
 
         const totalAppointments = appointments.length;
         const cancelledAppointments = appointments.filter(t => t.Absage === true || t.Status === 'Storno').length;
@@ -11076,50 +12299,8 @@ class PlanungView {
         const heldSTs = appointments.filter(t => t.Kategorie === 'ST' && t.Status === 'Gehalten');
         const avgEhPerSt = heldSTs.length > 0 ? totalEH / heldSTs.length : 0;
 
-        // --- Sankey-Daten berechnen ---
-        const appointmentsForSankey = this.currentScope === 'personal'
-            ? appointments.filter(t => t.Mitarbeiter_ID === authenticatedUserData._id)
-            : appointments;
-
-        const flowAppointments = appointmentsForSankey.filter(t => t.Kategorie === this.flowType);
-        const totalFlow = flowAppointments.length;
-        const gehalten = flowAppointments.filter(t => t.Status === 'Gehalten').length; // KORREKTUR: Die Berechnung der PQQ-Werte für die Mitarbeiter wurde hinzugefügt.
-        const verschoben = flowAppointments.filter(t => t.Status === 'Verschoben').length; // KORREKTUR: Die Berechnung der PQQ-Werte für die Mitarbeiter wurde hinzugefügt.
-        const ausfall = flowAppointments.filter(t => t.Status === 'Storno' || t.Absage === true).length; // KORREKTUR: Die Berechnung der PQQ-Werte für die Mitarbeiter wurde hinzugefügt.
-        const offen = totalFlow - gehalten - verschoben - ausfall;
-
-        let outcome1 = 0, outcome2 = 0;
-        if (this.flowType === 'AT') {
-            // Finde alle BTs, die aus den gehaltenen ATs resultieren
-            const heldATsWithPartner = appointments.filter(t => t.Kategorie === 'AT' && t.Status === 'Gehalten' && t.Terminpartner);
-            const heldAtPartners = new Set(heldATsWithPartner.map(t => t.Terminpartner.trim().toLowerCase()));
-            
-            const resultingBTs = appointments.filter(t => t.Kategorie === 'BT' && t.Terminpartner && heldAtPartners.has(t.Terminpartner.trim().toLowerCase()));
-            const partnersWithResultingBT = new Set(resultingBTs.map(t => t.Terminpartner.trim().toLowerCase()));
-            
-            const heldATsWithoutBT = heldATsWithPartner.filter(at => !partnersWithResultingBT.has(at.Terminpartner.trim().toLowerCase()));
-
-            outcome1 = resultingBTs.length;
-            outcome2 = heldATsWithoutBT.length;
-
-            this.appointmentsForOutcomes = { resultingBTs, heldATsWithoutBT };
-        } else { // BT
-            // Finde alle Umsätze, die aus den gehaltenen BTs resultieren
-            const heldBTsWithPartner = appointments.filter(t => t.Kategorie === 'BT' && t.Status === 'Gehalten' && t.Terminpartner);
-            const heldBtPartners = new Set(heldBTsWithPartner.map(t => t.Terminpartner.trim().toLowerCase()));
-
-            const resultingSales = sales.filter(s => s.Kunde && heldBtPartners.has(s.Kunde.trim().toLowerCase()));
-            const partnersWithResultingSale = new Set(resultingSales.map(s => s.Kunde.trim().toLowerCase()));
-            const heldBTsWithoutSale = heldBTsWithPartner.filter(bt => !partnersWithResultingSale.has(bt.Terminpartner.trim().toLowerCase()));
-
-            outcome1 = resultingSales.length;
-            outcome2 = heldBTsWithoutSale.length;
-            this.appointmentsForOutcomes = { resultingSales, heldBTsWithoutSale };
-        }
-
-        const pqqDataPromises = this.allUsersInScope.map(user => getSingleUserPQQ(user._id));
-        const pqqDataMap = new Map(this.allUsersInScope.map((user, index) => [user._id, pqqResults[index]]));
-
+        // KORREKTUR: pqqDataMapForView ist bereits eine Map von userId -> pqqData, keine zusätzliche Transformation nötig
+        const pqqDataMap = pqqDataMapForView;
 
         // NEU: KPIs pro Mitarbeiter für die Gruppenansicht berechnen
         const memberKpis = this.allUsersInScope.map(user => {
@@ -11141,27 +12322,31 @@ class PlanungView {
                 avgEhPerAt: userHeldATs > 0 ? userTotalEH / userHeldATs : 0,
                 avgEhPerSt: userHeldSTs > 0 ? userTotalEH / userHeldSTs : 0,
                 cancellationRate: userTotalAppointments > 0 ? (userCancelledAppointments / userTotalAppointments) * 100 : 0,
-                pqq: pqqDataMap.get(user._id)?.pqq || 0,
+                pqq: pqqDataMap[user._id]?.pqq ?? 0,
+                ehQuote: pqqDataMap[user._id]?.ehQuote ?? 0,
+                etQuote: pqqDataMap[user._id]?.etQuote ?? 0,
             };
         });
 
         return {
             kpiData: { avgPqq, cancellationRate, avgEhPerBt, avgEhPerAt, avgEhPerSt },
-            sankeyData: { total: totalFlow, gehalten, verschoben, ausfall, offen, outcome1, outcome2, appointments: flowAppointments },
             memberKpis: memberKpis
         };
     }
 
     _renderKPIs({ kpiData: groupKpiData, memberKpis }) {
         const mitarbeiterDetailsSection = document.getElementById('planung-mitarbeiter-details-section');
+        
+        // Speichere memberKpis für Vision-Update
+        this.lastMemberKpis = memberKpis;
 
         // Haupt-KPIs (Durchschnitt/Gesamt) rendern
         const kpis = [
-            { label: 'PQQ', value: `${groupKpiData.avgPqq.toFixed(1)}%`, icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', color: 'indigo' },
-            { label: 'Terminausfall', value: `${groupKpiData.cancellationRate.toFixed(1)}%`, icon: 'M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636', color: 'red' },
-            { label: 'EH / BT', value: groupKpiData.avgEhPerBt.toFixed(2), icon: 'M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4z', color: 'blue' },
-            { label: 'EH / AT', value: groupKpiData.avgEhPerAt.toFixed(2), icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', color: 'blue' }, // KORREKTUR: Fehlendes Komma hinzugefügt
-            { label: 'EH / ST', value: groupKpiData.avgEhPerSt.toFixed(2), icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', color: 'blue' }
+            { label: 'PQQ', value: `${(groupKpiData.avgPqq || 0).toFixed(1)}%`, icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', color: 'indigo' },
+            { label: 'Terminausfall', value: `${(groupKpiData.cancellationRate || 0).toFixed(1)}%`, icon: 'M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636', color: 'red' },
+            { label: 'EH / BT', value: (groupKpiData.avgEhPerBt || 0).toFixed(2), icon: 'M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4z', color: 'blue' },
+            { label: 'EH / AT', value: (groupKpiData.avgEhPerAt || 0).toFixed(2), icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', color: 'blue' }, // KORREKTUR: Fehlendes Komma hinzugefügt
+            { label: 'EH / ST', value: (groupKpiData.avgEhPerSt || 0).toFixed(2), icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', color: 'blue' }
         ];
 
         this.kpiContainer.innerHTML = kpis.map(kpi => `
@@ -11189,43 +12374,1250 @@ class PlanungView {
 
     _renderGroupView(memberKpis) {
         const section = document.getElementById('planung-mitarbeiter-details-section');
-        const diagramWrapper = document.getElementById('mitarbeiter-rad-diagram-wrapper');
-        const detailsContainer = document.getElementById('mitarbeiter-rad-details');
+        const container = document.getElementById('network-graph-container');
+        const detailsContainer = document.getElementById('network-details-container');
         
+        // KORREKTUR: Stelle sicher, dass der Graph-Container die volle Breite hat, wenn die Ansicht neu gerendert wird.
+        this._hideMemberDetails();
         section.classList.remove('hidden');
-        diagramWrapper.innerHTML = '';
-        detailsContainer.innerHTML = '';
-        detailsContainer.classList.add('hidden');
-        diagramWrapper.parentElement.classList.remove('details-visible');
-
-        const leader = memberKpis.find(m => m.id === this.currentScopeId);
-        const members = memberKpis.filter(m => m.id !== this.currentScopeId);
-
-        if (!leader) {
-            diagramWrapper.innerHTML = '<p class="text-center text-gray-500">Führungskraft nicht gefunden.</p>';
+        container.innerHTML = '';
+        
+        // Prüfe ob Visionsblick aktiviert ist
+        const visionToggle = document.getElementById('vision-toggle');
+        const visionTimeframe = document.getElementById('vision-timeframe');
+        const isVisionMode = visionToggle && visionToggle.checked;
+        const quartersAhead = visionTimeframe ? parseInt(visionTimeframe.value) : 1;
+        
+        // 1. Daten für D3 vorbereiten (Nodes und Links)
+        const hierarchy = buildHierarchy();
+        const rootNode = hierarchy[this.currentScopeId];
+        if (!rootNode) {
+            container.innerHTML = '<p class="text-center text-gray-500">Startknoten für das Netzwerk nicht gefunden.</p>';
             return;
         }
+    
+        const kpiMap = new Map(memberKpis.map(m => [m.id, m]));
+        const userIdsInScope = new Set(this.allUsersInScope.map(u => u._id));
+        const nodes = [], links = [];
+        const queue = [rootNode];
+        const visited = new Set([rootNode.user._id]);
 
-        this._renderRadialDiagram(diagramWrapper, leader, members);
+        while(queue.length > 0) {
+            const currentNode = queue.shift();
+            if (!currentNode || !currentNode.user || currentNode.user.Status === 'Ausgeschieden') continue;
 
-        diagramWrapper.querySelectorAll('.member-segment, .center-circle').forEach(el => {
-            el.addEventListener('click', () => {
-                const memberId = el.dataset.memberId;
-                const selectedMember = memberKpis.find(m => m.id === memberId);
-                if (selectedMember) {
-                    this._showMemberDetails(selectedMember);
+            // KORREKTUR: Nur Knoten hinzufügen, die im aktuellen Scope (Gruppe/Struktur) enthalten sind.
+            if (!userIdsInScope.has(currentNode.user._id)) continue;
+
+            const subordinateCount = getAllSubordinatesRecursive(currentNode.user._id, hierarchy).length;
+            nodes.push({
+                id: currentNode.user._id,
+                name: currentNode.user.Name,
+                position: currentNode.user.Karrierestufe,
+                kpi: kpiMap.get(currentNode.user._id) || {},
+                subordinateCount: subordinateCount,
+                user: currentNode.user, // Ganzer User für Detailansicht
+                isPlanned: false // Echter Mitarbeiter
+            });
+
+            (currentNode.children || []).forEach(childId => {
+                if (!visited.has(childId)) {
+                    const childNode = hierarchy[childId];
+                    // KORREKTUR: Nur Verbindungen zu Knoten herstellen, die auch im Scope sind.
+                    if (childNode && childNode.user && childNode.user.Status !== 'Ausgeschieden' && userIdsInScope.has(childId)) {
+                        links.push({ source: currentNode.user._id, target: childId });
+                        queue.push(childNode);
+                        visited.add(childId);
+                    }
                 }
             });
+        }
+        
+        // NEU: Geplante MA hinzufügen, wenn Visionsblick aktiviert ist
+        if (isVisionMode) {
+            let plannedNodeCounter = 0;
+            
+            // Berechne Zielquartal basierend auf quartersAhead
+            const today = new Date();
+            const currentYear = today.getFullYear();
+            const currentMonth = today.getMonth(); // 0-11
+            const currentQuartal = Math.ceil((currentMonth + 1) / 3); // 1-4
+            
+            let targetQuartal = currentQuartal + quartersAhead;
+            let targetYear = currentYear;
+            while (targetQuartal > 4) {
+                targetQuartal -= 4;
+                targetYear++;
+            }
+            
+            // Berechne Enddatum des Zielquartals
+            const targetQuartalEndMonth = targetQuartal * 3 - 1; // 0-11
+            const targetDate = new Date(targetYear, targetQuartalEndMonth + 1, 0); // Letzter Tag des Quartals
+            
+            nodes.forEach(node => {
+                if (node.isPlanned) return; // Nur für echte Mitarbeiter
+                
+                const user = node.user;
+                const befoerderungsdatum = user.Befoerderungsdatum;
+                
+                // Prüfe ob Beförderungsdatum im Zielquartal liegt
+                if (!befoerderungsdatum) return;
+                
+                const befoerderungsDate = new Date(befoerderungsdatum);
+                if (befoerderungsDate > targetDate) return; // Beförderung liegt zu weit in der Zukunft
+                
+                // Bestimme Karrierestufe und benötigte MA
+                const currentStufe = user.Karrierestufe;
+                const isGeschaeftsstelle = currentStufe?.includes('Geschäftsstellenleiter');
+                const isTraineeOrJGST = currentStufe?.includes('Trainee') || currentStufe?.includes('JGST');
+                
+                let neededMA = 0;
+                
+                if (isGeschaeftsstelle) {
+                    // Geschäftsstellenleiter: Zähle Punkte (GST=2, andere=1), braucht 5 Punkte
+                    const direkteMitarbeiter = db.mitarbeiter.filter(m => 
+                        m.Werber === user._id && 
+                        m.Status !== 'Ausgeschieden'
+                    );
+                    
+                    const traineeIIHierarchy = this._getHierarchyForGroup('Trainee II');
+                    const relevantEmployees = direkteMitarbeiter.filter(m => {
+                        const hierarchy = this._getHierarchyForGroup(m.Karrierestufe);
+                        return hierarchy >= traineeIIHierarchy;
+                    });
+                    
+                    const totalPoints = relevantEmployees.reduce((sum, emp) => {
+                        const isGst = emp.Karrierestufe?.includes('Geschäftsstellenleiter');
+                        return sum + (isGst ? 2 : 1);
+                    }, 0);
+                    
+                    neededMA = Math.max(0, 5 - totalPoints);
+                } else if (isTraineeOrJGST) {
+                    // Trainee/JGST: Braucht 3 MA (direkt + indirekt)
+                    const direkteMitarbeiter = db.mitarbeiter.filter(m => 
+                        m.Werber === user._id && 
+                        m.Status !== 'Ausgeschieden'
+                    );
+                    
+                    const allSubordinateIds = getAllSubordinatesRecursive(user._id);
+                    const indirekteMitarbeiter = allSubordinateIds
+                        .map(id => db.mitarbeiter.find(m => m._id === id))
+                        .filter(m => m && m.Status !== 'Ausgeschieden');
+                    
+                    const alleMitarbeiterMap = new Map();
+                    [...direkteMitarbeiter, ...indirekteMitarbeiter].forEach(m => {
+                        if (m) alleMitarbeiterMap.set(m._id, m);
+                    });
+                    
+                    const totalMA = alleMitarbeiterMap.size;
+                    neededMA = Math.max(0, 3 - totalMA);
+                }
+                
+                // Füge geplante MA-Nodes hinzu
+                if (neededMA > 0) {
+                    const befoerderungDateStr = befoerderungsDate.toLocaleDateString('de-DE', { month: 'short', year: 'numeric' });
+                    for (let i = 0; i < neededMA; i++) {
+                        const plannedId = `planned_${node.id}_${plannedNodeCounter++}`;
+                        nodes.push({
+                            id: plannedId,
+                            name: `MA ${i + 1}`,
+                            position: 'Trainee I',
+                            kpi: {},
+                            subordinateCount: 0,
+                            user: {
+                                Name: `Benötigter MA ${i + 1}`,
+                                Karrierestufe: 'Trainee I',
+                                _id: plannedId
+                            },
+                            isPlanned: true,
+                            plannedNumber: i + 1,
+                            parentId: node.id,
+                            visionQuarter: `bis ${befoerderungDateStr}`
+                        });
+                        
+                        // Verbindung zum Werber
+                        links.push({ 
+                            source: node.id, 
+                            target: plannedId,
+                            isPlanned: true 
+                        });
+                    }
+                }
+            });
+        }
+
+        // 2. D3 Netzwerk-Graph erstellen
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+
+        // KORREKTUR: SVG wird jetzt responsive erstellt, damit es sich im Vollbildmodus anpasst.
+        const svg = d3.select(container).append("svg")
+            .attr("viewBox", `0 0 ${width} ${height}`)
+            .attr("preserveAspectRatio", "xMidYMid meet")
+            .style("width", "100%")
+            .style("height", "100%")
+            .call(d3.zoom().on("zoom", (event) => {
+                g.attr("transform", event.transform); // Behalte den Zoom bei
+            }));
+
+        const g = svg.append("g");
+
+        const simulation = d3.forceSimulation(nodes)
+            .force("link", d3.forceLink(links).id(d => d.id).distance(100))
+            .force("charge", d3.forceManyBody().strength(-300))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collide", d3.forceCollide().radius(d => 15 + Math.log(d.subordinateCount + 1) * 10 + 5));
+
+        const link = g.append("g")
+            .selectAll("line")
+            .data(links)
+            .join("line")
+            .attr("class", d => d.isPlanned ? "network-link network-link-planned" : "network-link")
+            .attr("stroke-dasharray", d => d.isPlanned ? "5,5" : "0"); // Gestrichelt für geplante Links
+
+        const node = g.append("g")
+            .selectAll("g")
+            .data(nodes)
+            .join("g")
+            .attr("class", d => d.isPlanned ? "network-node network-node-planned" : "network-node")
+            .call(this._drag(simulation))
+            .on("click", (event, d) => {
+                if (!d.isPlanned) {
+                    this._showMemberDetails(d);
+                }
+            });
+
+        // Hauptkreis (Node)
+        node.append("circle")
+            .attr("r", d => d.isPlanned ? 12 : (15 + Math.log(d.subordinateCount + 1) * 10)) // Kleinere Größe für geplante Nodes
+            .attr("fill", d => d.isPlanned ? "#a78bfa" : this.getPqqColor(d.kpi.pqq || 0)) // Lila für geplante MA
+            .attr("stroke", d => {
+                if (d.isPlanned) return "#7c3aed"; // Dunkellila Rand für geplante MA
+                return d.user.isActive ? "#10b981" : "#e5e7eb"; // Grüner Rand für aktive MA
+            })
+            .attr("stroke-width", d => d.isPlanned ? 2 : 2)
+            .attr("opacity", d => d.isPlanned ? 0.7 : 1); // Leicht transparent für geplante MA
+        
+        // Icon für geplante Nodes - Zeige Nummer statt Icon
+        node.filter(d => d.isPlanned)
+            .append("text")
+            .text(d => d.plannedNumber)
+            .attr("font-family", "Arial, sans-serif")
+            .attr("font-weight", "bold")
+            .attr("font-size", "12px")
+            .attr("fill", "#fff")
+            .attr("text-anchor", "middle")
+            .attr("dy", "0.35em");
+        
+        // Name unter dem Knoten (nur für echte Mitarbeiter)
+        node.filter(d => !d.isPlanned)
+            .append("text")
+            .text(d => d.name)
+            .attr("x", 0)
+            .attr("y", d => (15 + Math.log(d.subordinateCount + 1) * 10) + 12)
+            .attr("text-anchor", "middle")
+            .attr("font-size", "12px")
+            .attr("fill", "#374151");
+        
+        // Datum unter dem Knoten für geplante Nodes
+        node.filter(d => d.isPlanned)
+            .append("text")
+            .text(d => d.visionQuarter)
+            .attr("x", 0)
+            .attr("y", 24)
+            .attr("text-anchor", "middle")
+            .attr("font-size", "9px")
+            .attr("fill", "#9333ea")
+            .attr("font-style", "italic");
+
+        simulation.on("tick", () => {
+            link
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+            node
+                .attr("transform", d => `translate(${d.x},${d.y})`);
         });
     }
 
-    _renderRadialDiagram(container, leader, members) {
-        const getPqqColor = (pqq) => {
-            if (pqq >= 120) return '#27ae60'; // green
-            if (pqq >= 80) return '#f1c40f'; // yellow
-            return '#FF6347'; // red
-        };
+    // NEU: Funktion, die auf Änderungen des Vollbildmodus reagiert
+    _onFullscreenChange() {
+        const networkWrapper = document.getElementById('network-wrapper');
+        const isInFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
 
+        // NEU: Füge eine Klasse zum Body hinzu, um den Vollbildmodus zuverlässiger zu stylen.
+        // Dies umgeht Probleme mit Safari und Dark-Mode-Overrides.
+        document.body.classList.toggle('is-fullscreen', isInFullscreen);
+
+
+        // Kurze Verzögerung, damit der Container seine neue Größe annehmen kann
+        setTimeout(() => {
+            const simulation = d3.select(networkWrapper).select('svg').node()?.__d3_simulation__;
+            if (simulation) {
+                // Zentriert die Simulation im neuen (Vollbild- oder Normal-) Fenster neu.
+                simulation.force("center", d3.forceCenter(networkWrapper.clientWidth / 2, networkWrapper.clientHeight / 2)).alpha(0.3).restart();
+            }
+        }, 100);
+    }
+    // NEU: Funktion zum Umschalten des Vollbildmodus für das Netzwerk
+    _toggleNetworkFullscreen() {
+        const networkWrapper = document.getElementById('network-wrapper');
+        if (!networkWrapper) return;
+
+        const isInFullscreen = document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement;
+
+        if (!isInFullscreen) {
+            if (networkWrapper.requestFullscreen) {
+                networkWrapper.requestFullscreen();
+            } else if (networkWrapper.webkitRequestFullscreen) { /* Safari */
+                networkWrapper.webkitRequestFullscreen();
+            } else if (networkWrapper.msRequestFullscreen) { /* IE11 */
+                networkWrapper.msRequestFullscreen();
+            }
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) { /* Safari */
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) { /* IE11 */
+                document.msExitFullscreen();
+            }
+        }
+    }
+
+    // === Vision & Businessplan Funktionen ===
+    
+    async _loadVisionData() {
+        // Bestimme den User basierend auf dem memberFilter
+        const selectedMemberId = this.memberFilter.value;
+        const targetUser = selectedMemberId === 'all' ? authenticatedUserData : findRowById('mitarbeiter', selectedMemberId);
+        
+        if (!targetUser) return;
+        
+        const visionData = db.visionen?.filter(v => v.Mitarbeiter === targetUser._id)
+            .sort((a, b) => new Date(b.Edited || b._ctime) - new Date(a.Edited || a._ctime))[0];
+        
+        if (visionData) {
+            document.getElementById('vision-text').textContent = visionData.Vision || 'Noch keine Vision definiert.';
+            document.getElementById('ziel-text').textContent = visionData.Ziel || 'Noch kein Ziel definiert.';
+            document.getElementById('warum-text').textContent = visionData.Warum || 'Noch kein Grund definiert.';
+            document.getElementById('change-text').textContent = visionData.Change || 'Noch keine Veränderung definiert.';
+            
+            // Datum in Vision-Card anzeigen
+            if (visionData.Datum) {
+                const date = new Date(visionData.Datum);
+                document.getElementById('vision-datum-display').textContent = date.toLocaleDateString('de-DE', { 
+                    day: '2-digit', month: 'long', year: 'numeric' 
+                });
+            } else {
+                document.getElementById('vision-datum-display').textContent = 'Nicht festgelegt';
+            }
+            
+            // Todos anzeigen
+            const todosList = document.getElementById('todos-list');
+            if (visionData.Todos && visionData.Todos.trim()) {
+                const todos = visionData.Todos.split('\n').filter(t => t.trim());
+                todosList.innerHTML = todos.map(todo => 
+                    `<li class="flex items-start gap-2">
+                        <i class="fas fa-check-circle text-green-500 mt-1"></i>
+                        <span>${_escapeHtml(todo)}</span>
+                    </li>`
+                ).join('');
+            } else {
+                todosList.innerHTML = '<li class="text-gray-500 italic">Noch keine Schritte definiert.</li>';
+            }
+        } else {
+            // Keine Vision vorhanden
+            document.getElementById('vision-text').textContent = 'Noch keine Vision definiert.';
+            document.getElementById('ziel-text').textContent = 'Noch kein Ziel definiert.';
+            document.getElementById('warum-text').textContent = 'Noch kein Grund definiert.';
+            document.getElementById('change-text').textContent = 'Noch keine Veränderung definiert.';
+            document.getElementById('vision-datum-display').textContent = 'Nicht festgelegt';
+            document.getElementById('todos-list').innerHTML = '<li class="text-gray-500 italic">Noch keine Schritte definiert.</li>';
+        }
+        
+        // Aktivstatus berechnen und Fortschritt anzeigen (für den ausgewählten User)
+        await this._updateVisionProgress(targetUser);
+        
+        // Recruiting-Details berechnen (für den ausgewählten User)
+        this._updateRecruitingDetails(targetUser);
+    }
+    
+    async _updateRecruitingDetails(targetUser = authenticatedUserData) {
+        const befoerderungsdatum = targetUser.Befoerderungsdatum;
+        
+        // Aktuelle Progress-Daten ermitteln
+        const progressContainer = document.getElementById('vision-progress-container');
+        if (!progressContainer || !befoerderungsdatum) {
+            // Wenn kein Beförderungsdatum gesetzt ist, Details ausblenden
+            const detailsSection = document.getElementById('steps-details');
+            if (detailsSection) {
+                detailsSection.classList.add('hidden');
+                const toggleBtn = document.getElementById('toggle-steps-detail-btn');
+                if (toggleBtn) toggleBtn.classList.add('hidden');
+            }
+            return;
+        }
+        
+        // Toggle-Button sichtbar machen
+        const toggleBtn = document.getElementById('toggle-steps-detail-btn');
+        if (toggleBtn) toggleBtn.classList.remove('hidden');
+        
+        // Bestimme Karrierestufe und relevante Mitarbeiter
+        const currentStufe = targetUser.Karrierestufe;
+        const isGeschaeftsstelle = currentStufe?.includes('Geschäftsstellenleiter');
+        const isTraineeOrJGST = currentStufe?.includes('Trainee') || currentStufe?.includes('JGST');
+        
+        let required = 0;
+        let relevantEmployees = [];
+        
+        if (isGeschaeftsstelle) {
+            // Geschäftsstellenleiter: 5 direkte Trainee II+ Mitarbeiter
+            // ABER: Geschäftsstellenleiter zählen doppelt (2 Punkte)
+            required = 5;
+            const direkteMitarbeiter = db.mitarbeiter.filter(m => 
+                m.Werber === targetUser._id && 
+                m.Status !== 'Ausgeschieden'
+            );
+            
+            const traineeIIHierarchy = this._getHierarchyForGroup('Trainee II');
+            relevantEmployees = direkteMitarbeiter.filter(m => {
+                const hierarchy = this._getHierarchyForGroup(m.Karrierestufe);
+                return hierarchy >= traineeIIHierarchy;
+            }).map(emp => {
+                // Prüfe ob dieser Mitarbeiter selbst Geschäftsstellenleiter ist
+                const isGst = emp.Karrierestufe?.includes('Geschäftsstellenleiter');
+                return {
+                    ...emp,
+                    points: isGst ? 2 : 1  // GST zählen doppelt
+                };
+            });
+        } else if (isTraineeOrJGST) {
+            // Trainee/JGST: 3 aktive Mitarbeiter (direkte + indirekte Untergebene)
+            required = 3;
+            
+            // Hole alle direkten Mitarbeiter
+            const direkteMitarbeiter = db.mitarbeiter.filter(m => 
+                m.Werber === targetUser._id && 
+                m.Status !== 'Ausgeschieden'
+            );
+            
+            // Hole alle indirekten Mitarbeiter (rekursiv)
+            const allSubordinateIds = getAllSubordinatesRecursive(targetUser._id);
+            const indirekteMitarbeiter = allSubordinateIds
+                .map(id => db.mitarbeiter.find(m => m._id === id))
+                .filter(m => m && m.Status !== 'Ausgeschieden');
+            
+            // Kombiniere beide Listen (ohne Duplikate)
+            const alleMitarbeiterMap = new Map();
+            [...direkteMitarbeiter, ...indirekteMitarbeiter].forEach(m => {
+                if (m) alleMitarbeiterMap.set(m._id, m);
+            });
+            relevantEmployees = Array.from(alleMitarbeiterMap.values());
+        }
+        
+        // Berechne EH-Summe für jeden Mitarbeiter im aktuellen Quartal via SQL
+        const currentDate = getCurrentDate();
+        
+        // Bestimme den aktuellen Umsatzmonat (1-12)
+        const currentYear = currentDate.getFullYear();
+        let currentUmsatzmonat = 1;
+        
+        for (let month = 0; month < 12; month++) {
+            const { startDate, endDate } = getMonthlyCycleDatesForDate(new Date(currentYear, month, 15));
+            if (currentDate >= startDate && currentDate <= endDate) {
+                currentUmsatzmonat = month + 1;
+                break;
+            }
+        }
+        
+        // Bestimme das Quartal: 1-3 = Q1, 4-6 = Q2, 7-9 = Q3, 10-12 = Q4
+        const currentQuartal = Math.ceil(currentUmsatzmonat / 3);
+        
+        // Berechne Startmonat des Quartals
+        const quartalStartMonth = (currentQuartal - 1) * 3; // 0, 3, 6, 9
+        
+        // Hole das Startdatum des ersten Monats im Quartal
+        const { startDate: quartalStart } = getMonthlyCycleDatesForDate(new Date(currentYear, quartalStartMonth, 15));
+        
+        const quartalStartIso = toLocalISOString(quartalStart);
+        const todayIso = toLocalISOString(currentDate);
+        
+        const capitalbank = db.gesellschaften?.find(g => g.Gesellschaft === 'Capitalbank');
+        const capitalbankId = capitalbank ? capitalbank._id : null;
+        let capitalbankFilter = '';
+        if (capitalbankId) {
+            capitalbankFilter = ` AND NOT (\`Gesellschaft_ID\` IS NOT NULL AND \`Gesellschaft_ID\` LIKE '%${capitalbankId}%')`;
+        }
+        
+        const ehQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`ehSum\` FROM \`Umsatz\` WHERE \`Datum\` >= '${quartalStartIso}' AND \`Datum\` <= '${todayIso}'${capitalbankFilter} GROUP BY \`Mitarbeiter_ID\``;
+        const ehResultRaw = await seaTableSqlQuery(ehQuery, true);
+        const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
+        
+        const employeesWithProgress = relevantEmployees.map(emp => {
+            const ehData = ehResults.find(e => e.Mitarbeiter_ID?.[0]?.row_id === emp._id);
+            const umsatzSelbst = ehData?.ehSum || 0;
+            const isGstMember = emp.Karrierestufe?.includes('Geschäftsstellenleiter');
+            
+            let isActive = false;
+            let requiredEH = 400;
+            let missingEH = 400 - umsatzSelbst;
+            
+            if (isGstMember) {
+                // GST: 600 EH selbst UND 1.600 EH in der Gruppe
+                const gruppenMitglieder = getSubordinates(emp._id, 'gruppe');
+                let gruppenEH = umsatzSelbst;
+                
+                for (const memberId of gruppenMitglieder) {
+                    const memberEhData = ehResults.find(e => e.Mitarbeiter_ID?.[0]?.row_id === memberId);
+                    gruppenEH += memberEhData?.ehSum || 0;
+                }
+                
+                isActive = umsatzSelbst >= 600 && gruppenEH >= 1600;
+                requiredEH = 600;
+                missingEH = Math.max(0, 600 - umsatzSelbst);
+                emp.gruppenEH = gruppenEH;
+            } else {
+                isActive = umsatzSelbst >= 400;
+                missingEH = Math.max(0, 400 - umsatzSelbst);
+            }
+            
+            return {
+                ...emp,
+                ehSum: umsatzSelbst,
+                gruppenEH: emp.gruppenEH,
+                isActive: isActive,
+                missingEH: missingEH,
+                requiredEH: requiredEH,
+                points: emp.points || 1
+            };
+        }).sort((a, b) => b.ehSum - a.ehSum); // Sortiere nach EH-Summe absteigend
+        
+        // Berechne Gesamtpunkte (aktive Mitarbeiter)
+        const activeEmployees = employeesWithProgress.filter(e => e.isActive);
+        const totalActivePoints = activeEmployees.reduce((sum, e) => sum + (e.points || 1), 0);
+        const inactiveEmployees = employeesWithProgress.filter(e => !e.isActive);
+        const inactiveCount = inactiveEmployees.length;
+        
+        // Berechne vorhandene Punkte/MA (aktive + inaktive)
+        const totalExistingPoints = employeesWithProgress.reduce((sum, e) => sum + (e.points || 1), 0);
+        const totalExistingMA = employeesWithProgress.length; // aktive + inaktive
+        
+        // Für beide: Nur fehlende MA/Punkte zählen, inaktive zählen als vorhanden
+        const neededMA = isGeschaeftsstelle 
+            ? Math.max(0, required - totalExistingPoints)  // GST: fehlende Punkte
+            : Math.max(0, required - totalExistingMA);     // Trainee: fehlende MA
+        
+        // Gesamte ETs berechnen (10 ETs pro MA)
+        const neededETTotal = neededMA * 10;
+        
+        // Verbleibende Wochen berechnen
+        const today = new Date();
+        const targetDate = new Date(befoerderungsdatum);
+        const diffTime = targetDate - today;
+        const weeksRemaining = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 7)));
+        
+        // ETs pro Woche berechnen
+        const etPerWeek = weeksRemaining > 0 ? Math.ceil(neededETTotal / weeksRemaining) : 0;
+        
+        // Infoabende berechnen: Zähle alle Infozyklen (21 Tage) bis zum Beförderungsdatum
+        let infoabendeTotal = 0;
+        let currentInfoDate = findNextInfoDateAfter(today);
+        
+        while (currentInfoDate <= targetDate) {
+            infoabendeTotal++;
+            // Nächster Infozyklus ist 21 Tage später
+            const nextCycleDate = new Date(currentInfoDate.getTime() + (21 * 24 * 60 * 60 * 1000));
+            currentInfoDate = nextCycleDate;
+        }
+        
+        // DOM-Elemente aktualisieren
+        document.getElementById('needed-ma-count').textContent = neededMA;
+        document.getElementById('needed-et-total').textContent = neededETTotal;
+        document.getElementById('weeks-remaining').textContent = weeksRemaining;
+        document.getElementById('et-per-week').textContent = etPerWeek;
+        document.getElementById('infoabende-total').textContent = infoabendeTotal;
+        
+        // Mitarbeiter-Fortschritt anzeigen
+        this._renderEmployeeProgress(employeesWithProgress);
+    }
+    
+    _renderEmployeeProgress(employees) {
+        const container = document.getElementById('employee-progress-list');
+        if (!container) return;
+        
+        if (employees.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 italic text-sm">Noch keine relevanten Mitarbeiter vorhanden.</p>';
+            return;
+        }
+        
+        container.innerHTML = employees.map(emp => {
+            const isGst = emp.Karrierestufe?.includes('Geschäftsstellenleiter');
+            const requiredEH = emp.requiredEH || (isGst ? 600 : 400);
+            const percentage = Math.min(100, Math.round((emp.ehSum / requiredEH) * 100));
+            
+            const statusIcon = emp.isActive 
+                ? '<i class="fas fa-check-circle text-green-500"></i>' 
+                : '<i class="fas fa-hourglass-half text-orange-400"></i>';
+            
+            // Sicherstellen, dass ehSum eine Zahl ist
+            const ehSumDisplay = isNaN(emp.ehSum) ? 0 : Math.round(emp.ehSum);
+            const missingEHDisplay = isNaN(emp.missingEH) ? requiredEH : Math.round(emp.missingEH);
+            
+            // Punkte-Badge anzeigen, wenn mehr als 1 Punkt
+            const pointsBadge = emp.points && emp.points > 1 
+                ? `<span class="ml-1 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded-full" title="Zählt ${emp.points}x">×${emp.points}</span>` 
+                : '';
+            
+            // Zusätzliche Info für GST
+            const gstInfo = isGst && emp.gruppenEH 
+                ? `<div class="text-xs text-gray-500 mt-1">Gruppe: ${Math.round(emp.gruppenEH)} / 1.600 EH</div>` 
+                : '';
+            
+            return `
+                <div class="bg-white border border-gray-200 rounded-lg p-3 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            ${statusIcon}
+                            <span class="font-medium text-gray-800 text-sm">${_escapeHtml(emp.Name)}</span>
+                            ${pointsBadge}
+                        </div>
+                        <span class="text-xs font-semibold ${emp.isActive ? 'text-green-600' : 'text-orange-600'}">
+                            ${ehSumDisplay} EH
+                        </span>
+                    </div>
+                    <div class="space-y-1">
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <div class="h-2.5 rounded-full ${emp.isActive ? 'bg-green-500' : 'bg-orange-400'}" 
+                                 style="width: ${percentage}%"></div>
+                        </div>
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="text-gray-500">${percentage}% von ${requiredEH} EH${isGst ? ' (selbst)' : ''}</span>
+                            ${!emp.isActive ? `<span class="text-gray-600 font-medium">Noch ${missingEHDisplay} EH</span>` : '<span class="text-green-600 font-medium">✓ Aktiv</span>'}
+                        </div>
+                        ${gstInfo}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    _toggleStepsDetail() {
+        const detailsSection = document.getElementById('steps-details');
+        const toggleText = document.getElementById('toggle-steps-text');
+        const toggleIcon = document.getElementById('toggle-steps-icon');
+        
+        if (!detailsSection || !toggleText || !toggleIcon) return;
+        
+        if (detailsSection.classList.contains('hidden')) {
+            // Details anzeigen
+            detailsSection.classList.remove('hidden');
+            toggleText.textContent = 'Details ausblenden';
+            toggleIcon.classList.remove('fa-chevron-down');
+            toggleIcon.classList.add('fa-chevron-up');
+        } else {
+            // Details ausblenden
+            detailsSection.classList.add('hidden');
+            toggleText.textContent = 'Details anzeigen';
+            toggleIcon.classList.remove('fa-chevron-up');
+            toggleIcon.classList.add('fa-chevron-down');
+        }
+    }
+
+    async _updateVisionProgress(targetUser = authenticatedUserData) {
+        // Berechne aktive Mitarbeiter (mindestens 400 EH im aktuellen Quartal)
+        // Quartal basiert auf Umsatzmonaten: Q1=1-3, Q2=4-6, Q3=7-9, Q4=10-12
+        
+        const currentDate = getCurrentDate();
+        
+        // Bestimme den aktuellen Umsatzmonat (1-12)
+        // Gehe durch alle 12 Monate des Jahres und finde, in welchem Zyklus wir uns befinden
+        const currentYear = currentDate.getFullYear();
+        let currentUmsatzmonat = 1;
+        
+        for (let month = 0; month < 12; month++) {
+            const { startDate, endDate } = getMonthlyCycleDatesForDate(new Date(currentYear, month, 15));
+            if (currentDate >= startDate && currentDate <= endDate) {
+                currentUmsatzmonat = month + 1;
+                break;
+            }
+        }
+        
+        // Bestimme das Quartal: 1-3 = Q1, 4-6 = Q2, 7-9 = Q3, 10-12 = Q4
+        const currentQuartal = Math.ceil(currentUmsatzmonat / 3);
+        
+        // Berechne Startmonat des Quartals
+        const quartalStartMonth = (currentQuartal - 1) * 3; // 0, 3, 6, 9
+        
+        // Hole das Startdatum des ersten Monats im Quartal
+        const { startDate: quartalStart } = getMonthlyCycleDatesForDate(new Date(currentYear, quartalStartMonth, 15));
+        
+        const quartalStartIso = toLocalISOString(quartalStart);
+        const todayIso = toLocalISOString(currentDate);
+        
+        // SQL-Query um EH-Summen für alle Mitarbeiter im aktuellen Quartal zu holen
+        const capitalbank = db.gesellschaften?.find(g => g.Gesellschaft === 'Capitalbank');
+        const capitalbankId = capitalbank ? capitalbank._id : null;
+        let capitalbankFilter = '';
+        if (capitalbankId) {
+            capitalbankFilter = ` AND NOT (\`Gesellschaft_ID\` IS NOT NULL AND \`Gesellschaft_ID\` LIKE '%${capitalbankId}%')`;
+        }
+        
+        const ehQuery = `SELECT \`Mitarbeiter_ID\`, SUM(\`EH\`) AS \`ehSum\` FROM \`Umsatz\` WHERE \`Datum\` >= '${quartalStartIso}' AND \`Datum\` <= '${todayIso}'${capitalbankFilter} GROUP BY \`Mitarbeiter_ID\``;
+        const ehResultRaw = await seaTableSqlQuery(ehQuery, true);
+        const ehResults = mapSqlResults(ehResultRaw || [], "Umsatz");
+        
+        // Markiere ALLE Mitarbeiter mit ihrem Aktivstatus (für Netzwerk-Darstellung)
+        for (const user of db.mitarbeiter) {
+            const ehData = ehResults.find(e => e.Mitarbeiter_ID?.[0]?.row_id === user._id);
+            const umsatzSelbst = ehData?.ehSum || 0;
+            
+            // Prüfe ob Geschäftsstellenleiter -> spezielle Kriterien
+            const isGst = user.Karrierestufe?.includes('Geschäftsstellenleiter');
+            
+            if (isGst) {
+                // GST: 600 EH selbst UND 1.600 EH in der Gruppe
+                const gruppenMitglieder = getSubordinates(user._id, 'gruppe');
+                let gruppenEH = umsatzSelbst; // Eigene EH einrechnen
+                
+                // Addiere EH aller Gruppenmitglieder
+                for (const memberId of gruppenMitglieder) {
+                    const memberEhData = ehResults.find(e => e.Mitarbeiter_ID?.[0]?.row_id === memberId);
+                    gruppenEH += memberEhData?.ehSum || 0;
+                }
+                
+                user.isActive = umsatzSelbst >= 600 && gruppenEH >= 1600;
+            } else {
+                // Alle anderen: 400 EH
+                user.isActive = umsatzSelbst >= 400;
+            }
+        }
+        
+        const currentStufe = targetUser.Karrierestufe;
+        const container = document.getElementById('vision-progress-container');
+        
+        // Prüfe die genaue Karrierestufe
+        const isGeschaeftsstelle = currentStufe?.includes('Geschäftsstellenleiter');
+        const isBezirk = currentStufe?.includes('Bezirksleiter');
+        const isTraineeOrJGST = currentStufe?.includes('Trainee') || currentStufe?.includes('JGST');
+        
+        // Hole Beförderungs-Datum aus Mitarbeiter-Tabelle
+        const befoerderungsDatum = targetUser.Befoerderungsdatum 
+            ? new Date(targetUser.Befoerderungsdatum).toLocaleDateString('de-DE', { 
+                day: '2-digit', month: 'long', year: 'numeric' 
+              })
+            : 'Nicht festgelegt';
+        
+        // Hole zusätzliche MA aus Vision
+        const visionData = db.visionen?.filter(v => v.Mitarbeiter === targetUser._id)
+            .sort((a, b) => new Date(b.Edited || b._ctime) - new Date(a.Edited || a._ctime))[0];
+        const zusaetzlicheMA = visionData?.MA_Plan || 0;
+        
+        // Wenn Geschäftsstellenleiter, zeige Bezirksleiter-Fortschritt
+        if (isGeschaeftsstelle) {
+            // Benötigt: 5 Punkte (direkte aktive Trainee II+ Mitarbeiter)
+            // ABER: Geschäftsstellenleiter zählen doppelt (2 Punkte)
+            // Hole alle direkten Mitarbeiter
+            const direkteMitarbeiter = db.mitarbeiter.filter(m => 
+                m.Werber === targetUser._id && 
+                m.Status !== 'Ausgeschieden'
+            );
+            
+            // Filtere nach Trainee II oder höher
+            const traineeIIHierarchy = this._getHierarchyForGroup('Trainee II');
+            const qualifiedDirekt = direkteMitarbeiter.filter(m => {
+                const hierarchy = this._getHierarchyForGroup(m.Karrierestufe);
+                return hierarchy >= traineeIIHierarchy;
+            });
+            
+            // Berechne EH-Daten und Punkte für jeden qualifizierten Mitarbeiter
+            const qualifiedWithProgress = qualifiedDirekt.map(emp => {
+                const ehData = ehResults.find(e => e.Mitarbeiter_ID?.[0]?.row_id === emp._id);
+                const umsatzSelbst = ehData?.ehSum || 0;
+                const isGstMember = emp.Karrierestufe?.includes('Geschäftsstellenleiter');
+                
+                let isActive = false;
+                let requiredEH = 400;
+                let missingEH = 400 - umsatzSelbst;
+                
+                if (isGstMember) {
+                    // GST: 600 EH selbst UND 1.600 EH in der Gruppe
+                    const gruppenMitglieder = getSubordinates(emp._id, 'gruppe');
+                    let gruppenEH = umsatzSelbst;
+                    
+                    for (const memberId of gruppenMitglieder) {
+                        const memberEhData = ehResults.find(e => e.Mitarbeiter_ID?.[0]?.row_id === memberId);
+                        gruppenEH += memberEhData?.ehSum || 0;
+                    }
+                    
+                    isActive = umsatzSelbst >= 600 && gruppenEH >= 1600;
+                    requiredEH = 600; // Für die Anzeige
+                    missingEH = Math.max(0, 600 - umsatzSelbst);
+                    
+                    // Speichere Gruppen-EH für Tooltip
+                    emp.gruppenEH = gruppenEH;
+                } else {
+                    isActive = umsatzSelbst >= 400;
+                    missingEH = Math.max(0, 400 - umsatzSelbst);
+                }
+                
+                return {
+                    ...emp,
+                    ehSum: umsatzSelbst,
+                    gruppenEH: emp.gruppenEH,
+                    isActive: isActive,
+                    missingEH: missingEH,
+                    requiredEH: requiredEH,
+                    points: isGstMember ? 2 : 1
+                };
+            });
+            
+            // Berechne Gesamtpunkte
+            const activeEmployees = qualifiedWithProgress.filter(m => m.isActive);
+            const inactiveEmployees = qualifiedWithProgress.filter(m => !m.isActive);
+            const totalActivePoints = activeEmployees.reduce((sum, e) => sum + e.points, 0);
+            const totalInactivePoints = inactiveEmployees.reduce((sum, e) => sum + e.points, 0);
+            
+            // Füge zusätzliche MA als Punkte hinzu (geplante zukünftige MA)
+            const totalActivePointsWithPlanned = totalActivePoints + zusaetzlicheMA;
+            const zusatzInfo = zusaetzlicheMA > 0 
+                ? ` <span class="text-xs text-purple-600">(${totalActivePoints} aktuell + ${zusaetzlicheMA} geplant)</span>` 
+                : '';
+            
+            container.innerHTML = `
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="text-lg font-bold text-skt-blue">Nächster Karriereschritt: Bezirksleiter:in</h4>
+                            <p class="text-sm text-gray-600">Ziel-Datum: <span class="font-semibold">${befoerderungsDatum}</span></p>
+                        </div>
+                    </div>
+                    ${this._renderProgressBar(
+                        'Benötigt: 5 Punkte (GST = 2 Punkte, andere = 1 Punkt)',
+                        5,
+                        totalActivePoints,
+                        totalInactivePoints,
+                        'skt-blue',
+                        zusaetzlicheMA
+                    )}
+                    ${zusaetzlicheMA > 0 ? `<p class="text-sm text-purple-600 font-medium">Mit geplanten MA: ${totalActivePointsWithPlanned}/5 Punkte</p>` : ''}
+                </div>
+            `;
+        }
+        // Wenn Trainee oder JGST, zeige Geschäftsstellenleiter-Fortschritt
+        else if (isTraineeOrJGST) {
+            // Benötigt: 3 aktive Mitarbeiter (direkte + indirekte Untergebene)
+            // Hole alle direkten Mitarbeiter
+            const direkteMitarbeiter = db.mitarbeiter.filter(m => 
+                m.Werber === targetUser._id && 
+                m.Status !== 'Ausgeschieden'
+            );
+            
+            // Hole alle indirekten Mitarbeiter (rekursiv)
+            const allSubordinateIds = getAllSubordinatesRecursive(targetUser._id);
+            const indirekteMitarbeiter = allSubordinateIds
+                .map(id => db.mitarbeiter.find(m => m._id === id))
+                .filter(m => m && m.Status !== 'Ausgeschieden');
+            
+            // Kombiniere beide Listen (ohne Duplikate)
+            const alleMitarbeiterMap = new Map();
+            [...direkteMitarbeiter, ...indirekteMitarbeiter].forEach(m => {
+                if (m) alleMitarbeiterMap.set(m._id, m);
+            });
+            const alleMitarbeiter = Array.from(alleMitarbeiterMap.values());
+            
+            // Berechne EH-Daten für jeden Mitarbeiter
+            const alleMitarbeiterWithProgress = alleMitarbeiter.map(emp => {
+                const ehData = ehResults.find(e => e.Mitarbeiter_ID?.[0]?.row_id === emp._id);
+                const umsatz = ehData?.ehSum || 0;
+                return {
+                    ...emp,
+                    ehSum: umsatz,
+                    isActive: umsatz >= 400,
+                    missingEH: Math.max(0, 400 - umsatz)
+                };
+            });
+            
+            const activeUntergebene = alleMitarbeiterWithProgress.filter(m => m.isActive);
+            const inactiveUntergebene = alleMitarbeiterWithProgress.filter(m => !m.isActive);
+            
+            // Füge zusätzliche MA hinzu (geplante zukünftige MA)
+            const totalActiveWithPlanned = activeUntergebene.length + zusaetzlicheMA;
+            
+            container.innerHTML = `
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="text-lg font-bold text-skt-blue">Nächster Karriereschritt: Geschäftsstellenleiter:in</h4>
+                            <p class="text-sm text-gray-600">Ziel-Datum: <span class="font-semibold">${befoerderungsDatum}</span></p>
+                        </div>
+                    </div>
+                    ${this._renderProgressBar(
+                        'Benötigt: 3 aktive Mitarbeiter (direkte + indirekte)',
+                        3,
+                        activeUntergebene.length,
+                        inactiveUntergebene.length,
+                        'skt-green-accent',
+                        zusaetzlicheMA
+                    )}
+                    ${zusaetzlicheMA > 0 ? `<p class="text-sm text-purple-600 font-medium">Mit geplanten MA: ${totalActiveWithPlanned}/3 Mitarbeiter</p>` : ''}
+                </div>
+            `;
+        }
+        // Für alle anderen Karrierestufen (Bezirksleiter und höher)
+        else {
+            container.innerHTML = `
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-6 text-center">
+                    <i class="fas fa-info-circle text-skt-blue text-3xl mb-3"></i>
+                    <h4 class="text-lg font-semibold text-gray-800 mb-2">Fortschritts-Tracking</h4>
+                    <p class="text-sm text-gray-600">
+                        Diese Sektion wird für Ihre Karrierestufe in Zukunft hinzugefügt.
+                    </p>
+                </div>
+            `;
+        }
+    }
+    
+    _renderProgressBar(description, required, active, inactive, colorClass, planned = 0) {
+        const total = active + inactive;
+        const missing = Math.max(0, required - total - planned);
+        
+        // Erstelle Punkte-Array
+        const dots = [];
+        
+        // Aktive Mitarbeiter (grüner Punkt)
+        for (let i = 0; i < active; i++) {
+            dots.push('<div class="w-8 h-8 rounded-full bg-green-500 border-2 border-white shadow-md flex items-center justify-center"><i class="fas fa-check text-white text-xs"></i></div>');
+        }
+        
+        // Inaktive Mitarbeiter (orangener Punkt)
+        for (let i = 0; i < inactive; i++) {
+            dots.push('<div class="w-8 h-8 rounded-full bg-orange-400 border-2 border-white shadow-md flex items-center justify-center"><i class="fas fa-hourglass-half text-white text-xs"></i></div>');
+        }
+        
+        // Geplante Mitarbeiter (lila Punkt)
+        for (let i = 0; i < planned; i++) {
+            dots.push('<div class="w-8 h-8 rounded-full bg-purple-400 border-2 border-white shadow-md flex items-center justify-center"><i class="fas fa-user-plus text-white text-xs"></i></div>');
+        }
+        
+        // Fehlende Mitarbeiter (grauer Punkt)
+        for (let i = 0; i < missing; i++) {
+            dots.push('<div class="w-8 h-8 rounded-full bg-gray-300 border-2 border-white shadow-md flex items-center justify-center"><i class="fas fa-user-plus text-white text-xs"></i></div>');
+        }
+        
+        return `
+            <div class="space-y-3">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium text-gray-700">${description}</span>
+                    <span class="text-sm font-bold text-${colorClass}">${active}/${required} aktiv</span>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    ${dots.join('')}
+                </div>
+                <div class="flex items-center gap-2 text-xs text-gray-600 mt-2">
+                    <div class="flex items-center gap-1">
+                        <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                        <span>Aktiv (${active})</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <div class="w-3 h-3 rounded-full bg-orange-400"></div>
+                        <span>Inaktiv (${inactive})</span>
+                    </div>
+                    ${planned > 0 ? `
+                    <div class="flex items-center gap-1">
+                        <div class="w-3 h-3 rounded-full bg-purple-400"></div>
+                        <span>Geplant (${planned})</span>
+                    </div>
+                    ` : ''}
+                    <div class="flex items-center gap-1">
+                        <div class="w-3 h-3 rounded-full bg-gray-300"></div>
+                        <span>Benötigt (${missing})</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    _openVisionModal() {
+        const visionData = db.visionen?.filter(v => v.Mitarbeiter === authenticatedUserData._id)
+            .sort((a, b) => new Date(b.Edited || b._ctime) - new Date(a.Edited || a._ctime))[0];
+        
+        if (visionData) {
+            document.getElementById('vision-id').value = visionData._id || '';
+            document.getElementById('vision-vision').value = visionData.Vision || '';
+            document.getElementById('vision-ziel').value = visionData.Ziel || '';
+            document.getElementById('vision-warum').value = visionData.Warum || '';
+            document.getElementById('vision-change').value = visionData.Change || '';
+            document.getElementById('vision-datum').value = visionData.Datum ? visionData.Datum.split('T')[0] : '';
+            document.getElementById('vision-zusaetzliche-ma').value = visionData.MA_Plan || 0;
+            
+            // Todos laden
+            this._loadTodosInModal(visionData.Todos || '');
+        } else {
+            document.getElementById('vision-id').value = '';
+            document.getElementById('vision-vision').value = '';
+            document.getElementById('vision-ziel').value = '';
+            document.getElementById('vision-warum').value = '';
+            document.getElementById('vision-change').value = '';
+            document.getElementById('vision-datum').value = '';
+            document.getElementById('vision-zusaetzliche-ma').value = 0;
+            this._loadTodosInModal('');
+        }
+        
+        // Beförderungsdatum aus Mitarbeiter-Daten laden
+        document.getElementById('vision-befoerderung').value = authenticatedUserData.Befoerderungsdatum 
+            ? authenticatedUserData.Befoerderungsdatum.split('T')[0] 
+            : '';
+        
+        this.visionModal.classList.add('visible');
+        document.body.classList.add('modal-open');
+    }
+    
+    _closeVisionModal() {
+        this.visionModal.classList.remove('visible');
+        document.body.classList.remove('modal-open');
+    }
+    
+    _loadTodosInModal(todosString) {
+        const container = document.getElementById('vision-todos-container');
+        const todos = todosString ? todosString.split('\n').filter(t => t.trim()) : [];
+        
+        container.innerHTML = '';
+        if (todos.length === 0) {
+            this._addTodoItem();
+        } else {
+            todos.forEach(todo => this._addTodoItem(todo));
+        }
+    }
+    
+    _addTodoItem(value = '') {
+        const container = document.getElementById('vision-todos-container');
+        const todoItem = document.createElement('div');
+        todoItem.className = 'flex items-center gap-2';
+        todoItem.innerHTML = `
+            <input type="text" class="modern-input flex-1 todo-item" value="${_escapeHtml(value)}" placeholder="Beschreibe einen konkreten Schritt...">
+            <button type="button" class="remove-todo-btn text-red-500 hover:text-red-700 transition-colors">
+                <i class="fas fa-times-circle text-xl"></i>
+            </button>
+        `;
+        
+        const removeBtn = todoItem.querySelector('.remove-todo-btn');
+        removeBtn.addEventListener('click', () => {
+            todoItem.remove();
+            // Stelle sicher, dass mindestens ein Todo-Feld vorhanden ist
+            if (container.children.length === 0) {
+                this._addTodoItem();
+            }
+        });
+        
+        container.appendChild(todoItem);
+    }
+    
+    async _saveVision(e) {
+        e.preventDefault();
+        
+        const visionId = document.getElementById('vision-id').value;
+        const vision = document.getElementById('vision-vision').value.trim();
+        const ziel = document.getElementById('vision-ziel').value.trim();
+        const warum = document.getElementById('vision-warum').value.trim();
+        const change = document.getElementById('vision-change').value.trim();
+        const datum = document.getElementById('vision-datum').value;
+        const befoerderungsdatum = document.getElementById('vision-befoerderung').value;
+        const zusaetzlicheMA = parseInt(document.getElementById('vision-zusaetzliche-ma').value) || 0;
+        
+        // Todos sammeln
+        const todoInputs = document.querySelectorAll('.todo-item');
+        const todos = Array.from(todoInputs)
+            .map(input => input.value.trim())
+            .filter(t => t)
+            .join('\n');
+        
+        const visionData = {
+            Vision: vision,
+            Ziel: ziel,
+            Warum: warum,
+            Change: change,
+            Datum: datum || null,
+            Todos: todos
+        };
+        
+        // MA_Plan vorerst auskommentiert, bis die Spalte korrekt eingerichtet ist
+        // if (zusaetzlicheMA > 0) {
+        //     visionData.MA_Plan = zusaetzlicheMA;
+        // }
+        
+        // Mitarbeiter muss separat als Link gesetzt werden
+        const linkData = {
+            Mitarbeiter: authenticatedUserData._id
+        };
+        
+        console.log('Speichere neue Vision (ohne MA_Plan):', 'Daten:', visionData, 'Links:', linkData);
+        
+        try {
+            // Erstelle IMMER eine neue Zeile (keine Updates)
+            const newRowId = await seaTableAddRow('Visionen', visionData, linkData);
+            if (newRowId) {
+                console.log('Neue Vision erfolgreich erstellt mit ID:', newRowId);
+            } else {
+                console.error('Vision konnte nicht erstellt werden - keine ID zurückgegeben');
+            }
+            
+            // Speichere Beförderungsdatum in Mitarbeiter-Tabelle
+            if (befoerderungsdatum) {
+                await seaTableUpdateRow('Mitarbeiter', authenticatedUserData._id, {
+                    Befoerderungsdatum: befoerderungsdatum
+                });
+                console.log('Beförderungsdatum erfolgreich aktualisiert!');
+            }
+            
+            // Daten neu laden
+            await loadAllData();
+            this._closeVisionModal();
+            await this._loadVisionData();
+        } catch (error) {
+            console.error('Fehler beim Speichern der Vision:', error);
+        }
+    }
+
+    _drag(simulation) {
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+
+            // NEU: Speichere die Simulation im SVG-Knoten, um später darauf zugreifen zu können.
+            if (!svgNode) {
+                svgNode = this.closest('svg');
+                if (svgNode) svgNode.__d3_simulation__ = simulation;
+            }
+        }
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        let svgNode = null; // Variable, um den SVG-Knoten zu speichern
+        return d3.drag()
+            .on("start", dragstarted)
+            .on("drag", dragged)
+            .on("end", dragended);
+    }
+
+    getPqqColor(pqq) {
+        if (pqq === null || pqq === undefined) return '#e5e7eb'; // Grau, wenn keine PQQ vorhanden
+        
+        if (pqq >= 200) return 'var(--color-accent-gold)';      // Gold für 200%
+        if (pqq >= 100) {
+            // Interpoliere zwischen Grün (100%) und Gold (200%)
+            const factor = (pqq - 100) / 100;
+            const green = [39, 174, 96];   // --color-accent-green in RGB
+            const gold = [212, 175, 55];   // --color-accent-gold in RGB
+            const r = Math.round(green[0] + (gold[0] - green[0]) * factor);
+            const g = Math.round(green[1] + (gold[1] - green[1]) * factor);
+            const b = Math.round(green[2] + (gold[2] - green[2]) * factor);
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+        if (pqq > 0) {
+            // Interpoliere zwischen Rot (0%) und Grün (100%)
+            const factor = pqq / 100;
+            const red = [255, 99, 71];    // --color-accent-red in RGB
+            const green = [39, 174, 96];   // --color-accent-green in RGB
+            const r = Math.round(red[0] + (green[0] - red[0]) * factor);
+            const g = Math.round(red[1] + (green[1] - red[1]) * factor);
+            const b = Math.round(red[2] + (green[2] - red[2]) * factor);
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+        return 'var(--color-accent-red)'; // 0% ist rot
+    }
+
+    _showMemberDetails(member) {
+        const graphContainer = document.getElementById('network-graph-container');
+        const detailsContainer = document.getElementById('network-details-container');
+        const isInFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+
+        // Im normalen Modus wird das Layout angepasst, im Vollbildmodus wird nur das Overlay eingeblendet.
+        if (!isInFullscreen) {
+            graphContainer.classList.replace('w-full', 'md:w-2/3');
+            detailsContainer.classList.replace('md:w-0', 'md:w-1/3');
+        }
+        detailsContainer.classList.remove('opacity-0');
+        // NEU: Füge eine Klasse hinzu, um den sichtbaren Zustand zu markieren (wichtig für Vollbild)
+        detailsContainer.classList.add('details-visible');
+
+        const kpi = member.kpi;
+        const kpis = [
+            { label: 'PQQ', value: `${(kpi.pqq || 0).toFixed(1)}%`, icon: 'fa-check-double', color: 'indigo' },
+            { label: 'EH-Quote', value: kpi.ehQuote !== null ? `${kpi.ehQuote.toFixed(1)}%` : 'N/A', icon: 'fa-chart-pie', color: 'blue' },
+            { label: 'ET-Quote', value: kpi.etQuote !== null ? `${kpi.etQuote.toFixed(1)}%` : 'N/A', icon: 'fa-user-plus', color: 'teal' },
+            { label: 'Terminausfall', value: `${(kpi.cancellationRate || 0).toFixed(1)}%`, icon: 'fa-calendar-times', color: 'red' },
+            { label: 'EH / BT', value: (kpi.avgEhPerBt || 0).toFixed(2), icon: 'fa-handshake', color: 'blue' },
+            { label: 'EH / AT', value: (kpi.avgEhPerAt || 0).toFixed(2), icon: 'fa-search-dollar', color: 'green' },
+            { label: 'EH / ST', value: (kpi.avgEhPerSt || 0).toFixed(2), icon: 'fa-concierge-bell', color: 'purple' }
+        ];
+        
+        // Vision von diesem Mitarbeiter laden
+        const visionData = db.visionen?.filter(v => v.Mitarbeiter === member.id)
+            .sort((a, b) => new Date(b.Edited || b._ctime) - new Date(a.Edited || a._ctime))[0];
+        const visionText = visionData?.Vision || 'Keine Vision hinterlegt.';
+
+        detailsContainer.innerHTML = `
+            <div class="h-full flex flex-col">
+                <button id="close-network-details-btn" class="absolute top-4 right-4 text-2xl text-gray-400 hover:text-skt-blue transition-colors" title="Schließen">&times;</button>
+                <h3 class="text-2xl font-bold text-skt-blue mb-2">${_escapeHtml(member.name)}</h3>
+                <p class="text-skt-blue-light mb-4">${_escapeHtml(member.position)}</p>
+                <div class="grid grid-cols-1 gap-4 overflow-y-auto flex-grow pr-2">
+                    ${kpis.map(kpi => `
+                        <div class="kpi-card p-4 flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-full bg-${kpi.color}-100 text-${kpi.color}-600 flex items-center justify-center flex-shrink-0">
+                                <i class="fas ${kpi.icon} fa-lg"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-semibold text-gray-500">${kpi.label}</h4>
+                                <p class="text-2xl font-bold text-gray-800 mt-1">${kpi.value}</p>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="mt-6 border-t pt-4">
+                    <h4 class="font-semibold text-gray-700 mb-2">Vision & Ziele</h4>
+                    <p class="text-sm text-gray-600 italic">"${_escapeHtml(visionText)}"</p>
+                </div>
+            </div>
+        `;
+
+        // NEU: Event-Listener für den Schließen-Button hinzufügen
+        document.getElementById('close-network-details-btn').addEventListener('click', () => {
+            this._hideMemberDetails();
+        });
+    }
+
+    _hideMemberDetails() {
+        const graphContainer = document.getElementById('network-graph-container');
+        const detailsContainer = document.getElementById('network-details-container');
+        const isInFullscreen = document.fullscreenElement || document.webkitFullscreenElement;
+
+        if (!isInFullscreen) {
+            graphContainer.classList.replace('md:w-2/3', 'w-full');
+            detailsContainer.classList.replace('md:w-1/3', 'md:w-0');
+        }
+        detailsContainer.classList.add('opacity-0');
+        detailsContainer.classList.remove('details-visible');
+        
+        // WICHTIG: Leere den Inhalt, damit der Container zurückgesetzt wird
+        setTimeout(() => {
+            if (!detailsContainer.classList.contains('details-visible')) {
+                detailsContainer.innerHTML = '';
+            }
+        }, 300); // Warte bis die Transition abgeschlossen ist
+    }
+
+    _renderRadialDiagram(container, leader, members) {
         const memberCount = members.length;
         const angleStep = memberCount > 0 ? 360 / memberCount : 0;
         const radius = 150;
@@ -11236,7 +13628,7 @@ class PlanungView {
             const angle = angleStep * i - 90; // Start at top
             const x = radius * Math.cos(angle * Math.PI / 180);
             const y = radius * Math.sin(angle * Math.PI / 180);
-            const pqqColor = getPqqColor(member.pqq);
+            const pqqColor = this.getPqqColor(member.pqq);
 
             // KORREKTUR: Wenn das ET-Ziel 0 ist, soll die Quote 0% sein.
             const etQuote = member.etGoal > 0 ? (member.etIst / member.etGoal) * 100 : 0;
@@ -11249,7 +13641,7 @@ class PlanungView {
             `;
         });
 
-        const leaderPqqColor = getPqqColor(leader.pqq);
+        const leaderPqqColor = this.getPqqColor(leader.pqq);
         const svgHtml = `
             <svg viewBox="-250 -250 500 500" class="w-full h-auto max-w-full">
                 ${segmentsHtml}
@@ -11261,37 +13653,6 @@ class PlanungView {
             </svg>
         `;
         container.innerHTML = svgHtml;
-    }
-
-    _showMemberDetails(member) {
-        const diagramWrapper = document.getElementById('mitarbeiter-rad-diagram-wrapper');
-        const detailsContainer = document.getElementById('mitarbeiter-rad-details');
-        
-        diagramWrapper.parentElement.classList.add('details-visible');
-        diagramWrapper.classList.add('details-visible');
-        detailsContainer.classList.remove('hidden');
-
-        const kpis = [
-            { label: 'PQQ', value: `${member.pqq.toFixed(1)}%`, icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z', color: 'indigo' },
-            { label: 'Terminausfall', value: `${member.cancellationRate.toFixed(1)}%`, icon: 'M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636', color: 'red' },
-            { label: 'EH / BT', value: member.avgEhPerBt.toFixed(2), icon: 'M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4z', color: 'blue' },
-            { label: 'EH / AT', value: member.avgEhPerAt.toFixed(2), icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', color: 'blue' },
-            { label: 'EH / ST', value: member.avgEhPerSt.toFixed(2), icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', color: 'blue' }
-        ];
-
-        detailsContainer.innerHTML = `
-            <div class="bg-white p-6 rounded-lg shadow-lg">
-                <h3 class="text-2xl font-bold text-skt-blue mb-4">${member.name}</h3>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    ${kpis.map(kpi => `
-                        <div class="kpi-card p-4">
-                            <h4 class="font-semibold text-gray-500">${kpi.label}</h4>
-                            <p class="text-2xl font-bold text-gray-800 mt-1">${kpi.value}</p>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
     }
 
     _renderSankey(data) {
@@ -11365,8 +13726,30 @@ class PlanungView {
 
     // NEU: Die bestehende Logik wurde in eine eigene Methode für die Desktop-Ansicht verschoben.
     _renderSankeyDesktop(data) {
-        const outcome1Label = this.flowType === 'AT' ? 'Beratungstermin' : 'Abschluss';
-        const outcome2Label = this.flowType === 'AT' ? 'Kein BT' : 'Kein Abschluss';
+        let gehaltenLabel, ausfallLabel, outcome1Label, outcome2Label;
+        if (this.flowType === 'AT') {
+            gehaltenLabel = 'Gehalten';
+            ausfallLabel = 'Ausfall';
+            outcome1Label = 'Beratungstermin';
+            outcome2Label = 'Kein BT';
+        } else if (this.flowType === 'BT') {
+            gehaltenLabel = 'Gehalten';
+            ausfallLabel = 'Ausfall';
+            outcome1Label = 'Abschluss';
+            outcome2Label = 'Kein Abschluss';
+        } else { // ET Flow
+            gehaltenLabel = 'Im Prozess';
+            outcome1Label = 'Neuer Mitarbeiter';
+            outcome2Label = 'Kein Mitarbeiter'; // Wird aus "Im Prozess" abgeleitet
+            ausfallLabel = 'Ausfall'; // Behält den Standard-Label für stornierte Termine
+        }
+
+        // NEU: Dynamische Beschriftung für den Startknoten
+        const sourceNodeLabels = {
+            'AT': 'Analysetermine',
+            'BT': 'Beratungstermine',
+            'ET': 'Einstellungstermine'
+        };
 
         // Stelle sicher, dass die Höhe für die Desktop-Ansicht gesetzt ist
         this.sankeyContainer.style.height = '350px';
@@ -11383,20 +13766,22 @@ class PlanungView {
             <div class="relative w-full h-full flex justify-between items-center z-10">
                 <div class="w-1/4 flex justify-start">
                     <div id="source-node" class="p-4 bg-gray-600 text-white rounded-lg shadow-lg text-center">
-                        <span class="font-semibold">${this.flowType === 'AT' ? 'Analysetermine' : 'Beratungstermine'}</span>
+                        <span class="font-semibold">${sourceNodeLabels[this.flowType] || 'Termine'}</span>
                         <span class="block text-2xl font-bold">${data.total}</span>
                     </div>
                 </div>
                 <div class="w-1/2 flex flex-col justify-around items-center h-full py-4"> <!-- KORREKTUR: Die Logik für die Anzeige der Ergebnis-Pfade wurde korrigiert. -->
                     <a href="#" data-status="Gehalten" id="status-gehalten" class="p-3 bg-green-100 border-l-4 border-green-500 rounded-md shadow-md hover:shadow-xl hover:bg-green-200 transition w-48 text-center sankey-status-node">
-                        <span class="font-semibold text-green-800">Gehalten</span><span class="block text-xl font-bold text-green-900">${data.gehalten}</span>
-                    </a>
+                        <span class="font-semibold text-green-800">${gehaltenLabel}</span><span class="block text-xl font-bold text-green-900">${data.gehalten}</span>
+                    </a> 
                     <a href="#" data-status="Verschoben" id="status-verschoben" class="p-3 bg-orange-100 border-l-4 border-orange-500 rounded-md shadow-md hover:shadow-xl hover:bg-orange-200 transition w-48 text-center sankey-status-node">
                         <span class="font-semibold text-orange-800">Verschoben</span><span class="block text-xl font-bold text-orange-900">${data.verschoben}</span>
                     </a>
-                    <a href="#" data-status="Ausfall" id="status-ausfall" class="p-3 bg-red-100 border-l-4 border-red-500 rounded-md shadow-md hover:shadow-xl hover:bg-red-200 transition w-48 text-center sankey-status-node">
-                        <span class="font-semibold text-red-800">Ausfall</span><span class="block text-xl font-bold text-red-900">${data.ausfall}</span>
-                    </a>
+                    ${this.flowType !== 'ET' ? `
+                        <a href="#" data-status="Ausfall" id="status-ausfall" class="p-3 bg-red-100 border-l-4 border-red-500 rounded-md shadow-md hover:shadow-xl hover:bg-red-200 transition w-48 text-center sankey-status-node">
+                            <span class="font-semibold text-red-800">${ausfallLabel}</span><span class="block text-xl font-bold text-red-900">${data.ausfall}</span>
+                        </a>
+                    ` : ''}
                     <a href="#" data-status="Offen" id="status-offen" class="p-3 bg-gray-100 border-l-4 border-gray-500 rounded-md shadow-md hover:shadow-xl hover:bg-gray-200 transition w-48 text-center sankey-status-node">
                         <span class="font-semibold text-gray-800">Offen</span><span class="block text-xl font-bold text-gray-900">${data.offen}</span>
                     </a>
@@ -11405,14 +13790,16 @@ class PlanungView {
                     <a href="#" data-status="outcome1" id="outcome1-node" class="p-4 bg-emerald-600 text-white rounded-lg shadow-lg text-center w-48 hover:shadow-xl hover:bg-emerald-700 transition sankey-status-node">
                         <span class="font-semibold">${outcome1Label}</span><span class="block text-2xl font-bold">${data.outcome1}</span>
                     </a>
-                    <a href="#" data-status="outcome2" id="outcome2-node" class="p-4 bg-yellow-500 text-white rounded-lg shadow-lg text-center w-48 hover:shadow-xl hover:bg-yellow-600 transition sankey-status-node">
+                    <a href="#" data-status="outcome2" id="outcome2-node" class="p-4 ${this.flowType === 'ET' ? 'bg-red-600 hover:bg-red-700' : 'bg-yellow-500 hover:bg-yellow-600'} text-white rounded-lg shadow-lg text-center w-48 transition sankey-status-node"> 
                         <span class="font-semibold">${outcome2Label}</span><span class="block text-2xl font-bold">${data.outcome2}</span>
                     </a>
                 </div>
             </div>
         `;
-        this._drawSankeyLinks();
-        this._setupSankeyEventListeners(data.appointments);
+        // KORREKTUR: Verzögere das Zeichnen der Links um einen Frame, um sicherzustellen,
+        // dass die DOM-Elemente gerendert und positioniert sind, bevor ihre Koordinaten gelesen werden.
+        requestAnimationFrame(() => this._drawSankeyLinks());
+        this._setupSankeyEventListeners(data.appointments); // Listener können sofort gesetzt werden.
     }
 
     _drawSankeyLinks() {
@@ -11476,19 +13863,29 @@ class PlanungView {
                 this.activeSankeyNode = node;
 
                 let filteredAppointments = [];
-                if (status === 'Gehalten') filteredAppointments = appointments.filter(t => t.Status === 'Gehalten');
-                else if (status === 'Verschoben') filteredAppointments = appointments.filter(t => t.Status === 'Verschoben');
-                else if (status === 'Ausfall') filteredAppointments = appointments.filter(t => t.Status === 'Storno' || t.Absage === true);
-                else if (status === 'Offen') filteredAppointments = appointments.filter(t => !['Gehalten', 'Verschoben', 'Storno'].includes(t.Status) && t.Absage !== true);
-                else if (status === 'outcome1') {
+                if (this.flowType === 'ET') {
+                    if (status === 'Gehalten') filteredAppointments = appointments.filter(t => !['Offen', 'Verschoben', 'Storno'].includes(t.Status) && t.Absage !== true);
+                    else if (status === 'Verschoben') filteredAppointments = appointments.filter(t => t.Status === 'Verschoben');
+                    else if (status === 'Ausfall') filteredAppointments = appointments.filter(t => t.Status === 'Storno' || t.Absage === true);
+                    else if (status === 'Offen') filteredAppointments = appointments.filter(t => t.Status === 'Offen');
+                    else if (status === 'outcome1') filteredAppointments = this.appointmentsForOutcomes.newMitarbeiter;
+                    else if (status === 'outcome2') filteredAppointments = this.appointmentsForOutcomes.keinMitarbeiter;
+                } else {
+                    if (status === 'Gehalten') filteredAppointments = appointments.filter(t => t.Status === 'Gehalten');
+                    else if (status === 'Verschoben') filteredAppointments = appointments.filter(t => t.Status === 'Verschoben'); 
+                    else if (status === 'Ausfall') filteredAppointments = appointments.filter(t => t.Status === 'Storno' || t.Absage === true);
+                    else if (status === 'Offen') filteredAppointments = appointments.filter(t => !['Gehalten', 'Verschoben', 'Storno'].includes(t.Status) && t.Absage !== true);
+                }
+                
+                if (status === 'outcome1') {
                     if (this.flowType === 'AT') {
                         filteredAppointments = this.appointmentsForOutcomes.resultingBTs;
-                    } else { // BT
+                    } else if (this.flowType === 'BT') {
                         // Hier zeigen wir die BTs an, die zum Abschluss geführt haben.
                         const partnersWithSale = new Set(this.appointmentsForOutcomes.resultingSales.map(s => s.Kunde.trim().toLowerCase()));
                         filteredAppointments = appointments.filter(t => t.Kategorie === 'BT' && t.Status === 'Gehalten' && t.Terminpartner && partnersWithSale.has(t.Terminpartner.trim().toLowerCase()));
                     }
-                } else if (status === 'outcome2') {
+                } else if (status === 'outcome2' && this.flowType !== 'ET') {
                     filteredAppointments = this.flowType === 'AT' ? this.appointmentsForOutcomes.heldATsWithoutBT : this.appointmentsForOutcomes.heldBTsWithoutSale;
                 }
 
@@ -11500,13 +13897,17 @@ class PlanungView {
     _renderDetailsTable(status, appointments) {
         // KORREKTUR: Der Titel der Detailansicht wird jetzt benutzerfreundlicher gestaltet.
         const titleMap = {
-            'Gehalten': 'Gehaltene Termine',
+            'Gehalten': this.flowType === 'ET' ? 'Termine im Prozess' : 'Gehaltene Termine',
             'Verschoben': 'Verschobene Termine',
             'Ausfall': 'Ausgefallene Termine',
             'Offen': 'Offene Termine',
             'outcome1': this.flowType === 'AT' ? 'Resultierende Beratungstermine' : 'Beratungstermine mit Abschluss',
-            'outcome2': this.flowType === 'AT' ? 'Gehaltene ATs ohne BT' : 'Gehaltene BTs ohne Abschluss'
+            'outcome2': this.flowType === 'AT' ? 'Gehaltene ATs ohne BT' : 'Gehaltene BTs ohne Abschluss',
         };
+        if (this.flowType === 'ET') {
+            titleMap['outcome1'] = 'Neue Mitarbeiter'; 
+            titleMap['outcome2'] = 'Wird kein Mitarbeiter';
+        }
         this.detailsTitle.textContent = titleMap[status] || status;
 
         this.detailsTableBody.innerHTML = '';
@@ -11607,7 +14008,15 @@ class PlanungView {
                                     <span class="inline-block px-3 py-1 text-xs font-semibold text-white ${categoryPillColor} rounded-full">${termin.Kategorie}</span>
                                     <p class="font-bold text-lg text-skt-blue mt-1">${termin.Terminpartner}</p>
                                 </div>
-                                <p class="text-sm text-gray-500 font-medium">${new Date(termin.Datum).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} Uhr</p>
+                                <div class="flex items-center gap-2">
+                                    <button class="goto-calendar-btn p-2 text-skt-blue hover:text-skt-blue-light hover:bg-white rounded-lg transition-colors" 
+                                            data-appointment-id="${termin._id}" 
+                                            data-appointment-date="${termin.Datum}"
+                                            title="Im Kalender anzeigen">
+                                        <i class="fas fa-calendar-alt text-lg"></i>
+                                    </button>
+                                    <p class="text-sm text-gray-500 font-medium">${new Date(termin.Datum).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} Uhr</p>
+                                </div>
                             </div>
                             <div class="mt-3 pt-3 border-t border-gray-200 text-sm text-gray-600 space-y-1">
                                 <p><strong>Status:</strong> <span class="font-semibold ${statusColorClass.replace('border-', 'text-')}">${termin.Status || '-'}</span></p>
@@ -11620,6 +14029,25 @@ class PlanungView {
             });
             timelineHtml += '</div>';
             contentEl.innerHTML = timelineHtml;
+            
+            // Event-Listener für "Im Kalender anzeigen"-Buttons
+            const self = this; // Kontext speichern
+            contentEl.querySelectorAll('.goto-calendar-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const appointmentId = btn.dataset.appointmentId;
+                    const appointmentDate = btn.dataset.appointmentDate;
+                    
+                    console.log('[CALENDAR-NAV] Navigiere zu Termin:', appointmentId, appointmentDate);
+                    
+                    // Modal schließen
+                    modal.classList.remove('visible');
+                    document.body.classList.remove('modal-open');
+                    
+                    // Zur Terminübersicht navigieren und Termin anzeigen
+                    self._navigateToAppointmentInCalendar(appointmentId, appointmentDate);
+                });
+            });
         }
     
         modal.classList.add('visible');
@@ -11628,6 +14056,94 @@ class PlanungView {
             modal.classList.remove('visible');
             document.body.classList.remove('modal-open');
         };
+    }
+    
+    _navigateToAppointmentInCalendar(appointmentId, appointmentDate) {
+        console.log('[CALENDAR-NAV] Start navigation to appointment:', appointmentId);
+        
+        // Zur Terminübersicht wechseln - verwende den Header-Button
+        const appointmentsBtn = document.getElementById('appointments-header-btn');
+        if (appointmentsBtn) {
+            console.log('[CALENDAR-NAV] Clicking appointments button');
+            appointmentsBtn.click();
+        } else {
+            console.error('[CALENDAR-NAV] Appointments button not found!');
+            return;
+        }
+        
+        // Längere Wartezeit für die Initialisierung der Ansicht
+        setTimeout(() => {
+            // Prüfe beide Varianten: global und window
+            const appointmentsView = window.appointmentsViewInstance || appointmentsViewInstance;
+            
+            if (appointmentsView) {
+                console.log('[CALENDAR-NAV] Appointments view instance found');
+                // Datum extrahieren und zur Wochenansicht navigieren
+                const date = new Date(appointmentDate);
+                const year = date.getFullYear();
+                const month = date.getMonth();
+                const day = date.getDate();
+                
+                console.log('[CALENDAR-NAV] Target date:', year, month, day);
+                
+                // Zur Wochenansicht wechseln, falls nicht bereits aktiv
+                const weekViewBtn = document.getElementById('view-week');
+                if (weekViewBtn && !weekViewBtn.classList.contains('active')) {
+                    console.log('[CALENDAR-NAV] Switching to week view');
+                    weekViewBtn.click();
+                }
+                
+                // Zur richtigen Woche navigieren
+                setTimeout(() => {
+                    appointmentsView.currentDate = new Date(year, month, day);
+                    appointmentsView.render();
+                    console.log('[CALENDAR-NAV] Rendered calendar for date:', appointmentsView.currentDate);
+                    
+                    // Termin hervorheben
+                    setTimeout(() => {
+                        const appointmentEl = document.querySelector(`[data-appointment-id="${appointmentId}"]`);
+                        if (appointmentEl) {
+                            console.log('[CALENDAR-NAV] Found appointment element, scrolling and highlighting');
+                            appointmentEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            // Kurze Highlight-Animation
+                            appointmentEl.style.transition = 'box-shadow 0.3s ease';
+                            appointmentEl.style.boxShadow = '0 0 0 3px rgba(0, 82, 147, 0.5)';
+                            setTimeout(() => {
+                                appointmentEl.style.boxShadow = '';
+                            }, 2000);
+                        } else {
+                            console.warn('[CALENDAR-NAV] Appointment element not found in DOM:', appointmentId);
+                        }
+                    }, 400);
+                }, 200);
+            } else {
+                console.error('[CALENDAR-NAV] appointmentsViewInstance not found!');
+                console.log('[CALENDAR-NAV] Retrying in 500ms...');
+                
+                // Zweiter Versuch nach weiterer Wartezeit
+                setTimeout(() => {
+                    const appointmentsView2 = window.appointmentsViewInstance || appointmentsViewInstance;
+                    if (appointmentsView2) {
+                        console.log('[CALENDAR-NAV] Appointments view found on retry');
+                        const date = new Date(appointmentDate);
+                        appointmentsView2.currentDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                        appointmentsView2.render();
+                        
+                        setTimeout(() => {
+                            const appointmentEl = document.querySelector(`[data-appointment-id="${appointmentId}"]`);
+                            if (appointmentEl) {
+                                appointmentEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                appointmentEl.style.transition = 'box-shadow 0.3s ease';
+                                appointmentEl.style.boxShadow = '0 0 0 3px rgba(0, 82, 147, 0.5)';
+                                setTimeout(() => { appointmentEl.style.boxShadow = ''; }, 2000);
+                            }
+                        }, 400);
+                    } else {
+                        console.error('[CALENDAR-NAV] Still not found after retry!');
+                    }
+                }, 500);
+            }
+        }, 300);
     }
 }
 
@@ -12197,6 +14713,27 @@ function setupEventListeners() {
       e.preventDefault();
       closeSettingsMenu();
       openHelpModal();
+  });
+
+  // NEU: Event Listener zum Schließen des Hilfe-Modals
+  dom.cancelHelpBtn?.addEventListener('click', () => closeHelpModal());
+  document.getElementById('cancel-help-btn-2')?.addEventListener('click', () => closeHelpModal());
+  dom.helpModal?.addEventListener('click', (e) => { if (e.target === dom.helpModal) closeHelpModal(); });
+
+  // NEU: Event Listener für Neuen-Nutzer-Modal
+  dom.cancelAddUserBtn?.addEventListener('click', () => {
+      dom.addUserModal.classList.remove('visible');
+      document.body.classList.remove('modal-open');
+  });
+  dom.cancelAddUserBtn2?.addEventListener('click', () => {
+      dom.addUserModal.classList.remove('visible');
+      document.body.classList.remove('modal-open');
+  });
+  dom.addUserModal?.addEventListener('click', (e) => {
+      if (e.target === dom.addUserModal) {
+          dom.addUserModal.classList.remove('visible');
+          document.body.classList.remove('modal-open');
+      }
   });
 
   // KORREKTUR: Der Event-Listener für den Menüpunkt des Stimmungsdashboards war an der falschen Stelle.
@@ -12858,7 +15395,8 @@ async function mainRouter() {
 }
 
 // KORREKTUR: Event-Listener für den Businessplan an die richtige Stelle verschoben.
-document.getElementById('open-business-plan-btn').addEventListener('click', openBusinessPlanModal);
+// Button existiert nicht mehr - wurde mit dem Chancenseminar-Feld entfernt
+// document.getElementById('open-business-plan-btn').addEventListener('click', openBusinessPlanModal);
 document.getElementById('close-business-plan-btn').addEventListener('click', closeBusinessPlanModal);
 document.getElementById('cancel-business-plan-btn').addEventListener('click', closeBusinessPlanModal);
 document.getElementById('business-plan-form').addEventListener('submit', (e) => {
@@ -13025,24 +15563,19 @@ function getVerdienstForPosition(position) {
 async function getSingleUserPQQ(userId) {
     // --- KORREKTUR: PQQ-Berechnung an die Logik aus `calculateAndRenderPQQForCurrentView` angepasst ---
     const user = findRowById('mitarbeiter', userId);
-    const pqqLog = (message, ...data) => console.log(`%c[PQQ-Calc] %c[${user?.Name || 'Unbekannt'}] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: #8e44ad; font-weight: bold;', 'color: black;', ...data);
-    pqqLog(`--- Starte PQQ-Berechnung für User-ID: ${userId} ---`);
 
     const today = new Date();
     // 1. Finde den nächsten Infoabend, um den aktuellen Zyklus zu bestimmen.
     const nextInfoDate = findNextInfoDateAfter(today);
-    pqqLog(`1. Nächster Infoabend gefunden:`, nextInfoDate.toLocaleDateString('de-DE'));
 
     // 2. Finde den Infoabend davor (das ist der abgeschlossene Zyklus, für den wir die PQQ berechnen).
     const lastInfoDate = new Date(nextInfoDate.getTime() - 21 * 24 * 60 * 60 * 1000);
     const lastInfoDateString = toLocalISOString(lastInfoDate);
-    pqqLog(`2. Relevanter (letzter) Infoabend für die Berechnung:`, lastInfoDate.toLocaleDateString('de-DE'));
 
     // 3. Finde den EH-Plan für den entsprechenden *Umsatz*-Monat, in den der letzte Infoabend fiel.
     const { startDate: ehPlanStartDate } = getMonthlyCycleDatesForDate(lastInfoDate);
     const ehPlanMonthName = ehPlanStartDate.toLocaleString("de-DE", { month: "long" });
     const ehPlanYear = ehPlanStartDate.getFullYear();
-    pqqLog(`3. Suche Plandaten für den Zyklus: ${ehPlanMonthName} ${ehPlanYear}`);
 
     // Get EH plan
     const plan = db.monatsplanung.find(p => 
@@ -13051,7 +15584,6 @@ async function getSingleUserPQQ(userId) {
         p.Jahr === ehPlanYear
     );
     const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
-    pqqLog(`4. EH-Plan gefunden:`, { plan, ursprungszielEH });
     
     // Get ET plan
     const infoPlan = db.infoplanung.find(p => 
@@ -13059,12 +15591,10 @@ async function getSingleUserPQQ(userId) {
         p.Informationsabend && p.Informationsabend.startsWith(lastInfoDateString)
     );
     const ursprungszielET = infoPlan?.Ursprungsziel_ET || 0;
-    pqqLog(`5. ET-Plan gefunden:`, { infoPlan, ursprungszielET });
 
     // KORREKTUR: Lade die Ist-EH für den PQQ-Zeitraum direkt per SQL, anstatt den
     // limitierten globalen Cache zu verwenden. Dies behebt den Fehler, dass immer 0 EH angezeigt werden.
     const ehCycleDates = getMonthlyCycleDatesForDate(lastInfoDate);
-    pqqLog(`6. Suche Ist-EH im Zeitraum:`, { start: ehCycleDates.startDate.toLocaleDateString(), end: ehCycleDates.endDate.toLocaleDateString() });
     const mitarbeiterName = user?.Name;
     let actualEH = 0;
     if (mitarbeiterName) {
@@ -13073,31 +15603,44 @@ async function getSingleUserPQQ(userId) {
         const ehQuery = `SELECT SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID = '${escapeSql(mitarbeiterName)}' AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
         const ehResultRaw = await seaTableSqlQuery(ehQuery, true);
         actualEH = ehResultRaw?.[0]?.totalEH || 0;
-    } else {
-        pqqLog(`WARNUNG: Mitarbeitername für ID ${userId} nicht gefunden. Kann Ist-EH nicht laden.`);
     }
-    pqqLog(`   -> Gefundene Ist-EH: ${actualEH}`);
     
     // KORREKTUR: Zähle nur ETs, die nicht storniert wurden.
-    pqqLog(`7. Suche Ist-ETs für Infoabend am ${lastInfoDate.toLocaleDateString()}`);
     const actualET = db.termine.filter(t => 
         t.Mitarbeiter_ID === userId && 
         t.Kategorie === 'ET' &&
         t.Infoabend && t.Infoabend.startsWith(lastInfoDateString) &&
         t.Status !== 'Storno' && t.Absage !== true
     ).length;
-    pqqLog(`   -> Gefundene Ist-ETs: ${actualET}`);
 
-    const ehQuote = (ursprungszielEH > 0) ? (actualEH / ursprungszielEH) : 1;
-    const etQuote = (ursprungszielET > 0) ? (actualET / ursprungszielET) : 1;
-    const pqq = ((ehQuote + etQuote) / 2) * 100;
-    pqqLog(`8. Berechnung: EH-Quote=${ehQuote.toFixed(2)}, ET-Quote=${etQuote.toFixed(2)} -> PQQ=${pqq.toFixed(2)}%`);
+    // KORREKTUR: Wenn Ziel = 0, nur berücksichtigen wenn auch Ist > 0 (sonst null)
+    const ehQuote = (ursprungszielEH > 0) 
+        ? (actualEH / ursprungszielEH) 
+        : (plan && actualEH > 0 ? actualEH : null);
+    const etQuote = (ursprungszielET > 0) 
+        ? (actualET / ursprungszielET) 
+        : (infoPlan && actualET > 0 ? actualET : null);
 
-    return { pqq, ehQuote, etQuote };
+    let pqq;
+    if (ehQuote !== null && etQuote !== null) {
+        pqq = ((ehQuote + etQuote) / 2) * 100;
+    } else if (ehQuote !== null) {
+        pqq = ehQuote * 100;
+    } else if (etQuote !== null) {
+        pqq = etQuote * 100;
+    } else {
+        pqq = 0; // Kein Plan vorhanden
+    }
+
+    // KORREKTUR: Konvertiere ehQuote und etQuote in Prozent, damit sie konsistent mit calculatePQQForUserList sind
+    return { 
+        pqq, 
+        ehQuote: ehQuote !== null ? ehQuote * 100 : null, 
+        etQuote: etQuote !== null ? etQuote * 100 : null 
+    };
 }
 
-// NEU: Globale Funktion zur KPI-Berechnung
-async function getIndividualKpiData(user) {
+async function getIndividualKpiData(user) { // NEU: Globale Funktion zur KPI-Berechnung
     const log = (message, ...data) => console.log(`%c[KPI-DATA] %c[${user.Name}] %c${message}`, 'color: #8e44ad; font-weight: bold;', 'color: #17a2b8; font-weight: bold;', 'color: black;', ...data);
     const kpiLog = (message, ...data) => console.log(`%c[KPI-DATA] %c[${user.Name}] %c${message}`, 'color: #8e44ad; font-weight: bold;', 'color: #17a2b8; font-weight: bold;', 'color: black;', ...data);
     const warnings = [];
@@ -13129,12 +15672,26 @@ async function getIndividualKpiData(user) {
     }
     log('Plan gefunden. EH-Ziel:', plan.EH_Ziel);
 
+    log(`=== Terminausfall-Berechnung ===`);
+    log(`Zeitraum: ${twoWeeksAgo.toLocaleDateString('de-DE')} bis ${today.toLocaleDateString('de-DE')}`);
     const twoWeekAppointments = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Datum && new Date(t.Datum) >= twoWeeksAgo && new Date(t.Datum) <= today);
+    log(`Gefundene Termine in den letzten 2 Wochen: ${twoWeekAppointments.length}`);
     if (twoWeekAppointments.length > 0) {
-        const cancelledCount = twoWeekAppointments.filter(t => t.Absage === true || t.Status === 'Storno').length;
+        const cancelledAppointments = twoWeekAppointments.filter(t => t.Absage === true || t.Status === 'Storno');
+        const cancelledCount = cancelledAppointments.length;
+        log(`Abgesagte/Stornierte Termine:`, cancelledAppointments.map(t => ({ 
+            Kategorie: t.Kategorie, 
+            Datum: t.Datum, 
+            Status: t.Status, 
+            Absage: t.Absage,
+            Terminpartner: t.Terminpartner 
+        })));
         const cancellationRate = cancelledCount / twoWeekAppointments.length;
         values.cancellationRate = cancellationRate;
+        log(`Terminausfallquote: ${cancelledCount} / ${twoWeekAppointments.length} = ${(cancellationRate * 100).toFixed(1)}%`);
         if (cancellationRate >= 0.5) warnings.push(`Hoher Terminausfall (${(cancellationRate * 100).toFixed(0)}% in 2 Wochen)`);
+    } else {
+        log(`Keine Termine in den letzten 2 Wochen gefunden.`);
     }
     log('Terminausfallquote berechnet:', values.cancellationRate);
 
@@ -13157,7 +15714,7 @@ async function getIndividualKpiData(user) {
     
     // KORREKTUR: `await` war hier zwingend erforderlich, da getSingleUserPQQ asynchron ist.
     log('Prüfe PQQ...');
-    const pqqData = await getSingleUserPQQ(user._id, new Date().getMonth(), new Date().getFullYear());
+    const pqqData = await getSingleUserPQQ(user._id);
     log('PQQ-Daten erhalten:', pqqData);
     if (pqqData && pqqData.pqq < 50) warnings.push(`PQQ unter 50% (${pqqData.pqq.toFixed(0)}%)`);
 
@@ -13535,6 +16092,7 @@ async function applyAutomaticPromotionToDatabase(mitarbeiterId) {
     return false; // Keine Beförderung durchgeführt.
 }
 async function _calculateKpisForUser(user, userSales = []) {
+    const kpiLog = (message, ...data) => console.log(`%c[Terminausfall] %c[${user.Name}] %c${message}`, 'color: #e74c3c; font-weight: bold;', 'color: #3498db; font-weight: bold;', 'color: black;', ...data);
     const warnings = [];
     const values = { cancellationRate: null, closingRate: null };
     const today = new Date();
@@ -13543,11 +16101,25 @@ async function _calculateKpisForUser(user, userSales = []) {
     const sixtyDaysAgo = new Date(new Date().setDate(today.getDate() - 60));
 
     // Cancellation Rate
+    kpiLog(`=== Terminausfall-Berechnung ===`);
+    kpiLog(`Zeitraum: ${twoWeeksAgo.toLocaleDateString('de-DE')} bis ${today.toLocaleDateString('de-DE')}`);
     const twoWeekAppointments = db.termine.filter(t => t.Mitarbeiter_ID === user._id && t.Datum && new Date(t.Datum) >= twoWeeksAgo && new Date(t.Datum) <= today);
+    kpiLog(`Gefundene Termine in den letzten 2 Wochen: ${twoWeekAppointments.length}`);
     if (twoWeekAppointments.length > 0) {
-        const cancelledCount = twoWeekAppointments.filter(t => t.Absage === true || t.Status === 'Storno').length;
+        const cancelledAppointments = twoWeekAppointments.filter(t => t.Absage === true || t.Status === 'Storno');
+        const cancelledCount = cancelledAppointments.length;
+        kpiLog(`Abgesagte/Stornierte Termine:`, cancelledAppointments.map(t => ({ 
+            Kategorie: t.Kategorie, 
+            Datum: t.Datum, 
+            Status: t.Status, 
+            Absage: t.Absage,
+            Terminpartner: t.Terminpartner 
+        })));
         values.cancellationRate = cancelledCount / twoWeekAppointments.length;
+        kpiLog(`Terminausfallquote: ${cancelledCount} / ${twoWeekAppointments.length} = ${(values.cancellationRate * 100).toFixed(1)}%`);
         if (values.cancellationRate >= 0.5) warnings.push(`Hoher Terminausfall (${(values.cancellationRate * 100).toFixed(0)}% in 2 Wochen)`);
+    } else {
+        kpiLog(`Keine Termine in den letzten 2 Wochen gefunden.`);
     }
 
     // Closing Rate
@@ -13588,8 +16160,17 @@ async function _calculateKpisForUser(user, userSales = []) {
         if (etGoal > 0 && fourWeekEtAppointments.length === 0) warnings.push('Keine Recruiting-Termine (ET) in den letzten 4 Wochen');
     }
 
+    kpiLog(`=== PQQ-Berechnung für Performance KPIs ===`);
     const pqqData = await getSingleUserPQQ(user._id);
-    if (pqqData && pqqData.pqq < 50) warnings.push(`PQQ unter 50% (${pqqData.pqq.toFixed(0)}%)`);
+    kpiLog(`PQQ-Daten erhalten:`, pqqData);
+    if (pqqData && pqqData.pqq < 50) {
+        warnings.push(`PQQ unter 50% (${pqqData.pqq.toFixed(0)}%)`);
+        kpiLog(`⚠️ Warnung hinzugefügt: PQQ unter 50%`);
+    } else if (pqqData) {
+        kpiLog(`✓ PQQ ist in Ordnung: ${pqqData.pqq.toFixed(1)}%`);
+    } else {
+        kpiLog(`⚠️ Keine PQQ-Daten verfügbar`);
+    }
 
     return { warnings, values };
 }
@@ -13933,84 +16514,6 @@ function _renderSinglePQQGauge(indicatorEl, valueDisplayEl, value) {
     valueDisplayEl.textContent = `${value.toFixed(0)}%`;
 }
 
-async function calculateAndRenderPQQ(mitarbeiterId) {
-    const pqqLog = (message, ...data) => console.log(`%c[PQQ_CALC] %c${message}`, 'color: #d4af37; font-weight: bold;', 'color: black;', ...data);
-    pqqLog('Starte PQQ-Berechnung...');
-
-    // 1. Get previous month's dates
-    const { startDate, endDate } = getPreviousMonthlyCycleDates();
-    const startDateIso = startDate.toISOString().split('T')[0];
-    const endDateIso = endDate.toISOString().split('T')[0];
-    const prevMonthName = startDate.toLocaleString("de-DE", { month: "long" });
-    const prevYear = startDate.getFullYear();
-    pqqLog(`Berechnungszeitraum: ${startDateIso} bis ${endDateIso}`);
-
-    // 2. Get planning data from cache
-    const plan = db.monatsplanung.find(p => 
-        p.Mitarbeiter_ID === mitarbeiterId &&
-        p.Monat === prevMonthName &&
-        p.Jahr === prevYear
-    );
-
-    if (!plan) {
-        pqqLog('Keine Plandaten für den Vormonat gefunden. PQQ-Ansicht wird ausgeblendet.');
-        dom.pqqView.classList.add('hidden');
-        return;
-    }
-    dom.pqqView.classList.remove('hidden');
-
-    const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
-    const ursprungszielET = plan?.Ursprungsziel_ET || 0;
-    pqqLog(`Plandaten gefunden: EH-Ziel=${ursprungszielEH}, ET-Ziel=${ursprungszielET}`);
-
-    // 3. Get actual data for previous month via SQL
-    const mitarbeiterName = findRowById('mitarbeiter', mitarbeiterId)?.Name;
-    if (!mitarbeiterName) return;
-    const mitarbeiterNameSql = `'${escapeSql(mitarbeiterName)}'`;
-
-    const ehQuery = `SELECT SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID = ${mitarbeiterNameSql} AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
-    const etQuery = `SELECT Status FROM Termine WHERE Mitarbeiter_ID = ${mitarbeiterNameSql} AND Kategorie = 'ET' AND Datum >= '${startDateIso}' AND Datum <= '${endDateIso}'`;
-
-    const [ehResultRaw, etResultRaw] = await Promise.all([
-        seaTableSqlQuery(ehQuery, true),
-        seaTableSqlQuery(etQuery, true),
-    ]);
-
-    const totalEH = ehResultRaw?.[0]?.totalEH || 0;
-    const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
-    const totalETAusgemacht = etResultRaw.filter(t => ET_STATUS_AUSGEMACHT.includes(t.Status)).length;
-    pqqLog(`Ist-Werte ermittelt: Total EH=${totalEH}, Total ET Ausgemacht=${totalETAusgemacht}`);
-
-    // 4. Calculate PQQ parts
-    let ehQuote = 0;
-    if (totalEH > 0) {
-        ehQuote = ursprungszielEH / totalEH;
-    } else if (ursprungszielEH === 0) { // Ziel 0, Ist 0 -> 100% Zielerreichung
-        ehQuote = 1;
-    }
-
-    let etQuote = 0;
-    if (totalETAusgemacht > 0) {
-        etQuote = ursprungszielET / totalETAusgemacht;
-    } else if (ursprungszielET === 0) { // Ziel 0, Ist 0 -> 100% Zielerreichung
-        etQuote = 1;
-    }
-
-    const pqq = ((ehQuote + etQuote) / 2) * 100;
-    pqqLog(`Einzelquoten berechnet: EH-Quote=${(ehQuote * 100).toFixed(2)}%, ET-Quote=${(etQuote * 100).toFixed(2)}%`);
-    pqqLog(`Gesamt-PQQ berechnet: ${pqq.toFixed(2)}%`);
-
-    // 5. Render gauges
-    _renderSinglePQQGauge(dom.pqqIndicator, dom.pqqValueDisplay, pqq);
-    _renderSinglePQQGauge(dom.pqqEhIndicator, dom.pqqEhValueDisplay, ehQuote * 100);
-    // KORREKTUR: Die PQQ-Sektion wird jetzt auch in der persönlichen Ansicht angezeigt.
-    // Die Logik zum Ausblenden wird entfernt.
-    dom.pqqView.classList.remove('hidden');
-
-    _renderSinglePQQGauge(dom.pqqEtIndicator, dom.pqqEtValueDisplay, etQuote * 100);
-    pqqLog('Alle Gauges gerendert.');
-}
-
 // NEU: Berechnet und rendert die PQQ basierend auf der aktuellen Ansicht (Persönlich, Gruppe, Struktur)
 async function calculateAndRenderPQQForCurrentView() {
     // 1. Bestimme die relevanten Mitarbeiter-IDs basierend auf der aktuellen Ansicht
@@ -14071,58 +16574,31 @@ async function calculateAndRenderPQQForCurrentView() {
     }
 
     dom.pqqView.classList.remove('hidden');
-    const totalUrsprungszielEH = relevantPlans.reduce((sum, p) => sum + (p.Ursprungsziel_EH || 0), 0);
-    const totalUrsprungszielET = relevantInfoPlans.reduce((sum, p) => sum + (p.Ursprungsziel_ET || 0), 0);
-
-    // 4. Hole Ist-Daten für den ermittelten Zyklus
-    // FINALE KORREKTUR: Anstatt aus dem globalen Cache zu filtern, wird eine gezielte SQL-Abfrage
-    // für den PQQ-Zeitraum ausgeführt. Dies stellt sicher, dass die Daten konsistent und korrekt
-    // gefiltert sind (z.B. ohne Capitalbank-Umsätze).
-    const userNamesForSql = userIds.map(id => findRowById('mitarbeiter', id)?.Name).filter(Boolean);
-    let totalEH = 0;
-    if (userNamesForSql.length > 0) {
-        const userNamesSqlString = userNamesForSql.map(name => `'${escapeSql(name)}'`).join(',');
-        const capitalbank = db.gesellschaften.find(g => g.Gesellschaft === 'Capitalbank');
-        const capitalbankId = capitalbank ? capitalbank._id : null;
-        let capitalbankFilter = '';
-        if (capitalbankId) {
-            capitalbankFilter = ` AND NOT (\`Gesellschaft_ID\` IS NOT NULL AND \`Gesellschaft_ID\` LIKE '%${capitalbankId}%')`;
-        }
-        const ehQuery = `SELECT SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID IN (${userNamesSqlString}) AND Datum >= '${toLocalISOString(ehPlanStartDate)}' AND Datum <= '${toLocalISOString(ehPlanEndDate)}'${capitalbankFilter}`;
-        const ehResultRaw = await seaTableSqlQuery(ehQuery, true);
-        totalEH = ehResultRaw?.[0]?.totalEH || 0;
-    }
-
-    const totalETAusgemacht = db.termine.filter(t => 
-        userIds.includes(t.Mitarbeiter_ID) && 
-        t.Kategorie === 'ET' && 
-        t.Infoabend && t.Infoabend.startsWith(lastInfoDateString)
-    ).length;
-
-    // 5. Berechne PQQ-Teile
-    // KORREKTUR: Wenn das ET-Ziel 0 ist, soll die PQQ nur die EH-Quote widerspiegeln.
-    const ehQuote = (totalUrsprungszielEH > 0) ? (totalEH / totalUrsprungszielEH) : (totalUrsprungszielEH === 0 ? 1 : 0);
-    let etQuote = null;
-    let pqq;
-
-    if (totalUrsprungszielET > 0) {
-        etQuote = totalETAusgemacht / totalUrsprungszielET;
-        pqq = ((ehQuote + etQuote) / 2) * 100;
-    } else {
-        pqq = ehQuote * 100;
-    }
+    
+    // KORREKTUR: Berechne PQQ wie in der Planung-Ansicht - individuell pro User, dann Durchschnitt
+    // Dies stellt sicher, dass jeder Mitarbeiter gleich gewichtet wird, unabhängig von seinen Zielen
+    const pqqDataMap = await calculatePQQForUserList(userIds, today.getMonth(), today.getFullYear());
+    
+    // Berechne Durchschnitts-PQQ, EH-Quote und ET-Quote
+    const validUsers = userIds.filter(id => pqqDataMap[id] && pqqDataMap[id].pqq > 0);
+    const avgPqq = validUsers.length > 0 
+        ? validUsers.reduce((sum, id) => sum + pqqDataMap[id].pqq, 0) / validUsers.length 
+        : 0;
+    
+    const usersWithEhQuote = userIds.filter(id => pqqDataMap[id] && pqqDataMap[id].ehQuote !== null);
+    const avgEhQuote = usersWithEhQuote.length > 0
+        ? usersWithEhQuote.reduce((sum, id) => sum + pqqDataMap[id].ehQuote, 0) / usersWithEhQuote.length
+        : 0;
+    
+    const usersWithEtQuote = userIds.filter(id => pqqDataMap[id] && pqqDataMap[id].etQuote !== null);
+    const avgEtQuote = usersWithEtQuote.length > 0
+        ? usersWithEtQuote.reduce((sum, id) => sum + pqqDataMap[id].etQuote, 0) / usersWithEtQuote.length
+        : 0;
 
     // 6. Rendere die Gauges
-    _renderSinglePQQGauge(dom.pqqIndicator, dom.pqqValueDisplay, pqq);
-    _renderSinglePQQGauge(dom.pqqEhIndicator, dom.pqqEhValueDisplay, ehQuote * 100);
-    if (etQuote !== null) {
-        _renderSinglePQQGauge(dom.pqqEtIndicator, dom.pqqEtValueDisplay, etQuote * 100);
-    } else {
-        // Verstecke das ET-Gauge, wenn kein Ziel vorhanden ist.
-        dom.pqqEtIndicator.style.left = '50%';
-        dom.pqqEtValueDisplay.style.left = '50%';
-        dom.pqqEtValueDisplay.textContent = 'Kein Ziel';
-    }
+    _renderSinglePQQGauge(dom.pqqIndicator, dom.pqqValueDisplay, avgPqq);
+    _renderSinglePQQGauge(dom.pqqEhIndicator, dom.pqqEhValueDisplay, avgEhQuote);
+    _renderSinglePQQGauge(dom.pqqEtIndicator, dom.pqqEtValueDisplay, avgEtQuote);
     dom.pqqView.classList.remove('hidden'); // Sicherstellen, dass es sichtbar ist
 }
 
@@ -14452,6 +16928,131 @@ async function loadAndInitStrukturbaumView() {
         console.error("Fehler beim Laden der Strukturbaum-Ansicht:", error);
         container.innerHTML = `<p class="text-red-500 text-center">${error.message}</p>`;
     }
+}
+
+// KORREKTUR: Die Funktion wird in den globalen Scope verschoben, damit sie von allen Klassen aus aufgerufen werden kann.
+async function calculatePQQForUserList(userIds, forMonth, forYear) {
+    const pqqLog = (message, ...data) => console.log(`%c[PQQ-List-Debug] %c${message}`, 'color: #e67e22; font-weight: bold;', 'color: black;', ...data);
+    const pqqDataMap = {};
+    if (!userIds || userIds.length === 0) return pqqDataMap;
+    
+    // KORREKTUR: Die PQQ-Berechnung für das Netzwerk muss sich auf den letzten Infoabend-Zyklus beziehen,
+    // genau wie die Haupt-Dashboard-Ansicht, um die ET-Quote korrekt zu berechnen.
+    const today = new Date();
+    const nextInfoDate = findNextInfoDateAfter(today);
+    const lastInfoDate = new Date(nextInfoDate.getTime() - 21 * 24 * 60 * 60 * 1000);
+    const lastInfoDateString = toLocalISOString(lastInfoDate).split('T')[0];
+    const { startDate: ehPlanStartDate, endDate: ehPlanEndDate } = getMonthlyCycleDatesForDate(lastInfoDate);
+    const ehPlanMonthName = ehPlanStartDate.toLocaleString("de-DE", { month: "long" });
+    const ehPlanYear = ehPlanStartDate.getFullYear();
+    const ehPlanStartDateIso = toLocalISOString(ehPlanStartDate);
+    const ehPlanEndDateIso = toLocalISOString(ehPlanEndDate);
+    
+    pqqLog(`=== PQQ-Berechnung für ${userIds.length} User ===`);
+    pqqLog(`Zeitraum: ${ehPlanMonthName} ${ehPlanYear} (${ehPlanStartDateIso} bis ${ehPlanEndDateIso})`);
+    pqqLog(`Letzter Infoabend: ${lastInfoDateString}`);
+
+    // 2. Lade alle relevanten Plandaten aus dem Cache
+    const relevantPlans = db.monatsplanung.filter(p => 
+        userIds.includes(p.Mitarbeiter_ID) && p.Monat === ehPlanMonthName && p.Jahr === ehPlanYear
+    );
+    const relevantInfoPlans = db.infoplanung.filter(p => 
+        userIds.includes(p.Mitarbeiter_ID) && p.Informationsabend && p.Informationsabend.startsWith(lastInfoDateString)
+    );
+    const plansByUserId = _.keyBy(relevantPlans, 'Mitarbeiter_ID');
+    const infoPlansByUserId = _.keyBy(relevantInfoPlans, 'Mitarbeiter_ID');
+    
+    pqqLog(`Gefundene Pläne: ${relevantPlans.length} EH-Pläne, ${relevantInfoPlans.length} Info-Pläne`);
+    pqqLog(`Info-Pläne Details:`, relevantInfoPlans.map(p => ({
+        Mitarbeiter: findRowById('mitarbeiter', p.Mitarbeiter_ID)?.Name,
+        Infoabend: p.Informationsabend,
+        ET_Ziel: p.ET_Ziel,
+        Ursprungsziel_ET: p.Ursprungsziel_ET
+    })));
+
+    // 3. Lade alle Ist-Daten für alle Benutzer mit gebündelten SQL-Abfragen
+    const userNames = userIds.map(id => findRowById('mitarbeiter', id)?.Name).filter(Boolean);
+    if (userNames.length === 0) return pqqDataMap;
+    const userNamesSql = userNames.map(name => `'${escapeSql(name)}'`).join(',');
+
+    const ehQuery = `SELECT Mitarbeiter_ID, SUM(EH) as totalEH FROM Umsatz WHERE Mitarbeiter_ID IN (${userNamesSql}) AND Datum >= '${ehPlanStartDateIso}' AND Datum <= '${ehPlanEndDateIso}' GROUP BY Mitarbeiter_ID`;
+    // KORREKTUR V2: Die `DATE()`-Funktion wird von SeaTable SQL nicht unterstützt.
+    // Wir kehren zur `LIKE`-Abfrage zurück, die für Datumsfelder im Format 'YYYY-MM-DD' funktioniert.
+    // Der vorherige Fehler lag an einer anderen Stelle.
+    // KORREKTUR V3: Der `LIKE`-Operator funktioniert nicht zuverlässig mit Datums- oder Link-Spalten.
+    // Wir verwenden stattdessen eine exakte Datumsprüfung, die von SeaTable SQL unterstützt wird.
+    const etQuery = `SELECT Mitarbeiter_ID, Status FROM Termine WHERE Mitarbeiter_ID IN (${userNamesSql}) AND Kategorie = 'ET' AND Infoabend = '${lastInfoDateString}'`;
+    // KORREKTUR: Die SQL-Abfragen wurden definiert, aber nicht ausgeführt.
+    const [ehResultsRaw, etResultsRaw] = await Promise.all([
+        seaTableSqlQuery(ehQuery, true),
+        seaTableSqlQuery(etQuery, true)
+    ]);
+
+    const ehByMitarbeiterId = _.keyBy(mapSqlResults(ehResultsRaw, 'Umsatz').map(r => ({ id: r.Mitarbeiter_ID[0].row_id, totalEH: r.totalEH })), 'id');
+    const etByMitarbeiterId = _.groupBy(mapSqlResults(etResultsRaw, 'Termine'), r => r.Mitarbeiter_ID[0].row_id);
+
+    // 4. Berechne die PQQ für jeden Benutzer
+    const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Weiterer ET", "Info Eingeladen", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
+    userIds.forEach(userId => {
+        const user = findRowById('mitarbeiter', userId);
+        if (!user) return; // Überspringe, wenn der Benutzer nicht gefunden wurde
+        const plan = plansByUserId[userId];
+        const infoPlan = infoPlansByUserId[userId];
+        const ursprungszielEH = plan?.Ursprungsziel_EH || 0;
+        const ursprungszielET = infoPlan?.Ursprungsziel_ET || 0;
+        // KORREKTUR: Die Ist-Werte müssen aus den Ergebnissen der lokalen SQL-Abfragen (`ehByMitarbeiterId`, `etByMitarbeiterId`) kommen.
+        const totalEH = ehByMitarbeiterId[userId]?.totalEH || 0;
+        const userEts = etByMitarbeiterId[userId] || [];
+        const totalETAusgemacht = userEts.filter(t => ET_STATUS_AUSGEMACHT.includes(t.Status)).length;
+        
+        pqqLog(`--- ${user.Name} ---`, {
+            Plan: { 
+                EH_Ziel: ursprungszielEH, 
+                ET_Ziel: ursprungszielET,
+                'Info-Plan gefunden': !!infoPlan,
+                'Info-Plan Details': infoPlan ? { 
+                    Infoabend: infoPlan.Informationsabend, 
+                    Ursprungsziel_ET: infoPlan.Ursprungsziel_ET,
+                    ET_Ziel: infoPlan.ET_Ziel 
+                } : null
+            },
+            Ist: { EH: totalEH, ET: totalETAusgemacht },
+            'ETs Raw': userEts.map(t => ({ Status: t.Status, Datum: t.Datum }))
+        });
+        
+        // KORREKTUR: Die PQQ-Berechnung wurde an die neue Logik angepasst:
+        // - Wenn Ziel > 0: Normale Quote berechnen (Ist / Ziel)
+        // - Wenn Ziel = 0 UND Ist > 0 UND Plan existiert: Annahme Ziel = 1, also Quote = Ist / 1 = Ist
+        // - Wenn Ziel = 0 UND Ist = 0 UND Plan existiert: null (nicht berücksichtigen, da kein Ziel und nichts gemacht)
+        // - Wenn kein Plan existiert: null (nicht in PQQ einbeziehen)
+        const ehQuote = (ursprungszielEH > 0) 
+            ? (totalEH / ursprungszielEH) 
+            : (plan && totalEH > 0 ? totalEH : null);
+        const etQuote = (ursprungszielET > 0) 
+            ? (totalETAusgemacht / ursprungszielET) 
+            : (infoPlan && totalETAusgemacht > 0 ? totalETAusgemacht : null);
+
+        let pqq;
+        if (ehQuote !== null && etQuote !== null) {
+            pqq = ((ehQuote + etQuote) / 2) * 100;
+        } else if (ehQuote !== null) {
+            pqq = ehQuote * 100;
+        } else if (etQuote !== null) {
+            pqq = etQuote * 100;
+        } else {
+            pqq = 0; // Kein Plan für EH oder ET vorhanden
+        }
+        pqqLog(`  -> EH-Quote: ${ehQuote !== null ? (ehQuote * 100).toFixed(1) + '%' : 'null'}, ET-Quote: ${etQuote !== null ? (etQuote * 100).toFixed(1) + '%' : 'null'}, PQQ: ${pqq.toFixed(1)}%`);
+        
+        // KORREKTUR: Speichere null-Werte als null, nicht als 0, damit die Anzeige korrekt ist
+        pqqDataMap[userId] = { 
+            pqq, 
+            ehQuote: ehQuote !== null ? ehQuote * 100 : null, 
+            etQuote: etQuote !== null ? etQuote * 100 : null 
+        };
+    });
+
+    return pqqDataMap;
 }
 
 // --- PG-Tagebuch View Logic ---
@@ -15395,6 +17996,7 @@ async function saveUserData() {
       dataToUpdate.CheckinDays = selectedDays.join(',');
   }
 
+
   const mitarbeiterTableMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'mitarbeiter');
   const setClauses = [];
 
@@ -15457,6 +18059,7 @@ async function addUserToDatabase(tableName, rowData) {
     const linkData = {};
     const rowDataForCreation = { ...rowData };
     for (const name in linkColumns) {
+
         const colKey = linkColumns[name];
         if (Object.prototype.hasOwnProperty.call(rowDataForCreation, colKey)) {
             linkData[name] = rowDataForCreation[colKey]?.[0] || null;
@@ -16253,6 +18856,7 @@ function switchView(viewName) {
   } else if (viewName === "datenschutz") {
     loadAndInitDatenschutzView();
   } else if (viewName === 'pg-tagebuch') {
+
     loadAndInitPGTagebuchView();
   } else if (viewName === 'stimmungs-dashboard') {
     loadAndInitStimmungsDashboardView();
@@ -16267,6 +18871,10 @@ function switchView(viewName) {
     initializeBeratungView();
   }
 }
+
+
+
+
 
 async function loadAndInitPlanungView() {
     const container = dom.planungView;
@@ -16486,7 +19094,125 @@ class LeadCenterView {
         } else {
             campaignPieContainer.innerHTML = '<p class="text-gray-500">Keine Daten</p>';
         }
+        
+        // 4. NEU: Timeline Chart - Lead-Verlauf über Zeit
+        this._renderLeadTimeline(30); // Standard: 30 Tage
     }
+    
+    _renderLeadTimeline(days = 30) {
+        const leads = this._getFilteredLeads();
+        const container = document.getElementById('lead-timeline-chart-container');
+        if (!container) return;
+        
+        // Bestimme Zeitraum
+        const now = new Date();
+        const startDate = days === 'all' ? null : new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+        
+        // Filtere Leads nach Zeitraum (basierend auf _ctime = Erstellungsdatum)
+        const filteredLeads = startDate 
+            ? leads.filter(l => l._ctime && new Date(l._ctime) >= startDate)
+            : leads.filter(l => l._ctime);
+        
+        if (filteredLeads.length === 0) {
+            container.innerHTML = '<p class="text-center text-gray-500 py-8">Keine Leads in diesem Zeitraum</p>';
+            return;
+        }
+        
+        // Gruppiere Leads nach Tag
+        const leadsByDay = {};
+        filteredLeads.forEach(lead => {
+            const date = new Date(lead._ctime);
+            const dayKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
+            leadsByDay[dayKey] = (leadsByDay[dayKey] || 0) + 1;
+        });
+        
+        // Erstelle vollständige Datenreihe (auch Tage ohne Leads)
+        const dataPoints = [];
+        const firstLeadDate = new Date(Math.min(...filteredLeads.map(l => new Date(l._ctime))));
+        const iterDate = new Date(firstLeadDate);
+        iterDate.setHours(0, 0, 0, 0);
+        
+        while (iterDate <= now) {
+            const dayKey = iterDate.toISOString().split('T')[0];
+            dataPoints.push({
+                date: new Date(iterDate),
+                count: leadsByDay[dayKey] || 0
+            });
+            iterDate.setDate(iterDate.getDate() + 1);
+        }
+        
+        // ApexCharts konfigurieren
+        const options = {
+            series: [{
+                name: 'Neue Leads',
+                data: dataPoints.map(d => ({ x: d.date.getTime(), y: d.count }))
+            }],
+            chart: {
+                type: 'area',
+                height: 300,
+                toolbar: { show: false },
+                zoom: { enabled: false },
+                animations: {
+                    enabled: true,
+                    easing: 'easeinout',
+                    speed: 800
+                }
+            },
+            dataLabels: { enabled: false },
+            stroke: {
+                curve: 'smooth',
+                width: 3
+            },
+            fill: {
+                type: 'gradient',
+                gradient: {
+                    shadeIntensity: 1,
+                    opacityFrom: 0.7,
+                    opacityTo: 0.3,
+                    stops: [0, 90, 100]
+                }
+            },
+            colors: ['#5b21b6'], // Indigo/Purple
+            xaxis: {
+                type: 'datetime',
+                labels: {
+                    datetimeUTC: false,
+                    format: 'dd. MMM',
+                    style: { colors: '#6b7280' }
+                }
+            },
+            yaxis: {
+                title: { 
+                    text: 'Anzahl Leads',
+                    style: { color: '#6b7280' }
+                },
+                labels: {
+                    formatter: (val) => Math.round(val),
+                    style: { colors: '#6b7280' }
+                }
+            },
+            tooltip: {
+                x: { format: 'dd. MMM yyyy' },
+                y: {
+                    formatter: (val) => `${Math.round(val)} Lead${val !== 1 ? 's' : ''}`
+                }
+            },
+            grid: {
+                borderColor: '#e5e7eb',
+                strokeDashArray: 4
+            }
+        };
+        
+        // Render Chart
+        container.innerHTML = '';
+        if (window.ApexCharts) {
+            const chart = new ApexCharts(container, options);
+            chart.render();
+        } else {
+            container.innerHTML = '<p class="text-center text-gray-500 py-8">ApexCharts nicht geladen</p>';
+        }
+    }
+    
     _renderVideoAnalytics() {
         leadCenterLog('Rendere Video-Analytics-Ansicht...');
         const leads = this._getFilteredLeads();
@@ -16586,6 +19312,27 @@ class LeadCenterView {
         // NEU: Event-Listener für den Aktualisieren-Button
         this.refreshBtn.addEventListener('click', async () => {
             await this._refreshLeads();
+        });
+        
+        // NEU: Event-Listener für Timeline-Filter-Buttons
+        const timelineFilterBtns = document.querySelectorAll('.lead-timeline-filter-btn');
+        timelineFilterBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                // Entferne active von allen Buttons
+                timelineFilterBtns.forEach(b => b.classList.remove('active'));
+                // Setze active auf geklickten Button
+                e.target.classList.add('active');
+                
+                // Bestimme Zeitraum
+                let days = 30;
+                if (e.target.id === 'lead-timeline-7d') days = 7;
+                else if (e.target.id === 'lead-timeline-30d') days = 30;
+                else if (e.target.id === 'lead-timeline-90d') days = 90;
+                else if (e.target.id === 'lead-timeline-all') days = 'all';
+                
+                // Render Timeline mit neuem Zeitraum
+                this._renderLeadTimeline(days);
+            });
         });
 
         // NEU: Listener für das Detail-Modal
@@ -16709,7 +19456,15 @@ class LeadCenterView {
     }
 
     _createCard(lead) {
-        const mitarbeiter = findRowById('mitarbeiter', lead.Mitarbeiter);
+        // Telefonnummer formatieren: "p:" entfernen und 0 durch +43 ersetzen
+        let phoneDisplay = lead.Telefonnummer || 'N/A';
+        if (phoneDisplay !== 'N/A') {
+            phoneDisplay = phoneDisplay.replace(/^p:\s*/i, '').trim();
+            if (phoneDisplay.startsWith('0')) {
+                phoneDisplay = '+43' + phoneDisplay.substring(1);
+            }
+        }
+        
         return `
             <div class="bg-white p-3 rounded-md shadow border border-gray-200 mb-3 cursor-pointer" data-lead-id="${lead._id}">
                 <div class="flex justify-between items-start">
@@ -16718,9 +19473,9 @@ class LeadCenterView {
                 </div>
                 <p class="text-sm text-gray-600 mt-1">${lead.Kampagne}</p>
                 <div class="mt-2 pt-2 border-t text-xs text-gray-500">
-                    <p><i class="fas fa-phone-alt fa-fw mr-1 text-gray-400"></i>${lead.Telefonnummer || 'N/A'}</p>
+                    <p><i class="fas fa-phone-alt fa-fw mr-1 text-gray-400"></i>${phoneDisplay}</p>
+                    <p class="mt-1"><i class="fas fa-envelope fa-fw mr-1 text-gray-400"></i>${lead.Email || 'N/A'}</p>
                     <p class="mt-1"><i class="fas fa-video fa-fw mr-1 text-gray-400"></i>${lead.Video || 'N/A'}</p>
-                    <p class="mt-1"><i class="fas fa-user fa-fw mr-1 text-gray-400"></i>${mitarbeiter ? mitarbeiter.Name : 'N/A'}</p>
                 </div>
             </div>
         `;
@@ -16804,9 +19559,37 @@ class LeadCenterView {
 
         // Andere Felder befüllen
         document.getElementById('lead-details-campaign').textContent = lead.Kampagne || '-';
-        // Das alte Textfeld wird nicht mehr benötigt, da wir jetzt das Dropdown haben.
-        document.getElementById('lead-details-phone').textContent = lead.Telefonnummer || '-';
-        document.getElementById('lead-details-email').textContent = lead.Email || '-';
+        
+        // Telefonnummer mit anklickbarem tel: Link
+        const phoneElement = document.getElementById('lead-details-phone');
+        if (lead.Telefonnummer && lead.Telefonnummer.trim() !== '') {
+            // Entferne "p:" falls vorhanden
+            let cleanPhone = lead.Telefonnummer.replace(/^p:\s*/i, '').trim();
+            
+            // Wenn Nummer mit 0 beginnt, ersetze durch +43 (österreichische Vorwahl)
+            if (cleanPhone.startsWith('0')) {
+                cleanPhone = '+43' + cleanPhone.substring(1);
+            }
+            
+            phoneElement.textContent = cleanPhone;
+            phoneElement.href = 'tel:' + cleanPhone.replace(/\s/g, ''); // Leerzeichen entfernen für tel: Link
+        } else {
+            phoneElement.textContent = '-';
+            phoneElement.href = '';
+            phoneElement.style.pointerEvents = 'none';
+        }
+        
+        // Email mit anklickbarem mailto: Link
+        const emailElement = document.getElementById('lead-details-email');
+        if (lead.Email && lead.Email.trim() !== '') {
+            emailElement.textContent = lead.Email;
+            emailElement.href = 'mailto:' + lead.Email;
+        } else {
+            emailElement.textContent = '-';
+            emailElement.href = '';
+            emailElement.style.pointerEvents = 'none';
+        }
+        
         document.getElementById('lead-details-info').innerHTML = lead.Info ? marked.parse(lead.Info) : '<p class="text-gray-500">Keine Info vorhanden.</p>';
 
         // Editable Felder
@@ -17747,9 +20530,12 @@ async openCheckinModal(isEditMode = false) {
         const warnings = [];
         const users = Array.from(userIds).map(id => findRowById('mitarbeiter', id)).filter(Boolean).filter(u => u.Status !== 'Ausgeschieden');
 
-        // KORREKTUR: Verwende eine for...of-Schleife mit await, da getIndividualKpiData asynchron ist.
-        for (const user of users) {
-            const kpiData = await getIndividualKpiData(user);
+        // OPTIMIERUNG: Berechne KPI-Daten für alle User parallel statt sequentiell
+        const kpiDataPromises = users.map(user => getIndividualKpiData(user));
+        const allKpiData = await Promise.all(kpiDataPromises);
+        
+        users.forEach((user, index) => {
+            const kpiData = allKpiData[index];
             
             // KORREKTUR VOM 27.07: Die Funktion kann `undefined` zurückgeben.
             // Wir müssen zuerst prüfen, ob `kpiData` existiert, bevor wir darauf zugreifen.
@@ -17761,7 +20547,7 @@ async openCheckinModal(isEditMode = false) {
                     reasons: userWarnings
                 });
             }
-        }
+        });
 
         if (kpiWarningCountEl) kpiWarningCountEl.textContent = warnings.length;
         if (warnings.length === 0) {
@@ -17955,15 +20741,17 @@ async openCheckinModal(isEditMode = false) {
         const users = userIds.map(id => findRowById('mitarbeiter', id)).filter(Boolean);
         log(`Verarbeite ${users.length} Benutzer:`, users.map(u => u.Name));
 
-        // KORREKTUR: Die forEach-Schleife wurde durch eine for...of-Schleife ersetzt,
-        // um `await` korrekt verwenden zu können, da getIndividualKpiData asynchron ist.
-        for (const user of users) {
-            log(`--- Starte KPI-Prüfung für: ${user.Name} ---`);
-            if (user.Status === 'Ausgeschieden') continue;
+        // OPTIMIERUNG: Berechne KPI-Daten für alle User parallel statt sequentiell
+        const activeUsers = users.filter(u => u.Status !== 'Ausgeschieden');
+        const kpiResultPromises = activeUsers.map(user => getIndividualKpiData(user));
+        const allKpiResults = await Promise.all(kpiResultPromises);
 
+        activeUsers.forEach((user, index) => {
+            log(`--- Starte KPI-Prüfung für: ${user.Name} ---`);
+            
             // KORREKTUR: Dein Vorschlag wurde umgesetzt. Dies ist die robusteste Lösung.
             // Sie fängt sowohl `undefined` Rückgabewerte als auch fehlende `warnings`-Eigenschaften ab.
-            const kpiResult = await getIndividualKpiData(user);
+            const kpiResult = allKpiResults[index];
             log(`Ergebnis von getIndividualKpiData für ${user.Name}:`, kpiResult);
 
             const { warnings: userWarnings = [] } = kpiResult || {};
@@ -17971,7 +20759,7 @@ async openCheckinModal(isEditMode = false) {
             if (userWarnings.length > 0) {
                 warnings.push({ name: user.Name, reasons: userWarnings });
             }
-        }
+        });
         this.checkinData.kpiWarnings = warnings;
 
         if (warnings.length === 0) {

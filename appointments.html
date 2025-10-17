@@ -111,13 +111,7 @@
                             <input type="date" id="infoabend-date-select" class="modern-input w-full">
                         </div>
                     </div>
-                    <div class="flex items-center space-x-3 self-center justify-self-start pt-6">
-                        <label for="infoabend-show-cancelled" class="toggle-switch">
-                            <input type="checkbox" id="infoabend-show-cancelled" class="sr-only peer">
-                            <div class="toggle-slider"></div>
-                        </label>
-                        <label for="infoabend-show-cancelled" class="text-sm font-medium text-gray-700">Abgesagte anzeigen</label>
-                    </div>
+                    <!-- Toggle für abgesagte Termine entfernt, da diese nun standardmäßig angezeigt werden -->
                 </div>
             </div>
 
@@ -148,9 +142,67 @@
         </div>
 
     </div> <!-- KORREKTUR: Schließt die appointment-stats-section -->
+    
+    <!-- Button für neuen Termin anlegen -->
+    <div class="mt-6 text-center">
+        <button id="add-appointment-btn-stats" class="bg-skt-green-accent text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-green-700 transition-colors flex items-center justify-center w-full max-w-xs mx-auto">
+            <i class="fas fa-plus mr-2"></i>Neuen Termin anlegen
+        </button>
+    </div>
 
-    <!-- KORREKTUR: Button wird jetzt außerhalb der Statistik-Sektion platziert. -->
-    <div class="mt-8 text-center relative z-30"><button id="add-appointment-btn-stats" class="bg-skt-green-accent text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-green-700 transition-colors flex items-center justify-center w-full max-w-xs mx-auto"><i class="fas fa-plus mr-2"></i>Neuen Termin anlegen</button></div>
+    <!-- NEU: Termin-Flow-Analyse Sektion (von Planung hierher verschoben) -->
+    <section class="mt-8 bg-white rounded-2xl p-6 md:p-8 shadow-lg">
+         <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
+            <h2 class="text-xl font-semibold text-skt-blue">Termin-Flow-Analyse</h2>
+            <select id="appointments-flow-type-filter" class="w-full sm:w-auto bg-white border border-gray-300 rounded-md shadow-sm pl-3 pr-10 py-2 text-left cursor-default focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm mt-4 md:mt-0">
+                <option value="AT">Analysetermine (AT)</option>
+                <option value="BT">Beratungstermine (BT)</option>
+                <option value="ET">Einstellungstermine (ET)</option>
+            </select>
+        </div>
+        
+        <div class="bg-gray-50 p-6 rounded-lg min-h-[400px]">
+            <p id="appointments-sankey-description" class="text-sm text-gray-600 mb-6">
+                Dieses Diagramm visualisiert den Weg eines Termins von der Vereinbarung bis zum Ergebnis. 
+                Klicken Sie auf einen Status, um die zugehörigen Termine unten anzuzeigen.
+            </p>
+
+            <!-- Sankey Diagram Visualization -->
+            <div id="appointments-sankey-container" class="relative w-full h-[350px] flex items-center">
+                <!-- Inhalt wird per JS generiert -->
+                <div class="loader mx-auto"></div>
+            </div>
+        </div>
+
+        <!-- Termine Details Section (hidden by default) -->
+        <div id="appointments-flow-termine-details-section" class="mt-6 hidden">
+            <div class="bg-gray-50 p-6 rounded-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-semibold text-gray-700">Detailansicht: <span id="appointments-flow-termine-status-title" class="text-indigo-600"></span></h3>
+                    <button id="appointments-flow-close-termine-details" class="text-gray-500 hover:text-gray-800">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Datum</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kunde</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mitarbeiter</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Notizen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="appointments-flow-termine-table-body" class="bg-white divide-y divide-gray-200">
+                            <!-- Rows will be inserted here by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
 
     <!-- KORREKTUR: Analyse-Container wird jetzt außerhalb der Statistik-Sektion platziert. -->
     <div id="analysis-container" class="bg-skt-grey-light p-6 rounded-xl shadow-inner border border-gray-200 mt-8">
@@ -208,24 +260,95 @@
     .funnel-container-animated {
         display: flex;
         flex-direction: column;
+        gap: 8px;
+        position: relative;
+        margin: 20px auto;
+        max-width: 800px;
+        width: 90%;
+    }
+    
+    .funnel-step-wrapper {
+        display: grid;
+        grid-template-columns: 180px 1fr;
+        grid-gap: 20px;
         align-items: center;
-        gap: 2px;
+        width: 100%;
+        position: relative;
+        margin: 0 auto;
     }
     .funnel-step-animated {
         position: relative;
-        color: white;
-        padding: 0.75rem 2rem;
-        transition: width 0.7s cubic-bezier(0.25, 1, 0.5, 1);
+        padding: 1.25rem;
+        transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
         display: flex;
-        justify-content: space-between;
+        justify-content: center;
         align-items: center;
-        clip-path: polygon(0% 0%, 100% 0%, 90% 100%, 10% 100%);
-        min-height: 50px;
-        width: 0%; /* Startbreite für Animation */
+        clip-path: polygon(0% 0%, 100% 0%, 96% 100%, 4% 100%);
+        min-height: 70px;
+        width: 0%;
+        text-align: center;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+        margin: 0 auto;
     }
-    .funnel-label { font-weight: 600; }
     .funnel-value {
-        font-weight: 700;
-        font-size: 1.125rem;
+        font-weight: 800;
+        font-size: 2.25rem;
+        color: white;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        transition: transform 0.3s ease;
+    }
+    .funnel-step-animated:hover .funnel-value {
+        transform: scale(1.05);
+    }
+    .funnel-label {
+        font-weight: 600;
+        font-size: 0.9375rem;
+        color: var(--color-skt-blue);
+        text-align: right;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        min-height: 40px;
+        position: relative;
+        left: -20px; /* Move labels further left */
+        padding-right: 20px;
+        border-right: 2px solid #e5e7eb;
+        transition: border-color 0.3s ease;
+    }
+    .funnel-step-animated:hover + .funnel-label,
+    .funnel-label:hover {
+        border-color: var(--color-skt-blue);
+    }
+    /* Conversion rates are now shown in the quota cards below */
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .funnel-container-animated {
+            padding: 0;
+            margin: 40px auto;
+            width: 100%;
+        }
+        .funnel-step-wrapper {
+            grid-template-columns: 120px 1fr;
+            grid-gap: 10px;
+        }
+        .funnel-label {
+            font-size: 0.875rem;
+        }
+        .funnel-value {
+            font-size: 1.75rem;
+        }
     }
 </style>
+
+<!-- Modal für Termin-Historie -->
+<div id="customer-timeline-modal" class="modal-overlay">
+    <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-2xl w-full relative max-h-[90vh] flex flex-col">
+         <button id="close-customer-timeline-modal-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
+         <h3 id="customer-timeline-modal-title" class="text-2xl font-bold text-skt-blue mb-6">Termin-Historie</h3>
+         <div id="customer-timeline-modal-content" class="flex-grow overflow-y-auto pr-4 -mr-4">
+            <!-- Timeline wird hier per JS eingefügt -->
+            <div class="loader mx-auto"></div>
+         </div>
+    </div>
+</div>

@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
 
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>SKT Success Dashboard</title>
     
     <!-- PWA Manifest & Theme Color -->
@@ -95,10 +95,10 @@
                     <button id="stimmungs-dashboard-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Stimmungsdashboard">
                         <i class="fas fa-smile-beam"></i>
                     </button>
-                    <!-- Strukturbaum-Button im Header (sichtbar ab sm) -->
-                    <button id="strukturbaum-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Strukturbaum">
+                    <!-- Strukturbaum-Button im Header (sichtbar ab sm) - TEMPORÄR AUSGEBLENDET -->
+                    <!-- <button id="strukturbaum-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Strukturbaum">
                         <i class="fas fa-sitemap"></i>
-                    </button>
+                    </button> -->
                     <!-- NEU: Planungs-Button im Header -->
                     <button id="planung-header-btn" class="hidden sm:flex bg-skt-blue-light text-white font-semibold py-2 px-4 rounded-lg shadow-md hover:bg-skt-blue-main transition-colors h-10 w-10 items-center justify-center" title="Planung & Vision">
                         <i class="fas fa-tasks"></i>
@@ -132,7 +132,7 @@
                                 <a href="#" id="auswertung-menu-item" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-trophy w-5 mr-2"></i>Auswertung</a>
                                 <a href="#" id="planung-menu-item" class="block sm:hidden px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-tasks w-5 mr-2"></i>Planung & Vision</a>
                                 <a href="#" id="stimmungs-dashboard-menu-item" class="hidden px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light flex items-center" title="Stimmungsdashboard"><i class="fas fa-smile-beam w-5 mr-2"></i>Stimmungsdashboard</a>
-                                <a href="#" id="strukturbaum-menu-item" class="block sm:hidden px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sitemap w-5 mr-2"></i>Strukturbaum</a>
+                                <!-- TEMPORÄR AUSGEBLENDET: <a href="#" id="strukturbaum-menu-item" class="block sm:hidden px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-sitemap w-5 mr-2"></i>Strukturbaum</a> -->
                         </div>
                     </div>
                     <div class="relative">
@@ -348,20 +348,12 @@
                                 </div>
                             </div>
                             <!-- NEU: Design an ET-Box angepasst und Container für zusätzliche Infos hinzugefügt -->
-                            <div class="p-4 bg-accent-gold-light rounded-xl shadow-md border-2 border-accent-gold flex flex-col items-center justify-center text-center">
+                            <div class="p-4 bg-skt-grey-light rounded-xl shadow-md flex flex-col items-center justify-center text-center">
                                 <p id="next-career-goal-label" class="text-xs text-skt-blue-light font-bold">Nächstes Karriereziel</p>
                                 <div id="employee-info-container" class="mt-1 flex flex-col items-center justify-center">
                                     <p class="text-2xl font-bold text-skt-blue" id="employee-count-display">0</p><p id="employee-goal-status" class="text-skt-blue-light text-sm mt-1">...</p>
                                 </div>
                                 <div id="employee-slots-container" class="flex space-x-2 mt-2"></div>
-                            </div>
-                            <!-- KORREKTUR: Businessplan-Button hier platziert -->
-                            <div class="p-4 col-span-2 bg-skt-grey-light rounded-xl shadow-md flex items-center justify-center text-center relative">
-                                <p id="next-milestone" class="text-skt-blue-light text-sm font-bold">Nächster Meilenstein: <span class="text-skt-blue font-semibold">...</span></p>
-                                <!-- NEU: Button hier platziert -->
-                                <button id="open-business-plan-btn" class="absolute top-1/2 -translate-y-1/2 right-4 bg-skt-blue-light text-white font-semibold rounded-full shadow-md hover:bg-skt-blue-main transition-colors h-8 w-8 flex items-center justify-center" title="Businessplan bearbeiten">
-                                    <i class="fas fa-edit text-sm"></i>
-                                </button>
                             </div>
                             <div id="employee-additional-info-container" class="hidden p-4 col-span-2 bg-accent-gold-light rounded-xl shadow-md border-2 border-accent-gold text-center">
                                 <!-- Inhalt wird per JS generiert -->
@@ -529,18 +521,24 @@
     <!-- Modals -->
     <!-- Modal zum Bearbeiten/Hinzufügen von Terminen (zunächst verborgen) -->
     <div id="appointment-modal" class="modal-overlay">
-        <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-2xl w-full relative max-h-[90vh] overflow-y-auto">
+        <div class="modal-box bg-white rounded-lg shadow-xl p-6 sm:p-8 m-4 sm:m-4 max-w-2xl w-full relative max-h-[90vh] overflow-y-auto">
+            <!-- NEU: Lade-Overlay für Aktionen wie "Verschieben" -->
+            <div id="appointment-modal-loader" class="hidden absolute inset-0 bg-white bg-opacity-80 flex-col items-center justify-center z-20">
+                <div class="loader"></div>
+                <p id="appointment-modal-loader-text" class="mt-4 font-semibold text-skt-blue">Wird verschoben...</p>
+            </div>
+
             <button id="close-appointment-modal-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
-            <h3 id="appointment-modal-title" class="text-2xl font-bold text-skt-blue mb-6">Termin anlegen</h3>
+            <h3 id="appointment-modal-title" class="text-xl sm:text-2xl font-bold text-skt-blue mb-4 sm:mb-6">Termin anlegen</h3>
             <!-- NEU: Container für Hinweise -->
             <div id="appointment-modal-hints" class="hidden mb-4 space-y-2"></div>
             <form id="appointment-form" class="space-y-4">
                 <input type="hidden" id="appointment-id">
-            <div id="appointment-grid-1" class="grid grid-cols-2 gap-4">
-                    <div><label for="appointment-user" class="block text-sm font-medium text-gray-700 mb-1">Mitarbeiter</label><select id="appointment-user" required class="modern-select"></select></div>
-                    <div><label for="appointment-invitee" class="block text-sm font-medium text-gray-700 mb-1">Eingeladener</label><select id="appointment-invitee" class="modern-select"></select></div>
-                    <div><label for="appointment-date" class="block text-sm font-medium text-gray-700 mb-1">Datum & Uhrzeit</label><div class="input-wrapper"><input type="datetime-local" id="appointment-date" required class="modern-input w-full"></div></div>
-                    <div><label for="appointment-duration" class="block text-sm font-medium text-gray-700 mb-1">Dauer (Minuten)</label><input type="number" id="appointment-duration" class="modern-input"></div>
+            <div id="appointment-grid-1" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="sm:col-span-2 md:col-span-1"><label for="appointment-user" class="block text-sm font-medium text-gray-700 mb-1">Mitarbeiter</label><select id="appointment-user" required class="modern-select"></select></div>
+                    <div class="sm:col-span-2 md:col-span-1"><label for="appointment-invitee" class="block text-sm font-medium text-gray-700 mb-1">Eingeladener</label><select id="appointment-invitee" class="modern-select"></select></div>
+                    <div class="sm:col-span-2 md:col-span-1"><label for="appointment-date" class="block text-sm font-medium text-gray-700 mb-1">Datum & Uhrzeit</label><div class="input-wrapper"><input type="datetime-local" id="appointment-date" required class="modern-input w-full"></div></div>
+                    <div class="sm:col-span-2 md:col-span-1"><label for="appointment-duration" class="block text-sm font-medium text-gray-700 mb-1">Dauer (Minuten)</label><input type="number" id="appointment-duration" class="modern-input"></div>
                 </div>
                 <div id="appointment-location-wrapper" class="hidden"><label for="appointment-location" class="block text-sm font-medium text-gray-700 mb-1">Ort</label><input type="text" id="appointment-location" class="modern-input"></div>
                 <!-- KORREKTUR: Fehlender Wrapper für das Wiederholungs-Dropdown hinzugefügt.
@@ -556,26 +554,13 @@
             <div id="appointment-grid-2" class="grid grid-cols-2 gap-4">
                     <div><label for="appointment-category" class="block text-sm font-medium text-gray-700 mb-1">Kategorie</label><select id="appointment-category" required class="modern-select"></select></div>
                     <div><label for="appointment-status" class="block text-sm font-medium text-gray-700 mb-1">Status</label><select id="appointment-status" required class="modern-select"></select></div>
-                    <div id="appointment-infoabend-container" class="hidden"><label for="appointment-infoabend-date" class="block text-sm font-medium text-gray-700 mb-1">Nächster Infoabend</label><div class="input-wrapper"><input type="date" id="appointment-infoabend-date" class="modern-input w-full"></div></div>
-                    <!-- NEU: Container für Wiederholungen -->
-                    <div id="appointment-recurrence-container" class="hidden sm:col-span-1">
-                        <label for="appointment-recurrence" class="block text-sm font-medium text-gray-700 mb-1">Wiederholung</label>
-                        <select id="appointment-recurrence" class="modern-select">
-                            <option value="">Keine</option>
-                            <option value="täglich">Täglich</option>
-                            <option value="wöchentlich">Wöchentlich</option>
-                            <option value="zweiwöchentlich">Zweiwöchentlich</option>
-                            <option value="monatlich">Monatlich (an diesem Tag)</option>
-                        </select>
-                    </div>
-                <div id="appointment-partner-container" class="sm:col-span-2"><label for="appointment-partner" class="block text-sm font-medium text-gray-700">Kunde, Bewerber,...</label><input type="text" id="appointment-partner" class="modern-input"></div>
-                <div id="appointment-referrals-container-single" class="hidden sm:col-span-2"><label for="appointment-referrals-single" class="block text-sm font-medium text-gray-700">Empfehlungen</label><input type="number" id="appointment-referrals-single" class="modern-input"></div>
+                    <div id="appointment-infoabend-container" class="hidden col-span-2"><label for="appointment-infoabend-date" class="block text-sm font-medium text-gray-700 mb-1">Nächster Infoabend</label><div class="input-wrapper"><input type="date" id="appointment-infoabend-date" class="modern-input w-full"></div></div>
+                <div id="appointment-partner-container" class="col-span-2"><label for="appointment-partner" class="block text-sm font-medium text-gray-700">Kunde, Bewerber,...</label><input type="text" id="appointment-partner" class="modern-input"></div>
+                <div id="appointment-referrals-container-single" class="hidden col-span-2"><label for="appointment-referrals-single" class="block text-sm font-medium text-gray-700">Empfehlungen</label><input type="number" id="appointment-referrals-single" class="modern-input"></div>
                 <div id="appointment-prognose-container" class="hidden"><label for="appointment-prognose" class="block text-sm font-medium text-gray-700">Umsatzprognose (EH)</label><input type="number" step="0.01" id="appointment-prognose" class="modern-input"></div>
                 <div id="appointment-referrals-container-paired"><label for="appointment-referrals-paired" class="block text-sm font-medium text-gray-700">Empfehlungen</label><input type="number" id="appointment-referrals-paired" class="modern-input"></div>
                 </div>
                 <div><label for="appointment-note" class="block text-sm font-medium text-gray-700">Hinweis</label><textarea id="appointment-note" rows="3" class="modern-input"></textarea></div>
-                <div class="flex items-center space-x-3 pt-2"><label for="appointment-cancellation" class="toggle-switch cancellation-toggle"><input type="checkbox" id="appointment-cancellation" class="sr-only peer"><div class="toggle-slider"></div></label><label for="appointment-cancellation" class="text-sm font-medium text-gray-700">Absage/Storno</label></div>
-                <div id="appointment-cancellation-reason-container" class="hidden"><label for="appointment-cancellation-reason" class="block text-sm font-medium text-gray-700">Absagegrund</label><textarea id="appointment-cancellation-reason" rows="2" class="modern-input"></textarea></div>
                 <!-- NEU: iCal Download Checkbox -->
                 <div class="flex items-center space-x-3 pt-2">
                     <label for="appointment-download-ical" class="toggle-switch">
@@ -584,13 +569,19 @@
                     </label>
                     <label for="appointment-download-ical" class="text-sm font-medium text-gray-700">Termin nach Speichern herunterladen</label>
                 </div>
-                <!-- NEU: Löschen-Button -->
-                <div class="pt-4">
-                    <button type="button" id="delete-appointment-btn" class="hidden text-skt-red-accent font-semibold hover:underline">
-                        <i class="fas fa-trash-alt mr-2"></i>Diesen Termin löschen
-                    </button>
+                <div class="pt-6 mt-6 border-t border-gray-200 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3">
+                    <div class="order-2 sm:order-1">
+                        <button type="button" id="cancel-appointment-storno-btn" class="hidden bg-skt-red-accent text-white font-semibold py-2 px-5 rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2 w-full sm:w-auto">
+                            <i class="fas fa-calendar-times"></i>Absage/Storno
+                        </button>
+                    </div>
+                    <div class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3 order-1 sm:order-2 w-full sm:w-auto">
+                        <button type="button" id="cancel-appointment-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors w-full sm:w-auto">Abbrechen</button>
+                        <button type="submit" id="save-appointment-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors flex items-center justify-center w-full sm:w-auto" style="min-width: 110px; min-height: 42px;">
+                            <span id="save-btn-text">Speichern</span><div class="loader-small hidden"></div>
+                        </button>
+                    </div>
                 </div>
-                <div class="pt-4 flex justify-end items-center gap-4"><div class="flex space-x-3"><button type="button" id="cancel-appointment-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button><button type="submit" id="save-appointment-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors flex items-center justify-center" style="min-width: 110px; min-height: 42px;"><span id="save-btn-text">Speichern</span><div class="loader-small hidden"></div></button></div></div>
             </form>
         </div>
     </div>
@@ -872,6 +863,29 @@
             </form>
         </div>
     </div>
+    <!-- NEU: Modal für Termin-Absage -->
+    <div id="storno-modal" class="modal-overlay">
+        <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative">
+            <button id="close-storno-modal-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
+            <h3 class="text-2xl font-bold text-skt-blue mb-6">Termin absagen</h3>
+            <form id="storno-form" class="space-y-4">
+                <input type="hidden" id="storno-appointment-id">
+                <div>
+                    <label for="storno-reason" class="block text-sm font-medium text-gray-700">Absagegrund</label>
+                    <textarea id="storno-reason" rows="3" required class="modern-input mt-1" placeholder="z.B. Kunde hat abgesagt, kein Interesse mehr..."></textarea>
+                </div>
+                <div class="flex items-center space-x-3 pt-2">
+                    <label for="storno-move-to-potential" class="toggle-switch">
+                        <input type="checkbox" id="storno-move-to-potential" class="sr-only peer" checked>
+                        <div class="toggle-slider"></div>
+                    </label>
+                    <label for="storno-move-to-potential" class="text-sm font-medium text-gray-700">Kontakt zur Potenzialliste hinzufügen</label>
+                </div>
+                <p class="text-xs text-gray-500">Wenn diese Option aktiviert ist, wird der Kontakt in die Potenzialliste verschoben (Datum wird entfernt). Andernfalls bleibt der Termin als "Storno" im Kalender bestehen.</p>
+                <div class="pt-4 flex justify-end space-x-3"><button type="button" id="cancel-storno-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button><button type="submit" id="save-storno-btn" class="bg-skt-red-accent text-white font-semibold py-2 px-5 rounded-lg hover:bg-red-700 transition-colors">Absage speichern</button></div>
+            </form>
+        </div>
+    </div>
     <!-- NEU: Modal für den täglichen Check-in -->
     <div id="checkin-modal" class="modal-overlay">
         <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-5xl w-full relative max-h-[90vh] flex flex-col">
@@ -986,7 +1000,8 @@
                      <label for="help-message" class="block text-sm font-medium text-gray-700">Deine Nachricht</label>
                      <textarea id="help-message" rows="5" required class="modern-input mt-1"></textarea>
                  </div>
-                 <div class="pt-4 flex justify-end">
+                 <div class="pt-4 flex justify-end space-x-3">
+                     <button type="button" id="cancel-help-btn-2" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button>
                      <button type="submit" id="send-help-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors flex items-center justify-center" style="min-width: 110px;">
                         <span id="send-help-btn-text">Senden</span>
                         <div class="loader-small hidden"></div>
@@ -1099,6 +1114,10 @@
     <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
     <!-- NEU: Signature Pad für die Zeichenfunktion -->
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+    <!-- NEU: D3.js für die Netzwerkdarstellung -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- NEU: ApexCharts für moderne Charts -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <!-- NEU: SortableJS für Drag-and-Drop im Kanban-Board -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script type="module" src="main.js"></script>
