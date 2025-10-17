@@ -3098,7 +3098,9 @@ function updateEmployeeCareerView() {
                   dom.employeeSlotsContainer.appendChild(slot);
               }
           } else {
-              dom.employeeGoalStatus.textContent = `nächsten Karriere Schritt mit FK klären!`;
+              // Kürzerer Text für mobile Geräte
+              const isMobile = window.innerWidth < 768;
+              dom.employeeGoalStatus.textContent = isMobile ? `Mit FK klären!` : `nächsten Karriere Schritt mit FK klären!`;
               dom.employeeGoalStatus.classList.remove('text-skt-blue-light', 'mt-1');
               dom.employeeGoalStatus.classList.add('text-skt-red-accent', 'font-bold', 'text-center');
               dom.employeeCountDisplay.classList.add('hidden');
