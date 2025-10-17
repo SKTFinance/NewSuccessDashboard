@@ -621,84 +621,151 @@
 
     <!-- NEU: Modal zum Bearbeiten von Benutzerdaten -->
     <div id="edit-user-modal" class="modal-overlay">
-        <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative max-h-[90vh] overflow-y-auto">
+        <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-4xl w-full relative max-h-[90vh] overflow-y-auto">
              <button id="cancel-edit-user-btn" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
              <h3 class="text-2xl font-bold text-skt-blue mb-6">Personendaten bearbeiten</h3>
-             <form id="edit-user-form" class="space-y-4">
-                 <div>
-                     <label for="edit-name" class="block text-sm font-medium text-gray-700">Name</label>
-                     <input type="text" id="edit-name" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
-                 </div>
-                 <div>
-                     <label for="edit-pwd" class="block text-sm font-medium text-gray-700">Passwort</label>
-                     <input type="text" id="edit-pwd" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
-                 </div>
-                  <div>
-                     <label for="edit-eh-quote" class="block text-sm font-medium text-gray-700">EH pro AT Quote</label>
-                     <input type="number" id="edit-eh-quote" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
-                 </div>
-                 <div>
-                     <label for="edit-start-date" class="block text-sm font-medium text-gray-700">Startdatum</label>
-                     <div class="input-wrapper">
-                        <input type="date" id="edit-start-date" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
-                     </div>
-                 </div>
-                 <div>
-                     <label for="edit-birthday" class="block text-sm font-medium text-gray-700">Geburtstag</label>
-                     <div class="input-wrapper">
-                        <input type="date" id="edit-birthday" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
-                     </div>
-                 </div>
-                 <div>
-                     <label for="edit-promotion-date" class="block text-sm font-medium text-gray-700">Nächstes Rennen Startdatum</label>
-                     <div class="input-wrapper">
-                        <input type="date" id="edit-promotion-date" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
-                     </div>
-                     <p class="mt-1 text-xs text-gray-500">Startdatum deines nächsten Karriereschritts</p>
-                 </div>
-                 <!-- NEU: Check-in Aktivierung (nur für Führungskräfte sichtbar) -->
-                 <div id="edit-checkin-container" class="hidden items-center space-x-3 pt-4 border-t border-gray-200">
-                     <label for="edit-checkin-enabled" class="toggle-switch">
-                         <input type="checkbox" id="edit-checkin-enabled" class="sr-only peer">
-                         <div class="toggle-slider"></div>
-                     </label>
-                     <label for="edit-checkin-enabled" class="text-sm font-medium text-gray-700">Täglichen Check-in für diesen Nutzer aktivieren</label>
-                 </div>
-                 <!-- NEU: Auswahl der Check-in-Tage -->
-                 <div id="edit-checkin-days-container" class="hidden space-y-2 pt-4">
-                     <label class="block text-sm font-medium text-gray-700">An welchen Tagen soll der Check-in erscheinen?</label>
-                     <div class="flex flex-wrap gap-x-4 gap-y-2">
-                         <label class="flex items-center space-x-2"><input type="checkbox" data-day="Mo" class="checkin-day-checkbox h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light"> <span>Mo</span></label>
-                         <label class="flex items-center space-x-2"><input type="checkbox" data-day="Di" class="checkin-day-checkbox h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light"> <span>Di</span></label>
-                         <label class="flex items-center space-x-2"><input type="checkbox" data-day="Mi" class="checkin-day-checkbox h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light"> <span>Mi</span></label>
-                         <label class="flex items-center space-x-2"><input type="checkbox" data-day="Do" class="checkin-day-checkbox h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light"> <span>Do</span></label>
-                         <label class="flex items-center space-x-2"><input type="checkbox" data-day="Fr" class="checkin-day-checkbox h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light"> <span>Fr</span></label>
-                         <label class="flex items-center space-x-2"><input type="checkbox" data-day="Sa" class="checkin-day-checkbox h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light"> <span>Sa</span></label>
-                         <label class="flex items-center space-x-2"><input type="checkbox" data-day="So" class="checkin-day-checkbox h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light"> <span>So</span></label>
-                     </div>
-                 </div>
-                 <div class="flex items-center space-x-3 pt-2">
-                     <label for="edit-ausgeschieden" class="toggle-switch">
-                         <input type="checkbox" id="edit-ausgeschieden" class="sr-only peer">
-                         <div class="toggle-slider"></div>
-                     </label>
-                     <label for="edit-ausgeschieden" class="text-sm font-medium text-gray-700">Mitarbeiter ausgeschieden</label>
-                 </div>
-                 <div id="ausscheide-fields-container" class="hidden space-y-4 border-t border-gray-200 pt-4 mt-4">
-                     <div>
-                         <label for="edit-ausscheidetag" class="block text-sm font-medium text-gray-700">Ausscheidedatum</label>
-                         <div class="input-wrapper">
-                            <input type="date" id="edit-ausscheidetag" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+             <form id="edit-user-form" class="space-y-6">
+                 <!-- Grunddaten Section -->
+                 <div class="border-b border-gray-200 pb-6">
+                     <h4 class="text-lg font-semibold text-skt-blue mb-4">Grunddaten</h4>
+                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <div>
+                             <label for="edit-name" class="block text-sm font-medium text-gray-700">Name</label>
+                             <input type="text" id="edit-name" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                         </div>
+                         <div>
+                             <label for="edit-pwd" class="block text-sm font-medium text-gray-700">Passwort</label>
+                             <input type="text" id="edit-pwd" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                         </div>
+                         <div>
+                             <label for="edit-eh-quote" class="block text-sm font-medium text-gray-700">EH pro AT Quote</label>
+                             <input type="number" id="edit-eh-quote" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                         </div>
+                         <div>
+                             <label for="edit-birthday" class="block text-sm font-medium text-gray-700">Geburtstag</label>
+                             <div class="input-wrapper">
+                                <input type="date" id="edit-birthday" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                             </div>
+                         </div>
+                         <div>
+                             <label for="edit-start-date" class="block text-sm font-medium text-gray-700">Startdatum</label>
+                             <div class="input-wrapper">
+                                <input type="date" id="edit-start-date" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                             </div>
+                         </div>
+                         <div>
+                             <label for="edit-promotion-date" class="block text-sm font-medium text-gray-700">Nächstes Rennen Startdatum</label>
+                             <div class="input-wrapper">
+                                <input type="date" id="edit-promotion-date" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                             </div>
+                             <p class="mt-1 text-xs text-gray-500">Startdatum deines nächsten Karriereschritts</p>
                          </div>
                      </div>
-                     <div>
-                         <label for="edit-ausscheidegrund" class="block text-sm font-medium text-gray-700">Ausscheidegrund</label>
-                         <textarea id="edit-ausscheidegrund" rows="2" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></textarea>
+                 </div>
+
+                 <!-- Profilbild Section -->
+                 <div class="border-b border-gray-200 pb-6">
+                     <h4 class="text-lg font-semibold text-skt-blue mb-4">Profilbild</h4>
+                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                         <div>
+                             <label for="edit-bild" class="block text-sm font-medium text-gray-700 mb-2">Bild hochladen</label>
+                             <input type="file" id="edit-bild" accept="image/*" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-skt-blue file:text-white hover:file:bg-skt-blue-light">
+                             <p class="mt-1 text-xs text-gray-500">PNG, JPG oder GIF bis 5MB</p>
+                         </div>
+                         <div>
+                             <label class="block text-sm font-medium text-gray-700 mb-2">Vorschau</label>
+                             <div id="edit-image-preview" class="w-32 h-32 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">
+                                 <span class="text-gray-400 text-sm">Kein Bild</span>
+                             </div>
+                         </div>
                      </div>
                  </div>
+
+                 <!-- Qualifikationen Section -->
+                 <div class="border-b border-gray-200 pb-6">
+                     <h4 class="text-lg font-semibold text-skt-blue mb-4">Qualifikationen</h4>
+                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                         <div class="flex items-center space-x-3">
+                             <input type="checkbox" id="edit-va" class="h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light">
+                             <label for="edit-va" class="text-sm font-medium text-gray-700">VA (Versicherungsagent)</label>
+                         </div>
+                         <div class="flex items-center space-x-3">
+                             <input type="checkbox" id="edit-vb" class="h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light">
+                             <label for="edit-vb" class="text-sm font-medium text-gray-700">VB (Versicherungsberater)</label>
+                         </div>
+                         <div class="flex items-center space-x-3">
+                             <input type="checkbox" id="edit-immobilienexperte" class="h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light">
+                             <label for="edit-immobilienexperte" class="text-sm font-medium text-gray-700">Immobilienexperte</label>
+                         </div>
+                     </div>
+                 </div>
+
+                 <!-- Text über mich Section -->
+                 <div class="border-b border-gray-200 pb-6">
+                     <h4 class="text-lg font-semibold text-skt-blue mb-4">Über mich</h4>
+                     <div>
+                         <label for="edit-text-zu-mir" class="block text-sm font-medium text-gray-700 mb-2">Text über mich</label>
+                         <textarea id="edit-text-zu-mir" rows="4" class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main" placeholder="Erzähle etwas über dich, deine Erfahrungen und was dich antreibt..."></textarea>
+                         <p class="mt-1 text-xs text-gray-500">Dieser Text wird in deiner Berater-Vorstellung angezeigt</p>
+                     </div>
+                 </div>
+                 <!-- Check-in Einstellungen Section (nur für Führungskräfte) -->
+                 <div id="edit-checkin-section" class="hidden border-b border-gray-200 pb-6">
+                     <h4 class="text-lg font-semibold text-skt-blue mb-4">Check-in Einstellungen</h4>
+                     <div id="edit-checkin-container" class="flex items-center space-x-3 mb-4">
+                         <label for="edit-checkin-enabled" class="toggle-switch">
+                             <input type="checkbox" id="edit-checkin-enabled" class="sr-only peer">
+                             <div class="toggle-slider"></div>
+                         </label>
+                         <label for="edit-checkin-enabled" class="text-sm font-medium text-gray-700">Täglichen Check-in für diesen Nutzer aktivieren</label>
+                     </div>
+                     <div id="edit-checkin-days-container" class="hidden space-y-2">
+                         <label class="block text-sm font-medium text-gray-700">An welchen Tagen soll der Check-in erscheinen?</label>
+                         <div class="flex flex-wrap gap-x-4 gap-y-2">
+                             <label class="flex items-center space-x-2"><input type="checkbox" data-day="Mo" class="checkin-day-checkbox h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light"> <span>Mo</span></label>
+                             <label class="flex items-center space-x-2"><input type="checkbox" data-day="Di" class="checkin-day-checkbox h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light"> <span>Di</span></label>
+                             <label class="flex items-center space-x-2"><input type="checkbox" data-day="Mi" class="checkin-day-checkbox h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light"> <span>Mi</span></label>
+                             <label class="flex items-center space-x-2"><input type="checkbox" data-day="Do" class="checkin-day-checkbox h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light"> <span>Do</span></label>
+                             <label class="flex items-center space-x-2"><input type="checkbox" data-day="Fr" class="checkin-day-checkbox h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light"> <span>Fr</span></label>
+                             <label class="flex items-center space-x-2"><input type="checkbox" data-day="Sa" class="checkin-day-checkbox h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light"> <span>Sa</span></label>
+                             <label class="flex items-center space-x-2"><input type="checkbox" data-day="So" class="checkin-day-checkbox h-4 w-4 rounded border-gray-300 text-skt-blue focus:ring-skt-blue-light"> <span>So</span></label>
+                         </div>
+                     </div>
+                 </div>
+
+                 <!-- Ausscheiden Section -->
+                 <div class="pb-6">
+                     <h4 class="text-lg font-semibold text-skt-blue mb-4">Status</h4>
+                     <div class="flex items-center space-x-3 mb-4">
+                         <label for="edit-ausgeschieden" class="toggle-switch">
+                             <input type="checkbox" id="edit-ausgeschieden" class="sr-only peer">
+                             <div class="toggle-slider"></div>
+                         </label>
+                         <label for="edit-ausgeschieden" class="text-sm font-medium text-gray-700">Mitarbeiter ausgeschieden</label>
+                     </div>
+                     <div id="ausscheide-fields-container" class="hidden space-y-4 border-t border-gray-200 pt-4">
+                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                             <div>
+                                 <label for="edit-ausscheidetag" class="block text-sm font-medium text-gray-700">Ausscheidedatum</label>
+                                 <div class="input-wrapper">
+                                    <input type="date" id="edit-ausscheidetag" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main">
+                                 </div>
+                             </div>
+                             <div>
+                                 <label for="edit-ausscheidegrund" class="block text-sm font-medium text-gray-700">Ausscheidegrund</label>
+                                 <textarea id="edit-ausscheidegrund" rows="2" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-skt-blue-main focus:border-skt-blue-main"></textarea>
+                             </div>
+                         </div>
+                     </div>
+                 </div>
+
                  <div class="pt-4 flex justify-end space-x-3">
                      <button type="button" id="cancel-edit-user-btn-2" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Abbrechen</button>
                      <button type="submit" id="save-user-btn" class="bg-skt-blue text-white font-semibold py-2 px-5 rounded-lg hover:bg-skt-blue-light transition-colors">Speichern</button>
+                 </div>
+             </form>
+        </div>
+    }
                  </div>
              </form>
         </div>

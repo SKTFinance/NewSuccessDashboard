@@ -126,7 +126,11 @@ async function genericAddRowWithLinks(tableName, rowDataWithKeys, linkColumnName
     linkColumnNames.forEach(colName => {
         const colKey = tableMap[colName];
         if (Object.prototype.hasOwnProperty.call(rowDataForCreation, colKey)) {
-            linkData[colName] = rowDataForCreation[colKey]?.[0] || null;
+            // KORREKTUR: Speichere das komplette Array für Link-Updates, aber nur wenn es nicht null ist
+            const linkValue = rowDataForCreation[colKey];
+            if (linkValue && Array.isArray(linkValue) && linkValue.length > 0) {
+                linkData[colName] = linkValue;
+            }
             delete rowDataForCreation[colKey];
         }
     });
@@ -137,13 +141,31 @@ async function genericAddRowWithLinks(tableName, rowDataWithKeys, linkColumnName
         if (name) rowDataWithNames[name] = (rowDataForCreation[key] === undefined || rowDataForCreation[key] === '') ? null : rowDataForCreation[key];
     }
 
+    console.log(`[GENERIC-ADD-ROW] Creating row in ${tableName}:`, rowDataWithNames);
     const newRowId = await genericSeaTableAddRow(tableName, rowDataWithNames);
     if (!newRowId) return false;
 
+    console.log(`[GENERIC-ADD-ROW] Row created with ID: ${newRowId}, processing links:`, linkData);
+
     for (const colName in linkData) {
-        if (linkData[colName] && !(await updateSingleLink(tableName, newRowId, colName, [linkData[colName]]))) return false;
+        if (linkData[colName]) {
+            // KORREKTUR: Extrahiere die row_ids aus den Link-Objekten
+            const rowIds = Array.isArray(linkData[colName]) 
+                ? linkData[colName].map(item => item.row_id).filter(Boolean)
+                : [];
+            
+            console.log(`[GENERIC-ADD-ROW] Processing link column ${colName} with row IDs:`, rowIds);
+            
+            if (rowIds.length > 0) {
+                const linkSuccess = await updateSingleLink(tableName, newRowId, colName, rowIds);
+                if (!linkSuccess) {
+                    console.error(`[GENERIC-ADD-ROW] Failed to update link for ${colName}`);
+                    return false;
+                }
+            }
+        }
     }
-    return true;
+    return newRowId; // Gib die neue Zeilen-ID zurück statt nur true
 }
 
 async function genericSeaTableAddRow(tableName, rowDataWithNames) {
@@ -167,13 +189,36 @@ async function genericSeaTableAddRow(tableName, rowDataWithNames) {
 async function updateSingleLink(baseTableName, baseRowId, linkColumnName, otherRowIds) {
     if (!seaTableAccessToken || !apiGatewayUrl) return false;
     try {
+        console.log(`[LINK-UPDATE] Updating link for ${linkColumnName} in ${baseTableName}`, { baseRowId, otherRowIds });
+        
         const baseTableMeta = METADATA.tables.find(t => t.name.toLowerCase() === baseTableName.toLowerCase());
-        if (!baseTableMeta) throw new Error(`Could not find metadata for table '${baseTableName}'`);
+        if (!baseTableMeta) {
+            console.error(`[LINK-UPDATE] Available tables:`, METADATA.tables?.map(t => t.name) || 'No tables found');
+            throw new Error(`Could not find metadata for table '${baseTableName}'`);
+        }
 
         const linkColumnMeta = baseTableMeta.columns.find(c => c.name === linkColumnName);
-        if (!linkColumnMeta || !linkColumnMeta.data || !linkColumnMeta.data.link_id) throw new Error(`Could not find link metadata for column '${linkColumnName}' in table '${baseTableName}'`);
+        if (!linkColumnMeta) {
+            console.error(`[LINK-UPDATE] Available columns in ${baseTableName}:`, baseTableMeta.columns?.map(c => c.name) || 'No columns found');
+            throw new Error(`Could not find column '${linkColumnName}' in table '${baseTableName}'`);
+        }
+        
+        if (!linkColumnMeta.data || !linkColumnMeta.data.link_id) {
+            console.error(`[LINK-UPDATE] Column metadata for ${linkColumnName}:`, linkColumnMeta);
+            throw new Error(`Column '${linkColumnName}' is not a link column or missing link metadata`);
+        }
 
         const otherTableId = linkColumnMeta.data.other_table_id;
+        
+        // KORREKTUR: Stelle sicher, dass otherRowIds ein Array von Strings ist
+        const cleanRowIds = Array.isArray(otherRowIds) 
+            ? otherRowIds.filter(Boolean).map(id => String(id))
+            : (otherRowIds ? [String(otherRowIds)] : []);
+
+        if (cleanRowIds.length === 0) {
+            console.log(`[LINK-UPDATE] No valid row IDs to link, skipping update for ${linkColumnName}`);
+            return true; // Nicht als Fehler behandeln, wenn keine IDs da sind
+        }
 
         const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/links/`;
         const body = {
@@ -181,14 +226,28 @@ async function updateSingleLink(baseTableName, baseRowId, linkColumnName, otherR
             other_table_id: otherTableId,
             link_id: linkColumnMeta.data.link_id,
             other_rows_ids_map: {
-                [baseRowId]: Array.isArray(otherRowIds) ? otherRowIds.filter(Boolean) : (otherRowIds ? [otherRowIds] : [])
+                [baseRowId]: cleanRowIds
             }
         };
         
-        const response = await fetch(url, { method: 'PUT', headers: { Authorization: `Bearer ${seaTableAccessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        console.log(`[LINK-UPDATE] Request body:`, JSON.stringify(body, null, 2));
+        
+        const response = await fetch(url, { 
+            method: 'PUT', 
+            headers: { 
+                Authorization: `Bearer ${seaTableAccessToken}`, 
+                'Content-Type': 'application/json' 
+            }, 
+            body: JSON.stringify(body) 
+        });
+        
         if (!response.ok) {
-            throw new Error(`Link update for ${linkColumnName} failed: ${response.status} ${await response.text()}`);
+            const errorText = await response.text();
+            console.error(`[LINK-UPDATE] Error response:`, errorText);
+            throw new Error(`Link update for ${linkColumnName} failed: ${response.status} ${errorText}`);
         }
+        
+        console.log(`[LINK-UPDATE] Successfully updated link for ${linkColumnName}`);
         return true;
     } catch (error) {
         console.error(`Error updating link for ${linkColumnName}:`, error);
@@ -216,6 +275,82 @@ async function fetchColumnMaps() {
     console.error("Error fetching column maps:", error);
     return {};
   }
+}
+
+async function seaTableGetUploadLink() {
+    if (!seaTableAccessToken || !apiGatewayUrl) {
+        console.error("Cannot get upload link without access token and gateway URL.");
+        return null;
+    }
+    try {
+        const log = (message, ...data) => console.log(`[API-GetUploadLink] ${message}`, ...data);
+        log('Starte Abruf des App-Upload-Links...');
+        if (!apiGatewayUrl) {
+            log("!!! FEHLER: API Gateway URL fehlt.");
+            return null;
+        }
+
+        const baseUrl = new URL(apiGatewayUrl).origin;
+        const url = `${baseUrl}/api/v2.1/dtable/app-upload-link/?dtable_uuid=${SEATABLE_DTABLE_UUID}`;
+        log(`Sende GET-Anfrage an: ${url}`);
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: { Authorization: `Token ${SEATABLE_API_TOKEN}` }
+        });
+        log(`Antwort-Status: ${response.status}`);
+        const responseText = await response.text();
+        log('Antwort-Text vom Server:', responseText);
+
+        if (!response.ok) {
+            log(`!!! FEHLER: HTTP-Fehler!`, responseText);
+            throw new Error(`HTTP error! status: ${response.status}, message: ${responseText}`);
+        }
+        
+        const data = JSON.parse(responseText);
+        log('Erfolgreiche Antwort erhalten:', data);
+        // Erwartet: { upload_link, parent_path, img_relative_path, file_relative_path }
+        // HINWEIS: "path" wird nicht direkt geliefert, sondern aus parent_path + file_relative_path konstruiert
+        return data;
+    } catch (error) {
+        console.log(`!!! KRITISCHER FEHLER beim Abrufen des Upload-Links:`, error);
+        console.error("Error getting SeaTable upload link:", error);
+        return null;
+    }
+}
+
+async function seaTableUploadFile(uploadLink, file, parentDir) {
+    const log = (message, ...data) => console.log(`[API-UploadFile] ${message}`, ...data);
+    log(`Starte Upload für Datei: ${file.name} in Verzeichnis: ${parentDir}`);
+    try {
+        const formData = new FormData();
+        formData.append('parent_dir', parentDir);
+        formData.append('file', file, file.name);
+        log('FormData erstellt:', { parent_dir: parentDir, filename: file.name, size: file.size });
+
+        // KORREKTUR: Hinzufügen des ret-json=1 Parameters für korrekte Antwort
+        const uploadUrl = `${uploadLink}?ret-json=1`;
+        log(`Sende Upload-Request an: ${uploadUrl}`);
+
+        const response = await fetch(uploadUrl, {
+            method: 'POST',
+            body: formData
+        });
+        log(`Antwort-Status vom Upload-Server: ${response.status}`);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            log(`!!! FEHLER: Upload fehlgeschlagen.`, errorText);
+            throw new Error(`Datei-Upload fehlgeschlagen: ${response.status} ${errorText}`);
+        }
+
+        const result = await response.json();
+        log('Upload erfolgreich. Server-Antwort:', result);
+        return result; // Gibt die Server-Antwort mit Datei-Info zurück
+    } catch (error) {
+        log(`!!! KRITISCHER FEHLER beim Datei-Upload:`, error);
+        console.error("Fehler beim Hochladen der Datei zu SeaTable:", error);
+        return null;
+    }
 }
 
 // --- BERATUNG VIEW LOGIK (aus beratung.js kopiert und angepasst) ---
@@ -275,6 +410,7 @@ class BeratungView {
         this.navigation = {
             startPhase: [
                 'beratung-slide-mitarbeitername',
+                'beratung-slide-disclaimer',
                 'beratung-slide-kundenname',
                 'beratung-slide-welcome',
                 'beratung-slide-berater-vorstellung',
@@ -303,6 +439,7 @@ class BeratungView {
         this.nextBtn = document.getElementById('beratung-next-btn');
         this.bgImage = document.getElementById('beratung-bg-image');
         this.mitarbeiternameInput = document.getElementById('beratung-mitarbeitername-input'); // NEU
+        this.disclaimerCheckbox = document.getElementById('disclaimer-checkbox'); // NEU
         this.slides = Array.from(document.querySelectorAll('.beratung-slide'));
         this.kundennameInput = document.getElementById('beratung-kundenname-input');
         this.welcomeKundenname = document.getElementById('beratung-welcome-kundenname');
@@ -371,12 +508,41 @@ class BeratungView {
     }
 
     _setupEventListeners() {
-        this.nextBtn.addEventListener('click', () => this._navigateNext());
+        this.nextBtn.addEventListener('click', () => {
+            // Zuerst prüfen, ob wir zur Abschlussseite sollen
+            beratungLog('=== WEITER-BUTTON GEKLICKT ===');
+            beratungLog('Agenda-Index:', this.navigation.agendaIndex);
+            beratungLog('Agenda-Länge:', this.beratungData.agenda.length);
+            beratungLog('Aktueller Slide:', this.currentSlideId);
+            
+            // Direkte Prüfung: Sind wir am Ende der Beratung?
+            if (this._shouldGoToAbschluss()) {
+                beratungLog('DIREKT ZUR ABSCHLUSSSEITE!');
+                this._renderAbschluss();
+                return;
+            }
+            
+            // Ansonsten normale Navigation
+            this._navigateNext();
+        });
+        
+        // ZUSÄTZLICHE SICHERHEIT: Verhindere Page-Reload wenn Beratung läuft
+        window.addEventListener('beforeunload', (e) => {
+            if (this.navigation.agendaIndex > 0 && this.navigation.agendaIndex < this.beratungData.agenda.length + 1) {
+                e.preventDefault();
+                e.returnValue = 'Die Beratung läuft noch. Möchten Sie wirklich die Seite verlassen?';
+                return e.returnValue;
+            }
+        });
+        
         this.backBtn.addEventListener('click', () => this._navigateBack());
 
         // KORREKTUR: Ruft jetzt eine dedizierte Funktion auf, um den Button-Status zu aktualisieren.
         this.mitarbeiternameInput.addEventListener('input', () => this._updateNavButtons());
         this.kundennameInput.addEventListener('input', () => this._updateNavButtons());
+        if (this.disclaimerCheckbox) {
+            this.disclaimerCheckbox.addEventListener('change', () => this._updateNavButtons());
+        }
 
         // KORREKTUR: Die Modal-Trigger müssen hier einmalig initialisiert werden, damit sie auf allen Seiten funktionieren.
         this._setupModalTriggers();
@@ -435,6 +601,13 @@ class BeratungView {
     }
 
     _showSlide(slideId) {
+        // NOTFALL-PRÜFUNG: Verhindere das Zurückspringen zum Anfang
+        if (slideId === 'beratung-slide-mitarbeitername' && this.navigation.agendaIndex > 0) {
+            beratungLog('!!! NOTFALL: Verhindere Rücksprung zum Anfang - gehe zur Abschlussseite');
+            this._renderAbschluss();
+            return;
+        }
+        
         beratungLog(`Zeige Slide: ${slideId}`);
 
         // Finde die aktuell aktive Folie und blende sie aus
@@ -456,7 +629,7 @@ class BeratungView {
             newSlide.classList.add('active'); // Startet die Fade-In-Animation
 
             // NEU: Hintergrundbild für die ersten beiden Slides einblenden
-            const showBg = ['beratung-slide-mitarbeitername', 'beratung-slide-kundenname', 'beratung-slide-welcome'].includes(slideId);
+            const showBg = ['beratung-slide-mitarbeitername', 'beratung-slide-disclaimer', 'beratung-slide-kundenname', 'beratung-slide-welcome'].includes(slideId);
             this.bgImage.classList.toggle('opacity-30', showBg);
 
             this.currentSlideId = slideId; // Speichere die aktuelle Slide-ID
@@ -597,9 +770,73 @@ class BeratungView {
         }
     }
 
+    _shouldGoToAbschluss() {
+        beratungLog('=== Prüfe ob zur Abschlussseite ===');
+        
+        // Prüfe 1: Sind wir bereits am Ende der Agenda?
+        if (this.navigation.agendaIndex >= this.beratungData.agenda.length) {
+            beratungLog('✓ Agenda-Index >= Agenda-Länge');
+            return true;
+        }
+        
+        // Prüfe 2: Sind wir im letzten Agendapunkt und am Ende des Flows?
+        if (this.navigation.agendaIndex === this.beratungData.agenda.length - 1) {
+            const currentAgendaItem = this.beratungData.agenda[this.navigation.agendaIndex];
+            const currentFlow = this.slideFlows[currentAgendaItem];
+            
+            beratungLog('Letzter Agendapunkt:', currentAgendaItem);
+            beratungLog('Flow:', currentFlow);
+            beratungLog('Sub-Slide-Index:', this.navigation.subSlideIndex);
+            
+            if (currentFlow) {
+                const nextSlideInFlow = currentFlow[this.navigation.subSlideIndex];
+                beratungLog('Nächstes Slide im Flow:', nextSlideInFlow);
+                
+                // WICHTIG: Wenn das nächste Slide "dynamic" ist, bedeutet das,
+                // dass der Flow noch expandiert werden muss - also NICHT am Ende!
+                if (nextSlideInFlow === 'dynamic') {
+                    beratungLog('✗ Nächstes Slide ist "dynamic" - Flow muss noch expandiert werden');
+                    return false;
+                }
+                
+                // Nur wenn wir über das Ende des Flows hinaus sind, sind wir fertig
+                if (this.navigation.subSlideIndex >= currentFlow.length) {
+                    beratungLog('✓ Am Ende des letzten Flows');
+                    return true;
+                }
+            }
+        }
+        
+        // Prüfe 3: Sind wir auf einer Produktempfehlung und haben bereits alle Agendapunkte durchlaufen?
+        if (this.currentSlideId && this.currentSlideId.includes('product-recommendation')) {
+            beratungLog('✓ Auf Produktempfehlung - prüfe nächsten Schritt');
+            // Simuliere den nächsten Schritt und schaue, ob wir am Ende sind
+            const wouldBeNext = this.navigation.agendaIndex;
+            if (wouldBeNext >= this.beratungData.agenda.length - 1) {
+                return true;
+            }
+        }
+        
+        beratungLog('✗ Noch nicht am Ende');
+        return false;
+    }
+
     async _navigateNext() {
+        beratungLog('=== _navigateNext() aufgerufen ===');
+        beratungLog('Aktuelle Phase:', this.navigation.currentPhase);
+        beratungLog('Aktueller Slide:', this.currentSlideId);
+        beratungLog('Agenda-Index:', this.navigation.agendaIndex);
+        beratungLog('Sub-Slide-Index:', this.navigation.subSlideIndex);
+        
         const currentSlideId = this.currentSlideId;
         this.history.push(currentSlideId); // Aktuelle Seite zur History hinzufügen
+
+        // WICHTIG: Prüfe zuerst, ob alle Agendapunkte bereits abgeschlossen sind
+        if (this.navigation.agendaIndex >= this.beratungData.agenda.length) {
+            beratungLog('Alle Agendapunkte bereits abgeschlossen. Gehe direkt zur Abschlussseite.');
+            this._renderAbschluss();
+            return;
+        }
 
         
         // NEU: Spezielle Logik für das 3-Konten-Modell
@@ -632,11 +869,14 @@ class BeratungView {
                 this.beratungData.beratungspunkte[currentAgendaItem] = {};
             }
             this.beratungData.beratungspunkte[currentAgendaItem].besonderheiten = this.currentSelection.besonderheiten;
-
-            // NEU: Speichere das ausgewählte Produkt
-            const recommendationContainer = document.getElementById('beratung-slide-product-recommendation');
-            const selectedProductInput = recommendationContainer.querySelector('input[name="product-selection"]:checked');
-            this.beratungData.beratungspunkte[currentAgendaItem].ausgewaehltesProdukt = selectedProductInput ? selectedProductInput.value : null;
+        }
+        
+        // --- Spezielle Behandlung für Produktempfehlung ---
+        if (currentSlideId === 'beratung-slide-dynamic-features' && 
+            this.navigation.currentPhase === 'agenda' && 
+            this.navigation.currentFlow && 
+            this.navigation.currentFlow.includes('beratung-slide-product-recommendation')) {
+            
             // NEU: Ladeanimation vor der Produktempfehlung anzeigen
             this._showLoadingOverlay(true, [
                 'Passende Produkte werden gesucht...',
@@ -648,6 +888,20 @@ class BeratungView {
             this._showLoadingOverlay(false);
             // Die Navigation wird hier gestoppt und erst nach dem Rendern fortgesetzt.
             // Der nächste Klick auf "Weiter" führt dann von der Empfehlungsseite weg.
+        }
+        
+        // --- Spezielle Behandlung für Produktauswahl speichern ---
+        if (currentSlideId === 'beratung-slide-product-recommendation' && this.navigation.currentPhase === 'agenda') {
+            // NEU: Speichere das ausgewählte Produkt
+            const currentAgendaItem = this.beratungData.agenda[this.navigation.agendaIndex];
+            const recommendationContainer = document.getElementById('beratung-slide-product-recommendation');
+            const selectedProductInput = recommendationContainer.querySelector('input[name="product-selection"]:checked');
+            
+            if (!this.beratungData.beratungspunkte[currentAgendaItem]) {
+                this.beratungData.beratungspunkte[currentAgendaItem] = {};
+            }
+            this.beratungData.beratungspunkte[currentAgendaItem].ausgewaehltesProdukt = selectedProductInput ? selectedProductInput.value : null;
+            beratungLog('Produkt gespeichert für', currentAgendaItem, ':', this.beratungData.beratungspunkte[currentAgendaItem].ausgewaehltesProdukt);
         }
 
         // --- Logik für die Startphase ---
@@ -697,9 +951,15 @@ class BeratungView {
         // --- Logik für die Agenda-Phase ---
         if (this.navigation.currentPhase === 'agenda') {
             const currentAgendaItem = this.beratungData.agenda[this.navigation.agendaIndex];
+            beratungLog('=== AGENDA NAVIGATION ===');
+            beratungLog('Aktueller Agendapunkt:', currentAgendaItem);
+            beratungLog('subSlideIndex:', this.navigation.subSlideIndex);
+            beratungLog('currentFlow:', this.navigation.currentFlow);
+            
             // KORREKTUR: Verwende den explizit gesetzten Flow oder falle auf den Haupt-Flow zurück.
             if (!this.navigation.currentFlow) {
                 this.navigation.currentFlow = this.slideFlows[currentAgendaItem];
+                beratungLog('Flow aus slideFlows geholt:', this.navigation.currentFlow);
             }
             const currentFlow = this.navigation.currentFlow;
 
@@ -710,6 +970,7 @@ class BeratungView {
             }
 
             const nextSubSlideId = currentFlow[this.navigation.subSlideIndex];
+            beratungLog('Nächste Slide ID:', nextSubSlideId);
 
             if (nextSubSlideId === 'dynamic') {
                 // Hier wird basierend auf der User-Auswahl der nächste Schritt bestimmt.
@@ -722,7 +983,12 @@ class BeratungView {
                     if (selectedProducts.length > 0) {
                         // KORREKTUR: Ersetze das aktuelle Agenda-Item durch die ausgewählten Produkte.
                         // Beispiel: 'Körper & Existenz' wird zu ['Unfallversicherung', 'Berufsunfähigkeit']
+                        beratungLog('Erweitere Agenda mit ausgewählten Produkten:', selectedProducts);
+                        beratungLog('Vor Expansion - Agenda:', this.beratungData.agenda, 'Index:', this.navigation.agendaIndex);
+                        
                         this.beratungData.agenda.splice(this.navigation.agendaIndex, 1, ...selectedProducts);
+                        
+                        beratungLog('Nach Expansion - Agenda:', this.beratungData.agenda, 'Index:', this.navigation.agendaIndex);
                         
                         // Setze den Flow zurück, damit der nächste Durchlauf den Flow für das erste neue Item holt.
                         this.navigation.currentFlow = null;
@@ -730,7 +996,7 @@ class BeratungView {
 
                         // Starte die Navigation für das (neu eingefügte) aktuelle Agenda-Item.
                         // Die agendaIndex bleibt gleich, zeigt aber jetzt auf das erste neue Item.
-                        this._navigateNext();
+                        this._startCurrentAgendaItem();
                         return;
 
                     } else {
@@ -741,24 +1007,96 @@ class BeratungView {
                 }
                 // TODO: Weitere 'dynamic' Fälle hier implementieren (Investment, Körper & Existenz, etc.)
             } else if (nextSubSlideId) {
+                beratungLog('Gehe zu nächstem Sub-Slide:', nextSubSlideId);
+                // WICHTIGER FIX: Erst die subSlideIndex erhöhen, DANN das nächste Slide zeigen
                 this.navigation.subSlideIndex++;
-                this._showSlide(nextSubSlideId);
+                beratungLog('Neue subSlideIndex:', this.navigation.subSlideIndex);
+                
+                // Hole das TATSÄCHLICH nächste Slide
+                const actualNextSlideId = currentFlow[this.navigation.subSlideIndex];
+                if (actualNextSlideId) {
+                    beratungLog('Zeige tatsächlich nächstes Slide:', actualNextSlideId);
+                    
+                    // WICHTIG: Wenn das nächste Slide "dynamic" ist, zeige es NICHT an,
+                    // sondern führe direkt die Navigation erneut aus
+                    if (actualNextSlideId === 'dynamic') {
+                        beratungLog('Nächstes Slide ist "dynamic" - führe Navigation erneut aus');
+                        this._navigateNext(); // Rekursiv aufrufen, um die dynamic-Logik zu triggern
+                    } else {
+                        this._showSlide(actualNextSlideId);
+                    }
+                } else {
+                    beratungLog('Kein weiteres Slide im Flow - gehe zum nächsten Agendapunkt');
+                    this._moveToNextAgendaItem();
+                }
             } else {
+                beratungLog('Ende des Flows erreicht');
                 // Ende des Flows für diesen Agendapunkt
                 this._moveToNextAgendaItem();
             }
         }
     }
 
+    _startCurrentAgendaItem() {
+        beratungLog('=== Starte aktuellen Agendapunkt ===');
+        beratungLog('Agenda-Index:', this.navigation.agendaIndex);
+        beratungLog('Aktuelle Agenda:', this.beratungData.agenda);
+        
+        if (this.navigation.agendaIndex >= this.beratungData.agenda.length) {
+            beratungLog('Alle Agendapunkte abgeschlossen. Gehe zur Abschlussseite.');
+            this._renderAbschluss();
+            return;
+        }
+        
+        const currentAgendaItem = this.beratungData.agenda[this.navigation.agendaIndex];
+        beratungLog('Aktueller Agendapunkt:', currentAgendaItem);
+        
+        // Initialisiere Beratungsdaten für diesen Agendapunkt
+        if (!this.beratungData.beratungspunkte[currentAgendaItem]) {
+            this.beratungData.beratungspunkte[currentAgendaItem] = {};
+            beratungLog('Neue Beratungsdaten für', currentAgendaItem, 'initialisiert');
+        }
+        
+        // Setze die Navigation für diesen Agendapunkt zurück
+        this.navigation.subSlideIndex = 0;
+        this.navigation.currentFlow = null;
+        
+        // Reset currentSelection für neue Agenda-Items
+        this.currentSelection = {
+            kategorie: currentAgendaItem,
+            besonderheiten: []
+        };
+        
+        // Hole den Flow für diesen Agendapunkt
+        const flow = this.slideFlows[currentAgendaItem];
+        if (flow && flow.length > 0) {
+            this.navigation.currentFlow = flow;
+            const firstSlideId = flow[0];
+            beratungLog('Starte Flow für', currentAgendaItem, ':', flow);
+            this._showSlide(firstSlideId);
+        } else {
+            beratungLog('Kein Flow für Agendapunkt gefunden:', currentAgendaItem);
+            this._moveToNextAgendaItem();
+        }
+    }
+
     _moveToNextAgendaItem() {
+        beratungLog('=== _moveToNextAgendaItem() aufgerufen ===');
         this.navigation.agendaIndex++;
         this.navigation.subSlideIndex = 0;
         this.navigation.currentFlow = null; // Setze den Flow für den nächsten Agendapunkt zurück
-        if (this.navigation.agendaIndex < this.beratungData.agenda.length) {
-            this._navigateNext(); // Nächsten Agendapunkt starten
-        } else {
+        
+        beratungLog(`Neuer Agenda-Index: ${this.navigation.agendaIndex}, Agenda-Länge: ${this.beratungData.agenda.length}`);
+        
+        // WICHTIG: Prüfe mehrfach, ob wir am Ende sind
+        if (this.navigation.agendaIndex >= this.beratungData.agenda.length) {
+            beratungLog('✓ ALLE AGENDAPUNKTE ABGESCHLOSSEN - GEHE ZUR ABSCHLUSSSEITE');
             this._renderAbschluss();
+            return;
         }
+        
+        beratungLog('Navigiere zum nächsten Agendapunkt...');
+        this._startCurrentAgendaItem(); // Verwende die neue Methode statt rekursiver Navigation
     }
 
     _navigateBack() {
@@ -2671,12 +3009,111 @@ class BeratungView {
     }
 
     _renderAbschluss() {
+        beratungLog('=== _renderAbschluss() aufgerufen ===');
         const abschlussSlide = this.slides.find(s => s.id === 'beratung-slide-abschluss');
+        beratungLog('Abschluss-Slide gefunden:', !!abschlussSlide);
+        beratungLog('Alle verfügbaren Slides:', this.slides.map(s => s.id));
+        
+        // WICHTIG: Alle Overlays und Modals ausblenden
+        this._hideAllOverlaysAndModals();
+        
         if (abschlussSlide) {
+            beratungLog('Zeige Abschlussseite an...');
             this.slides.forEach(s => s.classList.add('hidden'));
             abschlussSlide.classList.remove('hidden');
+            
+            // Verstecke die Navigation, da die Beratung abgeschlossen ist
+            this.navContainer.classList.add('hidden');
+            
+            // Stelle sicher, dass die Abschlussseite wirklich sichtbar ist
+            abschlussSlide.style.display = 'flex';
+            abschlussSlide.style.zIndex = '9999'; // SEHR hoher z-Index
+            abschlussSlide.style.position = 'relative';
+            abschlussSlide.classList.add('active');
+            
+            beratungLog('Abschlussseite sollte jetzt sichtbar sein.');
+            beratungLog('Abschlussseite CSS-Klassen:', Array.from(abschlussSlide.classList));
+            beratungLog('Abschlussseite style.display:', abschlussSlide.style.display);
+            
+            // Gib der Abschlussseite Zeit, angezeigt zu werden, bevor das Speichern beginnt
+            setTimeout(() => {
+                beratungLog('Starte Speichervorgang nach Anzeige der Abschlussseite...');
+                this._saveBeratung();
+            }, 1000); // 1 Sekunde Verzögerung
+        } else {
+            beratungLog('!!! FEHLER: Abschluss-Slide nicht gefunden!');
+            // Fallback: Direkt speichern
             this._saveBeratung();
         }
+    }
+
+    // Neue Funktion: Alle Overlays und Modals ausblenden
+    _hideAllOverlaysAndModals() {
+        beratungLog('=== Blende alle Overlays und Modals aus ===');
+        
+        // Loading-Overlay ausblenden
+        if (this.loadingOverlay) {
+            this.loadingOverlay.classList.add('hidden');
+            this.loadingOverlay.classList.remove('flex');
+            this.loadingOverlay.style.display = 'none';
+            this.loadingOverlay.style.zIndex = '-1';
+            beratungLog('✓ Loading-Overlay ausgeblendet');
+        }
+        
+        // AGGRESSIV: Alle Elemente mit z-Index > 10 ausblenden (außer Abschlussseite)
+        const allElements = document.querySelectorAll('*');
+        allElements.forEach(element => {
+            const computedStyle = window.getComputedStyle(element);
+            const zIndex = parseInt(computedStyle.zIndex);
+            
+            // Wenn z-Index hoch ist und es nicht die Abschlussseite ist
+            if (zIndex > 10 && 
+                element.id !== 'beratung-slide-abschluss' && 
+                !element.closest('#beratung-slide-abschluss')) {
+                
+                element.style.display = 'none !important';
+                element.style.zIndex = '-1';
+                element.style.visibility = 'hidden';
+                element.classList.add('hidden');
+                beratungLog('✓ High z-index Element forciert ausgeblendet:', element.id || element.tagName, 'z-index:', zIndex);
+            }
+        });
+        
+        // Spezifisch: Alle Produktkarten und Empfehlungskarten ausblenden
+        const cardSelectors = [
+            '.recommendation-card',
+            '.recommendation-card-best', 
+            '.product-card',
+            '.benefit-card',
+            '[class*="card"]',
+            '[class*="modal"]',
+            '[class*="overlay"]',
+            '[class*="popup"]'
+        ];
+        
+        cardSelectors.forEach(selector => {
+            const elements = document.querySelectorAll(selector);
+            elements.forEach(element => {
+                if (!element.closest('#beratung-slide-abschluss')) {
+                    element.style.display = 'none !important';
+                    element.style.zIndex = '-1';
+                    element.style.visibility = 'hidden';
+                    element.classList.add('hidden');
+                }
+            });
+        });
+        
+        // Finale Sicherheit: Alle sichtbaren Slides außer Abschluss verstecken
+        this.slides.forEach(slide => {
+            if (slide.id !== 'beratung-slide-abschluss') {
+                slide.style.display = 'none !important';
+                slide.style.zIndex = '-1';
+                slide.classList.add('hidden');
+                slide.classList.remove('active');
+            }
+        });
+        
+        beratungLog('✓ ALLE Overlays, Modals und Karten AGGRESSIV ausgeblendet');
     }
 
     _renderKategorien() {
@@ -2759,8 +3196,10 @@ class BeratungView {
     _updateNavButtons() {
         const isMitarbeiternameValid = this.mitarbeiternameInput.value.trim() !== '';
         const isKundennameValid = this.kundennameInput.value.trim() !== '';
+        const isDisclaimerAccepted = !this.disclaimerCheckbox || this.disclaimerCheckbox.checked;
         let canProceed = true;
         if (this.currentSlideId === 'beratung-slide-mitarbeitername' && !isMitarbeiternameValid) canProceed = false;
+        if (this.currentSlideId === 'beratung-slide-disclaimer' && !isDisclaimerAccepted) canProceed = false;
         if (this.currentSlideId === 'beratung-slide-kundenname' && !isKundennameValid) canProceed = false;
 
         this.nextBtn.disabled = !canProceed;
@@ -2770,9 +3209,20 @@ class BeratungView {
     }
 
     async _saveBeratung() {
-        beratungLog('Speichere Beratung...');
-        this.navContainer.classList.add('hidden');
-        const dauerInSekunden = Math.round((new Date() - this.beratungData.startTime) / 1000);
+        try {
+            beratungLog('=== SPEICHERN DER BERATUNG GESTARTET ===');
+            this.navContainer.classList.add('hidden');
+            
+            // Prüfe, ob COLUMN_MAPS korrekt geladen sind
+            if (!COLUMN_MAPS.beratung || !COLUMN_MAPS.beratung.Protokoll) {
+                beratungLog('!!! FEHLER: COLUMN_MAPS für Beratung nicht vollständig geladen:', COLUMN_MAPS);
+                this._showErrorOnAbschlussSlide('Systemfehler: Tabellen-Konfiguration nicht vollständig geladen.');
+                return;
+            }
+            
+            beratungLog('COLUMN_MAPS für Beratung:', COLUMN_MAPS.beratung);
+            
+            const dauerInSekunden = Math.round((new Date() - this.beratungData.startTime) / 1000);
 
         // KORREKTUR: Die Dauer muss im Format "HH:MM:SS" an die API gesendet werden.
         const stunden = Math.floor(dauerInSekunden / 3600).toString().padStart(2, '0');
@@ -2786,247 +3236,1147 @@ class BeratungView {
             .map(p => p.ausgewaehltesProdukt)
             .filter(Boolean);
         
+        beratungLog('Ausgewählte Produkte:', ausgewaehlteProduktNamen);
+        
         const produktNameKey = COLUMN_MAPS.produkte?.['Produkt'];
         const produktIds = db.produkte
             .filter(p => produktNameKey && ausgewaehlteProduktNamen.includes(p[produktNameKey]))
             .map(p => p._id);
 
+        beratungLog('Produkt-IDs für DB:', produktIds);
+
+        // KORREKTUR: Link-Spalten (wie Mitarbeiter und Produkte) brauchen spezielles Format
+        // Format für Link-Spalten: [{"row_id": "abc123"}, {"row_id": "def456"}]
+        const produktLinks = produktIds.length > 0 ? produktIds.map(id => ({ "row_id": id })) : null;
+        const mitarbeiterLinks = this.beratungData.mitarbeiterId ? [{ "row_id": this.beratungData.mitarbeiterId }] : null;
+        
+        beratungLog('Produkt-Links für DB (neues Format):', produktLinks);
+        beratungLog('Mitarbeiter-Links für DB (neues Format):', mitarbeiterLinks);
+
         // KORREKTUR: Die `rowData` wird an die neue Tabellenstruktur angepasst.
         // Die Spaltennamen werden dynamisch aus den COLUMN_MAPS geholt.
         const rowData = {
             [COLUMN_MAPS.beratung.Beratung]: this.beratungData.kundenname, // Primärschlüssel
-            [COLUMN_MAPS.beratung.Mitarbeiter]: this.beratungData.mitarbeiterId ? [this.beratungData.mitarbeiterId] : null,
+            [COLUMN_MAPS.beratung.Mitarbeiter]: mitarbeiterLinks, // KORRIGIERT: Link-Format
             [COLUMN_MAPS.beratung.Themen]: this.beratungData.agenda.join(', '),
             [COLUMN_MAPS.beratung.Dauer]: formatierteDauer,
-            [COLUMN_MAPS.beratung.Produkte]: produktIds.length > 0 ? produktIds : null,
+            [COLUMN_MAPS.beratung.Produkte]: produktLinks, // KORRIGIERT: Link-Format
         };
+        
+        beratungLog('Beratungsdaten für DB:', rowData);
+        beratungLog('Speichere Beratung in Datenbank...');
+        
         const success = await genericAddRowWithLinks('Beratung', rowData, ['Mitarbeiter', 'Produkte']);
-        // KORREKTUR: PDF-Report wird jetzt in einer Variable gehalten, um ihn hochladen zu können.
-        const pdfBlob = await this._generatePdfReport(true); // true = return blob instead of downloading
+        
+        if (!success) {
+            beratungLog('!!! FEHLER: Beratung konnte nicht in DB gespeichert werden');
+            this._showErrorOnAbschlussSlide('Fehler beim Speichern der Beratung in der Datenbank.');
+            return;
+        }
+        
+        beratungLog('✓ Beratung erfolgreich in DB gespeichert. Neue ID:', success);
+        
+        // KORREKTUR: PDF-Report wird jetzt über das Template-System generiert
+        beratungLog('Generiere PDF-Report mit Template-System...');
+        let pdfBlob = await this._generateTemplateBasedPDF(); // NEU: Template-basierte PDF-Generierung
 
-        if (success) {
-            beratungLog('Beratung erfolgreich gespeichert.');
+        if (!pdfBlob) {
+            beratungLog('!!! FEHLER: Template-PDF konnte nicht generiert werden, verwende Fallback');
+            // Fallback zur alten Methode falls Template-System nicht verfügbar
+            pdfBlob = await this._generatePdfReport(true);
+            if (!pdfBlob) {
+                beratungLog('!!! FEHLER: Auch Fallback-PDF konnte nicht generiert werden');
+                this._showErrorOnAbschlussSlide('Fehler beim Generieren des PDF-Reports.');
+                return;
+            }
+        }
+        
+        beratungLog('✓ PDF erfolgreich generiert');
 
-            // NEU: Lade das PDF-Protokoll in die gerade erstellte Zeile hoch.
-            if (pdfBlob) {
-                const newBeratungId = success; // genericAddRowWithLinks gibt die neue ID zurück
-                const pdfFile = new File([pdfBlob], `Beratungsreport_${this.beratungData.kundenname.replace(/ /g, '_')}.pdf`, { type: 'application/pdf' });
-                
-                const uploadLinkData = await seaTableGetUploadLink();
-                if (uploadLinkData) {
-                    const fileUploadSuccess = await seaTableUploadFile(uploadLinkData.upload_link, pdfFile, uploadLinkData.parent_path);
-                    if (fileUploadSuccess) {
-                        const fileData = {
-                            [COLUMN_MAPS.beratung.Protokoll]: [{ url: uploadLinkData.path, name: pdfFile.name, size: pdfFile.size }]
-                        };
-                        // KORREKTUR: Verwende die REST-API für das Update von Dateispalten.
-                        const updateUrl = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
-                        const updateBody = { table_name: 'Beratung', row_id: newBeratungId, row: fileData };
-                        const updateResponse = await fetch(updateUrl, { method: 'PUT', headers: { Authorization: `Bearer ${seaTableAccessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(updateBody) });
-                        if (updateResponse.ok) {
-                            beratungLog('PDF-Protokoll erfolgreich hochgeladen.');
-                        } else {
-                            beratungLog('!!! FEHLER beim Aktualisieren der Zeile mit dem PDF-Link.', await updateResponse.text());
-                        }
+        // TEMPORÄR DEAKTIVIERT: Automatischer Download des PDFs
+        /*
+        // NEU: Automatischer Download des PDFs
+        beratungLog('Starte automatischen PDF-Download...');
+        const pdfUrl = URL.createObjectURL(pdfBlob);
+        const downloadLink = document.createElement('a');
+        downloadLink.href = pdfUrl;
+        downloadLink.download = `Beratungsreport_${this.beratungData.kundenname.replace(/ /g, '_')}.pdf`;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+        URL.revokeObjectURL(pdfUrl);
+        beratungLog('✓ PDF automatisch heruntergeladen');
+        */
+
+        // NEU: Lade das PDF-Protokoll in die gerade erstellte Zeile hoch.
+        beratungLog('Starte PDF-Upload zur Datenbank...');
+        const newBeratungId = success; // genericAddRowWithLinks gibt die neue ID zurück
+        beratungLog('Verwende Beratungs-ID für PDF-Update:', newBeratungId);
+        const pdfFile = new File([pdfBlob], `Beratungsreport_${this.beratungData.kundenname.replace(/ /g, '_')}.pdf`, { type: 'application/pdf' });
+        
+        beratungLog('PDF-Datei erstellt:', { name: pdfFile.name, size: pdfFile.size, type: pdfFile.type });
+        
+        const uploadLinkData = await seaTableGetUploadLink();
+        if (!uploadLinkData) {
+            beratungLog('!!! FEHLER: Upload-Link konnte nicht abgerufen werden');
+            this._showErrorOnAbschlussSlide('Fehler beim Abrufen des Upload-Links.');
+            return;
+        }
+        
+        beratungLog('✓ Upload-Link erhalten:', uploadLinkData);
+        
+        const uploadResult = await seaTableUploadFile(uploadLinkData.upload_link, pdfFile, uploadLinkData.parent_path);
+        if (!uploadResult) {
+            beratungLog('!!! FEHLER: PDF-Upload fehlgeschlagen');
+            this._showErrorOnAbschlussSlide('Fehler beim Hochladen des PDFs.');
+            return;
+        }
+        
+        beratungLog('✓ PDF erfolgreich hochgeladen. Upload-Result:', uploadResult);
+        
+        // Verknüpfe das PDF mit der Beratungszeile
+        beratungLog('Verknüpfe PDF mit Beratungszeile...');
+        
+        // KRITISCH: Verwende den tatsächlichen Dateinamen aus der Server-Antwort!
+        const actualFileName = uploadResult[0]?.name || pdfFile.name;
+        const fileId = uploadResult[0]?.id; // Verwende die Datei-ID aus der Upload-Response
+        beratungLog('Tatsächlicher Dateiname vom Server:', actualFileName);
+        beratungLog('Ursprünglicher Dateiname:', pdfFile.name);
+        beratungLog('Datei-ID aus Upload-Response:', fileId);
+        
+        // Die korrekten Definitionen sind unten nach der SeaTable-Dokumentation
+        
+        // KORREKTUR BASIEREND AUF SEATABLE-DOKUMENTATION:
+        // Datei-Spalten erwarten: [{name, size, type, url}]
+        
+        // Konstruiere die korrekte URL-Struktur für SeaTable-Dateien
+        const workspaceId = "86704"; // Aus den Browser-URLs ersichtlich
+        const fileUrl = `/workspace/${workspaceId}${uploadLinkData.parent_path}/${uploadLinkData.file_relative_path}/${actualFileName}`;
+        beratungLog('Konstruierte Datei-URL für SeaTable:', fileUrl);
+        
+        // NUR DOKUMENTATIONS-KONFORME VERSION - KEINE ALTERNATIVEN!
+        const fileData = {
+            [COLUMN_MAPS.beratung.Protokoll]: [{
+                "name": actualFileName,
+                "size": uploadResult[0]?.size || pdfFile.size,
+                "type": "file",
+                "url": fileUrl
+            }]
+        };
+        
+        beratungLog('EINZIGE VERSION: Exakt nach SeaTable-Doku:', fileData);
+        
+        beratungLog('EINZIGE VERSION: Exakt nach SeaTable-Doku:', fileData);
+        beratungLog('Protokoll-Spalte (verwendet Spalten-Key):', COLUMN_MAPS.beratung.Protokoll);
+        beratungLog('Protokoll-Spalte (Name wäre):', "Protokoll");
+        
+        // KORREKTUR: Verwende die REST-API für das Update von Dateispalten.
+        const updateUrl = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+        const updateBody = { 
+            table_name: 'Beratung', 
+            row_id: newBeratungId, 
+            row: fileData 
+        };
+        
+        beratungLog('Update-Request:', { url: updateUrl, body: updateBody });
+        beratungLog('DETAILLIERTES Update-Body:', JSON.stringify(updateBody, null, 2));
+        
+        // NUR EIN EINZIGER VERSUCH - DOKUMENTATIONS-KONFORM
+        try {
+            beratungLog('=== EINZIGER VERSUCH: Exakt nach SeaTable-Dokumentation ===');
+            beratungLog('Sende PUT-Request für Datei-Update...');
+            
+            const updateResponse = await fetch(updateUrl, { 
+                method: 'PUT', 
+                headers: { 
+                    Authorization: `Bearer ${seaTableAccessToken}`, 
+                    'Content-Type': 'application/json' 
+                }, 
+                body: JSON.stringify(updateBody) 
+            });
+            
+            if (!updateResponse.ok) {
+                const errorText = await updateResponse.text();
+                beratungLog('!!! DOKUMENTATIONS-VERSION FEHLGESCHLAGEN:', { status: updateResponse.status, error: errorText });
+                this._showErrorOnAbschlussSlide('Fehler beim Verknüpfen des PDFs mit der Beratung.');
+                return;
+            }
+            
+            const updateResult = await updateResponse.text();
+            beratungLog('✓ DOKUMENTATIONS-VERSION ERFOLGREICH! Response:', updateResult);
+        } catch (error) {
+            beratungLog('!!! FATALER FEHLER beim Update:', error);
+            this._showErrorOnAbschlussSlide('Unerwarteter Fehler beim PDF-Upload.');
+            return;
+        }
+        
+        // ZUSÄTZLICHE DIAGNOSE: Prüfe, ob die Datei wirklich in der DB angekommen ist
+        setTimeout(async () => {
+            try {
+                beratungLog('=== VERIFIKATION NACH 5 SEKUNDEN ===');
+                const verifyUrl = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/?table_name=Beratung&convert_link_id=true`;
+                const verifyResponse = await fetch(verifyUrl, { headers: { Authorization: `Bearer ${seaTableAccessToken}` } });
+                const verifyData = await verifyResponse.json();
+                const updatedRow = verifyData.rows?.find(row => row._id === newBeratungId);
+                if (updatedRow) {
+                    beratungLog('✓ VERIFIKATION: Zeile nach Update gefunden:', updatedRow);
+                    beratungLog('✓ VERIFIKATION: Protokoll-Spalte Inhalt:', updatedRow[COLUMN_MAPS.beratung.Protokoll]);
+                    
+                    if (updatedRow[COLUMN_MAPS.beratung.Protokoll] && updatedRow[COLUMN_MAPS.beratung.Protokoll].length > 0) {
+                        beratungLog('🎉 SUCCESS: PDF ist in der Datenbank angekommen!');
                     } else {
-                        beratungLog('!!! FEHLER beim Hochladen der PDF-Datei.');
+                        beratungLog('❌ PROBLEM: PDF ist immer noch nicht in der DB...');
                     }
                 } else {
-                    beratungLog('!!! FEHLER beim Abrufen des Upload-Links für das PDF.');
+                    beratungLog('!!! VERIFIKATION: Zeile nicht gefunden!');
                 }
+            } catch (error) {
+                beratungLog('!!! VERIFIKATION: Fehler beim Prüfen:', error);
             }
+        }, 5000); // 5 Sekunden warten
+        
+        beratungLog('✓ PDF erfolgreich mit Beratungszeile verknüpft');
+        beratungLog('=== SPEICHERN ERFOLGREICH ABGESCHLOSSEN ===');
+        
+        // Zeige Erfolgsmeldung auf der Abschlussseite
+        this._showSuccessOnAbschlussSlide();
+        
+        // KEINE AUTOMATISCHE WEITERLEITUNG - Benutzer bleibt auf der Erfolgseite
+        beratungLog('=== BERATUNG ABGESCHLOSSEN - KEINE WEITERLEITUNG ===');
+        
+        } catch (error) {
+            beratungLog('!!! KRITISCHER FEHLER beim Speichern der Beratung:', error);
+            console.error('Kritischer Fehler beim Speichern:', error);
+            this._showErrorOnAbschlussSlide(`Unerwarteter Fehler beim Speichern: ${error.message}`);
+        }
+    }
 
-            setTimeout(() => { window.location.href = window.location.pathname; }, 2000); // KORREKTUR: Sicherer Weg, um zur Startseite zurückzukehren.
+    _showSuccessOnAbschlussSlide() {
+        beratungLog('=== Zeige Erfolgsmeldung auf Abschlussseite ===');
+        const abschlussSlide = this.slides.find(s => s.id === 'beratung-slide-abschluss');
+        beratungLog('Abschluss-Slide für Erfolgsmeldung gefunden:', !!abschlussSlide);
+        
+        if (abschlussSlide) {
+            const h2 = abschlussSlide.querySelector('h2');
+            const p = abschlussSlide.querySelector('p');
+            const loader = abschlussSlide.querySelector('.loader-white');
+            
+            beratungLog('DOM-Elemente gefunden:', { h2: !!h2, p: !!p, loader: !!loader });
+            
+            if (h2) {
+                h2.textContent = 'Beratung erfolgreich gespeichert!';
+                h2.className = 'text-4xl font-bold mb-8 text-green-400';
+            }
+            if (p) {
+                p.innerHTML = 'Das Protokoll wurde erfolgreich heruntergeladen.<br><br>Die Beratung ist abgeschlossen!';
+                p.className = 'text-xl mb-6 text-center';
+            }
+            if (loader) {
+                loader.style.display = 'none';
+            }
+            
+            // Entferne alte Symbole
+            const existingIcons = abschlussSlide.querySelectorAll('.status-icon');
+            existingIcons.forEach(icon => icon.remove());
+            
+            // Füge ein Erfolgssymbol hinzu
+            const successIcon = document.createElement('div');
+            successIcon.innerHTML = '<i class="fas fa-check-circle text-green-400 text-6xl mb-6"></i>';
+            successIcon.className = 'text-center status-icon';
+            
+            // Füge das Icon als erstes Element hinzu
+            if (abschlussSlide.firstChild) {
+                abschlussSlide.insertBefore(successIcon, abschlussSlide.firstChild);
+            } else {
+                abschlussSlide.appendChild(successIcon);
+            }
+            
+            // Füge einen "Neue Beratung"-Button hinzu
+            const existingButtons = abschlussSlide.querySelectorAll('.new-consultation-btn');
+            existingButtons.forEach(btn => btn.remove());
+            
+            const newConsultationBtn = document.createElement('button');
+            newConsultationBtn.innerHTML = '<i class="fas fa-plus mr-2"></i>Neue Beratung starten';
+            newConsultationBtn.className = 'new-consultation-btn bg-skt-blue hover:bg-skt-blue/80 text-white px-6 py-3 rounded-lg mt-6 transition-colors';
+            newConsultationBtn.onclick = () => {
+                beratungLog('Benutzer startet neue Beratung...');
+                window.location.href = window.location.pathname;
+            };
+            abschlussSlide.appendChild(newConsultationBtn);
+            
+            beratungLog('✓ Erfolgsmeldung auf Abschlussseite angezeigt');
         } else {
-            alert('Fehler beim Speichern der Beratung.');
+            beratungLog('!!! FEHLER: Abschluss-Slide für Erfolgsmeldung nicht gefunden');
+        }
+    }
+
+    _showErrorOnAbschlussSlide(errorMessage) {
+        const abschlussSlide = this.slides.find(s => s.id === 'beratung-slide-abschluss');
+        if (abschlussSlide) {
+            const h2 = abschlussSlide.querySelector('h2');
+            const p = abschlussSlide.querySelector('p');
+            const loader = abschlussSlide.querySelector('.loader-white');
+            
+            if (h2) h2.textContent = 'Fehler beim Speichern!';
+            if (p) p.innerHTML = `${errorMessage}<br><br>Bitte versuchen Sie es erneut oder wenden Sie sich an den Support.`;
+            if (loader) loader.style.display = 'none';
+            
+            // Füge ein Fehlersymbol hinzu
+            const errorIcon = document.createElement('div');
+            errorIcon.innerHTML = '<i class="fas fa-exclamation-triangle text-red-400 text-6xl mb-4"></i>';
+            errorIcon.className = 'text-center';
+            if (p && p.parentNode) {
+                p.parentNode.insertBefore(errorIcon, p);
+            }
+            
+            // Zeige Navigation wieder an, damit der Benutzer zurück kann
             this.navContainer.classList.remove('hidden');
         }
     }
 
     // NEU: Generiert den PDF-Report am Ende der Beratung
-    async _generatePdfReport() {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-        const data = this.beratungData;
-        let y = 20; // Startposition auf der Y-Achse
-
-        // --- HILFSFUNKTIONEN ---
-        const addTitle = (text, yPos = y) => {
-            doc.setFontSize(22);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0, 33, 71); // SKT Blau
-            doc.text(text, 14, yPos);
-            y = yPos + 10;
-        };
-        const addSubTitle = (text, yPos = y) => {
-            doc.setFontSize(14);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(4, 60, 100); // SKT Blau-Light
-            doc.text(text, 14, yPos);
-            y = yPos + 8;
-        };
-        const addText = (text, x = 14, yPos = y, options = {}) => {
-            const { color = [0, 0, 0], size = 11, style = 'normal' } = options;
-            doc.setFontSize(size);
-            doc.setFont('helvetica', style);
-            doc.setTextColor(color[0], color[1], color[2]);
-            const splitText = doc.splitTextToSize(text, 180);
-            doc.text(splitText, x, yPos);
-            y = yPos + (splitText.length * 5);
-        };
-        const addLine = (yPos = y) => {
-            doc.setDrawColor(220, 220, 220);
-            doc.line(14, yPos, 196, yPos);
-            y = yPos + 5;
-        };
-        const checkPageBreak = (neededHeight = 20) => {
-            if (y + neededHeight > 280) {
-                doc.addPage();
-                y = 20;
+    async _generatePdfReport(returnBlob = false) {
+        try {
+            beratungLog('PDF-Generierung gestartet...');
+            const { jsPDF } = window.jspdf;
+            
+            if (!jsPDF) {
+                throw new Error('jsPDF ist nicht verfügbar');
             }
-        };
-        // Funktion zum Laden und Konvertieren von Bildern in Base64
-        const loadImageAsBase64 = async (url) => {
-            if (!url) return null;
-            try {
-                const finalUrl = await getSeaTableDownloadLink(url);
-                if (!finalUrl) return null;
-                const response = await fetch(finalUrl);
-                const blob = await response.blob();
-                return new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(blob);
+            
+            const doc = new jsPDF();
+            const data = this.beratungData;
+            
+            // --- DESIGN-KONSTANTEN ---
+            const colors = {
+                primary: [0, 102, 179],      // SKT Blau (heller und freundlicher)
+                primaryLight: [52, 144, 220], // Helleres SKT Blau
+                secondary: [4, 60, 100],     // SKT Blau-Dark
+                accent: [255, 193, 7],       // Modernes Gold
+                success: [34, 197, 94],      // Grün
+                danger: [239, 68, 68],       // Rot
+                gray: [71, 85, 105],         // Modernes Grau
+                lightGray: [226, 232, 240],  // Hellgrau
+                white: [255, 255, 255],      // Weiß
+                background: [248, 250, 252], // Sehr helles Grau
+                border: [203, 213, 225]      // Subtile Rahmen
+            };
+            
+            let y = 20; // Startposition auf der Y-Achse
+
+            // --- HILFSFUNKTIONEN ---
+            const addGradientHeader = (yPos = y) => {
+                // Erstelle einen Farbverlauf-Effekt mit mehreren Rechtecken
+                for (let i = 0; i < 20; i++) {
+                    const opacity = 1 - (i * 0.05);
+                    const grayValue = 0 + (i * 12);
+                    doc.setFillColor(grayValue, grayValue + 20, grayValue + 40);
+                    doc.rect(0, yPos + i, 210, 1, 'F');
+                }
+                y = yPos + 25;
+            };
+
+            const addTitle = (text, yPos = y, size = 28, color = colors.primary) => {
+                doc.setFontSize(size);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(color[0], color[1], color[2]);
+                doc.text(text, 105, yPos, { align: 'center' });
+                y = yPos + 12;
+            };
+
+            const addSubTitle = (text, yPos = y, size = 16, color = colors.secondary) => {
+                doc.setFontSize(size);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(color[0], color[1], color[2]);
+                doc.text(text, 105, yPos, { align: 'center' });
+                y = yPos + 10;
+            };
+
+            const addText = (text, x = 20, yPos = y, options = {}) => {
+                const { color = colors.gray, size = 11, style = 'normal', align = 'left', maxWidth = 170 } = options;
+                doc.setFontSize(size);
+                doc.setFont('helvetica', style);
+                doc.setTextColor(color[0], color[1], color[2]);
+                
+                const splitText = doc.splitTextToSize(text, maxWidth);
+                if (align === 'center') {
+                    doc.text(splitText, 105, yPos, { align: 'center' });
+                } else {
+                    doc.text(splitText, x, yPos);
+                }
+                y = yPos + (splitText.length * 6);
+            };
+
+            const addCard = async (x, yPos, width, height, content, options = {}) => {
+                const { 
+                    backgroundColor = colors.white, 
+                    borderColor = colors.border, 
+                    borderWidth = 0.5, 
+                    shadow = true,
+                    radius = 6
+                } = options;
+                
+                // Modernerer Schatten-Effekt (weicher und subtiler)
+                if (shadow) {
+                    doc.setFillColor(0, 0, 0, 0.08); // Transparenter Schatten
+                    doc.roundedRect(x + 1, yPos + 2, width, height, radius, radius, 'F');
+                }
+                
+                // Hauptkarte mit modernerem Styling
+                doc.setFillColor(backgroundColor[0], backgroundColor[1], backgroundColor[2]);
+                doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2]);
+                doc.setLineWidth(borderWidth);
+                doc.roundedRect(x, yPos, width, height, radius, radius, 'FD');
+                doc.setLineWidth(0.567); // Reset to default
+                
+                // Inhalt der Karte
+                if (content) await content(x, yPos, width, height);
+                
+                return yPos + height + 10;
+            };
+
+            const addIcon = (iconText, x, yPos, size = 12, color = colors.primary) => {
+                doc.setFontSize(size);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(color[0], color[1], color[2]);
+                doc.text(iconText, x, yPos);
+            };
+
+            const checkPageBreak = (neededHeight = 20) => {
+                if (y + neededHeight > 270) {
+                    doc.addPage();
+                    y = 20;
+                    return true;
+                }
+                return false;
+            };
+
+            // Funktion zum Laden und Konvertieren von Bildern in Base64
+            const loadImageAsBase64 = async (url) => {
+                if (!url) return null;
+                try {
+                    const finalUrl = await getSeaTableDownloadLink(url);
+                    if (!finalUrl) return null;
+                    const response = await fetch(finalUrl);
+                    const blob = await response.blob();
+                    return new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(blob);
+                    });
+                } catch (error) {
+                    console.error("Fehler beim Laden des Bildes für PDF:", error);
+                    return null;
+                }
+            };
+
+            // --- SEITE 1: MODERNE DECKSEITE ---
+            // Subtiler Hintergrund-Gradient (weniger aufdringlich)
+            addGradientHeader(0);
+            
+            // Moderneres Logo-Design
+            y = 50;
+            // Größerer, eleganteren Logo-Bereich
+            doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+            doc.roundedRect(85, y - 10, 40, 30, 8, 8, 'F');
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(255, 255, 255);
+            doc.text('SKT', 105, y + 5, { align: 'center' });
+            
+            y = 110;
+            // Modernere Titel-Gestaltung
+            doc.setFontSize(28);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+            doc.text('Finanzkonzept &', 105, y, { align: 'center' });
+            doc.text('Beratungsprotokoll', 105, y + 12, { align: 'center' });
+            
+            y += 30;
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+            doc.text(`erstellt für`, 105, y, { align: 'center' });
+            
+            y += 8;
+            doc.setFontSize(20);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+            doc.text(`${data.kundenname}`, 105, y, { align: 'center' });
+            
+            y = 200;
+            // Elegantere Info-Karten mit besserem Spacing
+            const cardWidth = 75;
+            const cardHeight = 40;
+            const cardSpacing = 20;
+            const startX = (210 - (2 * cardWidth + cardSpacing)) / 2;
+            
+            // Datum-Karte mit modernerem Design
+            await addCard(startX, y, cardWidth, cardHeight, (x, yPos) => {
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                doc.text('Beratungsdatum', x + cardWidth/2, yPos + 12, { align: 'center' });
+                doc.setFontSize(12);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+                doc.text(new Date().toLocaleDateString('de-DE'), x + cardWidth/2, yPos + 26, { align: 'center' });
+            }, { backgroundColor: colors.background, borderColor: colors.primaryLight });
+            
+            // Berater-Karte mit modernerem Design
+            await addCard(startX + cardWidth + cardSpacing, y, cardWidth, cardHeight, (x, yPos) => {
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                doc.text('Ihr Berater', x + cardWidth/2, yPos + 12, { align: 'center' });
+                doc.setFontSize(12);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+                doc.text(data.mitarbeitername, x + cardWidth/2, yPos + 26, { align: 'center' });
+            }, { backgroundColor: colors.background, borderColor: colors.accent });
+            
+            y = 250;
+            addText('Dieses Dokument enthält eine Zusammenfassung Ihrer persönlichen Finanzberatung.', 20, y, { 
+                align: 'center', 
+                color: colors.gray, 
+                size: 10,
+                maxWidth: 170 
+            });
+
+            // --- SEITE 2: BERATER-VORSTELLUNG ---
+            doc.addPage();
+            y = 30;
+            
+            addTitle('Ihr persönlicher Berater', y);
+            y += 20;
+            
+            const berater = db.mitarbeiter.find(m => m._id === data.mitarbeiterId);
+            if (berater) {
+                // Berater-Karte im EXAKTEN Präsentationsdesign (2-Spalten Layout)
+                const beraterCardHeight = 140;
+                await addCard(20, y, 170, beraterCardHeight, async (x, yPos) => {
+                    // LINKE SPALTE - Text und Informationen (wie in der Präsentation)
+                    const leftColumnWidth = 100;
+                    const rightColumnX = x + leftColumnWidth + 10;
+                    
+                    // Name (links oben, prominent wie in Präsentation)
+                    const nameKey = COLUMN_MAPS.mitarbeiter?.Name;
+                    doc.setFontSize(18);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(0, 51, 102); // Dunkles Blau
+                    doc.text(berater[nameKey], x + 15, yPos + 30);
+                    
+                    // Karrierestufe (links, unter dem Namen, in Gold)
+                    const karrierestufe = berater[COLUMN_MAPS.mitarbeiter.Karrierestufe]?.[0]?.display_value || 'Berater';
+                    doc.setFontSize(14);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(255, 193, 7); // Gold wie in Präsentation
+                    doc.text(karrierestufe, x + 15, yPos + 45);
+                    
+                    // Büro-Standort (links, unter Karrierestufe)
+                    const buero = berater[COLUMN_MAPS.mitarbeiter.Buero]?.[0]?.display_value || '';
+                    doc.setFontSize(12);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(71, 85, 105); // Grau für Zusatzinfo
+                    doc.text(`📍 ${buero}`, x + 15, yPos + 60);
+                    
+                    // Qualifikationen (links, als Liste wie in Präsentation)
+                    doc.setFontSize(12);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(0, 51, 102);
+                    doc.text('Qualifikationen:', x + 15, yPos + 80);
+                    
+                    const hatVA = berater[COLUMN_MAPS.mitarbeiter.VA] === true;
+                    const hatVB = berater[COLUMN_MAPS.mitarbeiter.VB] === true;
+                    const hatImmo = berater[COLUMN_MAPS.mitarbeiter.Immobilienexperte] === true;
+                    
+                    let qualY = yPos + 95;
+                    doc.setFontSize(11);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(34, 197, 94); // Grün für Qualifikationen
+                    
+                    if (hatVA) {
+                        doc.text('• Versicherungsagent', x + 15, qualY);
+                        qualY += 12;
+                    }
+                    if (hatVB) {
+                        doc.text('• Vermögensberater', x + 15, qualY);
+                        qualY += 12;
+                    }
+                    if (hatImmo) {
+                        doc.text('• Immobilienexperte', x + 15, qualY);
+                    }
+                    
+                    // RECHTE SPALTE - Rundes Profilbild (wie in der Präsentation)
+                    const bildUrlRaw = berater[COLUMN_MAPS.mitarbeiter.Bild]?.[0];
+                    const beraterBildBase64 = await loadImageAsBase64(bildUrlRaw);
+                    
+                    const imageSize = 60; // Größer für bessere Sichtbarkeit
+                    const imageX = rightColumnX;
+                    const imageY = yPos + 25;
+                    
+                    if (beraterBildBase64) {
+                        // Weißer Hintergrund-Kreis für das Bild
+                        doc.setFillColor(255, 255, 255);
+                        doc.circle(imageX + imageSize/2, imageY + imageSize/2, imageSize/2 + 2, 'F');
+                        
+                        // Dünner Rahmen um das Bild
+                        doc.setDrawColor(226, 232, 240);
+                        doc.setLineWidth(1);
+                        doc.circle(imageX + imageSize/2, imageY + imageSize/2, imageSize/2 + 2, 'D');
+                        
+                        // Das runde Profilbild selbst
+                        doc.addImage(beraterBildBase64, 'PNG', imageX, imageY, imageSize, imageSize, '', 'FAST');
+                    } else {
+                        // Eleganter Platzhalter falls kein Bild vorhanden
+                        doc.setFillColor(248, 250, 252);
+                        doc.circle(imageX + imageSize/2, imageY + imageSize/2, imageSize/2, 'F');
+                        
+                        doc.setDrawColor(203, 213, 225);
+                        doc.setLineWidth(1);
+                        doc.circle(imageX + imageSize/2, imageY + imageSize/2, imageSize/2, 'D');
+                        
+                        doc.setFontSize(24);
+                        doc.setTextColor(156, 163, 175);
+                        doc.text('👤', imageX + imageSize/2 - 8, imageY + imageSize/2 + 8);
+                    }
+                    
+                }, { 
+                    backgroundColor: colors.white, // Weißer Hintergrund für Protokoll
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                    shadow: true
                 });
-            } catch (error) {
-                console.error("Fehler beim Laden des Bildes für PDF:", error);
+                
+                y += beraterCardHeight + 20;
+                
+                // Persönlicher Text
+                const textZuMir = berater[COLUMN_MAPS.mitarbeiter.TextZuMir] || '';
+                if (textZuMir) {
+                    await addCard(20, y, 170, 60, (x, yPos) => {
+                        doc.setFontSize(11);
+                        doc.setFont('helvetica', 'normal');
+                        doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                        const splitText = doc.splitTextToSize(textZuMir, 150);
+                        doc.text(splitText, x + 10, yPos + 15);
+                    }, { backgroundColor: colors.background });
+                }
+            }
+
+            // --- PRODUKTSEITEN: EINE SEITE PRO AUSGEWÄHLTEM PRODUKT ---
+            const ausgewaehlteProdukte = [];
+            
+            // Sammle alle ausgewählten Produkte
+            for (const agendaPunkt of data.agenda) {
+                const punktData = data.beratungspunkte[agendaPunkt];
+                if (!punktData || !punktData.ausgewaehltesProdukt) continue;
+                
+                const chosenProduct = punktData.empfehlungen?.find(p => p.name === punktData.ausgewaehltesProdukt);
+                if (chosenProduct) {
+                    ausgewaehlteProdukte.push({
+                        kategorie: agendaPunkt,
+                        punktData: punktData,
+                        product: chosenProduct
+                    });
+                }
+            }
+
+            // Erstelle eine Seite pro ausgewähltem Produkt
+            for (const { kategorie, punktData, product } of ausgewaehlteProdukte) {
+                doc.addPage();
+                y = 40;
+                
+                // PRODUKTNAME ALS ÜBERSCHRIFT
+                addTitle(product.name, y, 32, colors.primary);
+                y += 10;
+                
+                // Gesellschaft als Untertitel
+                doc.setFontSize(16);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
+                doc.text(product.gesellschaft, 105, y, { align: 'center' });
+                y += 25;
+                
+                // HINWEIS AUS PRODUKTTABELLE (dynamische Höhe)
+                if (product.hinweis) {
+                    const cardStartY = y;
+                    
+                    // Berechne die benötigte Höhe für den Hinweistext
+                    doc.setFontSize(10);
+                    const hinweisText = doc.splitTextToSize(product.hinweis, 150);
+                    const textHeight = hinweisText.length * 5;
+                    const cardHeight = 24 + textHeight + 10; // Header + Text + Padding
+                    
+                    await addCard(20, cardStartY, 170, cardHeight, (x, yPos) => {
+                        doc.setFontSize(12);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+                        doc.text('Produktinformation:', x + 10, yPos + 12);
+                        
+                        doc.setFontSize(10);
+                        doc.setFont('helvetica', 'normal');
+                        doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                        doc.text(hinweisText, x + 10, yPos + 24);
+                    }, { backgroundColor: [255, 252, 240], borderColor: colors.accent });
+                    
+                    y = cardStartY + cardHeight + 15;
+                }
+                
+                // KUNDENANFORDERUNGEN
+                if (punktData.besonderheiten && punktData.besonderheiten.length > 0) {
+                    await addCard(20, y, 170, 50, (x, yPos) => {
+                        doc.setFontSize(12);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+                        doc.text('Ihre Anforderungen:', x + 10, yPos + 15);
+                        
+                        doc.setFontSize(11);
+                        doc.setFont('helvetica', 'normal');
+                        doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                        doc.text(punktData.besonderheiten.join(' • '), x + 10, yPos + 28);
+                        
+                        doc.setFontSize(10);
+                        doc.setTextColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
+                        doc.text(`Kategorie: ${kategorie}`, x + 10, yPos + 40);
+                    }, { backgroundColor: colors.background });
+                    y += 60;
+                }
+                
+                // PRODUKTEMPFEHLUNG IM PRÄSENTATIONSDESIGN - MODERNISIERT
+                const cardHeight = 140;
+                await addCard(20, y, 170, cardHeight, async (x, yPos) => {
+                    // Modernerer Header mit Gradient-Effekt
+                    doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+                    doc.roundedRect(x, yPos, 170, 35, 6, 6, 'F');
+                    
+                    // Subtiler Akzent am oberen Rand
+                    doc.setFillColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+                    doc.roundedRect(x, yPos, 170, 4, 6, 6, 'F');
+                    
+                    doc.setFontSize(13);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(255, 255, 255);
+                    doc.text('UNSERE EMPFEHLUNG FÜR SIE', x + 85, yPos + 22, { align: 'center' });
+                    
+                    // Produktbereich mit besserem Layout
+                    const logoBase64 = await loadImageAsBase64(product.logoUrl);
+                    if (logoBase64) {
+                        // Logo mit moderneren Abständen
+                        doc.addImage(logoBase64, 'PNG', x + 15, yPos + 45, 35, 18, '', 'FAST');
+                    }
+                    
+                    // Produktname und Gesellschaft mit besserem Spacing
+                    doc.setFontSize(15);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+                    doc.text(product.name, x + 60, yPos + 50);
+                    
+                    doc.setFontSize(11);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                    doc.text(product.gesellschaft, x + 60, yPos + 62);
+                    
+                    // Modernerer Score-Bereich
+                    doc.setFillColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+                    doc.roundedRect(x + 125, yPos + 40, 35, 25, 8, 8, 'F');
+                    
+                    doc.setFontSize(14);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(255, 255, 255);
+                    doc.text(`${product.score.toFixed(0)}%`, x + 142, yPos + 55, { align: 'center' });
+                    
+                    doc.setFontSize(8);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text('Match', x + 142, yPos + 62, { align: 'center' });
+                    
+                    doc.setFontSize(7);
+                    doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                    doc.text('Übereinstimmung', x + 145, yPos + 67, { align: 'center' });
+                    
+                    // Feature-Badges horizontal (wie in der Präsentation)
+                    let featureX = x + 15;
+                    let featureY = yPos + 80;
+                    let featuresShown = 0;
+                    
+                    punktData.besonderheiten.forEach(feature => {
+                        if (featuresShown >= 4) return; // Maximal 4 Features pro Zeile
+                        
+                        const hasFeature = product.availableFeatures.includes(feature);
+                        const badgeWidth = 35;
+                        
+                        // Feature-Badge
+                        doc.setFillColor(hasFeature ? colors.success[0] : 220, 
+                                        hasFeature ? colors.success[1] : 220, 
+                                        hasFeature ? colors.success[2] : 220);
+                        doc.roundedRect(featureX, featureY - 6, badgeWidth, 10, 2, 2, 'F');
+                        
+                        // Text im Badge
+                        doc.setFontSize(7);
+                        doc.setTextColor(hasFeature ? 255 : 120, hasFeature ? 255 : 120, hasFeature ? 255 : 120);
+                        const icon = hasFeature ? '✓' : '✗';
+                        const shortFeature = feature.length > 5 ? feature.substring(0, 5) + '..' : feature;
+                        doc.text(`${icon} ${shortFeature}`, featureX + badgeWidth/2, featureY - 2, { align: 'center' });
+                        
+                        featureX += badgeWidth + 3;
+                        featuresShown++;
+                    });
+                    
+                    // Zweite Zeile für weitere Features falls nötig
+                    if (punktData.besonderheiten.length > 4) {
+                        featureX = x + 15;
+                        featureY = yPos + 95;
+                        featuresShown = 0;
+                        
+                        punktData.besonderheiten.slice(4).forEach(feature => {
+                            if (featuresShown >= 4) return;
+                            
+                            const hasFeature = product.availableFeatures.includes(feature);
+                            const badgeWidth = 35;
+                            
+                            doc.setFillColor(hasFeature ? colors.success[0] : 220, 
+                                            hasFeature ? colors.success[1] : 220, 
+                                            hasFeature ? colors.success[2] : 220);
+                            doc.roundedRect(featureX, featureY - 6, badgeWidth, 10, 2, 2, 'F');
+                            
+                            doc.setFontSize(7);
+                            doc.setTextColor(hasFeature ? 255 : 120, hasFeature ? 255 : 120, hasFeature ? 255 : 120);
+                            const icon = hasFeature ? '✓' : '✗';
+                            const shortFeature = feature.length > 5 ? feature.substring(0, 5) + '..' : feature;
+                            doc.text(`${icon} ${shortFeature}`, featureX + badgeWidth/2, featureY - 2, { align: 'center' });
+                            
+                            featureX += badgeWidth + 3;
+                            featuresShown++;
+                        });
+                    }
+                    
+                }, { 
+                    backgroundColor: [248, 250, 252], 
+                    borderColor: colors.primary,
+                    borderWidth: 2
+                });
+                
+                y += cardHeight + 20;
+                
+                // Link-Button falls vorhanden
+                if (product.link) {
+                    await addCard(20, y, 170, 30, (x, yPos) => {
+                        doc.setFillColor(colors.secondary[0], colors.secondary[1], colors.secondary[2]);
+                        doc.roundedRect(x + 50, yPos + 8, 70, 14, 3, 3, 'F');
+                        
+                        doc.setFontSize(10);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(255, 255, 255);
+                        doc.text('Mehr Informationen online', x + 85, yPos + 17, { align: 'center' });
+                        
+                        doc.setFontSize(8);
+                        doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                        doc.text(product.link, x + 85, yPos + 6, { align: 'center' });
+                    });
+                }
+            }
+
+            // --- ANHANG MIT FACTSHEETS ---
+            let hasFactsheets = false;
+            
+            // Sammle alle Factsheets der ausgewählten Produkte
+            const factsheets = [];
+            for (const { product } of ausgewaehlteProdukte) {
+                // Finde das entsprechende Produkt in der Produkte-Tabelle
+                const produktInDB = db.produkte.find(p => 
+                    p[COLUMN_MAPS.produkte['Produkt']] === product.name
+                );
+                
+                if (produktInDB && produktInDB[COLUMN_MAPS.produkte['Factsheet']]) {
+                    const factsheetUrl = produktInDB[COLUMN_MAPS.produkte['Factsheet']];
+                    factsheets.push({
+                        produktName: product.name,
+                        gesellschaft: product.gesellschaft,
+                        factsheetUrl: factsheetUrl
+                    });
+                    hasFactsheets = true;
+                }
+            }
+            
+            // Nur Anhang erstellen, wenn Factsheets vorhanden sind
+            if (hasFactsheets) {
+                doc.addPage();
+                y = 40;
+                
+                // Anhang-Titel
+                addTitle('Anhang - Produktinformationen', y, 28, colors.primary);
+                y += 20;
+                
+                addText('In diesem Anhang finden Sie detaillierte Factsheets zu den empfohlenen Produkten. ' +
+                       'Diese können Sie für weitere Informationen und zur Vorbereitung Ihrer Entscheidung nutzen.', 
+                       20, y, { color: colors.gray, size: 11, maxWidth: 170 });
+                y += 30;
+                
+                // Modernere Factsheet-Übersicht
+                for (const [index, factsheet] of factsheets.entries()) {
+                    await addCard(20, y, 170, 45, (x, yPos) => {
+                        // Moderner Factsheet-Header
+                        doc.setFillColor(colors.background[0], colors.background[1], colors.background[2]);
+                        doc.roundedRect(x + 5, yPos + 5, 160, 35, 4, 4, 'F');
+                        
+                        // Nummer-Badge
+                        doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+                        doc.roundedRect(x + 10, yPos + 10, 20, 15, 3, 3, 'F');
+                        doc.setFontSize(10);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(255, 255, 255);
+                        doc.text(`${index + 1}`, x + 20, yPos + 20, { align: 'center' });
+                        
+                        // Produktname
+                        doc.setFontSize(12);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+                        doc.text(factsheet.produktName, x + 35, yPos + 18);
+                        
+                        // Gesellschaft
+                        doc.setFontSize(10);
+                        doc.setFont('helvetica', 'normal');
+                        doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                        doc.text(factsheet.gesellschaft, x + 35, yPos + 28);
+                        
+                        // Hinweis mit Icon
+                        doc.setFontSize(9);
+                        doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+                        doc.text('📄 Factsheet verfügbar', x + 35, yPos + 38);
+                    }, { 
+                        backgroundColor: colors.white, 
+                        borderColor: colors.primaryLight,
+                        borderWidth: 1
+                    });
+                    
+                    y += 50;
+                }
+                
+                // Hinweis für Zugang zu Factsheets
+                await addCard(20, y, 170, 60, (x, yPos) => {
+                    doc.setFontSize(10);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+                    doc.text('Zugang zu den Factsheets:', x + 10, yPos + 15);
+                    
+                    doc.setFontSize(9);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                    const hinweisText = 'Die vollständigen Produktinformationsblätter können Sie von Ihrem Berater erhalten oder ' +
+                                       'über die digitale Plattform abrufen. Diese enthalten alle relevanten Details zu ' +
+                                       'Konditionen, Leistungen und rechtlichen Hinweisen.';
+                    const splitHinweis = doc.splitTextToSize(hinweisText, 150);
+                    doc.text(splitHinweis, x + 10, yPos + 28);
+                }, { backgroundColor: [255, 252, 240], borderColor: colors.accent });
+            }
+
+            // --- MODERNE ABSCHLUSSSEITE ---
+            doc.addPage();
+            y = 50;
+            
+            // Eleganter Dank-Bereich mit Gradient-Hintergrund
+            await addCard(20, y, 170, 100, (x, yPos) => {
+                // Subtiler Hintergrund-Gradient
+                doc.setFillColor(colors.primaryLight[0], colors.primaryLight[1], colors.primaryLight[2]);
+                doc.roundedRect(x + 5, yPos + 5, 160, 90, 8, 8, 'F');
+                
+                // Haupttext
+                doc.setFontSize(26);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(255, 255, 255);
+                doc.text('Vielen Dank', x + 85, yPos + 35, { align: 'center' });
+                
+                doc.setFontSize(18);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(255, 255, 255);
+                doc.text('für Ihr Vertrauen!', x + 85, yPos + 55, { align: 'center' });
+                
+                // Kleiner Akzent
+                doc.setFontSize(12);
+                doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+                doc.text('Ihre Finanzplanung in guten Händen', x + 85, yPos + 75, { align: 'center' });
+            }, { 
+                backgroundColor: colors.primary, 
+                borderColor: colors.accent,
+                borderWidth: 2,
+                shadow: true
+            });
+            
+            y += 120;
+            
+            // Moderne Nächste Schritte Karte
+            await addCard(20, y, 170, 70, (x, yPos) => {
+                doc.setFontSize(16);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+                doc.text('Ihre nächsten Schritte:', x + 10, yPos + 20);
+                
+                const nextSteps = [
+                    '• Prüfung der Unterlagen',
+                    '• Antragsstellung bei gewählten Produkten',
+                    '• Terminvereinbarung für Vertragsübergabe'
+                ];
+                
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                nextSteps.forEach((step, i) => {
+                    doc.text(step, x + 10, yPos + 35 + (i * 8));
+                });
+            }, { 
+                backgroundColor: colors.background, 
+                borderColor: colors.primary,
+                borderWidth: 1
+            });
+            
+            y += 80;
+            
+            // Modernerer Disclaimer
+            await addCard(20, y, 170, 55, (x, yPos) => {
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                doc.text('Wichtiger Hinweis:', x + 10, yPos + 15);
+                
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(8);
+                doc.setTextColor(colors.gray[0], colors.gray[1], colors.gray[2]);
+                const disclaimerText = 'Diese Beratung dient zur groben Orientierung und ersetzt keine vollständige Finanzberatung. ' +
+                                     'Vor Produktabschluss sind individuelle Analysen erforderlich. Software erstellt von Samuel Königslehner.';
+                const splitDisclaimer = doc.splitTextToSize(disclaimerText, 150);
+                doc.text(splitDisclaimer, x + 10, yPos + 28);
+            }, { 
+                backgroundColor: colors.background, 
+                borderColor: colors.lightGray,
+                borderWidth: 0.5
+            });
+
+            // --- PDF SPEICHERN oder als BLOB zurückgeben ---
+            if (returnBlob) {
+                beratungLog('PDF-Report wird als Blob für den Upload zurückgegeben.');
+                return doc.output('blob');
+            } else {
+                beratungLog('PDF-Report wird heruntergeladen.');
+                doc.save(`Beratungsreport_${data.kundenname.replace(/ /g, '_')}.pdf`);
+            }
+        
+        } catch (error) {
+            beratungLog('!!! FEHLER bei der PDF-Generierung:', error);
+            console.error('Fehler bei PDF-Generierung:', error);
+            return null;
+        }
+    }
+
+    // NEU: Template-basierte PDF-Generierung
+    async _generateTemplateBasedPDF() {
+        try {
+            beratungLog('Template-System Check:', {
+                hasWindow: !!window.pdfTemplateManager,
+                hasTemplateSystem: !!(window.pdfTemplateManager && window.pdfTemplateManager.templateSystem),
+                hasTemplate: !!(window.pdfTemplateManager && window.pdfTemplateManager.templateSystem && window.pdfTemplateManager.templateSystem.templatePdfBytes)
+            });
+
+            // Prüfe ob Template-Manager verfügbar ist
+            if (!window.pdfTemplateManager || !window.pdfTemplateManager.templateSystem || !window.pdfTemplateManager.templateSystem.templatePdfBytes) {
+                beratungLog('Template-System nicht verfügbar oder kein Template geladen');
                 return null;
             }
-        };
 
-        // --- SEITE 1: TITELSEITE ---
-        addTitle(`Zusammenfassung Ihrer Beratung`, 40);
-        addSubTitle(`für ${data.kundenname}`, 50);
-        doc.setFontSize(10);
-        doc.setTextColor(100, 100, 100);
-        doc.text(`Datum: ${new Date().toLocaleDateString('de-DE')}`, 14, 60);
+            const data = this.beratungData;
+            const berater = db.mitarbeiter.find(m => m._id === data.mitarbeiterId);
+            
+            // Sammle alle empfohlenen Produkte für Produktseiten
+            const empfohleneProdukte = data.empfohleneProdukte || [];
+            beratungLog('Empfohlene Produkte für Template:', empfohleneProdukte.length);
+            
+            // Erstelle Berater-Beschreibung
+            const beraterBeschreibung = this._createBeraterBeschreibung(berater);
+            
+            // Setze Platzhalter basierend auf Beratungsdaten
+            const placeholders = {
+                // SEITE 1 - Deckblatt
+                '***TELEFONNUMMER DES BERATERS***': this._getBeraterTelefon(berater),
+                '***KUNDENNAME***': data.kundenname || 'Kunde',
+                '***DATUM***': new Date().toLocaleDateString('de-DE'),
+                
+                // SEITE 2 - Berater-Info
+                '***NAME DES BERATERS***': data.mitarbeitername || 'Berater',
+                '***BESCHREIBUNG DES BERATERS***': beraterBeschreibung,
+                
+                // Produktarray für Seitenduplikation
+                '***PRODUKTE_ARRAY***': empfohleneProdukte,
+            };
+            
+            beratungLog('Template-Platzhalter gesetzt:', placeholders);
+            window.pdfTemplateManager.templateSystem.setPlaceholders(placeholders);
 
-        // --- SEITE 2: BERATER-VORSTELLUNG ---
-        doc.addPage();
-        y = 20;
-        const berater = db.mitarbeiter.find(m => m._id === data.mitarbeiterId);
-        if (berater) {
-            addTitle('Ihr Berater');
-            const bildUrlRaw = berater[COLUMN_MAPS.mitarbeiter.Bild]?.[0];
-            const beraterBildBase64 = await loadImageAsBase64(bildUrlRaw);
-            if (beraterBildBase64) {
-                doc.addImage(beraterBildBase64, 'PNG', 140, 40, 50, 50, '', 'FAST');
-            }
-            addSubTitle(berater[COLUMN_MAPS.mitarbeiter.Name], y);
-            const karrierestufe = berater[COLUMN_MAPS.mitarbeiter.Karrierestufe]?.[0]?.display_value || 'Berater';
-            addText(karrierestufe, 14, y, { color: [212, 175, 55], style: 'bold' });
-            const buero = berater[COLUMN_MAPS.mitarbeiter.Buero]?.[0]?.display_value || '';
-            addText(buero, 14, y, { size: 10, color: [100, 100, 100] });
-            y += 10;
-            const textZuMir = berater[COLUMN_MAPS.mitarbeiter.TextZuMir] || '';
-            addText(textZuMir, 14, y);
+            // Generiere PDF
+            beratungLog('Starte Template-PDF-Generierung...');
+            const pdfBytes = await window.pdfTemplateManager.templateSystem.generatePDF();
+            
+            // Konvertiere zu Blob
+            const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+            
+            beratungLog('✓ Template-PDF erfolgreich generiert, Größe:', pdfBlob.size, 'bytes');
+            return pdfBlob;
+            
+        } catch (error) {
+            beratungLog('!!! FEHLER bei Template-PDF-Generierung:', error);
+            console.error('Fehler bei Template-PDF-Generierung:', error);
+            return null;
         }
+    }
 
-        // --- DETAILSEITEN PRO AGENDAPUNKT ---
-        for (const agendaPunkt of data.agenda) {
-            const punktData = data.beratungspunkte[agendaPunkt];
-            if (!punktData) continue;
-
-            checkPageBreak(80);
-            addLine();
-            addSubTitle(`Detailanalyse: ${agendaPunkt}`);
-
-            if (punktData.besonderheiten && punktData.besonderheiten.length > 0) {
-                addText(`Ihnen waren folgende Eigenschaften wichtig: ${punktData.besonderheiten.join(', ')}`);
-                y += 5;
-            }
-
-            const chosenProduct = punktData.empfehlungen?.find(p => p.name === punktData.ausgewaehltesProdukt);
-
-            if (chosenProduct) {
-                checkPageBreak(100);
-                doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(0,0,0);
-                doc.text('Ihre Produktauswahl:', 14, y);
-                y += 8;
-
-                // Produkt-Karte zeichnen
-                const cardX = 14, cardY = y, cardWidth = 182, cardHeight = 80;
-                doc.setDrawColor(220, 220, 220);
-                doc.setFillColor(248, 250, 252);
-                doc.roundedRect(cardX, cardY, cardWidth, cardHeight, 3, 3, 'FD');
-
-                // Logo
-                const logoBase64 = await loadImageAsBase64(chosenProduct.logoUrl);
-                if (logoBase64) {
-                    doc.addImage(logoBase64, 'PNG', cardX + 8, cardY + 8, 30, 15, '', 'FAST');
-                }
-
-                // Produktname & Gesellschaft
-                doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor(0, 33, 71);
-                doc.text(chosenProduct.name, cardX + 8, cardY + 30);
-                doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100);
-                doc.text(chosenProduct.gesellschaft, cardX + 8, cardY + 35);
-
-                // Score
-                doc.setFontSize(28); doc.setFont('helvetica', 'bold'); doc.setTextColor(212, 175, 55);
-                doc.text(`${chosenProduct.score.toFixed(0)}%`, cardX + cardWidth - 10, cardY + 20, { align: 'right' });
-                doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100);
-                doc.text('Übereinstimmung', cardX + cardWidth - 10, cardY + 25, { align: 'right' });
-
-                // Features
-                let featureY = cardY + 45;
-                punktData.besonderheiten.forEach(feature => {
-                    const hasFeature = chosenProduct.availableFeatures.includes(feature);
-                    doc.setFontSize(10);
-                    doc.setFont('helvetica', 'normal');
-                    doc.setTextColor(hasFeature ? 0 : 150, hasFeature ? 0 : 150, hasFeature ? 0 : 150);
-                    doc.text(hasFeature ? '✓' : '✗', cardX + 8, featureY, { renderingMode: 'fillThenStroke' });
-                    doc.text(feature, cardX + 14, featureY);
-                    featureY += 6;
-                });
-
-                y += cardHeight + 10;
+    // Hilfsmethode: Berater-Telefonnummer ermitteln
+    _getBeraterTelefon(berater) {
+        if (!berater) return '';
+        
+        // Prüfe verschiedene Telefon-Felder
+        const telefonFelder = ['Telefon', 'Handy', 'Mobil', 'Phone'];
+        for (const feld of telefonFelder) {
+            const columnKey = COLUMN_MAPS.mitarbeiter[feld];
+            if (columnKey && berater[columnKey]) {
+                return berater[columnKey];
             }
         }
+        return '';
+    }
 
-        // --- SEITE 2: CHECKLISTE FÜR BERATER ---
-        doc.addPage();
-        y = 20;
-        addTitle('Checkliste für den Berater');
-
-        const checklistItems = [
-            'Unterlagen an den Kunden überreicht',
-            'Gesprächsprotokoll erstellt',
-            'Kündigungen zu Bestandsprodukten vorbereitet',
-            'Auskunftsvollmacht eingeholt'
-        ];
-
-        // Füge für jedes ausgewählte Produkt einen "Antrag"-Punkt hinzu
-        Object.values(data.beratungspunkte).forEach(punkt => {
-            if (punkt.ausgewaehltesProdukt) {
-                checklistItems.push(`Antrag für "${punkt.ausgewaehltesProdukt}" vorbereitet`);
-            }
-        });
-
-        checklistItems.forEach(item => {
-            doc.rect(14, y - 3.5, 4, 4, 'S'); // Checkbox-Kasten
-            addText(item);
-            y += 5;
-        });
-
-        // --- PDF SPEICHERN oder als BLOB zurückgeben ---
-        if (returnBlob) {
-            beratungLog('PDF-Report wird als Blob für den Upload zurückgegeben.');
-            return doc.output('blob');
-        } else {
-            doc.save(`Beratungsreport_${data.kundenname.replace(/ /g, '_')}.pdf`);
+    // Hilfsmethode: Berater-Beschreibung erstellen
+    _createBeraterBeschreibung(berater) {
+        if (!berater) return 'Ihr persönlicher Finanzberater';
+        
+        const teile = [];
+        
+        // Karrierestufe
+        const karrierestufe = berater[COLUMN_MAPS.mitarbeiter.Karrierestufe]?.[0]?.display_value;
+        if (karrierestufe) {
+            teile.push(`${karrierestufe} bei SKT`);
         }
+        
+        // Büro-Standort
+        const buero = berater[COLUMN_MAPS.mitarbeiter.Buero]?.[0]?.display_value;
+        if (buero) {
+            teile.push(`Standort: ${buero}`);
+        }
+        
+        // Qualifikationen
+        const qualifikationen = [];
+        if (berater[COLUMN_MAPS.mitarbeiter.VA] === true) qualifikationen.push('Versicherungsagent');
+        if (berater[COLUMN_MAPS.mitarbeiter.VB] === true) qualifikationen.push('Vermögensberater');
+        if (berater[COLUMN_MAPS.mitarbeiter.Immobilienexperte] === true) qualifikationen.push('Immobilienexperte');
+        
+        if (qualifikationen.length > 0) {
+            teile.push(`Qualifikationen: ${qualifikationen.join(', ')}`);
+        }
+        
+        // Persönlicher Text
+        const textZuMir = berater[COLUMN_MAPS.mitarbeiter.TextZuMir];
+        if (textZuMir) {
+            teile.push(`\n${textZuMir}`);
+        }
+        
+        return teile.join('\n') || 'Ihr persönlicher Finanzberater bei SKT';
     }
 }
 // KORREKTUR: Die `prose`-Klassen von Tailwind benötigen eine Basiskonfiguration.
@@ -3127,9 +4477,232 @@ async function initialize() {
     rootEl.innerHTML = content;
 
     const beratungView = new BeratungView();
+    
+    // NEU: Template-Manager initialisieren
+    pdfTemplateManager = new PDFTemplateManager(beratungView);
+    
+    // NEU: Template-Manager global verfügbar machen
+    window.pdfTemplateManager = pdfTemplateManager;
+    
     // Da es keinen Login gibt, übergeben wir null als currentUser.
     // Die View muss damit umgehen können (z.B. Mitarbeiter-Auswahl anbieten).
     await beratungView.init(null); // KORREKTUR: init() muss aufgerufen werden
 }
 
+// NEU: PDF Template System Integration
+class PDFTemplateManager {
+    constructor(beratungView) {
+        this.beratungView = beratungView;
+        this.templateSystem = null;
+        this.setupTemplateSystem();
+    }
+
+    setupTemplateSystem() {
+        // Prüfe ob PDF-lib verfügbar ist
+        if (typeof window.PDFLib !== 'undefined') {
+            this.templateSystem = new window.PDFTemplateSystem();
+            console.log('PDF Template System bereit');
+            
+            // Versuche automatisch Vorlage.pdf zu laden
+            setTimeout(() => {
+                this.autoLoadTemplate();
+            }, 1000);
+        } else {
+            console.warn('PDF-lib nicht verfügbar');
+        }
+    }
+
+    // Lade PDF-Template aus File-Input oder URL
+    async loadTemplate(source) {
+        if (!this.templateSystem) return false;
+        
+        try {
+            await this.templateSystem.loadTemplate(source);
+            console.log('PDF Template erfolgreich geladen');
+            return true;
+        } catch (error) {
+            console.error('Fehler beim Laden des PDF Templates:', error);
+            return false;
+        }
+    }
+
+    // Generiere PDF basierend auf Beratungsdaten
+    async generateFromTemplate() {
+        if (!this.templateSystem) {
+            alert('PDF Template System nicht verfügbar');
+            return;
+        }
+
+        const data = this.beratungView.beratungData;
+        const berater = db.mitarbeiter.find(m => m._id === data.mitarbeiterId);
+        
+        // Sammle alle empfohlenen Produkte für Produktseiten
+        const empfohleneProdukte = data.empfohleneProdukte || [];
+        
+        // Erstelle Berater-Beschreibung
+        const beraterBeschreibung = this.createBeraterBeschreibung(berater);
+        
+        // Setze Platzhalter basierend auf deinen spezifischen Anforderungen
+        this.templateSystem.setPlaceholders({
+            // SEITE 1 - Deckblatt
+            '***TELEFONNUMMER DES BERATERS***': berater ? (berater[COLUMN_MAPS.mitarbeiter.Telefon] || berater[COLUMN_MAPS.mitarbeiter.Handy] || '') : '',
+            '***KUNDENNAME***': data.kundenname || 'Kunde',
+            '***DATUM***': new Date().toLocaleDateString('de-DE'),
+            
+            // SEITE 2 - Berater-Info
+            '***NAME DES BERATERS***': data.mitarbeitername || 'Berater',
+            '***BESCHREIBUNG DES BERATERS***': beraterBeschreibung,
+            
+            // Produktarray für Seitenduplikation
+            '***PRODUKTE_ARRAY***': empfohleneProdukte,
+        });
+
+        try {
+            // Generiere PDF
+            const pdfBytes = await this.templateSystem.generatePDF();
+            this.templateSystem.downloadPDF(pdfBytes, `beratungsprotokoll_${data.kundenname}_vorlage.pdf`);
+        } catch (error) {
+            console.error('Fehler bei PDF-Generierung:', error);
+            alert('Fehler bei der PDF-Generierung: ' + error.message);
+        }
+    }
+
+    // Erstelle detaillierte Berater-Beschreibung
+    createBeraterBeschreibung(berater) {
+        if (!berater) return 'Ihr persönlicher Finanzberater';
+        
+        const teile = [];
+        
+        // Karrierestufe
+        const karrierestufe = berater[COLUMN_MAPS.mitarbeiter.Karrierestufe]?.[0]?.display_value;
+        if (karrierestufe) {
+            teile.push(`${karrierestufe} bei SKT`);
+        }
+        
+        // Büro-Standort
+        const buero = berater[COLUMN_MAPS.mitarbeiter.Buero]?.[0]?.display_value;
+        if (buero) {
+            teile.push(`Standort: ${buero}`);
+        }
+        
+        // Qualifikationen
+        const qualifikationen = [];
+        if (berater[COLUMN_MAPS.mitarbeiter.VA] === true) qualifikationen.push('Versicherungsagent');
+        if (berater[COLUMN_MAPS.mitarbeiter.VB] === true) qualifikationen.push('Vermögensberater');
+        if (berater[COLUMN_MAPS.mitarbeiter.Immobilienexperte] === true) qualifikationen.push('Immobilienexperte');
+        
+        if (qualifikationen.length > 0) {
+            teile.push(`Qualifikationen: ${qualifikationen.join(', ')}`);
+        }
+        
+        // Persönlicher Text
+        const textZuMir = berater[COLUMN_MAPS.mitarbeiter.TextZuMir];
+        if (textZuMir) {
+            teile.push(`\n${textZuMir}`);
+        }
+        
+        return teile.join('\n') || 'Ihr persönlicher Finanzberater bei SKT';
+    }
+
+    // Automatisch Vorlage.pdf laden wenn verfügbar
+    async autoLoadTemplate() {
+        try {
+            const success = await this.loadTemplate('./Vorlage.pdf');
+            if (success) {
+                console.log('Vorlage.pdf automatisch geladen');
+                return true;
+            }
+        } catch (error) {
+            console.log('Vorlage.pdf nicht gefunden, verwende manuellen Upload');
+        }
+        return false;
+    }
+
+    // Erstelle File-Input für Template-Upload
+    createTemplateUpload() {
+        const uploadDiv = document.createElement('div');
+        uploadDiv.className = 'pdf-template-upload hidden fixed top-4 right-4 bg-white p-4 rounded-lg shadow-lg z-50 max-w-sm';
+        uploadDiv.innerHTML = `
+            <h3 class="text-lg font-bold mb-2 text-gray-800">PDF Template System</h3>
+            <div class="mb-3">
+                <button id="use-vorlage-btn" class="bg-blue-500 text-white px-3 py-1 rounded w-full mb-2">Vorlage.pdf verwenden</button>
+                <p class="text-xs text-gray-500 mb-2">oder eigenes Template hochladen:</p>
+                <input type="file" id="pdf-template-input" accept=".pdf" class="mb-2 text-sm">
+                <button id="load-template-btn" class="bg-gray-500 text-white px-3 py-1 rounded">Eigenes Template laden</button>
+            </div>
+            <div class="border-t pt-2 mt-2">
+                <button id="generate-template-pdf" class="bg-green-500 text-white px-3 py-1 rounded w-full mb-2">PDF aus Template erstellen</button>
+                <div class="text-xs text-gray-600 mb-2">
+                    <strong>Verfügbare Platzhalter:</strong><br>
+                    ***KUNDENNAME***, ***DATUM***<br>
+                    ***NAME DES BERATERS***<br>
+                    ***TELEFONNUMMER DES BERATERS***<br>
+                    ***BESCHREIBUNG DES BERATERS***<br>
+                    ***PRODUKT***, ***PRODUKTBESCHREIBUNG***<br>
+                    ***VORTEILE***
+                </div>
+            </div>
+            <button id="close-template-upload" class="bg-gray-500 text-white px-2 py-1 rounded float-right">×</button>
+        `;
+
+        document.body.appendChild(uploadDiv);
+
+        // Event Listeners
+        document.getElementById('use-vorlage-btn').addEventListener('click', async () => {
+            const success = await this.autoLoadTemplate();
+            if (success) {
+                alert('Vorlage.pdf erfolgreich geladen!');
+            } else {
+                alert('Vorlage.pdf nicht gefunden. Bitte eigenes Template hochladen.');
+            }
+        });
+
+        document.getElementById('load-template-btn').addEventListener('click', async () => {
+            const fileInput = document.getElementById('pdf-template-input');
+            if (fileInput.files.length > 0) {
+                const success = await this.loadTemplate(fileInput.files[0]);
+                if (success) {
+                    alert('Template erfolgreich geladen!');
+                } else {
+                    alert('Fehler beim Laden des Templates');
+                }
+            } else {
+                alert('Bitte wählen Sie zuerst eine PDF-Datei aus.');
+            }
+        });
+
+        document.getElementById('generate-template-pdf').addEventListener('click', () => {
+            this.generateFromTemplate();
+        });
+
+        document.getElementById('close-template-upload').addEventListener('click', () => {
+            uploadDiv.classList.add('hidden');
+        });
+
+        return uploadDiv;
+    }
+
+    // Zeige Template-Upload an
+    showTemplateUpload() {
+        let uploadDiv = document.querySelector('.pdf-template-upload');
+        if (!uploadDiv) {
+            uploadDiv = this.createTemplateUpload();
+        }
+        uploadDiv.classList.remove('hidden');
+    }
+}
+
+// Globale Template-Manager Instanz
+let pdfTemplateManager = null;
+
 document.addEventListener("DOMContentLoaded", initialize);
+
+// NEU: Tastenkürzel für Template-Upload (Strg+T)
+document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 't') {
+        e.preventDefault();
+        if (pdfTemplateManager) {
+            pdfTemplateManager.showTemplateUpload();
+        }
+    }
+});

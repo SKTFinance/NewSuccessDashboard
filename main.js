@@ -3,6 +3,7 @@ const SEATABLE_API_TOKEN = "b148f4c735d193f77841ce4e4ddb2bb8bc2e446b";
 const SEATABLE_APP_ACCESS_TOKEN_URL =
   "https://cloud.seatable.io/api/v2.1/dtable/app-access-token/";
 const SEATABLE_DTABLE_UUID = "5b374b51-789c-4aac-a12f-02574f8f4855";
+const SEATABLE_WORKSPACE_ID = "86704";
 // Cache-Konstanten: Ändere die Version, um alle Caches zu invalidieren.
 const CACHE_VERSION = "v1.1";
 const CACHE_PREFIX = `skt-dashboard-cache-${CACHE_VERSION}-`;
@@ -490,12 +491,16 @@ async function seaTableGetUploadLink() {
         }
 
         const baseUrl = new URL(apiGatewayUrl).origin;
-        const url = `${baseUrl}/api/v2.1/dtable/app-upload-link/?dtable_uuid=${SEATABLE_DTABLE_UUID}`;
+        const url = `${baseUrl}/api/v2.1/dtable/app-upload-link/`;
         log(`Sende GET-Anfrage an: ${url}`);
-        const response = await fetch(url, {
+        const options = {
             method: 'GET',
-            headers: { Authorization: `Token ${SEATABLE_API_TOKEN}` }
-        });
+            headers: {
+                accept: 'application/json',
+                authorization: `Bearer ${SEATABLE_API_TOKEN}`
+            }
+        };
+        const response = await fetch(url, options);
         log(`Antwort-Status: ${response.status}`);
         const responseText = await response.text();
         log('Antwort-Text vom Server:', responseText);
@@ -528,10 +533,19 @@ async function seaTableUploadFile(uploadLink, file, parentDir) {
         formData.append('file', file, file.name);
         log('FormData erstellt:', { parent_dir: parentDir, filename: file.name, size: file.size });
 
-        const response = await fetch(uploadLink, {
+        // Add ?ret-json=1 to get JSON response
+        const uploadUrl = `${uploadLink}?ret-json=1`;
+        
+        const options = {
             method: 'POST',
+            headers: {
+                accept: 'application/json',
+                authorization: `Bearer ${SEATABLE_API_TOKEN}`
+            },
             body: formData
-        });
+        };
+
+        const response = await fetch(uploadUrl, options);
         log(`Antwort-Status vom Upload-Server: ${response.status}`);
 
         if (!response.ok) {
@@ -540,8 +554,16 @@ async function seaTableUploadFile(uploadLink, file, parentDir) {
             throw new Error(`Datei-Upload fehlgeschlagen: ${response.status} ${errorText}`);
         }
 
+        const responseData = await response.json();
+        log('Upload-Antwort vom Server:', responseData);
+        
         log('Datei erfolgreich hochgeladen (Status 2xx).');
-        return true;
+        
+        // WICHTIG: Gib den echten Dateinamen zurück, den der Server verwendet hat
+        if (responseData && responseData[0] && responseData[0].name) {
+          return { success: true, actualFileName: responseData[0].name };
+        }
+        return { success: true, actualFileName: null };
     } catch (error) {
         log(`!!! KRITISCHER FEHLER beim Datei-Upload:`, error);
         console.error("Fehler beim Hochladen der Datei zu SeaTable:", error);
@@ -17906,6 +17928,43 @@ function openEditUserModal() {
     document.getElementById('edit-birthday').value = user.Geburtstag?.split('T')[0] || '';
     document.getElementById('edit-promotion-date').value = user.Befoerderungsdatum?.split('T')[0] || '';
 
+    // NEU: Populate qualification checkboxes
+    document.getElementById('edit-va').checked = user.VA === true;
+    document.getElementById('edit-vb').checked = user.VB === true;
+    document.getElementById('edit-immobilienexperte').checked = user.Immobilienexperte === true;
+
+    // NEU: Populate text about me
+    document.getElementById('edit-text-zu-mir').value = user.TextZuMir || '';
+
+    // NEU: Handle image preview
+    const imagePreview = document.getElementById('edit-image-preview');
+    if (user.Bild && user.Bild.length > 0) {
+        // Assuming the image is stored as a URL or path
+        const imageUrl = user.Bild[0]?.url || user.Bild;
+        if (imageUrl) {
+            imagePreview.innerHTML = `<img src="${imageUrl}" alt="Profilbild" class="w-full h-full object-cover rounded-lg">`;
+        } else {
+            imagePreview.innerHTML = '<span class="text-gray-400 text-sm">Kein Bild</span>';
+        }
+    } else {
+        imagePreview.innerHTML = '<span class="text-gray-400 text-sm">Kein Bild</span>';
+    }
+
+    // NEU: Handle file input change for image preview
+    const fileInput = document.getElementById('edit-bild');
+    fileInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                imagePreview.innerHTML = `<img src="${e.target.result}" alt="Profilbild Vorschau" class="w-full h-full object-cover rounded-lg">`;
+            };
+            reader.readAsDataURL(file);
+        } else {
+            imagePreview.innerHTML = '<span class="text-gray-400 text-sm">Kein Bild</span>';
+        }
+    });
+
     // Handle ausscheiden logic
     const ausgeschiedenCheckbox = document.getElementById('edit-ausgeschieden');
     const ausscheideFieldsContainer = document.getElementById('ausscheide-fields-container');
@@ -17923,12 +17982,13 @@ function openEditUserModal() {
     });
 
     // NEU: Handle Check-in logic
+    const checkinSection = document.getElementById('edit-checkin-section');
     const checkinContainer = document.getElementById('edit-checkin-container');
     const checkinCheckbox = document.getElementById('edit-checkin-enabled');
     const checkinDaysContainer = document.getElementById('edit-checkin-days-container');
 
     // KORREKTUR: Die Check-in-Einstellungen sollen für alle Benutzer sichtbar sein.
-    checkinContainer.classList.remove('hidden');
+    checkinSection.classList.remove('hidden');
     checkinContainer.classList.add('flex');
     checkinCheckbox.checked = user.Checkin === true;
 
@@ -17980,6 +18040,12 @@ async function saveUserData() {
       Ausgeschieden: isAusgeschieden,
       Ausscheidetag: isAusgeschieden ? ausscheidetag : null,
       Ausscheidegrund: isAusgeschieden ? ausscheidegrund : null,
+      // NEU: Qualifikationen
+      VA: document.getElementById('edit-va').checked,
+      VB: document.getElementById('edit-vb').checked,
+      Immobilienexperte: document.getElementById('edit-immobilienexperte').checked,
+      // NEU: Text über mich
+      TextZuMir: document.getElementById('edit-text-zu-mir').value || null,
   };
 
   // NEU: Check-in Status nur hinzufügen, wenn die Checkbox sichtbar war (d.h. von einer FK bearbeitet)
@@ -17996,12 +18062,82 @@ async function saveUserData() {
       dataToUpdate.CheckinDays = selectedDays.join(',');
   }
 
+  // NEU: Handle image upload if a file was selected
+  const fileInput = document.getElementById('edit-bild');
+  if (fileInput.files && fileInput.files[0]) {
+    try {
+      console.log('Starte Bild-Upload...');
+      
+      // Schritt 1: Upload-Link vom Server holen
+      const uploadLinkData = await seaTableGetUploadLink();
+      if (!uploadLinkData || !uploadLinkData.upload_link || !uploadLinkData.parent_path) {
+        console.error('Fehler beim Abrufen des Upload-Links:', uploadLinkData);
+        alert('Fehler: Upload-Link konnte nicht vom Server abgerufen werden.');
+        dom.saveUserBtn.textContent = "Speichern";
+        dom.saveUserBtn.disabled = false;
+        return;
+      }
+
+      // Konstruiere den vollständigen Pfad für das Bild
+      const fileName = fileInput.files[0].name;
+      const imgPath = `${uploadLinkData.parent_path}/${uploadLinkData.img_relative_path}/${fileName}`;
+      
+      // Konstruiere die korrekte URL mit workspace_id (laut SeaTable Dokumentation)
+      const baseUrl = new URL(apiGatewayUrl).origin;
+      const fullImageUrl = `${baseUrl}/workspace/${SEATABLE_WORKSPACE_ID}${imgPath}`;
+      console.log('Vollständige Bild-URL zum Testen:', fullImageUrl);
+      
+      // Konstruiere den relativen Pfad für die Datenbank (wie in der Dokumentation)
+      const relativeImagePath = `/workspace/${SEATABLE_WORKSPACE_ID}${imgPath}`;
+      console.log('Relativer Pfad für Datenbank:', relativeImagePath);
+
+      // Schritt 2: Datei hochladen
+      const uploadResult = await seaTableUploadFile(uploadLinkData.upload_link, fileInput.files[0], uploadLinkData.parent_path);
+      
+      if (uploadResult && uploadResult.success) {
+        // Verwende den echten Dateinamen, den der Server zurückgegeben hat
+        const actualFileName = uploadResult.actualFileName || fileName;
+        console.log('Echter Dateiname vom Server:', actualFileName);
+        
+        // Konstruiere Pfad mit dem echten Dateinamen
+        const actualRelativeImagePath = `/workspace/${SEATABLE_WORKSPACE_ID}${uploadLinkData.parent_path}/${uploadLinkData.img_relative_path}/${actualFileName}`;
+        console.log('Aktualisierter relativer Pfad mit echtem Dateinamen:', actualRelativeImagePath);
+        
+        // Schritt 3: Datei-Info für Database vorbereiten
+        // WICHTIG: SeaTable-Datei-Felder erwarten nur den relativen Pfad (laut Dokumentation)
+        // Format: ["/workspace/ID/asset/..."] wie in der Dokumentation
+        
+        // Add the uploaded image to the data to update
+        dataToUpdate.Bild = [actualRelativeImagePath];  // Verwende den echten Dateinamen
+        console.log('Bild für Datenbank vorbereitet (mit echtem Dateinamen):', dataToUpdate.Bild);
+      } else {
+        console.error('Fehler beim Hochladen des Bildes');
+        alert('Fehler beim Hochladen des Bildes. Bitte versuchen Sie es erneut.');
+        dom.saveUserBtn.textContent = "Speichern";
+        dom.saveUserBtn.disabled = false;
+        return;
+      }
+    } catch (error) {
+      console.error('Fehler beim Hochladen des Bildes:', error);
+      alert('Fehler beim Hochladen des Bildes. Bitte versuchen Sie es erneut.');
+      dom.saveUserBtn.textContent = "Speichern";
+      dom.saveUserBtn.disabled = false;
+      return;
+    }
+  }
+
 
   const mitarbeiterTableMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'mitarbeiter');
   const setClauses = [];
 
   for (const keyName in dataToUpdate) {
       const value = dataToUpdate[keyName];
+      
+      // NEU: Skip file fields completely in SQL update - they need special API calls
+      if (keyName === 'Bild') {
+        continue;
+      }
+      
       const colKey = COLUMN_MAPS.mitarbeiter[keyName];
       if (!colKey) continue;
       const colMeta = mitarbeiterTableMeta.columns.find(c => c.key === colKey);
@@ -18009,10 +18145,17 @@ async function saveUserData() {
 
       const colName = colMeta.name;
       let formattedValue;
-      if (value === null || value === undefined) formattedValue = "NULL";
-      else if (colMeta.type === 'number') formattedValue = parseFloat(value) || 0;
-      else if (colMeta.type === 'checkbox') formattedValue = value ? "true" : "false";
-      else formattedValue = `'${escapeSql(String(value))}'`;
+      
+      if (value === null || value === undefined) {
+        formattedValue = "NULL";
+      } else if (colMeta.type === 'number') {
+        formattedValue = parseFloat(value) || 0;
+      } else if (colMeta.type === 'checkbox') {
+        formattedValue = value ? "true" : "false";
+      } else {
+        formattedValue = `'${escapeSql(String(value))}'`;
+      }
+      
       // KORREKTUR: Wenn das Feld CheckinDays ist und leer ist, soll es als leerer String gespeichert werden, nicht als 'NULL'.
       if (keyName === 'CheckinDays' && value === '') {
           formattedValue = "''";
@@ -18035,7 +18178,102 @@ async function saveUserData() {
   console.log(`[SAVE-USER] Führe SQL-Update aus: ${sql}`);
   const result = await seaTableSqlQuery(sql, false);
 
-  if (result !== null) {
+  // NEU: Update file field separately if image was uploaded (independent of SQL result)
+  let imageUpdateSuccess = false;
+  if (dataToUpdate.Bild) {
+    try {
+      console.log('=== BILD-DATENBANK-UPDATE STARTS ===');
+      console.log('Aktualisiere Bild-Feld in der Datenbank...');
+      console.log('Bild-Daten:', dataToUpdate.Bild);
+      console.log('User ID:', user._id);
+      console.log('API Gateway URL:', apiGatewayUrl);
+      console.log('SeaTable UUID:', SEATABLE_DTABLE_UUID);
+      console.log('SeaTable Access Token verfügbar:', !!seaTableAccessToken);
+      
+      // Use the correct /api/v2/dtables/rows/ endpoint for updating rows (like other functions)
+      const url = `${apiGatewayUrl}api/v2/dtables/${SEATABLE_DTABLE_UUID}/rows/`;
+
+      console.log('Update URL:', url);
+      
+      // WICHTIG: Verwende den echten Spaltennamen aus COLUMN_MAPS
+      const bildColumnKey = COLUMN_MAPS.mitarbeiter.Bild;
+      console.log('Bild-Spalten-Key aus COLUMN_MAPS:', bildColumnKey);
+      
+      // Finde den echten Spaltennamen in den Metadaten
+      const mitarbeiterTableMeta = METADATA.tables.find(t => t.name.toLowerCase() === 'mitarbeiter');
+      console.log('Mitarbeiter Table Meta gefunden:', !!mitarbeiterTableMeta);
+      
+      const bildColumn = mitarbeiterTableMeta?.columns.find(c => c.key === bildColumnKey);
+      console.log('Bild Column gefunden:', bildColumn);
+      
+      const realColumnName = bildColumn ? bildColumn.name : 'Bild';
+      console.log('Echter Spaltenname in SeaTable:', realColumnName);
+      console.log('Spaltentyp:', bildColumn?.type);
+      
+      const updatePayload = {
+        table_name: 'Mitarbeiter',
+        updates: [
+          {
+            row_id: user._id,
+            row: {
+              [realColumnName]: dataToUpdate.Bild
+            }
+          }
+        ]
+      };
+      
+      console.log('=== UPDATE PAYLOAD ===');
+      console.log('Update Payload:', JSON.stringify(updatePayload, null, 2));
+      
+      console.log('=== SENDING REQUEST ===');
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${seaTableAccessToken}`,
+        },
+        body: JSON.stringify(updatePayload)
+      });
+      
+      console.log('=== RESPONSE RECEIVED ===');
+      console.log('Response Status:', response.status);
+      console.log('Response Status Text:', response.statusText);
+      console.log('Response OK:', response.ok);
+      console.log('Response Headers:', Object.fromEntries(response.headers.entries()));
+      
+      if (response.ok) {
+        const responseData = await response.json();
+        console.log('=== SUCCESS RESPONSE ===');
+        console.log('Bild-Feld erfolgreich aktualisiert:', responseData);
+        console.log('Response Keys:', Object.keys(responseData));
+        imageUpdateSuccess = true;
+      } else {
+        console.log('=== ERROR RESPONSE ===');
+        const errorText = await response.text();
+        console.error('Fehler beim Aktualisieren des Bild-Feldes (Status ' + response.status + '):', errorText);
+        console.error('Full Error Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
+          body: errorText
+        });
+        alert('Das Bild wurde hochgeladen, aber es gab einen Fehler beim Speichern in der Datenbank.');
+      }
+    } catch (error) {
+      console.log('=== EXCEPTION CAUGHT ===');
+      console.error('Fehler beim Aktualisieren des Bild-Feldes:', error);
+      console.error('Error Type:', error.constructor.name);
+      console.error('Error Message:', error.message);
+      console.error('Error Stack:', error.stack);
+      alert('Das Bild wurde hochgeladen, aber es gab einen Fehler beim Speichern in der Datenbank.');
+    }
+    console.log('=== BILD-DATENBANK-UPDATE ENDS ===');
+  } else {
+    console.log('Kein Bild zum Aktualisieren vorhanden.');
+  }
+
+  // Close modal and reload if either SQL update was successful OR image update was successful
+  if (result !== null || imageUpdateSuccess) {
     closeEditUserModal();
     setStatus("Daten werden neu geladen...");
     localStorage.removeItem(CACHE_PREFIX + 'mitarbeiter');
