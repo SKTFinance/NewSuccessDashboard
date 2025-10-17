@@ -161,21 +161,27 @@
             </select>
         </div>
         
-        <div class="bg-gray-50 p-6 rounded-lg min-h-[400px]">
+        <!-- Desktop: Sankey Diagram -->
+        <div class="hidden md:block bg-gray-50 p-6 rounded-lg min-h-[400px]">
             <p id="appointments-sankey-description" class="text-sm text-gray-600 mb-6">
                 Dieses Diagramm visualisiert den Weg eines Termins von der Vereinbarung bis zum Ergebnis. 
                 Klicken Sie auf einen Status, um die zugehörigen Termine unten anzuzeigen.
             </p>
-
-            <!-- Sankey Diagram Visualization -->
             <div id="appointments-sankey-container" class="relative w-full h-[350px] flex items-center">
-                <!-- Inhalt wird per JS generiert -->
                 <div class="loader mx-auto"></div>
             </div>
         </div>
 
-        <!-- Termine Details Section (hidden by default) -->
-        <div id="appointments-flow-termine-details-section" class="mt-6 hidden">
+        <!-- Mobile: Accordion View -->
+        <div id="appointments-flow-mobile-accordion" class="md:hidden space-y-3">
+            <!-- Wird per JavaScript gefüllt -->
+            <div class="flex items-center justify-center py-8">
+                <div class="loader"></div>
+            </div>
+        </div>
+
+        <!-- Desktop: Termine Details Section (hidden by default) -->
+        <div id="appointments-flow-termine-details-section" class="mt-6 hidden md:block">
             <div class="bg-gray-50 p-6 rounded-lg">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-xl font-semibold text-gray-700">Detailansicht: <span id="appointments-flow-termine-status-title" class="text-indigo-600"></span></h3>

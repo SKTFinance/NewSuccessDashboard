@@ -143,6 +143,7 @@
                                 <a href="#" id="superuser-btn" class="hidden block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-users-cog w-5 mr-2"></i>Gesamtansicht</a>
                                 <a href="#" id="money-view-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-euro-sign w-5 mr-2"></i>Geld-Ansicht</a>
                                 <a href="#" id="edit-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-edit w-5 mr-2"></i>Personendaten</a>
+                                <a href="#" id="team-planung-btn" class="hidden block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-clipboard-list w-5 mr-2"></i>Team-Planung</a>
                                 <a href="#" id="workingday-auswertung-btn" class="hidden block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-calendar-week w-5 mr-2"></i>WorkingDay Auswertung</a>
                                 <a href="#" id="help-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-question-circle w-5 mr-2"></i>Hilfe</a>
                                 <a href="#" id="add-new-user-btn" class="block px-4 py-2 text-sm text-skt-blue hover:bg-skt-grey-light"><i class="fas fa-user-plus w-5 mr-2"></i>Neuer Nutzer</a>
@@ -339,21 +340,21 @@
                             </div>
                         </div>
                         <div class="flex-grow md:w-1/2 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-                            <div class="p-4 bg-skt-grey-light rounded-xl shadow-md flex flex-col items-center justify-center text-center">
-                                <p id="eh-value-title" class="text-xs text-skt-blue-light font-bold" data-tooltip="Deine gesamten erreichten Einheiten">
+                            <div class="p-3 md:p-4 bg-skt-grey-light rounded-xl shadow-md flex flex-col items-center justify-center text-center min-h-[120px] md:min-h-[140px]">
+                                <p id="eh-value-title" class="text-[10px] sm:text-xs text-skt-blue-light font-bold leading-tight" data-tooltip="Deine gesamten erreichten Einheiten">
                                     Erreichte EH (insgesamt)
                                 </p>
-                                <div class="flex items-center justify-center h-full">
-                                    <p id="eh-value-display" class="text-2xl font-bold text-skt-blue mt-1"><span id="current-eh-display">0</span><span id="eh-value-unit"> EH</span></p><i id="eh-checkmark" class="fas fa-check-circle text-5xl text-green-500 hidden"></i>
+                                <div class="flex items-center justify-center h-full mt-1 md:mt-0">
+                                    <p id="eh-value-display" class="text-xl sm:text-2xl md:text-3xl font-bold text-skt-blue"><span id="current-eh-display">0</span><span id="eh-value-unit" class="text-base sm:text-xl md:text-2xl"> EH</span></p><i id="eh-checkmark" class="fas fa-check-circle text-3xl sm:text-4xl md:text-5xl text-green-500 hidden"></i>
                                 </div>
                             </div>
                             <!-- NEU: Design an ET-Box angepasst und Container für zusätzliche Infos hinzugefügt -->
-                            <div class="p-4 bg-skt-grey-light rounded-xl shadow-md flex flex-col items-center justify-center text-center">
-                                <p id="next-career-goal-label" class="text-xs text-skt-blue-light font-bold">Nächstes Karriereziel</p>
+                            <div class="p-3 md:p-4 bg-skt-grey-light rounded-xl shadow-md flex flex-col items-center justify-center text-center min-h-[120px] md:min-h-[140px]">
+                                <p id="next-career-goal-label" class="text-[10px] sm:text-xs text-skt-blue-light font-bold leading-tight">Nächstes Karriereziel</p>
                                 <div id="employee-info-container" class="mt-1 flex flex-col items-center justify-center">
-                                    <p class="text-2xl font-bold text-skt-blue" id="employee-count-display">0</p><p id="employee-goal-status" class="text-skt-blue-light text-sm mt-1">...</p>
+                                    <p class="text-xl sm:text-2xl md:text-3xl font-bold text-skt-blue" id="employee-count-display">0</p><p id="employee-goal-status" class="text-skt-blue-light text-xs sm:text-sm mt-1 truncate max-w-full px-1">...</p>
                                 </div>
-                                <div id="employee-slots-container" class="flex space-x-2 mt-2"></div>
+                                <div id="employee-slots-container" class="flex flex-wrap justify-center gap-1 sm:gap-2 mt-2 max-w-full"></div>
                             </div>
                             <div id="employee-additional-info-container" class="hidden p-4 col-span-2 bg-accent-gold-light rounded-xl shadow-md border-2 border-accent-gold text-center">
                                 <!-- Inhalt wird per JS generiert -->
@@ -806,6 +807,62 @@
              </form>
         </div>
     </div>
+
+    <!-- NEU: Team-Planung Modal -->
+    <div id="team-planung-modal" class="modal-overlay">
+        <div class="modal-box bg-white rounded-lg shadow-xl p-6 m-4 max-w-7xl w-full relative max-h-[90vh] flex flex-col">
+             <button id="close-team-planung-modal" class="absolute top-2 right-3 text-2xl text-gray-500 hover:text-skt-blue">&times;</button>
+             <h3 class="text-2xl font-bold text-skt-blue mb-6">Team-Planung & Qualifikationen</h3>
+             
+             <!-- Filter und Suche -->
+             <div class="mb-6 flex flex-wrap gap-4">
+                 <input type="text" id="team-planung-search" placeholder="Mitarbeiter suchen..." class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-skt-blue">
+                 <div class="flex gap-2">
+                     <label class="inline-flex items-center">
+                         <input type="checkbox" id="filter-va" class="mr-2">
+                         <span class="text-sm">Nur VA</span>
+                     </label>
+                     <label class="inline-flex items-center">
+                         <input type="checkbox" id="filter-vb" class="mr-2">
+                         <span class="text-sm">Nur VB</span>
+                     </label>
+                     <label class="inline-flex items-center">
+                         <input type="checkbox" id="filter-immo" class="mr-2">
+                         <span class="text-sm">Nur Immo</span>
+                     </label>
+                     <label class="inline-flex items-center">
+                         <input type="checkbox" id="filter-recruiter" class="mr-2">
+                         <span class="text-sm">Nur Recruiter</span>
+                     </label>
+                 </div>
+             </div>
+
+             <!-- Tabelle -->
+             <div class="flex-grow overflow-y-auto">
+                 <table class="w-full text-sm">
+                     <thead class="bg-skt-grey-light sticky top-0">
+                         <tr>
+                             <th class="px-3 py-3 text-left font-semibold text-skt-blue">Name</th>
+                             <th class="px-3 py-3 text-center font-semibold text-skt-blue">VA</th>
+                             <th class="px-3 py-3 text-center font-semibold text-skt-blue">VB</th>
+                             <th class="px-3 py-3 text-center font-semibold text-skt-blue">Immo</th>
+                             <th class="px-3 py-3 text-center font-semibold text-skt-blue">Recruiter</th>
+                             <th class="px-3 py-3 text-center font-semibold text-skt-blue">EH-Ziel</th>
+                             <th class="px-3 py-3 text-center font-semibold text-skt-blue">ET-Ziel</th>
+                         </tr>
+                     </thead>
+                     <tbody id="team-planung-table-body" class="bg-white divide-y divide-gray-200">
+                         <!-- Wird dynamisch gefüllt -->
+                     </tbody>
+                 </table>
+             </div>
+
+             <div class="mt-6 flex justify-end">
+                 <button id="close-team-planung-modal-btn" class="bg-gray-200 text-gray-800 font-semibold py-2 px-5 rounded-lg hover:bg-gray-300 transition-colors">Schließen</button>
+             </div>
+        </div>
+    </div>
+
     <!-- NEU: Modal für die Monatsplanung -->
     <div id="planning-modal" class="modal-overlay">
         <div class="modal-box bg-white rounded-lg shadow-xl p-8 m-4 max-w-lg w-full relative">

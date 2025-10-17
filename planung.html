@@ -204,8 +204,18 @@
                 <div id="network-graph-container" class="relative w-full h-full overflow-hidden transition-all duration-300 ease-in-out">
                     <!-- Das Netzwerk-Diagramm wird hier per JS eingefügt -->
                 </div>
-                <div id="network-details-container" class="w-full md:w-0 flex-shrink-0 opacity-0 transition-all duration-300 ease-in-out overflow-y-auto">
-                    <!-- Die KPI-Details für den ausgewählten Mitarbeiter werden hier angezeigt -->
+                <!-- Desktop: Sidebar, Mobile: Modal Overlay -->
+                <div id="network-details-container" class="hidden md:flex md:w-0 flex-shrink-0 md:opacity-0 transition-all duration-300 ease-in-out overflow-y-auto">
+                    <!-- Die KPI-Details für den ausgewählten Mitarbeiter werden hier angezeigt (Desktop) -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Mobile: Details Modal Overlay -->
+        <div id="network-details-mobile-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden md:hidden">
+            <div class="absolute inset-x-0 bottom-0 bg-white rounded-t-2xl max-h-[80vh] overflow-hidden shadow-2xl">
+                <div id="network-details-mobile-container" class="p-6 overflow-y-auto max-h-[80vh]">
+                    <!-- Die KPI-Details für Mobile -->
                 </div>
             </div>
         </div>
