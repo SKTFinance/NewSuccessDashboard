@@ -14139,12 +14139,13 @@ class PlanungView {
     getPqqColor(pqq) {
         if (pqq === null || pqq === undefined) return '#e5e7eb'; // Grau, wenn keine PQQ vorhanden
         
-        if (pqq >= 200) return 'var(--color-accent-gold)';      // Gold für 200%
+        // Farben exakt wie in der Legende: 0% rot (#DC2626), 100% grün (#10B981), 200% gold (#F59E0B)
+        if (pqq >= 200) return '#F59E0B';  // Gold für 200%+
         if (pqq >= 100) {
             // Interpoliere zwischen Grün (100%) und Gold (200%)
             const factor = (pqq - 100) / 100;
-            const green = [39, 174, 96];   // --color-accent-green in RGB
-            const gold = [212, 175, 55];   // --color-accent-gold in RGB
+            const green = [16, 185, 129];   // #10B981 in RGB
+            const gold = [245, 158, 11];    // #F59E0B in RGB
             const r = Math.round(green[0] + (gold[0] - green[0]) * factor);
             const g = Math.round(green[1] + (gold[1] - green[1]) * factor);
             const b = Math.round(green[2] + (gold[2] - green[2]) * factor);
@@ -14153,14 +14154,14 @@ class PlanungView {
         if (pqq > 0) {
             // Interpoliere zwischen Rot (0%) und Grün (100%)
             const factor = pqq / 100;
-            const red = [255, 99, 71];    // --color-accent-red in RGB
-            const green = [39, 174, 96];   // --color-accent-green in RGB
+            const red = [220, 38, 38];      // #DC2626 in RGB
+            const green = [16, 185, 129];   // #10B981 in RGB
             const r = Math.round(red[0] + (green[0] - red[0]) * factor);
             const g = Math.round(red[1] + (green[1] - red[1]) * factor);
             const b = Math.round(red[2] + (green[2] - red[2]) * factor);
             return `rgb(${r}, ${g}, ${b})`;
         }
-        return 'var(--color-accent-red)'; // 0% ist rot
+        return '#DC2626'; // 0% ist rot
     }
 
     _showMemberDetails(member) {
