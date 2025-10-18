@@ -16,7 +16,7 @@
             <div class="flex items-center gap-4 flex-wrap">
                 <h3 class="text-2xl font-semibold text-skt-blue">Terminübersicht</h3>
                 <div id="stats-view-toggle" class="view-toggle flex space-x-2">
-                    <button id="stats-view-timeline-btn" class="active" title="Timeline-Ansicht"><i class="fas fa-chart-bar"></i></button><button id="stats-view-table-btn" title="Tabellenansicht"><i class="fas fa-list"></i></button><button id="stats-view-week-btn" title="Kalenderansicht"><i class="fas fa-calendar-week"></i></button><button id="stats-view-info-btn" title="Nächstes Info"><i class="fas fa-users"></i></button>
+                    <button id="stats-view-week-btn" class="active" title="Kalenderansicht"><i class="fas fa-calendar-week"></i></button><button id="stats-view-timeline-btn" title="Timeline-Ansicht"><i class="fas fa-chart-bar"></i></button><button id="stats-view-table-btn" title="Tabellenansicht"><i class="fas fa-list"></i></button><button id="stats-view-info-btn" title="Nächstes Info"><i class="fas fa-users"></i></button>
                 </div>
                 <!-- KORREKTUR: Filter-Button in die Haupt-Button-Leiste integriert, um auf allen Geräten in einer Zeile zu sein. -->
                 <button id="mobile-filter-toggle-btn" class="view-toggle-btn" title="Filter anzeigen/verstecken"><i class="fas fa-filter"></i></button>
@@ -152,13 +152,20 @@
 
     <!-- NEU: Termin-Flow-Analyse Sektion (von Planung hierher verschoben) -->
     <section class="mt-8 bg-white rounded-2xl p-6 md:p-8 shadow-lg">
-         <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
+         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
             <h2 class="text-xl font-semibold text-skt-blue">Termin-Flow-Analyse</h2>
-            <select id="appointments-flow-type-filter" class="w-full sm:w-auto bg-white border border-gray-300 rounded-md shadow-sm pl-3 pr-10 py-2 text-left cursor-default focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm mt-4 md:mt-0">
-                <option value="AT">Analysetermine (AT)</option>
-                <option value="BT">Beratungstermine (BT)</option>
-                <option value="ET">Einstellungstermine (ET)</option>
-            </select>
+            <div class="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+                <select id="appointments-flow-type-filter" class="w-full sm:w-auto bg-white border border-gray-300 rounded-md shadow-sm pl-3 pr-10 py-2 text-left cursor-default focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <option value="AT">Analysetermine (AT)</option>
+                    <option value="BT">Beratungstermine (BT)</option>
+                    <option value="ET">Einstellungstermine (ET)</option>
+                </select>
+                <!-- Infoabend-Auswahl (nur für ET sichtbar) -->
+                <select id="appointments-flow-infoabend-filter" class="hidden w-full sm:w-auto bg-white border border-gray-300 rounded-md shadow-sm pl-3 pr-10 py-2 text-left cursor-default focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                    <option value="">Infoabend auswählen...</option>
+                    <!-- Wird per JavaScript gefüllt -->
+                </select>
+            </div>
         </div>
         
         <!-- Desktop: Sankey Diagram -->

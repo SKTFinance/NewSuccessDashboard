@@ -4954,6 +4954,7 @@ class AppointmentsView {
         this.showPastToggle = null;
         // NEU: Termin-Flow-Analyse Elemente
         this.flowTypeFilter = null;
+        this.flowInfoabendFilter = null;
         this.flowSankeyContainer = null;
         this.flowSankeyDescription = null;
         this.flowDetailsSection = null;
@@ -5107,6 +5108,7 @@ class AppointmentsView {
         this.heatmapGrid = document.getElementById('heatmap-grid');
         // NEU: Termin-Flow-Analyse Elemente
         this.flowTypeFilter = document.getElementById('appointments-flow-type-filter');
+        this.flowInfoabendFilter = document.getElementById('appointments-flow-infoabend-filter');
         this.flowSankeyContainer = document.getElementById('appointments-sankey-container');
         this.flowSankeyDescription = document.getElementById('appointments-sankey-description');
         this.flowDetailsSection = document.getElementById('appointments-flow-termine-details-section');
@@ -5207,7 +5209,8 @@ class AppointmentsView {
             this._switchStatsView(pendingAppointmentViewMode);
             pendingAppointmentViewMode = null;
         } else {
-            this._switchStatsView(loadUiSetting('appointmentsViewMode', 'timeline'));
+            // Lade gespeicherte Ansicht, Fallback zu 'week' beim ersten Mal
+            this._switchStatsView(loadUiSetting('appointmentsViewMode', 'week'));
         }
         this._populateCategoryFilter(); // KORREKTUR: Reihenfolge getauscht
 
@@ -5448,6 +5451,19 @@ class AppointmentsView {
         // NEU: Event-Listener für Termin-Flow-Analyse
         if (this.flowTypeFilter) {
             this.flowTypeFilter.addEventListener('change', () => {
+                const flowType = this.flowTypeFilter.value;
+                // Zeige/Verstecke Infoabend-Filter basierend auf Termintyp
+                if (flowType === 'ET') {
+                    this.flowInfoabendFilter.classList.remove('hidden');
+                    this._populateInfoabendFilter();
+                } else {
+                    this.flowInfoabendFilter.classList.add('hidden');
+                }
+                this._renderFlowAnalysis();
+            });
+        }
+        if (this.flowInfoabendFilter) {
+            this.flowInfoabendFilter.addEventListener('change', () => {
                 this._renderFlowAnalysis();
             });
         }
@@ -5556,6 +5572,9 @@ class AppointmentsView {
     }
 
     _switchStatsView(view) {
+        // Speichere die ausgewählte Ansicht
+        saveUiSetting('appointmentsViewMode', view);
+        
         this.statsTimelineView.classList.toggle('hidden', view !== 'timeline');
         this.statsTableView.classList.toggle('hidden', view !== 'table');
         this.statsWeekView.classList.toggle('hidden', view !== 'week'); // NEU
@@ -8954,15 +8973,62 @@ class AppointmentsView {
         const flowType = this.flowTypeFilter.value;
         const scope = this.statsScopeFilter.value;
         
-        // Verwende die bereits gefilterten Termine aus der Hauptansicht
-        const allTermine = this.dateAndSearchFilteredAppointments;
+        let allTermine;
+        
+        // Bei ET: Lade ALLE Termine des Infoabend-Zyklus (nicht nur aus aktuellem 3-Monats-Fenster)
+        if (flowType === 'ET') {
+            const selectedInfoabend = this.flowInfoabendFilter.value;
+            if (!selectedInfoabend) {
+                // Kein Infoabend ausgewählt - zeige Hinweis
+                this.flowSankeyContainer.innerHTML = '<div class="text-center py-8 text-gray-500">Bitte wählen Sie einen Infoabend aus, um die Analyse anzuzeigen.</div>';
+                if (this.flowMobileAccordion) {
+                    this.flowMobileAccordion.innerHTML = '<div class="text-center py-8 text-gray-500">Bitte wählen Sie einen Infoabend aus, um die Analyse anzuzeigen.</div>';
+                }
+                return;
+            }
+            
+            // Bestimme gültige User-IDs basierend auf Scope
+            const validUserIds = new Set();
+            if (scope === 'personal') {
+                validUserIds.add(this.currentUserId);
+            } else if (scope === 'group' || scope === 'structure') {
+                validUserIds.add(this.currentUserId);
+                this.downline.forEach(u => validUserIds.add(u._id));
+            }
+            
+            // Filtere ALLE Einstellungstermine aus db.termine nach dem ausgewählten Infoabend
+            // db.termine enthält ALLE geladenen Termine, nicht nur die des aktuellen Zeitfensters
+            const infoabendDate = new Date(selectedInfoabend);
+            allTermine = db.termine.filter(t => {
+                // Kategorie muss ET sein
+                if (t.Kategorie !== 'ET') return false;
+                
+                // Scope-Filter anwenden
+                if (!validUserIds.has(t.Mitarbeiter_ID) && !validUserIds.has(t.Eingeladener)) {
+                    return false;
+                }
+                
+                // Prüfe ob der ET zum ausgewählten Infoabend gehört (basierend auf Infoabend-Feld)
+                if (t.Infoabend) {
+                    const terminInfoabend = new Date(t.Infoabend);
+                    return terminInfoabend.toDateString() === infoabendDate.toDateString();
+                }
+                return false;
+            });
+            
+            console.log(`ET Flow-Analyse: ${allTermine.length} Termine für Infoabend ${infoabendDate.toLocaleDateString('de-DE')} gefunden`);
+        } else {
+            // Für AT/BT: Verwende die bereits gefilterten Termine aus der Hauptansicht (Monatsfilter)
+            allTermine = this.dateAndSearchFilteredAppointments;
+        }
         
         // Filter nur nach Termin-Kategorie für die Flow-Analyse
         const flowAppointments = allTermine.filter(t => t.Kategorie === flowType);
         
         // Beschreibung anpassen
         if (flowType === 'ET') {
-            this.flowSankeyDescription.textContent = 'Dieses Diagramm visualisiert den Weg von Einstellungsterminen (ET) zu neu eingestellten Mitarbeitern.';
+            const selectedInfoabendDate = new Date(this.flowInfoabendFilter.value).toLocaleDateString('de-DE');
+            this.flowSankeyDescription.textContent = `Dieses Diagramm visualisiert den Weg von Einstellungsterminen (ET) vom Infoabend ${selectedInfoabendDate} zu neu eingestellten Mitarbeitern.`;
         } else if (flowType === 'AT') {
             this.flowSankeyDescription.textContent = 'Dieses Diagramm visualisiert den Weg von Analyseterminen (AT) zu nachfolgenden Beratungsterminen (BT).';
         } else {
@@ -9015,14 +9081,41 @@ class AppointmentsView {
             outcome2 = heldBTsWithoutSale.length;
         } else if (flowType === 'ET') {
             // ET → Neuer Mitarbeiter
-            // Im Prozess inkl. Gehalten = alle außer Offen, Verschoben, Storno/Absage
-            const etsInProcess = flowAppointments.filter(t => !['Offen', 'Verschoben', 'Storno'].includes(t.Status) && t.Absage !== true);
-            const newMitarbeiter = etsInProcess.filter(t => t.Status === 'Wird Mitarbeiter');
-            // "Kein Mitarbeiter" sind aus "Im Prozess" die NICHT "Wird Mitarbeiter" sind (z.B. Gehalten)
-            const keinMitarbeiter = etsInProcess.filter(t => t.Status !== 'Wird Mitarbeiter');
-            this.appointmentsForOutcomes = { newMitarbeiter, keinMitarbeiter };
-            outcome1 = newMitarbeiter.length;
-            outcome2 = keinMitarbeiter.length;
+            // Debug: Zeige alle vorhandenen Stati
+            const allStati = [...new Set(flowAppointments.map(t => t.Status))];
+            console.log('ET Stati in flowAppointments:', allStati);
+            console.log('Anzahl flowAppointments:', flowAppointments.length);
+            
+            // Aufteilung "Im Prozess" in Unterkategorien
+            const gehaltenETs = flowAppointments.filter(t => t.Status === 'Gehalten');
+            const wirdMitarbeiterETs = flowAppointments.filter(t => t.Status === 'Wird Mitarbeiter');
+            // Andere Stati die zu "Im Prozess" gehören (außer Offen, Verschoben, Storno, Absage)
+            const sonstigeInProcess = flowAppointments.filter(t => 
+                !['Offen', 'Verschoben', 'Storno', 'Gehalten', 'Wird Mitarbeiter'].includes(t.Status) && 
+                t.Absage !== true
+            );
+            
+            console.log('Gehalten ETs:', gehaltenETs.length, gehaltenETs.map(t => ({Status: t.Status, Terminpartner: t.Terminpartner})));
+            console.log('Wird Mitarbeiter ETs:', wirdMitarbeiterETs.length, wirdMitarbeiterETs.map(t => ({Status: t.Status, Terminpartner: t.Terminpartner})));
+            console.log('Sonstige im Prozess:', sonstigeInProcess.length, sonstigeInProcess.map(t => ({Status: t.Status, Terminpartner: t.Terminpartner})));
+            
+            // "Kein Mitarbeiter" nur bei Status "Storno"
+            const keinMitarbeiter = flowAppointments.filter(t => t.Status === 'Storno');
+            console.log('Kein Mitarbeiter (Storno):', keinMitarbeiter.length);
+            
+            // Speichere alle Unterkategorien für die Darstellung
+            this.appointmentsForOutcomes = { 
+                newMitarbeiter: wirdMitarbeiterETs,
+                gehaltenETs: gehaltenETs,
+                sonstigeInProcess: sonstigeInProcess,
+                keinMitarbeiter: keinMitarbeiter
+            };
+            
+            // gehalten = Summe aller "Im Prozess" Kategorien für Sankey
+            gehalten = gehaltenETs.length + wirdMitarbeiterETs.length + sonstigeInProcess.length;
+            console.log('Gesamt "Im Prozess":', gehalten);
+            outcome1 = wirdMitarbeiterETs.length;
+            outcome2 = keinMitarbeiter.length; // Nur Storno
         }
         
         const sankeyData = {
@@ -9126,11 +9219,59 @@ class AppointmentsView {
             'Ausfall': 'Ausgefallene Termine',
             'Offen': 'Offene Termine',
             'outcome1': flowType === 'AT' ? 'Resultierende Beratungstermine' : flowType === 'ET' ? 'Neue Mitarbeiter' : 'Beratungstermine mit Abschluss',
-            'outcome2': flowType === 'AT' ? 'Gehaltene ATs ohne BT' : flowType === 'ET' ? 'Wird kein Mitarbeiter' : 'Gehaltene BTs ohne Abschluss',
+            'outcome2': flowType === 'AT' ? 'Gehaltene ATs ohne BT' : flowType === 'ET' ? 'Kein Mitarbeiter (Storno)' : 'Gehaltene BTs ohne Abschluss',
+            'GehaltenET': 'Gehalten',
+            'WirdMitarbeiter': 'Wird Mitarbeiter',
+            'SonstigeInProcess': 'Sonstige im Prozess'
         };
         
-        // Gehalten Section
-        if (data.gehalten > 0) {
+        // Gehalten Section - Bei ET: Unterkategorien anzeigen
+        if (flowType === 'ET' && data.gehalten > 0) {
+            // Hauptkategorie "Im Prozess" als Zusammenfassung
+            accordionSections.push(`
+                <div class="bg-gradient-to-r from-green-500 to-green-700 rounded-lg p-4 text-white shadow-md mb-3">
+                    <div class="text-sm opacity-90">${titleMap['Gehalten']}</div>
+                    <div class="text-3xl font-bold">${data.gehalten}</div>
+                </div>
+            `);
+            
+            // Unterkategorien
+            if (this.appointmentsForOutcomes.gehaltenETs && this.appointmentsForOutcomes.gehaltenETs.length > 0) {
+                accordionSections.push(this._createMobileAccordionSection(
+                    'GehaltenET',
+                    titleMap['GehaltenET'],
+                    this.appointmentsForOutcomes.gehaltenETs.length,
+                    this.appointmentsForOutcomes.gehaltenETs,
+                    'bg-green-500',
+                    'fa-check',
+                    flowType
+                ));
+            }
+            
+            if (this.appointmentsForOutcomes.newMitarbeiter && this.appointmentsForOutcomes.newMitarbeiter.length > 0) {
+                accordionSections.push(this._createMobileAccordionSection(
+                    'WirdMitarbeiter',
+                    titleMap['WirdMitarbeiter'],
+                    this.appointmentsForOutcomes.newMitarbeiter.length,
+                    this.appointmentsForOutcomes.newMitarbeiter,
+                    'bg-emerald-500',
+                    'fa-user-plus',
+                    flowType
+                ));
+            }
+            
+            if (this.appointmentsForOutcomes.sonstigeInProcess && this.appointmentsForOutcomes.sonstigeInProcess.length > 0) {
+                accordionSections.push(this._createMobileAccordionSection(
+                    'SonstigeInProcess',
+                    titleMap['SonstigeInProcess'],
+                    this.appointmentsForOutcomes.sonstigeInProcess.length,
+                    this.appointmentsForOutcomes.sonstigeInProcess,
+                    'bg-teal-500',
+                    'fa-ellipsis-h',
+                    flowType
+                ));
+            }
+        } else if (data.gehalten > 0) {
             accordionSections.push(this._createMobileAccordionSection(
                 'Gehalten',
                 titleMap['Gehalten'],
@@ -9181,8 +9322,8 @@ class AppointmentsView {
             ));
         }
         
-        // Outcome1 Section
-        if (data.outcome1 > 0) {
+        // Outcome1 Section - Für ET bereits als Unterkategorie angezeigt
+        if (data.outcome1 > 0 && flowType !== 'ET') {
             accordionSections.push(this._createMobileAccordionSection(
                 'outcome1',
                 titleMap['outcome1'],
@@ -9372,7 +9513,7 @@ class AppointmentsView {
         } else {
             gehaltenLabel = 'Im Prozess';
             outcome1Label = 'Neuer Mitarbeiter';
-            outcome2Label = 'Kein Mitarbeiter';
+            outcome2Label = 'Kein Mitarbeiter (Storno)';
             ausfallLabel = 'Ausfall';
         }
         
@@ -9484,8 +9625,10 @@ class AppointmentsView {
                 
                 let filteredAppointments = [];
                 if (flowType === 'ET') {
-                    // Bei ET: "Gehalten" bedeutet "Im Prozess" (inkl. Status 'Gehalten')
-                    if (status === 'Gehalten') filteredAppointments = appointments.filter(t => !['Offen', 'Verschoben', 'Storno'].includes(t.Status) && t.Absage !== true);
+                    // Bei ET: "Gehalten" zeigt alle "Im Prozess" Termine an
+                    if (status === 'Gehalten') {
+                        filteredAppointments = appointments.filter(t => !['Offen', 'Verschoben', 'Storno'].includes(t.Status) && t.Absage !== true);
+                    }
                     else if (status === 'Verschoben') filteredAppointments = appointments.filter(t => t.Status === 'Verschoben');
                     else if (status === 'Ausfall') filteredAppointments = appointments.filter(t => t.Status === 'Storno' || t.Absage === true);
                     else if (status === 'Offen') filteredAppointments = appointments.filter(t => t.Status === 'Offen');
@@ -9521,7 +9664,7 @@ class AppointmentsView {
             'Ausfall': 'Ausgefallene Termine',
             'Offen': 'Offene Termine',
             'outcome1': flowType === 'AT' ? 'Resultierende Beratungstermine' : flowType === 'ET' ? 'Neue Mitarbeiter' : 'Beratungstermine mit Abschluss',
-            'outcome2': flowType === 'AT' ? 'Gehaltene ATs ohne BT' : flowType === 'ET' ? 'Wird kein Mitarbeiter' : 'Gehaltene BTs ohne Abschluss',
+            'outcome2': flowType === 'AT' ? 'Gehaltene ATs ohne BT' : flowType === 'ET' ? 'Kein Mitarbeiter (Storno)' : 'Gehaltene BTs ohne Abschluss',
         };
         
         this.flowDetailsTitle.textContent = titleMap[status] || status;
@@ -9544,19 +9687,39 @@ class AppointmentsView {
                 const mitarbeiter = findRowById('mitarbeiter', termin.Mitarbeiter_ID);
                 const partnerName = termin.Terminpartner || termin.Kunde || '-';
                 const hinweis = termin.Hinweis || '-';
+                const terminStatus = termin.Status || '-';
                 
-                return `
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${termin.Datum ? new Date(termin.Datum).toLocaleDateString('de-DE') : '-'}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <span class="text-skt-blue hover:underline cursor-pointer customer-timeline-link" data-customer-name="${_escapeHtml(partnerName)}" title="Zeige alle Termine für diesen Kunden">
-                                ${partnerName}
-                            </span>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${mitarbeiter?.Name || '-'}</td>
-                        <td class="px-6 py-4 text-sm text-gray-500">${hinweis}</td>
-                    </tr>
-                `;
+                // Für ET: Status-Spalte hinzufügen
+                if (flowType === 'ET') {
+                    return `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${termin.Datum ? new Date(termin.Datum).toLocaleDateString('de-DE') : '-'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <span class="text-skt-blue hover:underline cursor-pointer customer-timeline-link" data-customer-name="${_escapeHtml(partnerName)}" title="Zeige alle Termine für diesen Kunden">
+                                    ${partnerName}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${mitarbeiter?.Name || '-'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold">
+                                <span class="px-2 py-1 rounded text-xs ${this._getStatusBadgeClass(terminStatus)}">${terminStatus}</span>
+                            </td>
+                            <td class="px-6 py-4 text-sm text-gray-500">${hinweis}</td>
+                        </tr>
+                    `;
+                } else {
+                    return `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${termin.Datum ? new Date(termin.Datum).toLocaleDateString('de-DE') : '-'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <span class="text-skt-blue hover:underline cursor-pointer customer-timeline-link" data-customer-name="${_escapeHtml(partnerName)}" title="Zeige alle Termine für diesen Kunden">
+                                    ${partnerName}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${mitarbeiter?.Name || '-'}</td>
+                            <td class="px-6 py-4 text-sm text-gray-500">${hinweis}</td>
+                        </tr>
+                    `;
+                }
             }).join('');
             this.flowDetailsTableBody.innerHTML = tableRowsHtml;
             
@@ -9574,33 +9737,70 @@ class AppointmentsView {
                     const partnerName = termin.Terminpartner || termin.Kunde || '-';
                     const hinweis = termin.Hinweis || '-';
                     const datum = termin.Datum ? new Date(termin.Datum).toLocaleDateString('de-DE') : '-';
+                    const terminStatus = termin.Status || '-';
                     
-                    return `
-                        <div class="bg-white rounded-lg shadow border border-gray-200 p-4">
-                            <div class="flex justify-between items-start mb-3">
-                                <div class="flex-1">
-                                    <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Kunde</div>
-                                    <div class="text-base font-semibold text-skt-blue cursor-pointer hover:underline customer-timeline-link-mobile" data-customer-name="${_escapeHtml(partnerName)}">
-                                        ${partnerName}
+                    // Für ET: Status anzeigen
+                    if (flowType === 'ET') {
+                        return `
+                            <div class="bg-white rounded-lg shadow border border-gray-200 p-4">
+                                <div class="flex justify-between items-start mb-3">
+                                    <div class="flex-1">
+                                        <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Bewerber</div>
+                                        <div class="text-base font-semibold text-skt-blue cursor-pointer hover:underline customer-timeline-link-mobile" data-customer-name="${_escapeHtml(partnerName)}">
+                                            ${partnerName}
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Datum</div>
+                                        <div class="text-sm font-medium text-gray-900">${datum}</div>
                                     </div>
                                 </div>
-                                <div class="text-right">
-                                    <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Datum</div>
-                                    <div class="text-sm font-medium text-gray-900">${datum}</div>
+                                <div class="border-t border-gray-100 pt-3 space-y-2">
+                                    <div>
+                                        <div class="text-xs text-gray-500 uppercase tracking-wide">Mitarbeiter</div>
+                                        <div class="text-sm text-gray-900">${mitarbeiter?.Name || '-'}</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-xs text-gray-500 uppercase tracking-wide">Status</div>
+                                        <div class="text-sm">
+                                            <span class="px-2 py-1 rounded text-xs ${this._getStatusBadgeClass(terminStatus)}">${terminStatus}</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="text-xs text-gray-500 uppercase tracking-wide">Notizen</div>
+                                        <div class="text-sm text-gray-700">${hinweis}</div>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="border-t border-gray-100 pt-3 space-y-2">
-                                <div>
-                                    <div class="text-xs text-gray-500 uppercase tracking-wide">Mitarbeiter</div>
-                                    <div class="text-sm text-gray-900">${mitarbeiter?.Name || '-'}</div>
+                        `;
+                    } else {
+                        return `
+                            <div class="bg-white rounded-lg shadow border border-gray-200 p-4">
+                                <div class="flex justify-between items-start mb-3">
+                                    <div class="flex-1">
+                                        <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Kunde</div>
+                                        <div class="text-base font-semibold text-skt-blue cursor-pointer hover:underline customer-timeline-link-mobile" data-customer-name="${_escapeHtml(partnerName)}">
+                                            ${partnerName}
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-xs text-gray-500 uppercase tracking-wide mb-1">Datum</div>
+                                        <div class="text-sm font-medium text-gray-900">${datum}</div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <div class="text-xs text-gray-500 uppercase tracking-wide">Notizen</div>
-                                    <div class="text-sm text-gray-700">${hinweis}</div>
+                                <div class="border-t border-gray-100 pt-3 space-y-2">
+                                    <div>
+                                        <div class="text-xs text-gray-500 uppercase tracking-wide">Mitarbeiter</div>
+                                        <div class="text-sm text-gray-900">${mitarbeiter?.Name || '-'}</div>
+                                    </div>
+                                    <div>
+                                        <div class="text-xs text-gray-500 uppercase tracking-wide">Notizen</div>
+                                        <div class="text-sm text-gray-700">${hinweis}</div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    `;
+                        `;
+                    }
                 }).join('');
                 cardsContainer.innerHTML = cardsHtml;
                 
@@ -9614,6 +9814,52 @@ class AppointmentsView {
         }
         
         this.flowDetailsSection.classList.remove('hidden');
+    }
+
+    _getStatusBadgeClass(status) {
+        const statusColors = {
+            'Gehalten': 'bg-green-100 text-green-800',
+            'Wird Mitarbeiter': 'bg-emerald-100 text-emerald-800',
+            'Storno': 'bg-red-100 text-red-800',
+            'Verschoben': 'bg-orange-100 text-orange-800',
+            'Offen': 'bg-gray-100 text-gray-800',
+            'Ausgemacht': 'bg-blue-100 text-blue-800'
+        };
+        return statusColors[status] || 'bg-gray-100 text-gray-800';
+    }
+
+    _populateInfoabendFilter() {
+        if (!this.flowInfoabendFilter) return;
+        
+        // Hole alle Infoabend-Daten aus der Infoplanung-Tabelle
+        const infoabende = db.infoplanung || [];
+        
+        // Sortiere nach Datum (neueste zuerst)
+        const sortedInfoabende = infoabende
+            .filter(info => info.Informationsabend) // Nur Einträge mit Datum
+            .sort((a, b) => new Date(b.Informationsabend) - new Date(a.Informationsabend));
+        
+        // Entferne Duplikate (gleiche Daten)
+        const uniqueDates = [...new Set(sortedInfoabende.map(info => info.Informationsabend))];
+        
+        // Erstelle Optionen
+        const options = uniqueDates.map(date => {
+            const dateObj = new Date(date);
+            const formattedDate = dateObj.toLocaleDateString('de-DE', { 
+                weekday: 'short', 
+                day: '2-digit', 
+                month: '2-digit', 
+                year: 'numeric' 
+            });
+            return `<option value="${date}">${formattedDate}</option>`;
+        }).join('');
+        
+        this.flowInfoabendFilter.innerHTML = '<option value="">Infoabend auswählen...</option>' + options;
+        
+        // Wähle automatisch den neuesten Infoabend aus
+        if (uniqueDates.length > 0) {
+            this.flowInfoabendFilter.value = uniqueDates[0];
+        }
     }
 
     _showCustomerTimeline(customerName) {
@@ -12421,7 +12667,8 @@ class PlanungView {
 
         // Lade gespeicherte Einstellungen oder setze Standardwerte
         const isLeader = isUserLeader(authenticatedUserData);
-        this.currentScope = loadUiSetting('planungViewScope', isLeader ? 'group' : 'personal');
+        // Standardmäßig immer "Gruppe" auswählen
+        this.currentScope = 'group';
         this.currentScopeId = userId;
 
         this._setupEventListeners();
@@ -13962,6 +14209,7 @@ class PlanungView {
             }
             detailsContainer.classList.remove('opacity-0', 'hidden');
             detailsContainer.classList.add('details-visible', 'flex');
+            detailsContainer.style.opacity = '1';
             detailsContainer.innerHTML = detailsHTML;
         }
 
@@ -13991,6 +14239,7 @@ class PlanungView {
             }
             detailsContainer.classList.add('opacity-0', 'hidden');
             detailsContainer.classList.remove('details-visible', 'flex');
+            detailsContainer.style.opacity = '0';
             
             // WICHTIG: Leere den Inhalt, damit der Container zurückgesetzt wird
             setTimeout(() => {
