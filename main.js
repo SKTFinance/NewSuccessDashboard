@@ -500,11 +500,12 @@ async function seaTableGetUploadLink() {
         const baseUrl = new URL(apiGatewayUrl).origin;
         const url = `${baseUrl}/api/v2.1/dtable/app-upload-link/`;
         log(`Sende GET-Anfrage an: ${url}`);
+        
+        // KRITISCH: Verwende Token statt Bearer für Upload-Link Generierung
         const options = {
             method: 'GET',
             headers: {
-                accept: 'application/json',
-                authorization: `Bearer ${SEATABLE_API_TOKEN}`
+                Authorization: `Token ${SEATABLE_API_TOKEN}`
             }
         };
         const response = await fetch(url, options);
@@ -519,11 +520,22 @@ async function seaTableGetUploadLink() {
         
         const data = JSON.parse(responseText);
         log('Erfolgreiche Antwort erhalten:', data);
-        // Erwartet: { upload_link, parent_path, path }
-        if (!data.path) {
-            log('!!! WARNUNG: Die Server-Antwort enthält keinen "path". Upload wird wahrscheinlich fehlschlagen.');
+        
+        // Laut SeaTable API Dokumentation werden zurückgegeben:
+        // { upload_link, parent_path, img_relative_path, file_relative_path }
+        if (!data.upload_link || !data.parent_path) {
+            log('!!! FEHLER: Unvollständige Upload-Link Antwort:', data);
+            throw new Error('Upload-Link oder parent_path fehlt in Server-Antwort');
         }
-        return data;
+        
+        // Verwende img_relative_path für Bilder, file_relative_path für andere Dateien
+        const relativePath = data.img_relative_path || data.file_relative_path;
+        log('Verwendeter relativer Pfad:', relativePath);
+        
+        return {
+            ...data,
+            relative_path: relativePath  // Einheitlicher Schlüssel für später
+        };
     } catch (error) {
         pgLog(`!!! KRITISCHER FEHLER beim Abrufen des Upload-Links:`, error);
         console.error("Error getting SeaTable upload link:", error);
@@ -531,26 +543,40 @@ async function seaTableGetUploadLink() {
     }
 }
 
-async function seaTableUploadFile(uploadLink, file, parentDir) {
+async function seaTableUploadFile(uploadLink, file, parentDir, relativePath) {
     const log = (message, ...data) => pgLog(`[API-UploadFile] ${message}`, ...data);
     log(`Starte Upload für Datei: ${file.name} in Verzeichnis: ${parentDir}`);
+    log(`Relativer Pfad: ${relativePath}`);
     try {
         const formData = new FormData();
         formData.append('parent_dir', parentDir);
         formData.append('file', file, file.name);
-        log('FormData erstellt:', { parent_dir: parentDir, filename: file.name, size: file.size });
+        
+        // KRITISCH: Laut SeaTable API Dokumentation wird 'relative_path' benötigt
+        if (relativePath) {
+            formData.append('relative_path', relativePath);
+        }
+        
+        log('FormData erstellt:', { 
+            parent_dir: parentDir, 
+            filename: file.name, 
+            size: file.size,
+            relative_path: relativePath 
+        });
 
         // Add ?ret-json=1 to get JSON response
         const uploadUrl = `${uploadLink}?ret-json=1`;
         
+        // KRITISCH: Laut SeaTable Dokumentation sollte der Upload-Request 
+        // KEINE Authorization Header haben - die Authentifizierung erfolgt über die URL
         const options = {
             method: 'POST',
-            headers: {
-                accept: 'application/json',
-                authorization: `Bearer ${SEATABLE_API_TOKEN}`
-            },
             body: formData
+            // ENTFERNT: authorization header - wird nicht benötigt für Upload-URL
         };
+
+        log(`Sende Upload-Request an: ${uploadUrl}`);
+        log('Request Options (ohne Auth):', { method: options.method, hasBody: !!options.body });
 
         const response = await fetch(uploadUrl, options);
         log(`Antwort-Status vom Upload-Server: ${response.status}`);
@@ -568,9 +594,9 @@ async function seaTableUploadFile(uploadLink, file, parentDir) {
         
         // WICHTIG: Gib den echten Dateinamen zurück, den der Server verwendet hat
         if (responseData && responseData[0] && responseData[0].name) {
-          return { success: true, actualFileName: responseData[0].name };
+          return { success: true, actualFileName: responseData[0].name, uploadResponse: responseData };
         }
-        return { success: true, actualFileName: null };
+        return { success: true, actualFileName: file.name, uploadResponse: responseData };
     } catch (error) {
         log(`!!! KRITISCHER FEHLER beim Datei-Upload:`, error);
         console.error("Fehler beim Hochladen der Datei zu SeaTable:", error);
@@ -18243,12 +18269,13 @@ class PGTagebuchView {
 
         // Schritt 2: Datei hochladen.
         log('Schritt 2: Lade Datei zum Server hoch...');
-        const success = await seaTableUploadFile(uploadLinkData.upload_link, file, uploadLinkData.parent_path);
+        const success = await seaTableUploadFile(uploadLinkData.upload_link, file, uploadLinkData.parent_path, uploadLinkData.relative_path);
         
         // Schritt 3: Ergebnis auswerten.
         log('Schritt 3: Werte Upload-Ergebnis aus...');
         if (success) {
-            const relativePath = uploadLinkData.path;
+            // Verwende den korrekten relativen Pfad aus uploadLinkData
+            const relativePath = uploadLinkData.relative_path;
             log(`Schritt 3 erfolgreich. Relativer Pfad ist: ${relativePath}`);
             return { url: relativePath, name: file.name, size: file.size };
         } else {
@@ -18949,15 +18976,17 @@ async function saveUserData() {
       console.log('Relativer Pfad für Datenbank:', relativeImagePath);
 
       // Schritt 2: Datei hochladen
-      const uploadResult = await seaTableUploadFile(uploadLinkData.upload_link, fileInput.files[0], uploadLinkData.parent_path);
+      const uploadResult = await seaTableUploadFile(uploadLinkData.upload_link, fileInput.files[0], uploadLinkData.parent_path, uploadLinkData.relative_path);
       
       if (uploadResult && uploadResult.success) {
         // Verwende den echten Dateinamen, den der Server zurückgegeben hat
         const actualFileName = uploadResult.actualFileName || fileName;
         console.log('Echter Dateiname vom Server:', actualFileName);
         
-        // Konstruiere Pfad mit dem echten Dateinamen
-        const actualRelativeImagePath = `/workspace/${SEATABLE_WORKSPACE_ID}${uploadLinkData.parent_path}/${uploadLinkData.img_relative_path}/${actualFileName}`;
+        // KORREKTUR: Verwende die Workspace-ID aus der SeaTable Dokumentation
+        // Der korrekte Pfad ist /workspace/{workspace_id}{parent_path}/{img_relative_path}/{filename}
+        const workspaceId = uploadResult.uploadResponse?.[0]?.workspace_id || SEATABLE_WORKSPACE_ID;
+        const actualRelativeImagePath = `/workspace/${workspaceId}${uploadLinkData.parent_path}/${uploadLinkData.relative_path}/${actualFileName}`;
         console.log('Aktualisierter relativer Pfad mit echtem Dateinamen:', actualRelativeImagePath);
         
         // Schritt 3: Datei-Info für Database vorbereiten
