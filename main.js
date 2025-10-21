@@ -10203,10 +10203,10 @@ class PotentialView {
         this.downloadBtn.addEventListener('click', () => this.downloadExcelTemplate());
 
         // NEU: Event-Listener für den Lead-Center-Button
+        // Lead-Center ist jetzt auch für Trainees verfügbar, damit FKs ihnen Leads zuweisen können
         const leadCenterBtn = document.getElementById('potential-lead-center-btn');
         if (leadCenterBtn) {
-            const hasLeadAccess = SKT_APP.authenticatedUserData.SiehtLeads === true;
-            leadCenterBtn.classList.toggle('hidden', !hasLeadAccess);
+            leadCenterBtn.classList.remove('hidden'); // Immer anzeigen
             leadCenterBtn.addEventListener('click', () => switchView('lead-center'));
         }
 
@@ -14189,17 +14189,17 @@ class PlanungView {
         const visionText = visionData?.Vision || 'Keine Vision hinterlegt.';
 
         const detailsHTML = `
-            <div class="h-full flex flex-col">
-                <div class="flex justify-between items-center mb-4">
-                    <div>
-                        <h3 class="text-xl md:text-2xl font-bold text-skt-blue">${_escapeHtml(member.name)}</h3>
-                        <p class="text-sm md:text-base text-skt-blue-light">${_escapeHtml(member.position)}</p>
+            <div class="h-full flex flex-col w-full min-w-0">
+                <div class="flex justify-between items-center mb-4 min-w-0">
+                    <div class="min-w-0 flex-1">
+                        <h3 class="text-xl md:text-2xl font-bold text-skt-blue truncate">${_escapeHtml(member.name)}</h3>
+                        <p class="text-sm md:text-base text-skt-blue-light truncate">${_escapeHtml(member.position)}</p>
                     </div>
                     <button id="close-network-details-btn" class="text-2xl text-gray-400 hover:text-skt-blue transition-colors flex-shrink-0 ml-4" title="Schließen">&times;</button>
                 </div>
-                <div class="grid grid-cols-1 gap-3 overflow-y-auto flex-grow">
+                <div class="grid grid-cols-1 gap-3 overflow-y-auto flex-grow min-w-0">
                     ${kpis.map(kpi => `
-                        <div class="kpi-card p-3 md:p-4 flex items-center gap-3 md:gap-4">
+                        <div class="kpi-card p-3 md:p-4 flex items-center gap-3 md:gap-4 min-w-0">
                             <div class="w-10 h-10 md:w-12 md:h-12 rounded-full bg-${kpi.color}-100 text-${kpi.color}-600 flex items-center justify-center flex-shrink-0">
                                 <i class="fas ${kpi.icon} text-lg md:text-xl"></i>
                             </div>
@@ -14210,9 +14210,9 @@ class PlanungView {
                         </div>
                     `).join('')}
                 </div>
-                <div class="mt-4 border-t pt-4">
+                <div class="mt-4 border-t pt-4 min-w-0">
                     <h4 class="font-semibold text-gray-700 mb-2 text-sm md:text-base">Vision & Ziele</h4>
-                    <p class="text-xs md:text-sm text-gray-600 italic">"${_escapeHtml(visionText)}"</p>
+                    <p class="text-xs md:text-sm text-gray-600 italic break-words overflow-wrap-anywhere">"${_escapeHtml(visionText)}"</p>
                 </div>
             </div>
         `;
@@ -14229,10 +14229,14 @@ class PlanungView {
                 }
             });
         } else {
-            // Desktop: Show sidebar
+            // Desktop: Show sidebar mit absolut fester Breite
             if (!isInFullscreen) {
                 graphContainer.classList.replace('w-full', 'md:w-2/3');
                 detailsContainer.classList.replace('md:w-0', 'md:w-1/3');
+                detailsContainer.classList.replace('md:min-w-0', 'md:min-w-[350px]');
+                detailsContainer.classList.replace('md:max-w-0', 'md:max-w-[350px]');
+                // Setze absolute fixe Breite per Style
+                detailsContainer.style.width = '350px';
             }
             detailsContainer.classList.remove('opacity-0', 'hidden');
             detailsContainer.classList.add('details-visible', 'flex');
@@ -14263,6 +14267,10 @@ class PlanungView {
             if (!isInFullscreen) {
                 graphContainer.classList.replace('md:w-2/3', 'w-full');
                 detailsContainer.classList.replace('md:w-1/3', 'md:w-0');
+                detailsContainer.classList.replace('md:min-w-[350px]', 'md:min-w-0');
+                detailsContainer.classList.replace('md:max-w-[350px]', 'md:max-w-0');
+                // Entferne absolute Breite
+                detailsContainer.style.width = '0';
             }
             detailsContainer.classList.add('opacity-0', 'hidden');
             detailsContainer.classList.remove('details-visible', 'flex');
@@ -18769,6 +18777,36 @@ function setupTeamPlanungFilters() {
     const filterVB = document.getElementById('filter-vb');
     const filterImmo = document.getElementById('filter-immo');
     const filterRecruiter = document.getElementById('filter-recruiter');
+    const toggleBtn = document.getElementById('toggle-qualification-filters-btn');
+    const filtersContainer = document.getElementById('qualification-filters-container');
+    const toggleIcon = document.getElementById('filter-toggle-icon');
+    
+    //Lade gespeicherten Zustand der Filter-Sichtbarkeit
+    const filtersVisible = loadUiSetting('teamPlanungFiltersVisible', false);
+    if (filtersVisible) {
+        filtersContainer.classList.remove('hidden');
+        filtersContainer.classList.add('flex');
+        toggleIcon.classList.remove('fa-chevron-down');
+        toggleIcon.classList.add('fa-chevron-up');
+    }
+    
+    // Toggle Filter-Sichtbarkeit
+    toggleBtn.addEventListener('click', () => {
+        const isVisible = !filtersContainer.classList.contains('hidden');
+        if (isVisible) {
+            filtersContainer.classList.add('hidden');
+            filtersContainer.classList.remove('flex');
+            toggleIcon.classList.remove('fa-chevron-up');
+            toggleIcon.classList.add('fa-chevron-down');
+            saveUiSetting('teamPlanungFiltersVisible', false);
+        } else {
+            filtersContainer.classList.remove('hidden');
+            filtersContainer.classList.add('flex');
+            toggleIcon.classList.remove('fa-chevron-down');
+            toggleIcon.classList.add('fa-chevron-up');
+            saveUiSetting('teamPlanungFiltersVisible', true);
+        }
+    });
     
     const applyFilters = () => {
         const searchTerm = searchInput.value.toLowerCase();

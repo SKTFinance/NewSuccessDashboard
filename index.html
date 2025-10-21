@@ -815,9 +815,17 @@
              <h3 class="text-2xl font-bold text-skt-blue mb-6">Team-Planung & Qualifikationen</h3>
              
              <!-- Filter und Suche -->
-             <div class="mb-6 flex flex-wrap gap-4">
-                 <input type="text" id="team-planung-search" placeholder="Mitarbeiter suchen..." class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-skt-blue">
-                 <div class="flex gap-2">
+             <div class="mb-6">
+                 <div class="flex flex-wrap gap-4 items-center mb-3">
+                     <input type="text" id="team-planung-search" placeholder="Mitarbeiter suchen..." class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-skt-blue">
+                     <button id="toggle-qualification-filters-btn" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors flex items-center gap-2">
+                         <i class="fas fa-filter"></i>
+                         <span>Filter</span>
+                         <i id="filter-toggle-icon" class="fas fa-chevron-down text-xs"></i>
+                     </button>
+                 </div>
+                 <!-- Qualifikations-Filter (standardmäßig ausgeblendet) -->
+                 <div id="qualification-filters-container" class="hidden gap-2 mt-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
                      <label class="inline-flex items-center">
                          <input type="checkbox" id="filter-va" class="mr-2">
                          <span class="text-sm">Nur VA</span>
