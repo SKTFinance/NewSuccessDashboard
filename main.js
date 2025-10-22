@@ -2172,8 +2172,8 @@ async function fetchBulkDashboardData(mitarbeiterIds) {
   const AT_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten"];
   // KORREKTUR: Falsche Status für "gehaltene" ETs entfernt (z.B. Storno, Ausgemacht). Storno wird jetzt mitgezählt.
   const ET_STATUS_GEHALTEN = ["Gehalten", "Info Eingeladen", "Weiterer ET", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter"];
-  // NEU: Definition für ausgemachte ETs, die "Ausgemacht" und alle "Gehalten"-Stati umfasst.
-  const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Info Eingeladen", "Weiterer ET", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter", "Verschoben"];
+  // NEU: Definition für ausgemachte ETs, die "Ausgemacht" und alle "Gehalten"-Stati umfasst. Storno und Offen werden auch mitgezählt.
+  const ET_STATUS_AUSGEMACHT = ["Ausgemacht", "Gehalten", "Info Eingeladen", "Weiterer ET", "Info Bestätigt", "Info Anwesend", "Wird Mitarbeiter", "Verschoben", "Storno", "Offen"];
 
   return users.map((user) => {
     // 1. Plandaten und EH-Daten holen

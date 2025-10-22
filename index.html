@@ -24,7 +24,7 @@
     <!-- Font Awesome für Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <!-- NEU: Quill Rich Text Editor -->
-    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
     <!-- NEU: Eigene Stile für Quill, um das Theme anzupassen -->
     <link rel="stylesheet" href="quill-custom.css">
     <link rel="stylesheet" href="style.css">
@@ -1243,7 +1243,37 @@
     <!-- NEU: Marked.js für Markdown-Rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <!-- NEU: Quill Rich Text Editor -->
-    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+    <!-- Workaround für DOMNodeInserted Deprecation Warning -->
+    <script>
+        // Überschreibe addEventListener für DOMNodeInserted, um die Deprecation-Warnung zu vermeiden
+        (function() {
+            const originalAddEventListener = EventTarget.prototype.addEventListener;
+            EventTarget.prototype.addEventListener = function(type, listener, options) {
+                // Ignoriere DOMNodeInserted Events stillschweigend
+                if (type === 'DOMNodeInserted' || type === 'DOMNodeRemoved' || type === 'DOMSubtreeModified') {
+                    // Verwende stattdessen einen MutationObserver als Fallback
+                    if (this.nodeType === Node.ELEMENT_NODE) {
+                        const observer = new MutationObserver((mutations) => {
+                            // Simuliere das alte Event-Verhalten für Quill
+                            mutations.forEach(() => {
+                                if (typeof listener === 'function') {
+                                    listener.call(this, { type: type, target: this });
+                                }
+                            });
+                        });
+                        observer.observe(this, { 
+                            childList: true, 
+                            subtree: type === 'DOMSubtreeModified' || type === 'DOMNodeInserted'
+                        });
+                        return;
+                    }
+                }
+                // Für alle anderen Events: normale Funktionalität
+                return originalAddEventListener.call(this, type, listener, options);
+            };
+        })();
+    </script>
+    <script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
     <!-- NEU: Signature Pad für die Zeichenfunktion -->
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
     <!-- NEU: D3.js für die Netzwerkdarstellung -->
