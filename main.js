@@ -1744,9 +1744,52 @@ function getUiSettings() {
     } catch (e) { return {}; }
 }
 function saveUiSetting(key, value) {
-    const settings = getUiSettings();
-    settings[key] = value;
-    localStorage.setItem('skt-ui-settings', JSON.stringify(settings));
+    try {
+        const settings = getUiSettings();
+        settings[key] = value;
+        localStorage.setItem('skt-ui-settings', JSON.stringify(settings));
+    } catch (e) {
+        if (e.name === 'QuotaExceededError') {
+            console.warn('LocalStorage quota exceeded. Attempting to clean up...');
+            try {
+                // 1. Lösche alte Cache-Einträge
+                clearOldCacheEntries();
+                
+                // 2. Behalte nur wichtige UI-Settings
+                const settings = getUiSettings();
+                const importantKeys = ['appointmentsViewMode', 'teamPlanungFiltersVisible', 'currentView'];
+                const cleanedSettings = {};
+                importantKeys.forEach(k => {
+                    if (settings[k] !== undefined) cleanedSettings[k] = settings[k];
+                });
+                // Speichere das neue Setting
+                cleanedSettings[key] = value;
+                localStorage.setItem('skt-ui-settings', JSON.stringify(cleanedSettings));
+                console.log('LocalStorage cleaned up successfully');
+            } catch (cleanupError) {
+                console.error('Failed to save UI setting even after cleanup:', cleanupError);
+                // Als letzten Ausweg: Lösche alle nicht-essentiellen Daten
+                try {
+                    // Behalte nur Login-Daten und wichtige Settings
+                    const loggedInUserId = localStorage.getItem('loggedInUserId');
+                    const essentialData = { [key]: value };
+                    
+                    // Lösche alles außer essentiellen Daten
+                    localStorage.clear();
+                    
+                    // Wiederherstellen der essentiellen Daten
+                    if (loggedInUserId) localStorage.setItem('loggedInUserId', loggedInUserId);
+                    localStorage.setItem('skt-ui-settings', JSON.stringify(essentialData));
+                    
+                    console.warn('LocalStorage wurde komplett bereinigt. Nur essentielle Daten wurden wiederhergestellt.');
+                } catch (finalError) {
+                    console.error('Critical: Cannot save to localStorage:', finalError);
+                }
+            }
+        } else {
+            console.error('Error saving UI setting:', e);
+        }
+    }
 }
 function loadUiSetting(key, defaultValue) {
     const settings = getUiSettings();
