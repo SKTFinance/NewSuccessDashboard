@@ -3297,9 +3297,9 @@ function renderTeamMemberCards(members) {
     dom.teamMembersContainer.innerHTML = `<p class="text-center text-gray-500 col-span-full">Keine Mitarbeiter in dieser Ansicht.</p>`;
     return;
   }
-  // KORREKTUR: Ein Mitarbeiter ist nur aktiv, wenn sein EH-Ziel > 0 ist.
-  const activeMembers = members.filter((m) => (m.ehGoal || 0) > 0);
-  const passiveMembers = members.filter((m) => !(m.ehGoal > 0));
+  // KORREKTUR: Ein Mitarbeiter ist nur aktiv, wenn sein EH-Ziel ODER ET-Ziel > 0 ist.
+  const activeMembers = members.filter((m) => (m.ehGoal || 0) > 0 || (m.etGoal || 0) > 0);
+  const passiveMembers = members.filter((m) => !((m.ehGoal > 0) || (m.etGoal > 0)));
   const { startDate, endDate } = getMonthlyCycleDates();
   const totalDaysInCycle = (endDate - startDate) / (1000 * 60 * 60 * 24);
   const daysPassedInCycle = Math.max(
@@ -3787,6 +3787,32 @@ function findNextInfoDateAfter(startDate) {
     
     const nextInfoDate = new Date(calculationStartDate.getTime() + daysUntilNext * msPerDay);
     return nextInfoDate;
+}
+
+function findLastInfoDateBefore(startDate) {
+    // Referenzpunkt ist der letzte Infoabend: 08.10.2025
+    const referenceDate = new Date('2025-10-08T12:00:00Z');
+    const calculationStartDate = new Date(startDate);
+    calculationStartDate.setUTCHours(0, 0, 0, 0);
+    
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const cycleLengthDays = 21; // 3 Wochen
+    
+    // Differenz in Tagen zwischen dem Startdatum und dem Referenzdatum berechnen
+    const diffInMs = calculationStartDate.getTime() - referenceDate.getTime();
+    const diffInDays = Math.round(diffInMs / msPerDay);
+    
+    // Berechnen, wie viele Tage seit dem letzten Infoabend vergangen sind
+    const daysIntoCycle = ((diffInDays % cycleLengthDays) + cycleLengthDays) % cycleLengthDays;
+    
+    // Wenn wir genau auf einem Infoabend-Datum sind, gib dieses zurück
+    if (daysIntoCycle === 0) {
+        return calculationStartDate;
+    }
+    
+    // Ansonsten gehe zurück zum letzten Infoabend
+    const lastInfoDate = new Date(calculationStartDate.getTime() - daysIntoCycle * msPerDay);
+    return lastInfoDate;
 }
 
 function fetchNextInfoDate() {
@@ -19306,10 +19332,12 @@ function openAddUserModal() {
     dom.addUserForm.reset();
     const werberSelect = document.getElementById('add-werber');
     const bueroSelect = document.getElementById('add-buero');
+    const infoabendSelect = document.getElementById('add-infoabend');
     clearChildren(werberSelect);
     clearChildren(bueroSelect);
+    clearChildren(infoabendSelect);
 
-    // KORREKTUR: Werber-Auswahl auf die eigene Struktur begrenzen.
+    // KORREKTUR: Werber-Auswahl auf die eigene Struktur begrenzt.
     const structureUsers = [authenticatedUserData, ...getAllSubordinatesRecursive(authenticatedUserData._id)];
     structureUsers.sort((a, b) => a.Name.localeCompare(b.Name));
     structureUsers.forEach(user => {
@@ -19323,6 +19351,50 @@ function openAddUserModal() {
             bueroSelect.add(new Option(buero.Büro, buero._id));
         });
     }
+
+    // Infoabende laden: Die letzten 5 vergangenen und die nächsten 10 zukünftigen
+    const today = new Date();
+    const infoabendDates = [];
+    
+    // Referenzpunkt: 08.10.2025
+    const referenceDate = new Date('2025-10-08T12:00:00Z');
+    
+    // 5 vergangene Infoabende (von 08.10.2025 aus zurück)
+    for (let i = 5; i > 0; i--) {
+        const pastDate = new Date(referenceDate);
+        pastDate.setDate(pastDate.getDate() - (i * 21));
+        infoabendDates.push(pastDate);
+    }
+    
+    // Referenzdatum 08.10.2025 selbst hinzufügen
+    infoabendDates.push(new Date(referenceDate));
+    
+    // 10 zukünftige Infoabende (von 08.10.2025 aus vorwärts)
+    for (let i = 1; i <= 10; i++) {
+        const futureDate = new Date(referenceDate);
+        futureDate.setDate(futureDate.getDate() + (i * 21));
+        infoabendDates.push(futureDate);
+    }
+    
+    // Nächsten Infoabend ab heute finden für die Vorauswahl
+    const nextInfo = findNextInfoDateAfter(today);
+    const nextInfoStr = nextInfo.toISOString().split('T')[0];
+    
+    // Optionen erstellen
+    infoabendDates.forEach((date, index) => {
+        const dateStr = date.toISOString().split('T')[0];
+        const formatted = date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        const isPast = date < today;
+        const label = isPast ? `${formatted} (vergangen)` : formatted;
+        const option = new Option(label, dateStr);
+        
+        // Den nächsten Infoabend als Standard auswählen
+        if (dateStr === nextInfoStr) {
+            option.selected = true;
+        }
+        
+        infoabendSelect.add(option);
+    });
 
     dom.addUserModal.classList.add('visible');
     document.body.classList.add('modal-open');
@@ -19353,13 +19425,14 @@ async function saveNewUser() {
         return;
     }
 
-    const startDate = findNextInfoDateAfter(new Date());
+    // Gewähltes Infoabend-Datum als Startdatum verwenden
+    const selectedInfoabendDate = document.getElementById('add-infoabend').value;
 
     const rowData = {
         [COLUMN_MAPS.mitarbeiter.Name]: document.getElementById('add-name').value,
         [COLUMN_MAPS.mitarbeiter.PWD]: document.getElementById('add-pwd').value,
         [COLUMN_MAPS.mitarbeiter.Geburtstag]: document.getElementById('add-birthday').value || null,
-        [COLUMN_MAPS.mitarbeiter.Startdatum]: startDate.toISOString().split('T')[0],
+        [COLUMN_MAPS.mitarbeiter.Startdatum]: selectedInfoabendDate,
         [COLUMN_MAPS.mitarbeiter.Werber]: [document.getElementById('add-werber').value],
         [COLUMN_MAPS.mitarbeiter.Buero]: [document.getElementById('add-buero').value],
         [COLUMN_MAPS.mitarbeiter.Karrierestufe]: [traineeI._id],
