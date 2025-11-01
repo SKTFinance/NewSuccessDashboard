@@ -11487,55 +11487,13 @@ class AuswertungView {
         const btn = this.generateWeeklyKiReportBtn;
         if (!reportContainer || !btn) return;
 
-        reportContainer.innerHTML = '<div class="loader mx-auto"></div><p class="text-center mt-4">Sammle Daten und befrage die KI... Dies kann bis zu einer Minute dauern.</p>';
         btn.disabled = true;
         btn.classList.add('opacity-50', 'cursor-not-allowed');
 
-        try {
-            const prompt = await this._gatherDataAndBuildPrompt();
-            const aiResponse = await this._queryGemini(prompt); // The raw markdown response
-            reportContainer.innerHTML = marked.parse(aiResponse);
-        } catch (error) {
-            console.error("Fehler beim Erstellen des KI-Reports:", error);
-            reportContainer.innerHTML = `<p class="text-red-500 text-center">Ein Fehler ist aufgetreten: ${error.message}</p>`;
-        } finally {
+        reportContainer.innerHTML = '<p class="text-center text-gray-500">Die KI-Report-Funktion ist nicht mehr verfügbar.</p>';
 
-
-            btn.disabled = false;
-            btn.classList.remove('opacity-50', 'cursor-not-allowed');
-        }
-    }
-
-    async _queryGemini(prompt) {
-        const apiKey = "AIzaSyAUnqTaKJ1B7mvltFTWvHcz4szfA1YDFek";
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-
-        const systemPrompt = "Du bist ein hochqualifizierter Business-Analyst und Coach für eine Finanzvertriebsorganisation. Deine Aufgabe ist es, wöchentliche Leistungsdaten zu analysieren und einen prägnanten, aufschlussreichen Bericht für den Direktor zu erstellen. Formatiere deine Antwort in klarem, strukturiertem Markdown. Beginne mit einer Management-Zusammenfassung, die die wichtigsten Erkenntnisse und Handlungsempfehlungen hervorhebt. Liste danach die angeforderten Daten in übersichtlichen Tabellen oder Listen auf. Sei direkt, aber konstruktiv in deiner Analyse.";
-
-        const payload = {
-            contents: [{ parts: [{ text: prompt }] }],
-            systemInstruction: { parts: [{ text: systemPrompt }] },
-        };
-
-        const response = await fetch(apiUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`API-Anfrage fehlgeschlagen mit Status ${response.status}: ${errorText}`);
-        }
-
-        const result = await response.json();
-        const candidate = result.candidates?.[0];
-
-        if (candidate && candidate.content?.parts?.[0]?.text) {
-            return candidate.content.parts[0].text;
-        } else {
-            throw new Error("Unerwartete oder leere Antwort von der KI.");
-        }
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
     }
 
     async _gatherDataAndBuildPrompt() {
@@ -16967,32 +16925,8 @@ async function checkAndShowEtMotivationPopup() {
     const nextCareerStep = nextStage?.Stufe || 'Nächstes Ziel noch nicht definiert.';
     const promotionDate = user.Befoerderungsdatum ? new Date(user.Befoerderungsdatum).toLocaleDateString('de-DE') : 'Kein Datum gesetzt.';
 
-    // NEU: Schritt 4 - Zuerst die KI-Nachricht generieren
-    const prompt = `
-        Erstelle eine sehr kurze, motivierende Nachricht (maximal 3 Sätze) für einen Finanzberater namens ${user.Name}.
-        Kontext:
-        - Seine Vision: "${visionText}"
-        - Sein nächster Karriereschritt: ${nextCareerStep} (Zieldatum: ${promotionDate})
-        - Sein aktueller Fortschritt bei Einstellungsterminen (ETs) diesen Monat: ${etCurrent} von ${etGoal} erreicht.
-
-        Die Nachricht muss seine Vision als zentralen Ankerpunkt verwenden. Gehe explizit auf den Inhalt seiner Vision ("${visionText}") ein, anstatt nur "Vision" zu schreiben. Wenn er zb von "finanzieller Freiheit" spricht dann erwähne auch "finanzielle Freiheit" satt "deine Vision" zu sagen. Erinnere ihn wie das Erreichen seines ET-Ziels ihn seiner Vision und seinem nächsten Karriereschritt näherbringt.
-        Sprich ihn direkt mit "Du" an. Die Antwort soll nur aus der Nachricht bestehen, ohne Einleitung oder Verabschiedung. Formatiere die Antwort als HTML mit <p> und <strong> Tags.
-    `;
-
-    console.log('%c[KI-Motivation] %cSende folgenden Prompt an Gemini:', 'color: #8e44ad; font-weight: bold;', 'color: black;', prompt);
-
-    let aiMessage;
-    try {
-        const apiKey = "AIzaSyAUnqTaKJ1B7mvltFTWvHcz4szfA1YDFek";
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-        const response = await fetch(apiUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }) });
-        if (!response.ok) throw new Error('API request failed');
-        const result = await response.json();
-        aiMessage = result.candidates[0].content.parts[0].text;
-    } catch (error) {
-        console.error("Fehler bei der Gemini-API:", error);
-        aiMessage = `<p>Denk an dein Ziel, ${nextCareerStep} zu erreichen! Jeder Einstellungstermin bringt dich deiner Vision näher. Du schaffst das!</p>`;
-    }
+    // Statische motivierende Nachricht ohne KI
+    const aiMessage = `<p>Denk an dein Ziel, ${nextCareerStep} zu erreichen! Jeder Einstellungstermin bringt dich deiner Vision näher. Du schaffst das!</p>`;
 
     // 4. KI-Nachricht generieren und Popup anzeigen
     const modal = document.getElementById('et-motivation-modal');
@@ -17199,66 +17133,10 @@ async function setupTagInput(initialValue) {
 
 async function handleAIAssistantClick() {
   dom.hinweisModalTitle.textContent = "Frag den Adler";
-  dom.hinweisModalContent.innerHTML = '<div class="loader mx-auto"></div>';
   dom.hinweisModal.classList.add("visible");
   document.body.classList.add("modal-open");
-
-  const {
-    name,
-    position,
-    ehCurrent,
-    ehGoal,
-    atCurrent,
-    atGoal,
-    etCurrent,
-    etGoal,
-  } = personalData;
-
-  const userPrompt = `
-                Analysiere die folgenden Leistungsdaten für ${name} (${position}) und gib eine prägnante, motivierende Zusammenfassung sowie 2-3 konkrete, umsetzbare Tipps.
-                - Aktuelle Einheiten (EH): ${ehCurrent} von ${ehGoal} geplant.
-                - Aktuelle Analysetermine (AT): ${atCurrent} von ${atGoal} geplant.
-                - Aktuelle Einstellungstermine (ET): ${etCurrent} von ${etGoal} geplant.
-                
-                Gib die Antwort auf Deutsch, direkt formuliert an den Mitarbeiter (Du-Form). Formatiere die Zusammenfassung als normalen Absatz (<p>). Formatiere die Tipps als nummerierte Liste (<ol><li>Tipp 1</li>...</ol>). Verwende <strong> für Schlüsselwörter.
-            `;
-
-  const systemPrompt =
-    "Du bist ein erfahrener und motivierender Vertriebscoach. Deine Antworten sind immer positiv, konstruktiv und auf den Punkt gebracht.";
-
-  try {
-    const apiKey = "AIzaSyAUnqTaKJ1B7mvltFTWvHcz4szfA1YDFek";
-    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-
-    const payload = {
-      contents: [{ parts: [{ text: userPrompt }] }],
-      systemInstruction: { parts: [{ text: systemPrompt }] },
-    };
-
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok)
-      throw new Error(
-        `API-Anfrage fehlgeschlagen mit Status: ${response.status}`
-      );
-
-    const result = await response.json();
-    const candidate = result.candidates?.[0];
-
-    if (candidate && candidate.content?.parts?.[0]?.text) {
-      dom.hinweisModalContent.innerHTML = candidate.content.parts[0].text;
-    } else {
-      throw new Error("Unerwartete Antwortstruktur von der API.");
-    }
-  } catch (error) {
-    console.error("Fehler bei der Gemini-API-Anfrage:", error);
-    dom.hinweisModalContent.textContent =
-      "Der KI-Assistent ist im Moment leider nicht verfügbar. Bitte versuchen Sie es später erneut.";
-  }
+  
+  dom.hinweisModalContent.innerHTML = '<p class="text-center text-gray-500">Die KI-Assistent-Funktion ist nicht mehr verfügbar.</p>';
 }
 
 function _renderSinglePQQGauge(indicatorEl, valueDisplayEl, value) {

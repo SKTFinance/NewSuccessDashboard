@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8" />
-<title>Vertrag-Extractor + Gemini 2.5 Flash</title>
+<title>Vertrag-Extractor</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
 :root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --accent:#60a5fa; --good:#22c55e; --warn:#f59e0b; --bad:#ef4444; }
@@ -26,14 +26,13 @@ textarea{width:100%;min-height:200px;background:#0b1220;color:#e5e7eb;border:1px
 
 <body>
 <div class="wrap">
-  <h1>Vertrag-Extractor <span class="muted">mit DSGVO + Gemini 2.5 Flash</span></h1>
+  <h1>Vertrag-Extractor <span class="muted">mit DSGVO</span></h1>
 
   <div class="card">
     <label>PDF-Datei hochladen:</label>
     <input id="file" type="file" accept=".pdf" style="width:100%;padding:8px;border:1px dashed #334155;background:#0b1220;color:#cbd5e1;border-radius:8px" />
     <div style="display:flex;gap:8px;margin-top:10px">
       <button id="anonBtn" disabled>Anonymisieren</button>
-      <button id="aiBtn" disabled>An Gemini 2.5 Flash senden</button>
     </div>
     <div class="progress"><div class="bar" id="bar"></div></div>
     <div id="phase" class="muted" style="text-align:right;margin-top:6px">Bereit</div>
@@ -44,23 +43,13 @@ textarea{width:100%;min-height:200px;background:#0b1220;color:#e5e7eb;border:1px
     <textarea id="raw" class="mono" placeholder="Nach dem ersten Schritt erscheint hier der bereinigte Text …"></textarea>
   </div>
 
-  <div class="card">
-    <h3>Gemini-Ergebnis</h3>
-    <pre id="result" class="mono"></pre>
-  </div>
-
   <div class="card"><h3>Protokoll</h3><div id="log" class="log mono"></div></div>
 </div>
 
 <script>
-const apiKey = "AIzaSyAUnqTaKJ1B7mvltFTWvHcz4szfA1YDFek";
-const model = "gemini-2.5-flash";
-
 const fileEl=document.getElementById("file"),
       anonBtn=document.getElementById("anonBtn"),
-      aiBtn=document.getElementById("aiBtn"),
       rawEl=document.getElementById("raw"),
-      resultEl=document.getElementById("result"),
       barEl=document.getElementById("bar"),
       phaseEl=document.getElementById("phase"),
       logEl=document.getElementById("log");
@@ -180,155 +169,7 @@ anonBtn.addEventListener("click",async()=>{
   const {clean,count}=anonymizeSensitiveData(text);
   anonymizedText=clean; rawEl.value=clean;
   log(`Anonymisierung abgeschlossen (${count} Elemente ersetzt).`,"ok");
-  bar(100); phase("Bereit für Gemini"); aiBtn.disabled=false;
-});
-
-/* --- Schritt 2: Analyse mit Gemini 2.5 Flash --- */
-aiBtn.addEventListener("click", async ()=>{
-  if(!anonymizedText){alert("Bitte zuerst anonymisieren!");return;}
-
-  phase("Sende an Gemini 2.5 Flash …"); bar(30);
-  const prompt=`🤖 Prompt – Versicherungsagent-KI zur Vertragsanalyse (Österreich)
-Du bist eine spezialisierte Versicherungsagent-KI mit umfassender Expertise im österreichischen Versicherungsmarkt.
-Deine Aufgabe ist es, anonymisierte Versicherungsverträge inhaltlich zu verstehen, alle relevanten Werte aufzuspüren, zu kombinieren oder logisch herzuleiten, und sie präzise in JSON-Struktur auszugeben.
-Du arbeitest wie ein erfahrener Versicherungsberater, der komplexe Verträge liest, interpretiert und bewertet.
-
-🧭 Arbeitsweise
-Ganzheitliche Analyse:
-- Lies das gesamte Dokument (Deckblatt, Tabellen, Fußnoten, Anhänge, Produktbeilagen, Fondsinformationen).
-- Verstehe die Struktur und erkenne die Bedeutung jedes Abschnitts.
-
-Versicherungslogik anwenden:
-- Nutze dein Wissen über Versicherungsprodukte (Lebens-, Unfall-, Haushalts-, Eigenheim-, Rechtsschutzversicherung).
-- Wenn Werte nicht klar angegeben sind, leite sie aus Kontext, Berechnungen oder Produkterfahrung ab.
-- Beispiel: Wenn nur die monatliche Prämie und Laufzeit angegeben sind, berechne die Gesamteinzahlung. Wenn kein Vertragsende steht, rechne es aus dem Beginn + Laufzeit. Wenn Fonds genannt sind, erkenne sie auch in Tabellen oder Fondslisten.
-
-Synonyme und Formulierungen erkennen:
-- Beachte unterschiedliche Bezeichnungen, z.B. Prämie = Beitrag, laufende Zahlung, Versicherungsprämie; Vertragsbeginn = Beginn, Start, Polizzierungsdatum; Laufzeit = Dauer, Versicherungsdauer; Kündigung = Storno, Vertragsauflösung, Rücktritt.
-
-Tiefensuche & logische Ableitung:
-- Untersuche jedes Dokumentsegment, jede Tabelle und jeden Anhang.
-- Suche nach Zahlen, Datumsangaben, Prozenten, Eurobeträgen und Beschreibungen.
-- Rekonstruiere fehlende Werte, wenn sie rechnerisch oder durch Produktlogik eindeutig ableitbar sind.
-- Wenn ein Wert selbst nach gründlicher Analyse nicht vorhanden oder rekonstruierbar ist, verwende "NICHT IM VERTRAG ENTHALTEN".
-
-Plausibilitätsprüfung:
-- Prüfe Widersprüche zwischen Text und Tabellen.
-- Berechne einfache Kennzahlen (z. B. Kostenquote = Rückkaufswert ÷ Summe Einzahlungen × 100).
-- Gib immer die fachlich plausibelste Version aus.
-
-📋 Analyseauftrag
-1. Produkttyp
-   Ordne den Vertrag genau einem dieser Typen zu:
-   lebensversicherung, unfallversicherung, haushaltsversicherung, eigenheimversicherung, rechtschutzversicherung.
-
-2. Grunddaten
-   Ermittle: "vertragsbeginn" (YYYY-MM-DD, falls rekonstruierbar), "laufzeit" (in Jahren oder Monaten), "vertragsende" (direkt oder berechnet), "praemie" (Betrag + Zahlungsintervall, z. B. "150 €/Monat").
-
-3. Kündigung
-   Gib die vertraglich festgelegte ordentliche Kündigung wieder (Frist, Zeitpunkt, Form). Keine allgemeinen Gesetzesangaben – nur, was im Vertrag oder den Bedingungen steht.
-
-4. Produktspezifische Details
-   Verwende genau den passenden Block unter "details":
-   • Lebensversicherung
-     "lebensversicherung": {
-       "fondsveranlagungen": [],
-       "rueckkaufswertZumEnde": {
-         "0_prozent": "",
-         "3_prozent": "",
-         "6_prozent": ""
-       },
-       "kostenquoteProzent": ""
-     }
-   • Unfallversicherung
-     "unfallversicherung": {
-       "unfallkosten": "",
-       "dauerndeInvaliditaet": "",
-       "progressionProzent": "",
-       "unfallrente": "",
-       "spitalgeld": "",
-       "krankengeld": ""
-     }
-   • Haushaltsversicherung
-     "haushaltsversicherung": {
-       "wohnnutzflaecheQm": "",
-       "versicherungssummen": {},
-       "grobeFahrlaessigkeit100Prozent": ""
-     }
-   • Eigenheimversicherung
-     "eigenheimversicherung": {
-       "wohnnutzflaecheQm": "",
-       "verbauteFlaecheQm": "",
-       "anzahlStockwerke": "",
-       "versicherungssummen": {},
-       "grobeFahrlaessigkeit100Prozent": ""
-     }
-   • Rechtsschutzversicherung
-     "rechtschutzversicherung": {
-       "versicherteBereiche": [],
-       "deckungssummen": {}
-     }
-
-⚙️ Ausgaberegeln
-- Gib nur ein gültiges JSON-Objekt aus, ohne zusätzlichen Text.
-- Kein Feld darf leer bleiben.
-- Wenn ein Wert nach gründlicher Dokument- und Kontextanalyse nicht eindeutig ermittelt werden kann, verwende den Text "NICHT IM VERTRAG ENTHALTEN".
-- Füge zusätzlich "missingFields" hinzu – ein Array mit allen Feldern, die du nicht belegen konntest.
-
-📤 Endgültiges JSON-Schema
-{
-  "produktTyp": "",
-  "vertragsbeginn": "",
-  "laufzeit": "",
-  "vertragsende": "",
-  "praemie": "",
-  "kuendigung": "",
-  "details": {},
-  "missingFields": []
-}
-
-💡 Fachliche Zusatzlogik
-- Wenn mehrere Produkte vorkommen, analysiere nur das Hauptprodukt (z. B. Lebensversicherung bei Kombiprodukten).
-- Berücksichtige Fondsnamen, Tarife, Risikoklassen, Zusatzbausteine etc.
-- Verwende ausschließlich vertragliche Werte – keine Beispielrechnungen.
-- Prüfe interne Konsistenz zwischen Prämie, Laufzeit und Werten.
-- Am Ende muss jedes Pflichtfeld einen konkreten Wert oder "NICHT IM VERTRAG ENTHALTEN" haben.
-
-Textauszug:
-${(() => {
-  const MAX_CHARS = 40000;
-  return anonymizedText.length > MAX_CHARS
-    ? anonymizedText.slice(0, MAX_CHARS) + "\n[Text gekürzt]"
-    : anonymizedText;
-})()}
-`;
-
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body:JSON.stringify({
-          contents:[{ role:"user", parts:[{ text:prompt }] }],
-        }),
-      }
-    );
-    const data=await res.json();
-    console.log("🔍 RAW RESPONSE:",data);
-    if(data.error){
-      resultEl.textContent="❌ Fehler: "+data.error.message;
-      log(data.error.message,"err"); phase("Fehler"); return;
-    }
-    let output="";
-    if(data?.candidates?.[0]?.content?.parts){
-      output=data.candidates[0].content.parts.map(p=>p.text||JSON.stringify(p)).join("\n");
-    }
-    resultEl.textContent=output||"(Keine Antwort)";
-    phase("Fertig"); bar(100); log("Antwort empfangen.","ok");
-  } catch(e){
-    log("Fehler: "+e.message,"err"); phase("Fehler");
-  }
+  bar(100); phase("Fertig");
 });
 </script>
 </body>
