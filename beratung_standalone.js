@@ -1786,12 +1786,13 @@ class BeratungView {
         renderChart();
 
         const debouncedRender = _.debounce(renderChart, 300);
-        [startwertInput, sparrateInput, dauerInput, renditeInput, kestToggle].forEach(input => {
-            // Remove old listeners to be safe
-            const new_element = input.cloneNode(true);
-            input.parentNode.replaceChild(new_element, input);
-            new_element.addEventListener('input', debouncedRender);
-        });
+        
+        // Event-Listener für alle Eingabefelder - KORRIGIERT
+        sparrateInput.addEventListener('input', debouncedRender);
+        dauerInput.addEventListener('input', debouncedRender);
+        renditeInput.addEventListener('input', debouncedRender);
+        kestToggle.addEventListener('change', debouncedRender);
+        startwertInput.addEventListener('input', debouncedRender);
     }
 
     _getAdaptiveChartHeight(container, fallback = 220) {
